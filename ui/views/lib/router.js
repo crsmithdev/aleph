@@ -19,8 +19,8 @@ import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, load
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
-/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page, Automation, Jobs, Agents, Status, Flow, Sessions, Memory, a note and a Skill. */
-export const morph = new Set(["/", "/ideas", "/ideas/:slug", "/automation", "/factory/jobs", "/factory/agents", "/flow", "/sessions", "/memory", "/memory/:title", "/skills/:name"]);
+/** The paths of the views drawn by morphing, not by innerHTML: the Ideas list, the Idea page, Automation, Jobs, Agents, Status, Explore, Sessions, Memory, a note and a Skill. */
+export const morph = new Set(["/", "/ideas", "/ideas/:slug", "/automation", "/factory/jobs", "/factory/agents", "/explore", "/sessions", "/memory", "/memory/:title", "/skills/:name"]);
 
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);

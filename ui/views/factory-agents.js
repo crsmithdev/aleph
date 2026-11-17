@@ -157,7 +157,7 @@ export const view = {
   path: "/factory/agents",
   title: "Agents",
   group: "factory",
-  order: 2,
+  order: -1,
   icon: "robot",
   api: (_params, q = new URLSearchParams()) => scope(q).url("/api/factory"),
   live: true,

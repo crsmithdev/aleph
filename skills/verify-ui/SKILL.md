@@ -26,8 +26,8 @@ bun ui/server.ts --port "$port" >/tmp/verify-ui.log 2>&1 & echo $! > /tmp/verify
 
 The server prints its URL. Done when `curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/"` prints 200.
 
-The UI is a hash router: a screen's address is `http://127.0.0.1:<port>/#/<route>`, so `#/flow` reaches the
-Flow page while a bare `/flow` answers 404.
+The UI is a hash router: a screen's address is `http://127.0.0.1:<port>/#/<route>`, so `#/explore` reaches the
+Explore page while a bare `/explore` answers 404.
 
 ## 2. Screenshot the changed screens
 
@@ -37,8 +37,8 @@ which no ignore line covers, so a run from the worktree would leave the PNG untr
 
 ```sh
 mkdir -p /tmp/verify-ui && cd /tmp/verify-ui
-playwright-cli open "http://127.0.0.1:$port/#/flow"
-playwright-cli screenshot --filename=flow.png
+playwright-cli open "http://127.0.0.1:$port/#/explore"
+playwright-cli screenshot --filename=explore.png
 ```
 
 Read the PNG back and look at it. A capture that is blank or half drawn is the failure a screenshot exists to

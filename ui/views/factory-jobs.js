@@ -95,7 +95,7 @@ export const view = {
   path: "/factory/jobs",
   title: "Jobs",
   group: "factory",
-  order: 0,
+  order: 1,
   icon: "stopwatch",
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}`); },
   live: true,

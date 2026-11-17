@@ -1,4 +1,4 @@
-// The Flow page (was Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
+// The Explore page (was Flow, Efficiency): where agent time went, in hours. `d` is /api/flow for the window.
 import { moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
 import { count, hours, plural, sentence, pct } from "./lib/format.js";
@@ -51,7 +51,7 @@ const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usag
 function usagePage(d, key) {
   const total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Explore", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
     card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : empty(), { label: "Usage per issue, largest first" }) + `</div>`;
 }
@@ -61,21 +61,21 @@ export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
   const s = selection(d, key), total = d.classes.reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const head = scope().bar({ value: d.window ?? "week" });
-  return `<div class="page sp" id="eff">${pageHead("Flow", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Explore", { aside: head })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted`, lede: nc?.runs ? `${plural(nc.runs, "job")}, ${hours(nc.hours)}, have no outcome yet` : undefined }) +
     `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : empty(), { label: sentence(`${s.title} causes`) })}` +
     (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : empty(), { label: sentence(`${s.title} issues`) })) + `</div></div>`;
 }
 
 /** The old addresses. */
-export const redirect = (hash) => moved(hash, ["#/status/efficiency", "#/factory/efficiency"], "#/flow");
+export const redirect = (hash) => moved(hash, ["#/status/efficiency", "#/factory/efficiency", "#/flow"], "#/explore");
 
 export const view = {
-  path: "/flow",
-  title: "Flow",
+  path: "/explore",
+  title: "Explore",
   group: "factory",
-  order: 1,
-  icon: "chart-pie",
+  order: 3,
+  icon: "magnifying-glass-chart",
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}&baseline=1`); },
   live: true,
   refresh: 60,

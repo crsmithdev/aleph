@@ -30,7 +30,7 @@ const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
-  efficiency: { path: "#/flow", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
+  efficiency: { path: "#/explore", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
@@ -127,7 +127,7 @@ test("a chosen project is in the address, in each request, and on the next page"
 
 test("scope wire keeps the window and the project in storage and in the address; week and All stay out of it", () => {
   const root = { querySelector: () => null };
-  g.location.hash = "#/flow?window=day&project=alpha";
+  g.location.hash = "#/explore?window=day&project=alpha";
   scope().wire(root);
   g.location.hash = "#/factory/jobs";
   const s = scope();
@@ -136,9 +136,9 @@ test("scope wire keeps the window and the project in storage and in the address;
   expect(g.location.hash).toBe("#/factory/jobs?window=day&project=alpha");
   remember("window", "week");
   remember("project", "");
-  g.location.hash = "#/flow";
+  g.location.hash = "#/explore";
   scope().wire(root);
-  expect(g.location.hash).toBe("#/flow");
+  expect(g.location.hash).toBe("#/explore");
   expect(scope().url("/api/factory")).toBe("/api/factory");
 });
 

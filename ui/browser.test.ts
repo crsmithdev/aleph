@@ -1228,11 +1228,11 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
   afterAll(() => rig?.stop());
   afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
-  test("the list shows an idea after Issues in the nav, and the idea page shows its tabs and the newest prior art", async () => {
+  test("the list shows an idea after Jobs in the nav, and the idea page shows its tabs and the newest prior art", async () => {
     await page.when('document.querySelector("#view tbody tr")');
     expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historyexploringnew project");
     
-    expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Issues") + 1; })()')).toBe(true);
+    expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Jobs") + 1; })()')).toBe(true);
     await page.go("#/ideas/1");
     await page.when('document.querySelector("#view [data-tab]")');
     expect(await page.ev<string[]>('[...document.querySelectorAll("#view [data-tab]")].map((b) => b.textContent)')).toEqual(["Write-up", "Prior art", "Red team", "Explainer", "Log"]);
@@ -1372,9 +1372,9 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   }, 60_000);
 });
 
-describe.skipIf(!chromeUsable)("Flow and Sessions redraw", () => {
+describe.skipIf(!chromeUsable)("Explore and Sessions redraw", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/flow"); }, 150_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/explore"); }, 150_000);
   afterAll(() => rig?.stop());
 
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
@@ -1382,9 +1382,9 @@ describe.skipIf(!chromeUsable)("Flow and Sessions redraw", () => {
   const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at });
     window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
 
-  test("a redraw keeps a marked element connected on Flow and on Sessions", async () => {
+  test("a redraw keeps a marked element connected on Explore and on Sessions", async () => {
     await page.ev(sessions);
-    for (const [hash, sel] of [["#/flow", "#eff .tiles"], ["#/sessions", "#ag-live"]]) {
+    for (const [hash, sel] of [["#/explore", "#eff .tiles"], ["#/sessions", "#ag-live"]]) {
       await page.go(hash);
       await page.when(`document.querySelector("#view ${sel}")`);
       await page.ev(`window.mark = document.querySelector("#view ${sel}"); window.mark.old = 1`);

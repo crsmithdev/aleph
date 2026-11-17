@@ -16,7 +16,7 @@ export const view = {
   title: "Issues",
   icon: "list-check",
   group: "factory",
-  order: -1,
+  order: 0,
   api: "/api/issues",
   render: (d, _params, query) => renderIssues(d, hashOptions(query)),
   mount: (root, d) => mount(root, d),

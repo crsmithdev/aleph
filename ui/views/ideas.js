@@ -35,7 +35,7 @@ export const view = {
   title: "Ideas",
   icon: "lightbulb",
   group: "factory",
-  order: -0.5,
+  order: 2,
   api: (_params, q = new URLSearchParams()) => `/api/ideas?status=${encodeURIComponent(q.get("status") || "exploring")}`,
   live: true,
   render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring", q?.get("q") || "", scope(q).project),

@@ -56,7 +56,7 @@ function redrawHerald(root) {
   moved();
 }
 
-const EFFICIENCY = "#/flow", PERFORMANCE = "#/factory/jobs";
+const EFFICIENCY = "#/explore", PERFORMANCE = "#/factory/jobs";
 /** A link to another page that keeps the window; week is the default and stays out of the address. */
 const withWindow = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 
