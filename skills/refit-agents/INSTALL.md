@@ -1,9 +1,9 @@
 # Install lens
 
-Is each agent file installed once, at the scope that needs it, from its source? An item at user scope
-(`~/.claude/`, user MCP servers, user plugins) loads in every repo on the machine. An item at project scope loads in
-one repo. A file built in the home directory, not linked from the repo that owns it, drifts from the repo, and no
-commit or review sees the change.
+Is each agent file installed once, at the scope that needs it, from its source? An item at user scope (`~/.claude/`,
+user MCP servers, user plugins) loads in every repo on the machine. An item at project scope loads in one repo. A
+file built in the home directory, not linked from the repo that owns it, drifts from the repo, and no commit or
+review sees the change.
 
 ## Signals
 
@@ -45,15 +45,14 @@ uses, name the repo and the search of the other repos that finds no use.
 
 ## Fix
 
-Change nothing under `~/.claude/` before the user approves the move, because no commit records it. Move an item
-out of the way to a dated directory, such as `~/.claude/skills-removed-<date>/`, so it can come back. For a copy,
-merge into the repo any change the home copy has first, then replace the copy with a link into the repo. Delete a
-dangling link. Move an item to the scope that needs it. Uninstall a plugin that no settings file enables.
+Change nothing under `~/.claude/` before the user approves the move, because no commit records it. Move an item to
+a dated directory, such as `~/.claude/skills-removed-<date>/`, so it can come back. For a copy, merge into the repo
+any change the home copy has, then replace the copy with a link into the repo. Delete a dangling link. Move an item
+to the scope that needs it. Uninstall a plugin that no settings file enables.
 
 ## Guard
 
-Unchecked: `install.ts` in `lint` finds a copy, a shadow or a dangling link, but no hook runs it, because the
-state lives outside the repo.
+Unchecked: no hook runs `install.ts`, because the state lives outside the repo. `lint` runs it by hand.
 
 ## Check
 

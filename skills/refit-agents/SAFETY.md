@@ -1,7 +1,7 @@
 # Safety lens
 
-Can an agent file leak a secret, grant too much, or run code nobody reviewed? Agent files run with the user's
-rights: a hook is a shell command, an MCP server is a process, a skill can run its scripts.
+Can an agent file leak a secret, grant too much, or run code nobody reviewed? Agent files run with the user's rights.
+A hook is a shell command, an MCP server is a process, and a skill can run its scripts.
 
 ## Signals
 

@@ -1,9 +1,9 @@
 # Adherence lens
 
-Will the agent follow each line, every time, at the least cost? [write-agents](../write-agents/SKILL.md)
-is how to write an agent file; this lens audits one against the evidence. Each check carries its evidence:
-**measured** (a study or eval), **vendor** (Anthropic or OpenAI guidance), or **practitioner** (opinion with no
-data). A finding states its tag, and a practitioner check alone rates 3 at most.
+Will the agent follow each line, every time, at the least cost? [write-agents](../write-agents/SKILL.md) says how to
+write an agent file. This lens audits one against the evidence. Each check carries its evidence: **measured** (a
+study or eval), **vendor** (Anthropic or OpenAI guidance), or **practitioner** (opinion with no data). A finding
+states its tag, and a practitioner check alone rates 3 at most.
 
 ## Signals
 
@@ -52,13 +52,13 @@ the rediscovery result. For check 7, the user says the tool is unwanted. A `cont
 ## Fix
 
 Delete a no-op, a discoverable fact or scaffolding whole. Rewrite emphasis as "Use X when Y". Give a vague bar a
-command, path or number. Add the reason in a clause. State a rule's scope. Move a hard rule into a hook, a deny
-rule or CI, then delete the line. For a contradiction, quote both lines to the user and ask which wins, or whether
-each holds under a condition; then delete the loser, or state both conditions.
+command, path or number. Add the reason in a clause. State a rule's scope. Move a hard rule into a hook, a deny rule
+or CI, then delete the line. For a contradiction, quote both lines to the user and ask which wins, or whether each
+holds under a condition. Then delete the loser, or state both conditions.
 
 ## Guard
 
-`content.ts` counts as a shrink-only ratchet beside the `load.ts` total; model: `check`.
+See [Guards](SKILL.md#guards): `content.ts` counts as a shrink-only ratchet beside the `load.ts` total, and `check` is the model guard.
 
 ## Check
 

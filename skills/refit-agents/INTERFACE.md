@@ -1,8 +1,7 @@
 # Interface lens
 
-Can an agent build, test, run and use the repo with no one to ask? An agent learns a repo from what it can run
-and read. Every lookup it has to guess, and every command that asks a question or hangs, costs a turn or a wrong
-action.
+Can an agent build, test, run and use the repo with no one to ask? An agent learns a repo from what it can run and
+read. Each lookup it must guess, and each command that asks a question or hangs, costs a turn or a wrong action.
 
 ## Signals
 
@@ -35,8 +34,7 @@ refusal, a non-interactive flag, a manifest script. Then point the memory file a
 
 ## Guard
 
-A test that runs `<cli> <cmd> --help` for each command and asserts it prints usage and changes nothing; a CI job
-from a fresh clone.
+See [Guards](SKILL.md#guards). Add a CI job from a fresh clone.
 
 ## Check
 

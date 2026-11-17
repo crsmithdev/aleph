@@ -1,13 +1,13 @@
 # Triggers lens
 
-Does each description fire on its branches, and only there? A description is the pointer to its skill, subagent
-or command. [write-agents](../write-agents/SKILL.md) has the rules for pointers; this lens applies them
-across all descriptions at once.
+Does each description fire on its branches, and only there? A description is the pointer to its skill, subagent or
+command. [write-agents](../write-agents/SKILL.md) has the rules for pointers. This lens applies them across all
+descriptions at once.
 
 ## Signals
 
 - **Overlap.** Two descriptions name the same trigger ("review", "clean up", "debug") with no `NOT for:` to split
-  them. List every trigger phrase across the descriptions and sort it; a phrase under two names is a candidate.
+  them. List every trigger phrase across the descriptions and sort it. A phrase under two names is a candidate.
 - **A missing branch.** The body handles a case (a mode, a file kind) the description does not name.
 - **A buried lead.** The description opens with history or identity, not what the skill does. The listing cuts
   long descriptions from the end.

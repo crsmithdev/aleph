@@ -1,25 +1,24 @@
 # Load lens
 
-Does each always-loaded line earn its tokens? Every line of a memory file, every model-invoked description and
-every line a hook injects costs on every turn, whether it fires or not.
-[write-agents](../write-agents/SKILL.md) has the ladder (in-file, disclosed, environment) and the
-words this lens uses: context load, cache, sprawl, sediment.
+Does each always-loaded line earn its tokens? Every line of a memory file, every model-invoked description and every
+line a hook injects costs on every turn. [write-agents](../write-agents/SKILL.md) has the ladder (in-file, disclosed,
+environment) and the words this lens uses: context load, cache, sprawl, sediment.
 
 ## Signals
 
 From `load.ts`:
 
 - **The always total**, and the five largest items. Claude Code warns past about 200 lines per memory file.
-- **A model-invoked skill nobody reaches on its own.** It fires only by hand: `disable-model-invocation: true`
-  drops its description from the load.
+- **A model-invoked skill nobody reaches on its own.** `disable-model-invocation: true` drops its description from
+  the load.
 - **A long description.** Over 500 characters, or one that lists synonyms of one branch.
 - **A long skill body.** Over 500 lines, or reference that only some branches need, still in `SKILL.md`.
-- **Hook output.** Each event in `hooks` injects text; measure it from a session trace (Langfuse in aleph) or by
-  running the hook with a sample input. A hook that prints the same block every turn is load.
+- **Hook output.** Measure the text each `hooks` event injects from a session trace (Langfuse in aleph) or by running
+  the hook with a sample input. A hook that prints the same block every turn is load.
 - **A memory file that repeats another.** The same rule in the user's global `CLAUDE.md` and the repo's `CLAUDE.md`.
 
 In a live session, `/skill-doctor` shows each skill's cost per turn and the skills a session never invoked, and
-`/status` shows the memory files that are too long. Ask the user to run them; you cannot.
+`/status` shows the memory files that are too long. Ask the user to run them.
 
 ## Proof
 
@@ -40,8 +39,7 @@ Move it down the ladder: to a linked file, to the skill body, to the environment
 
 ## Guard
 
-The `load.ts` always total as a shrink-only ratchet in a test: a change that raises it records the new total and
-why.
+The `load.ts` always total as a shrink-only ratchet in a test. A change that raises it records the new total and why.
 
 ## Check
 
