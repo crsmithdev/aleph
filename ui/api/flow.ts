@@ -17,7 +17,7 @@ import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 // @ts-ignore plain JS, shared with the page
-import { shortModel } from "../views/lib/format.js";
+import { MIN_LANDED, shortModel } from "../views/lib/format.js";
 import { issueHref, parseId, parseKey, type EventRow } from "../../lib/naming.ts";
 import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
 import { readEvents } from "../../lib/layout.ts";
@@ -50,12 +50,15 @@ export interface Speed {
   /** Issues in each stage per bucket, for the Status page's chart. */
   active: Active[];
   buckets: ({ at: string; runs: number; cost: Record<string, number>; tokens: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
-  /** Every issue with a phase that ended in the window. */
-  times: IssueTimes[];
+  /** Every issue with a phase that ended in the window. `size` is the size of its last build run, null when that run has none or the issue has no build. */
+  times: (IssueTimes & { size: string | null })[];
+  /** Queue seconds over lead seconds, over the issues that landed in the window: how many, and their p50 (0 to 1; null with none). */
+  wait: { count: number; p50: number | null };
+  /** Every build run that started in the window, in start order. `issue` is its issue key, null for a run on no issue; `model` is the short name; `secs` its time; `landed` says its issue landed in the window. */
+  builds: { issue: string | null; model: string; size: string | null; secs: number; landed: boolean }[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
   /** The stages of the window, as the monitor counts them. */
   stages: { rows: StageRow[] };
-  models: { model: string; count: number; p50: number }[];
   /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
   flaky: number;
@@ -94,7 +97,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const times: Record<string, number[]> = { land: [], intake: [] };
   const checks = new Map<string, number[]>();
   const agents: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[] = [];
-  const models = new Map<string, number[]>();
+  const built: { r: Run; secs: number }[] = [];
 
   const { lists } = inp;
   const entries = allRuns().filter((e) => repoIn(e.run.repo, project));
@@ -113,10 +116,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (kind === "land" && r.state === "landed") landed.push(r);
     if (kind !== "agent") continue;
     const model = r.model || "unset";
-    // One row per short name: "claude-opus-5-5" and "opus" share a p50.
-    const short = shortModel(model);
-    if (!models.has(short)) models.set(short, []);
-    models.get(short)!.push(secs);
+    if (r.role === "build") built.push({ r, secs });
     agents.push({ name: r.name, state: r.state, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
   // A fix round is the rule of roundsByJob: first pass and `fixRounds` both read it.
@@ -168,6 +168,14 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (!item && lists.list(repo)) delete t.href;
   }
   const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
+  // The size of an issue is the size of its last build run, in all the records.
+  const sizeOf = new Map<string, { at: number; size: string | null }>();
+  for (const r of all) {
+    const key = r.role === "build" ? goalOf(r) : undefined, at = Date.parse(r.started);
+    if (key !== undefined && at >= (sizeOf.get(key)?.at ?? -Infinity)) sizeOf.set(key, { at, size: r.size ?? null });
+  }
+  const timed = ended.issues.map((i) => ({ ...i, size: sizeOf.get(i.id)?.size ?? null }));
+  const shares = timed.filter((i) => i.outcome === "landed" && i.queue !== null && i.lead).map((i) => i.queue! / i.lead!);
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {
     const inBucket = xs.filter((x) => b.slotOf(x.at) === i).map((x) => x.secs);
     return inBucket.length ? round(quantile(inBucket, q)!) : null;
@@ -201,11 +209,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     asks: asksOf(inp, project, since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], tokens: tokens[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
-    times: ended.issues,
+    times: timed,
+    wait: { count: shares.length, p50: shares.length ? round(quantile(shares, 0.5)!, 4) : null },
+    builds: built.map(({ r, secs }) => ({ issue: goalOf(r) ?? null, model: shortModel(r.model || "unset"), size: r.size ?? null, secs: round(secs), landed: landedBy.has(goalOf(r) ?? "") })),
     active: activeIssues(all, inp.filed, b, now.getTime(), (k) => inProject(k, project) && statusOf(k) === "open"),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,
-    models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(quantile(xs, 0.5)!) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
     issues,
     classes: cls.classes,
     notCounted: cls.notCounted,

@@ -13,12 +13,13 @@ const D: any = {
   phases: { lead: P(3, 1570, 16560), intake: P(3, 59, 1467), queue: P(3, 304, 6120, [1, 1, 1, 0, 0, 0, 0], 800), implement: P(3, 475, 1698), land: P(3, 74, 650) },
   buckets: [{ at: new Date(2026, 9, 27).toISOString(), lead: 1000, queue: 200, p90: { lead: 3000, queue: 900 } }, { at: new Date(2026, 9, 28).toISOString(), lead: null, queue: 100, p90: { lead: null, queue: 400 } }],
   times: [
-    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: new Date(F1).toISOString(), intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
-    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: new Date(F2).toISOString(), intake: 100, queue: 300, implement: 100, land: null, lead: null },
-    { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", filed: null, intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
+    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: new Date(F1).toISOString(), size: "small", intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
+    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: new Date(F2).toISOString(), size: "medium", intake: 100, queue: 300, implement: 100, land: null, lead: null },
+    { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", filed: null, size: null, intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
   ],
   checks: [{ name: "tests", count: 5, p50: 51, p90: 171 }],
-  models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
+  wait: { count: 2, p50: 0.2 },
+  builds: [],
 };
 
 const T = { hot: "H", run: "R", done: "D", need: "N", muted: "M" };
@@ -57,8 +58,8 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect(row).not.toContain('class=\"notice\"');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
-  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Lead Time by Size", "Build Time by Model", "Checks", "Jobs"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Lead time by size", "Build time by model", "Checks", "Jobs"]);
 });
 
 test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {
@@ -108,7 +109,7 @@ test("Slowest 10 holds the 10 slowest stages, by stage then by issue; for Lead T
 
 test("empty phases show dashes and no error", () => {
   const none = P(0, 0, 0, [0, 0, 0, 0, 0, 0, 0], 0);
-  const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], models: [] };
+  const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], builds: [], wait: { count: 0, p50: null } };
   const h = renderFactoryJobs(d, null, "lead");
   expect(h).toContain("<b>–<em> / –</em></b>");
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
@@ -118,13 +119,63 @@ test("the title is the sidebar name", () => {
   expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><div class="fbar">');
 });
 
-test("the Checks table groups a job count and the Models table names a model by shortModel()", () => {
-  const h = renderFactoryJobs({ ...D, checks: [{ name: "tests", count: 1234, p50: 51, p90: 171 }], models: [{ model: "claude-opus-5-5", count: 3, p50: 700 }, { model: "unset", count: 2, p50: 480 }] }, null, "lead");
+test("the Checks table groups a job count", () => {
+  const h = renderFactoryJobs({ ...D, checks: [{ name: "tests", count: 1234, p50: 51, p90: 171 }] }, null, "lead");
   expect(h).toContain('<td class="num">1,234</td>');
   expect(h).toContain('<td class="wide" title="tests">tests</td>');
-  expect(h).toContain('<td class="wide" title="opus">opus</td>');
+});
+
+const L = (id: string, size: string | null, lead: number, queue: number | null = 100, outcome = "landed") => ({ id, href: "#", outcome, filed: null, size, intake: 1, queue, implement: 1, land: 1, lead });
+const bld = (issue: string | null, model: string, size: string | null, secs: number, landed = true) => ({ issue, model, size, secs, landed });
+const cellsOf = (h: string, title: string) => [...h.match(new RegExp(`<h2>${title}</h2>.*?</section>`, "s"))![0].matchAll(/<tr>(.*?)<\/tr>/gs)].map((m) => [...m[1].matchAll(/<td[^>]*>(.*?)<\/td>/gs)].map((c) => c[1].replace(/<[^>]*>/g, ""))).filter((r) => r.length);
+
+test("Wait share is the p50 of queue over lead of the landed issues, after Lead Time, with no figure under 20 issues", () => {
+  const h = renderFactoryJobs(D, null, "lead");
+  expect([...h.matchAll(/<span class="k">([^<]*)</g)].map((m) => m[1]).slice(0, 3)).toEqual(["Lead Time", "Wait share", "Intake"]);
+  const card = h.match(/<[^>]*>Wait share.*?<\/div>/s)![0];
+  expect(card).toContain("<b>–</b>");
+  expect(card).toContain("2 issues");
+  expect(card).not.toContain("data-tile");
+  const many = renderFactoryJobs({ ...D, wait: { count: 24, p50: 0.234 }, baseline: { base: { waitShare: 0.3 }, prev: {}, basis: "the previous 7 days" } }, null, "lead");
+  expect(many).toContain("<b>23%</b>");
+  expect(many).toContain("24 issues");
+  expect(many).toContain('<span class="tr good" title="No previous value; baseline 30%, the previous 7 days (change in percentage points)">▼ 7%</span>');
+});
+
+test("Lead Time by Size counts the landed issues by the size of their last build, with a no size row only when an issue has none", () => {
+  const times = [L("a-1", "small", 100), L("a-2", "small", 300), L("a-3", "large", 900), L("a-4", "medium", 50, 10, "unlanded"), L("a-5", null, 70)];
+  const rows = cellsOf(renderFactoryJobs({ ...D, times }, null, "lead"), "Lead Time by Size");
+  expect(rows).toEqual([["small", "2", "1m 40s", "5m 00s"], ["medium", "0", "–", "–"], ["large", "1", "15m 00s", "15m 00s"], ["–", "1", "1m 10s", "1m 10s"]]);
+  expect(renderFactoryJobs({ ...D, times }, null, "lead")).toContain('<span title="no size">–</span>');
+  expect(cellsOf(renderFactoryJobs({ ...D, times: times.slice(0, 3) }, null, "lead"), "Lead Time by Size")).toHaveLength(3);
+  expect(renderFactoryJobs({ ...D, times }, null, "lead")).toContain('<h2>Lead Time by Size</h2><span class="count">4</span>');
+});
+
+test("Build Time by Model: a retry, a run with no size, a run with no issue and a run with no model", () => {
+  // opus: 20 landed issues of 100 s, one of them retried (100 + 60); sonnet: 2 landed issues.
+  const builds = [
+    ...Array.from({ length: 20 }, (_, i) => bld(`a-${i}`, "opus", "small", 100)), bld("a-0", "opus", "small", 60),
+    bld("a-30", "opus", null, 500, false), bld(null, "opus", "large", 40),
+    bld("b-1", "sonnet", "small", 10), bld("b-2", "sonnet", "small", 30),
+    bld("c-1", "unset", "medium", 20, false),
+  ];
+  const h = renderFactoryJobs({ ...D, builds }, null, "lead");
+  expect(cellsOf(h, "Build Time by Model")).toEqual([
+    ["opus", "23", "1m 40s", "1m 40s", "5%", "1m 40s"],
+    ["sonnet", "2", "10s", "30s", "0.0%", "–"],
+    ["–", "1", "20s", "20s", "0.0%", "–"],
+  ]);
+  // 1 of the 21 opus issues ran twice. Per Landed sums the retry: 20 landed issues, 19 of 100 s and one of 160 s.
+  expect(h).toContain('<td class="num" title="1 of 21 issues">5%</td>');
   expect(h).toContain('<td class="wide"><span title="no model">–</span></td>');
-  expect(h).not.toContain("not recorded");
+  expect(h).toContain('<td class="num"><span title="2 landed">–</span></td>');
+  expect(h).toContain('<h2>Build Time by Model</h2><span class="count">26</span>');
+  expect(h).toContain('data-name="size"');
+  // The Size filter keeps the runs of that size; a run with no size drops out.
+  const large = renderFactoryJobs({ ...D, builds }, null, "lead", null, { size: "large" });
+  expect(cellsOf(large, "Build Time by Model")).toEqual([["opus", "1", "40s", "40s", "–", "–"]]);
+  expect(large).toContain('data-value="large" aria-pressed="true"');
+  expect(large).toContain('<span class="count">1</span>');
 });
 
 test("each slowest stage has a colour that it keeps whatever other stages the data holds", () => {
@@ -137,7 +188,7 @@ test("each slowest stage has a colour that it keeps whatever other stages the da
 
 test("each Jobs chart frame with no data shows its empty line and its hint in the empty block", () => {
   const none = renderFactoryJobs({ ...D, buckets: [], times: [] }, null, "lead");
-  const blocks = [...none.matchAll(/<div class="empty"><p>No data<\/p><\/div>/g)];
+  const blocks = [...none.match(/<div class="trio">.*?<div class="pair">/s)![0].matchAll(/<div class="empty"><p>No data<\/p><\/div>/g)];
   expect(blocks).toHaveLength(3);
 });
 
@@ -165,7 +216,7 @@ test("the page lists the jobs with the search, the State filter and the Project 
 });
 
 test("the Checks and Models tables head their count Jobs, and no line names a run", () => {
-  const h = renderFactoryJobs(D, null, "queue");
+  const h = renderFactoryJobs({ ...D, builds: [bld("a-1", "opus", "small", 5)] }, null, "queue");
   const heads = [...h.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
   expect(heads.filter((t) => t === "Jobs")).toHaveLength(2);
   expect(heads.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
@@ -180,7 +231,8 @@ test("#/jobs redirects to the merged page with its query; a Job page does not", 
 });
 
 test("the Checks and Models tables show empty() with no rows and never page", () => {
-  expect(renderFactoryJobs({ ...D, checks: [], models: [] }, null, "lead").match(/class="empty"/g)!.length).toBe(2);
+  const tables = (h: string) => h.slice(h.indexOf('<div class="pair">'), h.indexOf('aria-label="Jobs"'));
+  expect(tables(renderFactoryJobs({ ...D, checks: [], times: D.times.filter((i: any) => i.outcome !== "landed"), builds: [] }, null, "lead")).match(/class="empty"/g)!.length).toBe(3);
   const checks = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, count: 1, p50: 1, p90: 2 }));
   const h = renderFactoryJobs({ ...D, checks }, null, "lead");
   expect(h).toContain('<table class="tbl fit">');

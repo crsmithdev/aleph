@@ -1,12 +1,13 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
 import { get, moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
-import { dur, count, failMessage, shortModel } from "./lib/format.js";
-import { card, cell, dataTable, miss, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
+import { dur, count, failMessage, MIN_LANDED, pct, plural, shortModel } from "./lib/format.js";
+import { card, cell, dataTable, filterBar, miss, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
+import { quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./lib/jobs-table.js";
-import { bucketOf, flowOf, lastPeriod, trendOn, usable } from "./lib/flow-parts.js";
+import { bucketOf, cardPct, flowOf, lastPeriod, trendOn, usable, windowTrend } from "./lib/flow-parts.js";
 
 export const STAGES = [
   ["lead", NAMES.lead],
@@ -24,7 +25,11 @@ const stageTile = ([key, name], d, day, on) => {
   return statCard({ k: name, v: none ? "–" : dur(c.p50), v2: none ? "–" : dur(c.p90), q: ["p50", "p90"], trend: tr, key, on });
 };
 
-/** The line a Jobs chart shows when the window holds no time for the stage. */
+/** The Wait share card: the p50 of queue time over lead time, over the issues that landed in the window; no figure with fewer than `MIN_LANDED`. */
+const waitTile = (d) => {
+  const { count: n, p50 } = d.wait, few = n < MIN_LANDED;
+  return statCard({ k: "Wait share", v: few ? "–" : pct(p50 * 100), note: plural(n, "issue"), trend: few ? "" : windowTrend(d, "waitShare", p50, { kind: "points", lowerIsGood: true, format: cardPct }) });
+};
 
 /** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is null, a gap. */
 export const trendFrame = (d, key, name) => ({
@@ -74,17 +79,51 @@ export const FRAMES = { trend: trendFrame, strip: stripFrame, slowest: slowestFr
 /** The key of a Jobs chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `factory/jobs/${k}`;
 
-const table = (labels, num, rows) => !rows.length ? empty() : dataTable(heads(labels, num), rows.map(([h, ...cells]) => row([typeof h === "string" ? cell(h, { wide: true }) : h.td, ...cells.map((c) => cell(c, { num: true }))])).join(""), { fit: true });
+/** A row's cell: text, or `{ td }` for a cell that holds markup or a title. */
+const td = (c, o) => (typeof c === "string" ? cell(c, o) : c.td);
+const table = (labels, num, rows) => !rows.length ? empty() : dataTable(heads(labels, num), rows.map(([h, ...cells]) => row([td(h, { wide: true }), ...cells.map((c) => td(c, { num: true }))])).join(""), { fit: true });
+const none = (reason, wide = true) => ({ td: `<td class="${wide ? "wide" : "num"}">${miss(reason)}</td>` });
+
+const SIZES = ["small", "medium", "large"];
+const landedIssues = (d) => (d.times ?? []).filter((i) => i.outcome === "landed" && i.lead > 0);
+const buildsOf = (d, size = "") => (d.builds ?? []).filter((b) => !size || b.size === size);
+
+/** The Lead Time by Size rows: the landed issues of each size, and of no size when any; an issue's size is that of its last build. */
+export function leadBySize(d) {
+  const landed = landedIssues(d);
+  const rows = [...SIZES, null].map((size) => {
+    const xs = landed.filter((i) => i.size === size).map((i) => i.lead);
+    return [size ?? none("no size"), count(xs.length), dur(quantile(xs, 0.5)), dur(quantile(xs, 0.9))];
+  });
+  return landed.length ? rows.filter((r, i) => i < SIZES.length || r[1] !== "0") : [];
+}
+
+/** The Build Time by Model rows of the build runs of `size` (all with none), fastest Per Landed first. A model with fewer than `MIN_LANDED` landed issues has no Per Landed and sorts last. */
+export function buildByModel(d, size = "") {
+  const rows = [...Map.groupBy(buildsOf(d, size), (b) => b.model)].map(([model, runs]) => {
+    const secs = runs.map((b) => b.secs), issues = [...Map.groupBy(runs.filter((b) => b.issue), (b) => b.issue).values()];
+    const retried = issues.filter((x) => x.length > 1).length;
+    const landed = issues.filter((x) => x[0].landed).map((x) => x.reduce((t, b) => t + b.secs, 0));
+    const per = landed.length >= MIN_LANDED ? quantile(landed, 0.5) : null;
+    return { per, count: runs.length, model, cells: [
+      model === "unset" ? none("no model") : shortModel(model), count(runs.length), dur(quantile(secs, 0.5)), dur(quantile(secs, 0.9)),
+      issues.length ? { td: cell(pct((retried / issues.length) * 100), { num: true, title: `${retried} of ${plural(issues.length, "issue")}` }) } : none("no issue", false),
+      per === null ? none(`${landed.length} landed`, false) : dur(per),
+    ] };
+  });
+  return rows.sort((a, b) => (a.per ?? Infinity) - (b.per ?? Infinity) || b.count - a.count || a.model.localeCompare(b.model));
+}
 
 /** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const head = renderScope(Array.isArray(jobs) ? jobs : [], { ...f, window: f.window ?? d.window });
   return `<div class="page sp" id="perf">${pageHead("Jobs", { aside: head })}` +
-    tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
+    tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).toSpliced(1, 0, waitTile(d)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
-    `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)])))}` +
-    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? { td: `<td class="wide">${miss("no model")}</td>` } : shortModel(m.model), count(m.count), dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
+    `<div class="pair">${card("Lead Time by Size", table(["Size", "Issues", "p50", "p90"], ["Issues", "p50", "p90"], leadBySize(d)), { count: landedIssues(d).length, label: "Lead time by size" })}` +
+    card("Build Time by Model", filterBar([{ label: "Size", name: "size", value: f.size || "", options: [{ value: "", label: "All" }, ...SIZES] }]) + table(["Model", "Jobs", "p50", "p90", "Retried", "Per Landed"], ["Jobs", "p50", "p90", "Retried", "Per Landed"], buildByModel(d, f.size).map((m) => m.cells)), { count: buildsOf(d, f.size).length, label: "Build time by model" }) + `</div>` +
+    card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)]))) +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error("Could not load the jobs.", { detail: jobs.message }) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 
@@ -97,7 +136,7 @@ export const view = {
   group: "factory",
   order: 1,
   icon: "stopwatch",
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}`); },
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/flow?window=${s.window}&baseline=1`); },
   live: true,
   refresh: 60,
   // `d.day` is /api/flow for the last 24h and `d.jobs` is /api/jobs for the window, which `more` adds; the page draws without them first.
@@ -127,5 +166,14 @@ export const view = {
       if (el) el.frame = fr(d, key, name);
     }
     wireJobs(root, () => (Array.isArray(d.jobs) ? d.jobs : null));
+    // The Size filter changes only what the model table counts, so it redraws and does not fetch: wireJobs would goQuery.
+    const onclick = root.onclick;
+    root.onclick = async (e) => {
+      const b = e.target.closest?.('.seg[data-name="size"] button');
+      if (!b) return onclick(e);
+      setQuery({ size: b.dataset.value });
+      await redraw();
+      root.querySelector('.seg[data-name="size"] button[aria-pressed="true"]')?.focus();
+    };
   },
 };

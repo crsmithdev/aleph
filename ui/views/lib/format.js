@@ -15,6 +15,8 @@ export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Numb
 export const mean = (v) => (v == null ? "–" : Number(v).toFixed(1));
 /** Hours as "3.2h": one decimal under 10, whole from 10. */
 export const hours = (h) => (h == null || Number.isNaN(h) ? "–" : `${h.toFixed(h < 10 ? 1 : 0)}h`); export const days = (d) => (d == null || Number.isNaN(d) ? "–" : `${Math.round(d)}d`);
+/** The fewest landed issues a median of issues rests on; with fewer the Jobs page shows no figure. */
+export const MIN_LANDED = 20;
 /** A byte count as "512B", "1.5KiB" or "2.0MiB". */
 export const bytes = (n) => (n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(1)}KiB` : `${(n / 1048576).toFixed(1)}MiB`);
 /** `≈1% wk` or `≈0.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */

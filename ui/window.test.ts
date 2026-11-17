@@ -24,7 +24,7 @@ const speed = (window: string): any => ({
   issues: { landed: 1, firstPass: 0.5, fixRounds: 0, week: null, usage: [] }, classes: [],
   figures: { lost: null, hours: null, leadP50: 60, leadP90: 120, asks: null, landed: null, firstPass: 0.5 },
   phases: { lead: P(1), intake: P(1), queue: P(1), implement: P(1), land: P(1) }, buckets: [{ at: new Date(2026, 9, 28).toISOString(), lead: 1 }],
-  checks: [], models: [], agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], outcomes: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
+  checks: [], times: [], builds: [], wait: { count: 0, p50: null }, agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], outcomes: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
 });
 const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday: 1, liveRuns: 0, liveCap: 5 } };
 
@@ -66,7 +66,7 @@ test("picking an option on each page asks for that window and the page marks it"
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" || name === "agents" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" || name === "agents" || name === "jobs" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(`data-value="${w}" aria-pressed="true"`);
     expect(html).toBeTruthy();
@@ -75,8 +75,8 @@ test("picking an option on each page asks for that window and the page marks it"
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   remember("window", "month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status || p === PAGES.agents ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
-  expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status || p === PAGES.agents || p === PAGES.jobs ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
+  expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour&baseline=1");
   expect(scope(new URLSearchParams("window=nope")).window).toBe("month");
 });
 

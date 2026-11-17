@@ -7,7 +7,7 @@ import { jobFolder } from "../../jobs/lib/records/run-files.ts";
 import { closePass, openPass } from "../../lib/sources.ts";
 import { withEnv } from "../server.testkit.ts";
 import { filed } from "../../issues/lib/store.ts";
-import { routes, speed } from "./flow.ts";
+import { inputs, routes, speed } from "./flow.ts";
 import { activeIssues, phaseTimes, phases } from "../flow/phases.ts";
 import { agentStats } from "../flow/agents.ts";
 import { CLASSES, classify } from "../flow/classes.ts";
@@ -263,12 +263,42 @@ test("classify: one run of each class, with its cause", () => {
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+test("builds, wait and size: one entry per build run; an issue's size is its last build's; wait is queue over lead of the landed issues", () => {
+  const t = (h: number, m = 0) => at(5, h, m), filedAt = Date.parse(t(8));
+  const inp = { ...inputs(), filed: { issue: new Map<string, number | null>([["alpha-1", filedAt], ["alpha-2", filedAt], ["alpha-4", filedAt]]) } };
+  const on = (n: number) => ({ repo: "alpha", target: `issue.${n}` });
+  // alpha-1: a small build retried as a medium one, then landed. alpha-2: no size and no model, landed. alpha-4: a build, not landed. One build on no issue.
+  run({ role: "build", state: "failed", model: "claude-opus-5-5", size: "small", ...on(1), ...secs(5, 9, 400) });
+  run({ role: "build", state: "passed", model: "claude-opus-5-5", size: "medium", ...on(1), ...secs(5, 10, 200) });
+  run({ role: "land", state: "landed", ...on(1), ...secs(5, 11, 40) });
+  run({ role: "build", state: "passed", ...on(2), ...secs(5, 9, 300) });
+  run({ role: "land", state: "landed", ...on(2), ...secs(5, 12, 40) });
+  run({ role: "build", state: "passed", model: "sonnet", size: "small", ...on(4), ...secs(5, 13, 100) });
+  run({ role: "build", state: "passed", model: "sonnet", size: "large", repo: "alpha", ...secs(5, 14, 50) });
+  run({ role: "recheck", state: "passed", model: "sonnet", size: "small", ...on(4), ...secs(5, 15, 70) });
+  const d = speed("month", now, null, "alpha", inp);
+  expect(d.builds).toEqual([
+    { issue: "alpha-1", model: "opus", size: "small", secs: 400, landed: true },
+    { issue: "alpha-1", model: "opus", size: "medium", secs: 200, landed: true },
+    { issue: "alpha-2", model: "unset", size: null, secs: 300, landed: true },
+    { issue: "alpha-4", model: "sonnet", size: "small", secs: 100, landed: false },
+    { issue: null, model: "sonnet", size: "large", secs: 50, landed: false },
+  ]);
+  expect(Object.fromEntries(d.times.map((i) => [i.id, i.size]))).toEqual({ "alpha-1": "medium", "alpha-2": null, "alpha-4": "small" });
+  // alpha-1: queue 3600 of lead 10840 (08:00 to 11:00:40); alpha-2: 3600 of 14440. The p50 of two is the lower one.
+  expect(d.wait).toEqual({ count: 2, p50: 0.2493 });
+  expect(d).not.toHaveProperty("models");
+  // Under 20 landed issues the baseline's figure is empty.
+  expect(figures(d).waitShare).toBeNull();
+  expect(figures({ ...d, wait: { count: 20, p50: 0.3 } }).waitShare).toBe(0.3);
+});
+
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
   run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
   const d = speed("week", now);
   expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
-  expect(d.models.find((m) => m.model === "opus")!.count).toBe((before.models.find((m) => m.model === "opus")?.count ?? 0) + 1);
+  expect(d.builds.filter((b) => b.model === "opus").length).toBe(before.builds.filter((b) => b.model === "opus").length + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (o: Record<string, unknown>) => ({ n: 1, job: "b", name: "b", repo: "fx", target: "issue.1", state: "passed", ...o }) as any;
   const out = classify([
