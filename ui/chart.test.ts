@@ -122,3 +122,10 @@ test("a null value is a gap that a line passes over, and a missing one is 0", ()
   expect(b.data).toEqual([3, 0, 1]);
   expect(a.connectNulls).toBe(true);
 });
+
+test("a time row with a name is a step: its name is its axis label; on and dashed style its point", () => {
+  const f: any = { measure: { name: "Fill", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { keys: [{ key: "fill", name: "fill" }] }, rows: [{ name: "1", fill: 5 }, { name: "2", fill: 9, on: true }, { name: "3", fill: 2, dashed: true }] };
+  const o = option(f, "columns", { ink: "#i" });
+  expect(o.xAxis.data).toEqual(["1", "2", "3"]);
+  expect(o.series[0].data).toEqual([5, { value: 9, itemStyle: { color: "#i" } }, { value: 2, itemStyle: { borderColor: "#i", borderType: "dashed", borderWidth: 1 } }]);
+});

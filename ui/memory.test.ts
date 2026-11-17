@@ -18,7 +18,7 @@ import { badge, dataTable, empty, heads, md, pageHead, priorityBadge } from "./v
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { mountContext } from "./views/lib/context-panel.js";
+import { fillFrame, mountContext } from "./views/lib/context-panel.js";
 // @ts-ignore
 import { panel } from "./views/lib/timeline.js";
 // @ts-ignore
@@ -256,7 +256,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   expect(h).not.toContain("<i title=");
   expect(v.recallFrame(hist).by.keys[0].name).toBe("recalls");
   expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
-  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).toContain(empty());
+  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).not.toContain("aleph-chart");
 });
 
 test("/api/memory lint still gives a stale finding to an old note that the read log shows read lately", async () => {
@@ -407,7 +407,7 @@ test("the overview writes its counts through count() and its sizes through bytes
   const h = v.renderMemory(big, v.options(), rs);
   expect(h).toMatch(/data-tile="semantic"[^]*?<b>1,000<\/b>/);
   expect(h).toContain('<h3>Semantic</h3><span class="count">1,000</span>');
-  for (const t of ["12,345 recalls in 30 days, 1,000 empty", "2.0KiB / 4.0KiB, 0 core lines, 1,500 cut", '<span class="count">1,200</span>', "1,200 warned"]) expect(h).toContain(t);
+  for (const t of ["<dd>12,345</dd>", "<dd>1,000 (10%)</dd>", "2.0KiB / 4.0KiB, 0 core lines, 1,500 cut", '<span class="count">1,200</span>', "1,200 warned"]) expect(h).toContain(t);
   expect(h).not.toContain("refusals,");
 });
 
@@ -427,15 +427,15 @@ test("the procedural table hides its 51st row and its pager says 50 of 51", () =
 test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {
   const n = { title: "N", path: "wiki/gotchas/N.md", frontmatter: { scope: "aleph", confidence: "measured", core: "the <core>" }, body: "**Claim.** x", text: "", links: [{ title: "L" }], backlinks: [{ title: "B" }] };
   const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
-  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', "Recall history", "No data", 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
+  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
     expect(h).toContain(t);
   // No button of the page carries data-act, which router.js's own handler takes.
   expect(h).not.toContain("data-act=");
   expect(h).toContain(`· ${badge("in use")}`);
-  expect(h).not.toMatch(/class="act[^"]* (danger|small)/);
+  expect(h).toContain('<button class="act danger" type="button" data-mact="delete">Delete</button>');
+  expect(h).toContain('<button class="act small" type="button" data-mact="unlink" data-target="L">Unlink</button>');
   const bare = v.renderInspector(it({}), { ...n, links: [], backlinks: [] }, "use");
-  expect(bare.split(empty()).length - 1).toBeGreaterThanOrEqual(2);
-  expect(bare).not.toContain("None.");
+  for (const t of ["Links to", "Linked from", "Recall history", empty()]) expect(bare).not.toContain(t);
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
   for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
   expect(hand).not.toContain("Recall history");
@@ -491,7 +491,7 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
     const row = v.renderProcessesTab(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
-    expect(row).toContain('<span class="badge error">failed</span> <span class="quiet">no route</span>');
+    expect(row).toContain('<span class="badge error" title="no route">failed</span>');
     expect(m.episodes.pages).toBe(1);
     expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
     expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
@@ -499,7 +499,7 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     expect(h).toContain("Run the checks.");
     expect(h).toContain('<span class="badge error">failed: no page</span>');
     expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
-    expect(h).toContain("No note is stale.");
+    expect(h).toContain(`<div class="empty"><p>No data</p></div>`);
     expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
   } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
@@ -512,7 +512,7 @@ test("the tabs link Search, Context, Log and Processes; the log row opens a reca
   expect(h).toContain('<a href="#/memory?tab=processes&project=aleph">Processes</a>');
   expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
   const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
-  expect(v.logRow(r)).toContain('<details><summary>q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
+  expect(v.logRow(r)).toContain('<details><summary title="q">q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
   expect(v.logRow(r)).toContain("+1");
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
   expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
@@ -530,9 +530,10 @@ test("the Context tab draws one parts row per part of the selected request, fixe
   const table = h.slice(h.indexOf("<table"), h.indexOf("</table>"));
   const rows = table.split("<tr>").slice(2).map((r: string) => r.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
   expect(rows).toEqual(["System prompt r 600 est.", "Tools · 2 r 300 est.", "Your messages · 1 r 100 exact", "Total message.usage 1,000 exact"]);
-  expect(h).toContain("Fill of request 2");
-  expect(h.match(/data-n="\d+" aria-label="request/g)?.length).toBe(2);
-  expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of request 2");
+  expect(h).toContain("Fill of Request 2");
+  expect(h).toContain('<aleph-chart key="memory/fill">');
+  expect(fillFrame(session.requests, session.requests[1]).rows).toEqual([{ name: "1", fill: 1000, on: false, dashed: false, pick: 1 }, { name: "2", fill: 1000, on: true, dashed: false, pick: 2 }]);
+  expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of Request 2");
   expect(v.renderContextTab({ sessions })).toContain("Loading the session");
   expect(v.renderContextTab({ sessions: [] })).toContain(empty());
 });
@@ -550,9 +551,9 @@ test("a kept session draws at once for the same session and request, and mountCo
   try {
     store.set("aleph.memory.context", JSON.stringify({ n: "", session: session("s1") }));
     const same = new URLSearchParams("tab=context&session=s1"), newest = new URLSearchParams("tab=context");
-    expect(v.renderContextTab({ sessions }, same)).toContain("Fill of request 1");
+    expect(v.renderContextTab({ sessions }, same)).toContain("Fill of Request 1");
     expect(v.renderContextTab({ sessions }, same)).not.toContain("Loading the session");
-    expect(v.renderContextTab({ sessions }, newest)).toContain("Fill of request 1");
+    expect(v.renderContextTab({ sessions }, newest)).toContain("Fill of Request 1");
     expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s2"))).toContain("Loading the session");
     expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s1&n=1"))).toContain("Loading the session");
     await mountContext(root({ sessions }, same).root, { sessions }, same);
@@ -572,8 +573,9 @@ test("the Context tab scales the fill line, the part segments and the chart bars
   const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }], items: [], summaries: [] };
   const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=1"));
   expect(h).toContain("of 1,000,000 tokens · 50%");
-  expect(h).toContain("width:25.00%");
-  expect(h).toContain("height:50%");
+  expect(h).toContain("width:25.0%");
+  const cut = [{ n: 1, fill: 500 }, { n: 2, fill: 100 }];
+  expect(fillFrame(cut, cut[0]).rows.map((r: any) => [r.on, r.dashed])).toEqual([[true, false], [false, true]]);
 });
 
 test("the Context tab unfolds Tools into each tool and Tool results into each tool's calls the request holds", () => {
@@ -590,7 +592,7 @@ test("the Context tab unfolds Tools into each tool and Tool results into each to
   const tools = h.slice(h.indexOf("By tool"), h.indexOf("</details>"));
   expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75%", "Bash built-in 100 25%"]);
   // request 4's call is not in request 3; the groups go by tokens
-  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 calls · 30 · 33%"]);
+  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 call · 30 · 33%"]);
   expect(h).toContain('data-call="b"');
   expect(h).not.toContain('data-call="d"');
 });
@@ -598,7 +600,7 @@ test("the Context tab unfolds Tools into each tool and Tool results into each to
 test("Health shows the recall misses card after Lint's: unoffered reads, empty of all recalls and hook runs, or No data", () => {
   const h = v.renderMemory({ ...page, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, hook: { runs: 1194 } } }, v.options(), []);
   const card = h.slice(h.indexOf('aria-label="Recall misses"'));
-  for (const t of ["1,234", "0 empty", "7 recalls", "1,194"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
+  for (const t of ["<dd>1,234</dd>", "<dd>0 (0.0%)</dd>", "<dd>7</dd>", "<dd>1,194</dd>"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
   expect(h.indexOf('aria-label="Recall misses"')).toBeGreaterThan(h.indexOf('aria-label="Lint"'));
   const none = v.renderMemory(page, v.options(), []);
   const body = none.slice(none.indexOf('aria-label="Recall misses"'));

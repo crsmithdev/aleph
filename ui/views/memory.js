@@ -4,12 +4,12 @@
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "./lib/router.js";
 import { held, mountContext, renderContext } from "./lib/context-panel.js";
-import { renderProcesses } from "./lib/processes.js";
+import { mountProcesses, renderProcesses } from "./lib/processes.js";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel } from "./lib/timeline.js";
 import { goQuery, hashQuery, postJson, setQuery, scope } from "./lib/address.js";
 import { bytes, count, day, localMs, pct, when } from "./lib/format.js";
-import { actButton, badge, fold, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, empty, error, esc, filterBar, legendHtml, arm, loadingLine, md, meter, miss, moreFold, pageHead, pager, say, searchBox, sectionHead, statCard, tag, tiles } from "./lib/html.js";
+import { actButton, badge, chip, fold, list as stack, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, empty, error, esc, filterBar, legendHtml, arm, loadingLine, md, meter, miss, moreFold, pageHead, pager, say, searchBox, sectionHead, statCard, subHead, tiles } from "./lib/html.js";
 
 const TABS = { log: "/api/memory/log", processes: "/api/memory/processes" };
 export const view = {
@@ -20,8 +20,8 @@ export const view = {
   order: 1,
   api: (_params, q = new URLSearchParams()) => (q.get("tab") === "context" ? "/api/context" : scope(q).url(TABS[q.get("tab")] ?? "/api/memory")),
   live: true,
-  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : query?.get("tab") === "processes" ? renderProcessesTab(m) : renderMemory(m, options(query))),
-  mount: (root, m, query) => (query?.get("tab") === "context" ? mountContext(root, m, query) : query?.get("tab") === "log" ? mountLog(root) : query?.get("tab") === "processes" ? undefined : mount(root, m)),
+  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : query?.get("tab") === "processes" ? renderProcessesTab(m, query) : renderMemory(m, options(query))),
+  mount: (root, m, query) => (query?.get("tab") === "context" ? mountContext(root, m, query) : query?.get("tab") === "log" ? mountLog(root) : query?.get("tab") === "processes" ? mountProcessesTab(root, m) : mount(root, m)),
 };
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
@@ -52,7 +52,7 @@ export function noteStatus(n, now = Date.now()) {
 /** The note rows of the overview with their status. */
 export const noteRows = (m, now = Date.now()) => (m.notes ?? []).map((n) => ({ ...n, status: noteStatus(n, now) }));
 
-const FRESH = [{ value: "", label: "Any" }, { value: "use", label: "Read in 7 days" }, { value: "never", label: "Never read" }, { value: "old", label: "Not written in 60 days" }, { value: "lint", label: "Lint problem" }];
+const FRESH = [{ value: "", label: "All" }, { value: "use", label: "Read in 7 days" }, { value: "never", label: "Never read" }, { value: "old", label: "Not written in 60 days" }, { value: "lint", label: "Lint problem" }];
 
 /** The page's state from the route's query: ?q=text&type=semantic&fresh=never&item=note:Title. */
 export function options(qs = new URLSearchParams()) {
@@ -82,8 +82,8 @@ export function typeCounts(results, o, status) {
   return Object.fromEntries(TYPES.map((t) => [t.id, rows.filter((it) => it.type === t.id).length]));
 }
 
-const renderTiles = (counts, o, loaded) => tiles("Memory types", TYPES.map((t) =>
-  statCard({ k: t.name, v: t.id === "parametric" || !loaded ? "–" : count(counts[t.id]), note: t.holds, key: t.id, on: t.id === o.type })).join(""));
+const renderTiles = (counts, o, loaded, failed = "") => tiles("Memory types", TYPES.map((t) =>
+  statCard({ k: t.name, v: t.id === "parametric" ? "–" : loaded && !failed ? count(counts[t.id]) : undefined, title: t.holds, key: t.id, on: t.id === o.type, loading: !loaded, failed })).join(""));
 
 const sel = (it, o) => `tabindex="0" data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
 const titleLink = (it) => (it.href ? `<a href="${esc(it.href)}">${esc(it.title)}</a>` : esc(it.title));
@@ -93,23 +93,23 @@ const noteRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${
   `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · read ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
 
 /** A rule, a skill, a hook or a lesson: what it says and when it is loaded. */
-export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text.replaceAll("`", ""))}">${codeText(it.text)}</td><td class="eff">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
+export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text.replaceAll("`", ""))}">${codeText(it.text)}</td><td title="${esc(it.effect)}">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
 
 /** An event in time: when first, then what. */
 const eventRow = (it, o) => `<li class="mrow mev" ${sel(it, o)}><span class="time">${shortDay(it.at) ? esc(shortDay(it.at)) : miss("No date")}</span><div><b>${titleLink(it)}</b>${it.scope ? ` ${q(esc(it.scope))}` : ""}<p>${codeText(it.text)}</p></div></li>`;
 
-/** A handoff or an issue: what it is and what it does next. */
-const cardRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p><p class="mm eff">${esc(it.effect)}</p></li>`;
+/** A handoff or an issue: what it is and what it does next. `shared` leaves the effect out: the inspector gives it. */
+const cardRow = (it, o, shared = false) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}${it.priority ? ` ${priorityBadge(it.priority)}` : ""}</b><span class="quiet">${esc([it.scope, it.at && ago(it.at)].filter(Boolean).join(" · "))}</span></div><p>${codeText(it.text)}</p>${shared ? "" : `<p class="mm eff">${esc(it.effect)}</p>`}</li>`;
 
 /** Rows past STEP start hidden; the pager turns the page in place, as under `pagedTable()`. */
 const hide = (rows) => rows.map((r, i) => (i < STEP ? r : r.replace(/^<li /, "<li hidden "))).join("");
-const list = (rows, cls = "") => `<div class="paged" data-step="${STEP}"><ul class="mrows${cls}">${hide(rows)}</ul>${pager(1, rows.length, STEP)}</div>`;
+const list = (rows, cls = "") => `<div class="paged" data-step="${STEP}"><ul class="mrows${cls}">${hide(rows)}</ul>${rows.length > STEP ? pager(1, rows.length, STEP) : ""}</div>`;
 
 const LAYOUT = {
   semantic: (xs, o) => list(xs.map((it) => noteRow(it, o))),
   procedural: (xs, o) => pagedTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), xs.map((it) => ruleRow(it, o)), STEP),
   episodic: (xs, o) => list([...xs].sort((a, b) => String(b.at).localeCompare(String(a.at))).map((it) => eventRow(it, o)), " tl"),
-  working: (xs, o) => list(xs.map((it) => cardRow(it, o))),
+  working: (xs, o) => list(xs.map((it) => cardRow(it, o, xs.length > 1 && xs.every((x) => x.effect === xs[0].effect)))),
   prospective: (xs, o) => list(xs.map((it) => cardRow(it, o))),
 };
 
@@ -117,10 +117,10 @@ export function renderResults(results, o, status) {
   if (results === null) return loadingLine("memory");
   const rows = keepRows(results, o, status);
   if (!rows.length) return empty();
-  return TYPES.filter((t) => LAYOUT[t.id]).map((t) => {
+  return stack(TYPES.filter((t) => LAYOUT[t.id]).map((t) => {
     const xs = rows.filter((it) => it.type === t.id);
-    return xs.length ? card(t.name, LAYOUT[t.id](xs, o), { level: 3, count: count(xs.length), aside: dot(t.id), cls: "mgroup" }) : "";
-  }).join("");
+    return xs.length ? card(t.name, LAYOUT[t.id](xs, o), { level: 3, count: count(xs.length) }) : "";
+  }).join(""));
 }
 
 /** The frame of a note's recalls per day over 30 days, oldest first, from the recall log. The frame's window only names the x label format: one row per day. */
@@ -132,8 +132,8 @@ export const recallFrame = (hist = []) => ({
   legend: false,
 });
 
-/** The chart panel of a note's recalls (`inspect` sets its frame), or the line that there were none. */
-const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : `<h4>Recall history, 30 days</h4>${empty()}`;
+/** The chart panel of a note's recalls (`inspect` sets its frame), or nothing when there were none. */
+const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : "";
 
 const why = field("Why (optional)", inputBox("why"));
 // `data-mact`, not `data-act`: router.js runs its own command for every `button.act[data-act]`.
@@ -141,27 +141,26 @@ const act = (label, a, o = {}) => actButton(label, { mact: a }, o);
 
 /** The writes a memory takes, by where it lives. A rule, a skill or a hook is a file in the repo, so it changes on a branch, not here. */
 function actions(it) {
-  const file = ["handoff", "episode", "memory-md"].includes(it.source);
   const rows = {
-    note: `${act("Edit", "edit", { primary: true })}${why}${act("Archive", "archive")}${act("Delete", "delete")}`,
+    note: `${act("Edit", "edit", { primary: true })}${why}${act("Archive", "archive")}${act("Delete", "delete", { kind: "danger" })}`,
     "memory-md": act("Edit", "edit", { primary: true }),
-    handoff: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete")}`,
-    episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete")}`,
-    issue: `${act("Drop", "drop")}`,
+    handoff: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { kind: "danger" })}`,
+    episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { kind: "danger" })}`,
+    issue: `${act("Drop", "drop", { cls: "warn" })}`,
     proposal: `${act("Approve", "approve", { primary: true })}${act("Decline", "decline")}`,
   }[it.source];
   const ro = ["rules", "skill", "hook"].includes(it.source) ? note("A file in the repo: change it on a branch.") : "";
-  return `<div class="macts" data-file="${file}">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
+  return `<div class="actions">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
 }
 
-/** The note's links out, each with Unlink, the notes that link to it, and a field to add a link. */
-const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title })}</li>`).join("")}</ul>` : empty()}` +
-  `<h4>Linked from</h4>${n.backlinks?.length ? `<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : empty()}` +
-  setting("Link to a note", inputBox("target", "", { id: "mem-link", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-link", save: "Link", attrs: ' data-mact="link"' });
+/** The note's links out, each with Unlink, the notes that link to it (each block only when it holds rows), and a field to add a link. */
+const links = (n) => (n.links?.length ? `${subHead("Links to")}<ul>${n.links.map((l) => `<li>${link(l.title)} ${actButton("Unlink", { mact: "unlink", target: l.title }, { kind: "small" })}</li>`).join("")}</ul>` : "") +
+  (n.backlinks?.length ? `${subHead("Linked from")}<ul>${n.backlinks.map((l) => `<li>${link(l.title)}</li>`).join("")}</ul>` : "") +
+  setting("Link to a note", inputBox("target", "", { id: "mem-link", attrs: ' list="mem-titles" placeholder="Note title"' }), { id: "mem-link", save: "Link", attrs: ' data-mact="link"', stack: true });
 
 /** The core line: the note's one line in the start context of its scope. Blank takes the note out. */
-const coreForm = (n) => setting("Core line", inputBox("core", n.frontmatter?.core, { id: "mem-core", attrs: ' placeholder="None: the note is reached by recall only" maxlength="160"' }),
-  { id: "mem-core", hint: `In every ${n.frontmatter?.scope ?? ""} session's start context.`, save: "Save core line", attrs: ' data-mact="core"' });
+const coreForm = (n) => setting("Core line", inputBox("core", n.frontmatter?.core, { id: "mem-core", attrs: ' maxlength="160"' }),
+  { id: "mem-core", save: "Save", stack: true, attrs: ` data-mact="core" title="${esc(`In every ${n.frontmatter?.scope ?? ""} session's start context. Blank takes the note out.`)}"` });
 
 /** The inspector for `it`; `n` is /api/memory/notes/:title's answer when `it` is a note, `hist` its recalls per day. */
 export function renderInspector(it, n = null, status = "", hist = []) {
@@ -171,7 +170,7 @@ export function renderInspector(it, n = null, status = "", hist = []) {
   // The claim first; the rest of the note folds, so how it reaches the agent stays in view.
   const [claim, ...rest] = (n?.body ?? "").trim().split(/\n\s*\n/);
   const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `${fold("The whole note", `<article class="note">${md(rest.join("\n\n"))}</article>`, { cls: "fold" })}` : ""}` : `<p>${codeText(it.text)}</p>`;
-  const reach = `<div class="mreach"><h4>How it reaches the agent</h4><p>${esc(it.effect)}</p>${n ? coreForm(n) : ""}</div>`;
+  const reach = `<div class="mreach">${subHead("How it reaches the agent")}<p>${esc(it.effect)}</p>${n ? coreForm(n) : ""}</div>`;
   const rows = facts([["Written", it.at && esc(shortDay(it.at))], ...(it.source === "note" ? [["Last recalled", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "")]] : [["Scope", esc(it.scope || "all")]])]);
   return `${head}${what}${reach}${rows}${it.source === "note" ? recallHistory(hist) : ""}${n ? links(n) : ""}${actions(it)}` +
     (n ? `<p class="hint"><code>${esc(n.path)}</code></p>` : "") + `<div class="medit" hidden></div>`;
@@ -184,13 +183,11 @@ function renderWrites(m) {
 }
 
 function renderHealth(m) {
-  const f = (x) => `<li><code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span></li>`;
+  const f = (x) => `<code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span>`;
   const { refuse, warn } = m.lint;
-  const med = m.misses;
-  return (refuse.length ? sectionHead("Refusals", { count: count(refuse.length), level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
-    (warn.length ? sectionHead("Warnings", { count: count(warn.length), level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
-    (!refuse.length && !warn.length ? empty() : "") +
-    (med ? `<p>${esc(`${count(med.recalls)} recalls in ${count(med.days)} days, ${count(med.empty)} empty (${pct(med.empty_share * 100)}), ${count(med.reformulated)} reformulated.`)}</p>` : "");
+  return (refuse.length ? subHead("Refusals") + moreFold(refuse, f) : "") +
+    (warn.length ? subHead("Warnings") + moreFold(warn, f) : "") +
+    (!refuse.length && !warn.length ? empty() : "");
 }
 
 /** Lint by rule, largest first. */
@@ -217,15 +214,15 @@ function readChart(rows) {
 
 function renderBroad(m, rows) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty()) +
+  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 })).join("")) : empty()) +
     fold("Every finding", renderHealth(m), { cls: "fold" }), { count: count(lint.refuse.length + lint.warn.length) });
   const med = m.misses;
-  const missCard = card("Recall Misses", med ? statCard({ k: "Unoffered reads", v: count(med.unoffered_reads), q: [`${count(med.empty)} empty`, `${count(med.recalls)} recalls`] }) + facts([["Hook runs", count(med.hook.runs)]]) : empty(), { label: "Recall misses" });
-  const reads = card("When Recall Last Returned Each Note", readChart(rows), { label: "When recall last returned each note" });
+  const missCard = card("Recall Misses", med ? facts([["Unoffered reads", count(med.unoffered_reads)], ["Recalls", count(med.recalls)], ["Empty", `${count(med.empty)} (${pct(med.empty_share * 100)})`], ["Reformulated", count(med.reformulated)], ["Days", count(med.days)], ["Hook runs", count(med.hook.runs)]]) : empty(), { label: "Recall misses" });
+  const reads = card("Last Recalled", readChart(rows), { label: "Last recalled" });
   const start = Object.entries(m.start ?? {});
   const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty(), { label: "Start context" });
   const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: count((m.writes ?? []).length), label: "Recent writes" });
-  return `<div class="pair">${lintCard}${missCard}</div><div class="pair">${reads}${budget}</div>${writes}`;
+  return stack(`<div class="pair">${lintCard}${missCard}</div><div class="pair">${reads}${budget}</div>${writes}`);
 }
 
 const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
@@ -237,7 +234,6 @@ export function renderTabs(on, project = "") {
   return `<nav class="vtabs" aria-label="Memory views">${[["", "Search"], ["context", "Context"], ["log", "Log"], ["processes", "Processes"]].map(t).join("")}</nav>`;
 }
 
-const TONE = { write: "done", recall: "run", miss: "need" };
 const KINDS = [{ value: "", label: "All" }, { value: "write", label: "Writes" }, { value: "recall", label: "Recalls" }, { value: "miss", label: "Misses" }];
 /** The `when` of a log row: a time for a write or a miss, the day for a recall (the recall log keeps no time). */
 const logTime = (at) => (at.length > 10 ? when(at) : shortDay(at));
@@ -245,10 +241,10 @@ const logTime = (at) => (at.length > 10 ? when(at) : shortDay(at));
 /** One event of the log. A recall's query opens to the notes it returned, in rank order. */
 export function logRow(r) {
   const why = r.kind === "recall"
-    ? `<details><summary>${esc(r.why)}</summary><ol>${r.titles.map((t) => `<li>${link(t)}</li>`).join("")}</ol></details>`
+    ? `<details><summary title="${esc(r.why)}">${esc(r.why)}</summary><ol>${r.titles.map((t) => `<li>${link(t)}</li>`).join("")}</ol></details>`
     : esc(r.why);
-  return `<tr><td class="time">${esc(logTime(r.at))}</td><td>${tag(r.op, TONE[r.kind])}</td>` +
-    `<td>${r.note ? link(r.note) : q("none")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
+  return `<tr><td class="time lead">${esc(logTime(r.at))}</td><td>${chip(r.op)}</td>` +
+    `<td>${r.note ? link(r.note) : miss("No note")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
 }
 
 /** The Log tab: every write, recall and miss of the last 30 days, newest first, 50 to a page. */
@@ -272,10 +268,12 @@ function mountLog(root) {
 
 /** The Context tab: the page head and tabs around the body of `renderContext`. */
 export const renderContextTab = (m, query = new URLSearchParams()) =>
-  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context")}${renderContext({ ...m, session: m.session ?? held(m, query) }, { n: query.get("n") })}</div>`;
+  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context", scope(query).project)}${renderContext({ ...m, session: m.session ?? held(m, query) }, { n: query.get("n") })}</div>`;
+
+const mountProcessesTab = (root, m) => { scope().wire(root); mountProcesses(root, m); };
 
 /** The Processes tab: the page head and tabs around the body of `renderProcesses`. */
-export const renderProcessesTab = (m) => `<div class="page sp memory">${pageHead("Memory")}${renderTabs("processes")}${renderProcesses(m)}</div>`;
+export const renderProcessesTab = (m, query = new URLSearchParams()) => `<div class="page sp memory">${pageHead("Memory", { aside: scope(query).bar() })}${renderTabs("processes", scope(query).project)}${renderProcesses(m)}</div>`;
 
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));
@@ -303,17 +301,20 @@ function redraw() {
   if (!onPage()) return;
   const o = here();
   live.root.querySelector("#mem-fresh").innerHTML = freshBar(o);
-  live.root.querySelector("#mem-board").innerHTML = renderTiles(typeCounts(live.results ?? [], o, live.status), o, live.results !== null);
+  live.root.querySelector("#mem-board").innerHTML = renderTiles(typeCounts(live.results ?? [], o, live.status), o, live.results !== null, live.failed);
   live.root.querySelector("#mem-results").innerHTML = renderResults(live.results, o, live.status);
 }
 
 /** `/api/memory/search` for the query; the router drops an answer that a later query or another page made old. */
 async function search() {
+  live.failed = "";
   try {
     const res = await get(scope().url(`/api/memory/search?q=${encodeURIComponent(here().q)}`), "mem-search");
     if (!res) return;
-    live.results = (await res.json()).results ?? [];
-  } catch (e) { live.results = []; live.root.querySelector("#mem-results").innerHTML = error(`Could not search: ${e.message}`); return; }
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? `answered ${res.status}`);
+    live.results = body.results ?? [];
+  } catch (e) { live.results = []; live.failed = "Could not load the search."; redraw(); live.root.querySelector("#mem-results").innerHTML = error(live.failed, { detail: e.message }); return; }
   redraw();
   if (here().item) inspect(here().item);
 }
@@ -331,10 +332,10 @@ async function inspect(id) {
     const n = await res.json();
     live.note = res.ok ? n : null;
     const row = live.m.notes?.find((x) => x.title === it.key);
-    box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error(n.error ?? `answered ${res.status}`);
+    box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error("Could not load the note.", { detail: n.error ?? `answered ${res.status}` });
     const chart = box.querySelector("aleph-chart");
     if (chart) chart.frame = recallFrame(row?.history);
-  } catch (e) { box.innerHTML = error(`Could not load the note: ${e.message}`); }
+  } catch (e) { box.innerHTML = error("Could not load the note.", { detail: e.message }); }
 }
 
 /** After a write: search again, so every count and row shows the vault as it is now. */
@@ -343,10 +344,18 @@ const refresh = () => { live.results = null; redraw(); return search(); };
 /** The editor for the selected memory's whole text. */
 async function edit(btn, it) {
   const box = btn.closest(".ins").querySelector(".medit");
-  const res = it.source === "note" ? null : await get(fileUrl(it), "mem-file");
-  if (it.source !== "note" && !res) return;
-  const text = it.source === "note" ? live.note?.text : (await res.json()).text;
-  box.innerHTML = form("mem-edit", [field("The whole text", `<textarea name="text" rows="16" spellcheck="false">${esc(text ?? "")}</textarea>`, { hint: it.source === "note" ? "Frontmatter first. vault write checks it." : "" })], "Save text", ' data-mact="save"') + act("Cancel", "cancel");
+  let text = live.note?.text;
+  try {
+    if (it.source !== "note") {
+      const res = await get(fileUrl(it), "mem-file");
+      if (!res) return;
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `answered ${res.status}`);
+      text = body.text;
+    }
+    if (typeof text !== "string") throw new Error("The text did not load.");
+  } catch (e) { box.innerHTML = error("Could not load the text.", { detail: e.message }); box.hidden = false; return; }
+  box.innerHTML = form("mem-edit", [field("The whole text", `<textarea name="text" rows="16" spellcheck="false">${esc(text)}</textarea>`, { hint: it.source === "note" ? "Frontmatter first. vault write checks it." : "" })], "Save text", ' data-mact="save"') + act("Cancel", "cancel");
   box.hidden = false;
   box.querySelector("textarea").focus();
 }

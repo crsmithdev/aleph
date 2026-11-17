@@ -32,3 +32,7 @@ test.each([
 test("a note written by hand still parses: comments, single quotes and block lists", () => {
   expect(parseFrontmatter("a: b # note\nc: [x, 'y z'] # note\nd:\n  - e\n  - \"f\"")).toEqual({ a: "b", c: ["x", "y z"], d: ["e", "f"] });
 });
+
+test("a block scalar folds with > and keeps its lines with |", () => {
+  expect(parseFrontmatter("name: x\ndescription: >\n  one line\n  and two\nkind: y\nnote: |\n  a\n  b\n")).toEqual({ name: "x", description: "one line and two", kind: "y", note: "a\nb" });
+});

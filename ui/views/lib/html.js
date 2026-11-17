@@ -369,11 +369,13 @@ export const form = (ui, fields, submit, attrs = "") =>
 /**
  * One setting: a label, its control and, with `save`, a Save button that submits it alone (a form of its own; the view wires `submit` on `attrs`' data key).
  * `id` is the control's id, so the label names it. Without `save` the control applies on change and the row is a `<div>`. `hint` is a line under the control.
+ * `stack` puts the label over the control at any width, for a setting in a narrow card.
  */
-export const setting = (label, control, { id, hint = "", save = "", attrs = "" } = {}) => {
+export const setting = (label, control, { id, hint = "", save = "", attrs = "", stack = false } = {}) => {
   const body = `<label class="sl"${id ? ` for="${esc(id)}"` : ""}>${esc(label)}</label><span class="sctl">${control}${save ? actButton(save, {}, { type: "submit" }) : ""}</span>` +
     `${hint ? `<small class="hint">${esc(hint)}</small>` : ""}`;
-  return save ? `<form class="srow"${attrs}>${body}</form>` : `<div class="srow"${attrs}>${body}</div>`;
+  const cls = stack ? "srow stack" : "srow";
+  return save ? `<form class="${cls}"${attrs}>${body}</form>` : `<div class="${cls}"${attrs}>${body}</div>`;
 };
 /** The rows of `setting()`, one group under a name. The settings of a page live here, not in table cells. */
 export const settings = (label, rows) => `<div class="settings" role="group" aria-label="${esc(label)}">${rows.join("")}</div>`;
@@ -425,22 +427,22 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis,
 /**
  * A metric card, 3 rows: the key and the trend; the value and the second value; one line of qualifier or note.
  * `v` and `v2` are text; `q` is `[first, second]`, naming the two values; `note` is text when there is no `q`;
- * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3.
+ * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3; `title` is a definition for the tooltip.
  * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
  * While a figure waits (`loading`) or its fetch failed (`failed`, the error line), a mark takes the trend's place and an
  * undefined `v` or `v2` leaves its space blank, so the card keeps its height.
  */
-export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false, loading = false, failed = "" }) {
+export function statCard({ k, v, v2, q, note, title, trend = "", extra = "", href, key, on = false, loading = false, failed = "" }) {
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
   const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
     : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
   const shown = [v, v2].filter((x) => x !== undefined).join(" / ");
-  const title = ` title="${esc([shown && `${k} ${shown}`, q && `${q[0]} / ${q[1]}`].filter(Boolean).join(", "))}"`;
+  const tip = ` title="${esc([shown && `${k} ${shown}`, q && `${q[0]} / ${q[1]}`, title].filter(Boolean).join(", "))}"`;
   const mark = failed ? `<i class="spin bad" role="img" aria-label="${esc(failed)}" title="${esc(failed)}">!</i>`
     : loading ? `<i class="spin" role="status" aria-label="Loading"></i>` : trend;
   const inner = `<span class="r1"><span class="k">${esc(k)}</span>${mark}</span><b>${v === undefined ? "&nbsp;" : esc(v)}${second}</b>${extra}${row3}`;
-  if (key) return `<button type="button" class="tile sc"${title} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
-  return href ? `<a class="tile sc"${title} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${title}>${inner}</div>`;
+  if (key) return `<button type="button" class="tile sc"${tip} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="tile sc"${tip} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${tip}>${inner}</div>`;
 }
 export const tiles = (label, html, id) => `<section class="tiles"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${html}</section>`;
 /** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */
@@ -528,7 +530,7 @@ function turnPage(box, page, step = 50) {
 }
 /** A `dataTable` that shows `step` rows and a pager that turns the page in place. `rows` is an array of `<tr>` strings. */
 export const pagedTable = (head, rows, step = 50) =>
-  `<div class="paged" data-step="${step}">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(1, rows.length, step)}</div>`;
+  `<div class="paged" data-step="${step}">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${rows.length > step ? pager(1, rows.length, step) : ""}</div>`;
 /** Open or close the clamped text before the button `b`, and set the button to match. */
 function openClamp(b, open) {
   b.previousElementSibling.classList.toggle("clamp", !open);

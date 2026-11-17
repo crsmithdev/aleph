@@ -1,6 +1,8 @@
 /**
- * The YAML subset the vault uses: `key: scalar`, `key: [a, b]`, and block
- * lists (`- item`). Quotes are honoured inside flow lists. Nothing nested.
+ * The YAML subset the vault uses: `key: scalar`, `key: [a, b]`, block
+ * lists (`- item`) and block scalars (`key: >` folds its lines with spaces,
+ * `key: |` keeps the line breaks). Quotes are honoured inside flow lists.
+ * Nothing nested.
  */
 type Scalar = string;
 export type Frontmatter = Record<string, Scalar | Scalar[]>;
@@ -65,7 +67,10 @@ function stripComment(line: string): string {
 export function parseFrontmatter(yaml: string): Frontmatter {
   const fm: Frontmatter = {};
   let listKey: string | null = null;
+  let block: { key: string; sep: string } | null = null;
   for (const raw of yaml.split(/\r?\n/)) {
+    if (block && /^\s+\S/.test(raw)) { fm[block.key] = (fm[block.key] ? `${fm[block.key]}${block.sep}` : "") + raw.trim(); continue; }
+    block = null;
     const line = stripComment(raw).trimEnd();
     if (!line.trim()) continue;
     const item = /^\s+-\s*(.*)$/.exec(line) ?? /^-\s*(.*)$/.exec(line);
@@ -75,6 +80,7 @@ export function parseFrontmatter(yaml: string): Frontmatter {
     const [, key, value] = kv;
     if (value === "") { fm[key] = []; listKey = key; continue; }
     listKey = null;
+    if (/^[>|][+-]?$/.test(value)) { fm[key] = ""; block = { key, sep: value[0] === ">" ? " " : "\n" }; continue; }
     if (value.startsWith("[") && value.endsWith("]")) { fm[key] = flowList(value.slice(1, -1)); continue; }
     fm[key] = unquote(value);
   }

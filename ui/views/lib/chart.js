@@ -8,7 +8,10 @@
 //     agg is how one key's values add up: a flow ("Cost") sums, a level ("Agents Live") peaks.
 //   over: { kind: "time", window } | { kind: "category", name }
 //   by: { name, keys: [{ key, name, color? }] }   color is a token name; a key keeps its colour in every window.
-//   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]; a row may carry `name` and `href`.
+//   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]; a row may carry `name` and `href`. A time row with a
+//     `name` and no `at` is a step that is not a time (a request): `name` is its axis label. A row may also carry
+//     `on` (its point is drawn in --ink: the selected one), `dashed` (a dashed outline: a point that follows a break)
+//     and `pick` (a click on its point makes the panel send a bubbling `chartpick` event whose detail is `pick`).
 //   form: the form the panel opens in, where its group offers it.
 //   legend: false hides the legend, for a frame of one key that the title already names.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
@@ -67,7 +70,11 @@ export function option(frame, form, t, hidden = []) {
   const ks = shown(f), share = form === "share", fmt = share ? pct : fmtOf(f);
   const sums = f.rows.map((r) => ks.reduce((n, k) => n + (r[k.key] ?? 0), 0));
   // A row with an issue link keeps it on its point, so a click on the point opens the issue.
-  const item = (r, v) => (r.href && v != null ? { value: v, href: r.href } : v);
+  const item = (r, v) => {
+    if (v == null || !(r.href || r.on || r.dashed)) return v;
+    const style = { ...(r.on ? { color: t.ink } : {}), ...(r.dashed ? { borderColor: t.ink, borderType: "dashed", borderWidth: 1 } : {}) };
+    return { value: v, ...(r.href ? { href: r.href } : {}), ...(r.on || r.dashed ? { itemStyle: style } : {}) };
+  };
   // A points form draws a dot only where the row has the key, so a row is one dot, not one dot per key.
   const none = f.over.kind === "time" && form === "points" ? null : 0;
   // A share point with nothing to divide is a gap, not 0%. A row whose key is null has no value there: a gap, not 0.
@@ -82,8 +89,8 @@ export function option(frame, form, t, hidden = []) {
     // A day axis keeps one label per day: the label of a bucket is its day, so a point whose label is the label
     // of the point before it is blank. A frame of one row per day labels every point.
     // The axis data is the date and the label, so the tooltip shows both; the axis shows the label.
-    const labels = f.rows.map((r) => xLabel(r.at, f.over.window)), perDay = (_, i) => (i && labels[i] === labels[i - 1] ? "" : labels[i]);
-    const dated = f.rows.map((r, i) => (f.over.window === "week" || f.over.window === "month" ? labels[i] : `${day(new Date(r.at))} ${labels[i]}`));
+    const labels = f.rows.map((r) => r.name ?? xLabel(r.at, f.over.window)), perDay = (_, i) => (i && labels[i] === labels[i - 1] ? "" : labels[i]);
+    const dated = f.rows.map((r, i) => (r.name !== undefined || f.over.window === "week" || f.over.window === "month" ? labels[i] : `${day(new Date(r.at))} ${labels[i]}`));
     return {
       ...o,
       tooltip: { ...o.tooltip, ...(bars ? { axisPointer: { type: "shadow" } } : {}) },
@@ -154,6 +161,8 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
         // The link of the point, or of the row whose name the clicked axis label gives.
         const h = p.data?.href ?? (p.componentType === "yAxis" ? f.rows.find((r) => r.name === p.value)?.href : null);
         if (h) location.hash = h;
+        const pick = f.rows[p.dataIndex]?.pick;
+        if (pick !== undefined) this.dispatchEvent(new CustomEvent("chartpick", { detail: pick, bubbles: true }));
       });
       this.onclick = (e) => {
         const b = e.target.closest?.("button[data-form]");

@@ -5,12 +5,11 @@
 // the compact summary into its text.
 import { get } from "./router.js";
 import { goQuery, hashQuery, keep, kept, setQuery } from "./address.js";
-import { count, pct } from "./format.js";
-import { card, dataTable, empty, error, esc, fold, heads, loadingLine, tag, tone } from "./html.js";
+import { panelOf } from "./chart.js";
+import { count, pct, plural, when } from "./format.js";
+import { actButton, card, chip, dataTable, empty, error, esc, field, fold, heads, list, legendHtml, loadingLine, meter, pagedTable, selectBox } from "./html.js";
 
-const SERIES = ["--series-1", "--series-2", "--series-3", "--chart-6", "--chart-7", "--run", "--need", "--done"];
-const colour = (i) => `var(${SERIES[i % SERIES.length]})`;
-const how = (h) => (h === "exact" ? tag("exact", tone("done")) : tag("est.", tone("waiting")));
+const how = (h) => chip(h === "exact" ? "exact" : "est.");
 const pick = (requests, n) => requests.find((r) => r.n === Number(n)) ?? requests.at(-1);
 const share = (n, of) => pct(n / Math.max(of, 1) * 100);
 /** A fold that keeps its open state under `context.<key>`, so a redraw for another request keeps it. */
@@ -19,7 +18,7 @@ const kfold = (key, summary, body) => fold(summary, body, { keep: `context.${key
 function byTool(tools, total) {
   const rows = [...tools].sort((a, b) => b.tokens - a.tokens).map((t) =>
     `<tr><td class="mono wide" title="${esc(t.name)}">${esc(t.name)}</td><td>${esc(t.name.match(/^mcp__(.+?)__/)?.[1] ?? "built-in")}</td><td class="num">${count(t.tokens)}</td><td class="num">${share(t.tokens, total)}</td></tr>`);
-  return kfold("tools", "By tool", dataTable(heads(["Tool", "Server", "Tokens", "Share"], ["Tokens", "Share"]), rows.join("")));
+  return kfold("tools", "By tool", pagedTable(heads(["Tool", "Server", "Tokens", "Share"], ["Tokens", "Share"]), rows));
 }
 
 /** The calls the request holds, those after its `since`, by tool and then by call. */
@@ -29,9 +28,9 @@ function byCall(calls, r, total) {
   const sum = (cs) => cs.reduce((s, c) => s + c.tokens, 0);
   return [...groups].sort((a, b) => sum(b[1]) - sum(a[1])).map(([tool, cs]) => {
     const rows = cs.sort((a, b) => b.tokens - a.tokens).map((c) =>
-      `<tr><td class="num">${c.n}</td><td class="mono wide" title="${esc(c.input)}"><button type="button" class="link" data-call="${esc(c.id)}">${esc(c.input)}</button></td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td></tr>`);
-    return kfold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}">${count(cs.length)} calls · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
-      dataTable(heads(["Request", "Input", "Tokens", "How"], ["Request", "Tokens"]), rows.join("")) + `<pre class="stat" data-result hidden style="max-height:360px;overflow:auto"></pre>`);
+      `<tr><td class="num">${count(c.n)}</td><td class="mono wide" title="${esc(c.input)}"><button type="button" class="link" data-call="${esc(c.id)}">${esc(c.input)}</button></td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td></tr>`);
+    return kfold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${plural(cs.length, "call")} · ${count(sum(cs))} · ${share(sum(cs), total)}">${plural(cs.length, "call")} · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
+      pagedTable(heads(["Request", "Input", "Tokens", "How"], ["Request", "Tokens"]), rows) + `<div data-result hidden></div>`);
   }).join("");
 }
 
@@ -52,39 +51,42 @@ function byItem(items, r, p) {
   if (!groups.size) return "";
   const rows = [...groups].sort((a, b) => b[1].tokens - a[1].tokens).map(([name, g]) =>
     `<tr><td class="wide" title="${esc(name)}">${esc(name)}</td><td class="num">${count(g.count)}</td><td class="num">${count(g.tokens)}</td><td class="num">${share(g.tokens, p.tokens)}</td></tr>`);
-  return kfold(`items:${p.rec}`, BY[p.rec] ?? "By item", dataTable(heads(["Item", "Count", "Tokens", "Share"], ["Count", "Tokens", "Share"]), rows.join("")));
+  return kfold(`items:${p.rec}`, BY[p.rec] ?? "By item", pagedTable(heads(["Item", "Count", "Tokens", "Share"], ["Count", "Tokens", "Share"]), rows));
 }
 
 function summary(summaries, r) {
   const s = summaries.find((x) => x.n === r.since);
-  return s ? kfold("summary", "Text", `<pre class="stat" style="max-height:360px;overflow:auto;white-space:pre-wrap">${esc(s.text)}</pre>`) : "";
+  return s ? kfold("summary", "Text", `<pre class="stat tall">${esc(s.text)}</pre>`) : "";
 }
 
 function picker(m, id, session, r) {
   const last = session.requests.length;
-  const opts = m.sessions.map((s) => `<option value="${esc(s.id)}"${s.id === id ? " selected" : ""}>${esc(`${s.id.slice(0, 8)} · ${s.updated.slice(0, 10)} · ${s.project}`)}</option>`).join("");
-  const step = (label, n) => `<button type="button" data-n="${n}"${n < 1 || n > last || n === r.n ? " disabled" : ""}>${label}</button>`;
-  return `<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center"><label class="ctx-session">Session <select id="ctx-session" name="session">${opts}</select></label>` +
-    `<span>Request ${step("Previous", r.n - 1)} <strong>${r.n}</strong> of ${last} ${step("Next", r.n + 1)} ${step("Latest", last)}</span></div>`;
+  const opts = m.sessions.map((s) => ({ value: s.id, label: `${s.id.slice(0, 8)} · ${when(s.updated)} · ${s.project}` }));
+  // actButton() has no disabled option: the attribute goes on its markup.
+  const step = (label, n) => { const b = actButton(label, { n }); return n < 1 || n > last || n === r.n ? b.replace("<button", "<button disabled") : b; };
+  return `<div class="actions">${field("Session", selectBox("Session", "session", opts, id, { id: "ctx-session" }))}` +
+    `<span>Request ${step("Previous", r.n - 1)} <strong>${count(r.n)}</strong> of ${count(last)} ${step("Next", r.n + 1)} ${step("Latest", last)}</span></div>`;
 }
+
+/** The class of the nth part's segment and swatch: the series colours, then `--muted` for the eighth. */
+const series = (i) => `c-s${i % 8 + 1}`;
 
 function fillBar(r, limit) {
-  const segs = r.parts.map((p, i) => `<i style="width:${(p.tokens / limit * 100).toFixed(2)}%;background:${colour(i)}" title="${esc(p.name)}"></i>`).join("");
-  const key = r.parts.map((p, i) => `<span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colour(i)}"></i> ${esc(p.name)}</span>`).join("");
   const u = r.usage;
-  return card("Fill of request " + r.n, `<p><strong>${count(r.fill)}</strong> of ${count(limit)} tokens · ${pct(r.fill / limit * 100)} ${how("exact")}</p>` +
+  return card("Fill of Request " + r.n, `<p><strong>${count(r.fill)}</strong> of ${count(limit)} tokens · ${pct(r.fill / limit * 100)} ${how("exact")}</p>` +
     `<p class="quiet">input ${count(u.input)} · cache read ${count(u.cacheRead)} · cache write ${count(u.cacheWrite)} · output ${count(u.output)}</p>` +
-    `<div style="display:flex;height:22px;border-radius:6px;overflow:hidden;background:var(--sunk)" role="img" aria-label="Context fill by part">${segs}</div><p class="quiet" style="display:flex;flex-wrap:wrap;gap:16px">${key}</p>`);
+    meter(r.parts.map((p, i) => ({ pct: p.tokens / limit * 100, cls: series(i) })), "Context fill by part") + legendHtml(r.parts.map((p, i) => [p.name, series(i)])));
 }
 
-function chart(requests, r, limit) {
-  const bars = requests.map((x, i) => {
-    const cut = i && x.fill < requests[i - 1].fill;
-    return `<button type="button" data-n="${x.n}" aria-label="request ${x.n}, ${count(x.fill)} tokens${cut ? ", after a compaction" : ""}"` +
-      ` aria-pressed="${x === r}" style="flex:1;min-width:0;padding:0;border:0;background:${x === r ? "var(--error)" : "var(--run)"};height:${Math.min(x.fill / limit, 1) * 100}%${cut ? ";outline:1px dashed var(--error)" : ""}"></button>`;
-  }).join("");
-  return card("Fill per request", `<div style="display:flex;align-items:flex-end;gap:2px;height:170px;border-bottom:1px solid var(--rule)">${bars}</div><p class="quiet">Click a bar to inspect that request. A dashed bar follows a compaction.</p>`);
-}
+/** The frame of the fill of each request: the selected one in --ink, one that follows a compaction dashed. A click picks it. */
+export const fillFrame = (requests, r) => ({
+  measure: { name: "Fill per Request", unit: "count", agg: "max" },
+  over: { kind: "time", window: "week" },
+  by: { keys: [{ key: "fill", name: "fill" }] },
+  rows: requests.map((x, i) => ({ name: String(x.n), fill: x.fill, on: x === r, dashed: i > 0 && x.fill < requests[i - 1].fill, pick: x.n })),
+  form: "columns",
+  legend: false,
+});
 
 function parts(r, s) {
   const more = (p) => p.rec === "prompt_snapshot.tools" ? (s.tools.length ? byTool(s.tools, p.tokens) : "") : p.rec === "tool_result" ? byCall(s.calls, r, p.tokens)
@@ -92,8 +94,7 @@ function parts(r, s) {
   const rows = r.parts.map((p) => [p, more(p)]).map(([p, m]) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.rec)}</td><td class="num">${count(p.tokens)}</td><td>${how(p.how)}</td></tr>` +
     (m ? `<tr><td colspan="4">${m}</td></tr>` : ""));
   rows.push(`<tr><td><strong>Total</strong></td><td class="mono">message.usage</td><td class="num"><strong>${count(r.fill)}</strong></td><td>${how("exact")}</td></tr>`);
-  return card(`What is in request ${r.n}`, dataTable(heads(["Part", "Record", "Tokens", "How"], ["Tokens"]), rows.join("")) +
-    `<p class="quiet">The fixed parts sum to the fill of request 1. With an Anthropic key, count_tokens counts each one and Other holds the rest. Without a key, the split is est. Each tool, and each item of a part, is its share of the part by chars, est. A message part is the usage of its request minus the usage of the request before it, exact unless one gap held more than one kind of record.</p>`);
+  return card(`What Is in Request ${r.n}`, dataTable(heads(["Part", "Record", "Tokens", "How"], ["Tokens"]), rows.join("")));
 }
 
 /** The session the tab loaded last, through keep(): `{ n, session }`, with `n` the request of the query it was loaded for. */
@@ -110,14 +111,20 @@ export function renderContext(m, o = {}) {
   if (!m.session) return `<div id="ctx-body">${loadingLine("the session")}</div>`;
   if (!m.session.requests.length) return `<div id="ctx-body">${empty()}</div>`;
   const r = pick(m.session.requests, o.n);
-  return `<div id="ctx-body">${picker(m, m.session.id, m.session, r)}${fillBar(r, m.session.window)}${chart(m.session.requests, r, m.session.window)}${parts(r, m.session)}</div>`;
+  return `<div id="ctx-body">${list(`${picker(m, m.session.id, m.session, r)}${fillBar(r, m.session.window)}${panelOf("memory/fill", fillFrame(m.session.requests, r))}${parts(r, m.session)}`)}</div>`;
 }
 
 /** Load the selected session (the newest by default) and draw it; a pick of a request redraws without loading. */
 export async function mountContext(root, m, query) {
   if (!m.sessions.length) return;
   const id = query.get("session") || m.sessions[0].id;
-  const draw = () => { root.querySelector("#ctx-body").outerHTML = renderContext({ ...m, session }, { n: hashQuery().get("n") }); };
+  // The chart panel draws once its element has a frame.
+  const plot = () => {
+    const el = root.querySelector('aleph-chart[key="memory/fill"]');
+    if (el) el.frame = fillFrame(session.requests, pick(session.requests, hashQuery().get("n")));
+  };
+  const draw = () => { root.querySelector("#ctx-body").outerHTML = renderContext({ ...m, session }, { n: hashQuery().get("n") }); plot(); };
+  const go = (n) => { setQuery({ n }); keep(KEPT, { n, session }); draw(); };
   let session = held(m, query);
   if (!session) {
     try {
@@ -125,25 +132,29 @@ export async function mountContext(root, m, query) {
       if (!res) return;
       session = await res.json();
       if (!res.ok) throw new Error(session.error ?? `answered ${res.status}`);
-    } catch (e) { root.querySelector("#ctx-body").innerHTML = error(`Could not load the session: ${e.message}`); return; }
+    } catch (e) { root.querySelector("#ctx-body").innerHTML = error("Could not load the session.", { detail: e.message }); return; }
     keep(KEPT, { n: query.get("n") ?? "", session });
     draw();
-  }
+  } else plot();
+  // A click on a bar of the chart. A property holds the handler, so each mount replaces the last one's, as for onclick.
+  if (root._pick) root.removeEventListener("chartpick", root._pick);
+  root._pick = (e) => go(String(e.detail));
+  root.addEventListener("chartpick", root._pick);
   root.onclick = async (e) => {
     const b = e.target.closest?.("#ctx-body button[data-n]");
-    if (b && !b.disabled) { setQuery({ n: b.dataset.n }); keep(KEPT, { n: b.dataset.n, session }); draw(); }
+    if (b && !b.disabled) go(b.dataset.n);
     const c = e.target.closest?.("#ctx-body button[data-call]");
     if (!c) return;
-    const pre = c.closest("details").querySelector("pre[data-result]");
-    pre.hidden = false;
-    pre.textContent = "Loading…";
+    const out = c.closest("details").querySelector("[data-result]");
+    out.hidden = false;
+    out.innerHTML = loadingLine("the call");
     try {
       const res = await get(`/api/context/${encodeURIComponent(id)}/calls/${encodeURIComponent(c.dataset.call)}`, "ctx-call");
       if (!res) return;
       const x = await res.json();
       if (!res.ok) throw new Error(x.error ?? `answered ${res.status}`);
-      pre.textContent = `${x.tool} ${JSON.stringify(x.input)}\n\n${x.text}`;
-    } catch (err) { pre.textContent = `Could not load the call: ${err.message}`; }
+      out.innerHTML = `<pre class="stat tall">${esc(`${x.tool} ${JSON.stringify(x.input)}\n\n${x.text}`)}</pre>`;
+    } catch (err) { out.innerHTML = error("Could not load the call.", { detail: err.message }); }
   };
   root.onchange = (e) => { if (e.target.id === "ctx-session") goQuery({ session: e.target.value, n: "" }); };
 }

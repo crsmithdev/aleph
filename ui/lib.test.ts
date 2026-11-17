@@ -617,3 +617,13 @@ test("loadingLine, loading() and a loading statCard draw the one spinner; a card
   // An empty state is not a loading state.
   expect(empty()).not.toContain("spin");
 });
+
+test("statCard title puts a definition in the tooltip, after the value", () => {
+  expect(lib.statCard({ k: "Working", v: "3", title: "handoffs" })).toContain('title="Working 3, handoffs"');
+  expect(lib.statCard({ k: "Working", v: "3" })).toContain('title="Working 3"');
+});
+
+test("setting stack puts the label over the control at any width", () => {
+  expect(lib.setting("Core line", "<input>")).toContain('<div class="srow">');
+  expect(lib.setting("Core line", "<input>", { stack: true, save: "Save" })).toContain('<form class="srow stack">');
+});
