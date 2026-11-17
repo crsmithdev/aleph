@@ -1,9 +1,8 @@
 # Slop lens
 
-Is a piece of the page bigger than its job? Slop is UI that draws correctly and carries more than it needs: a card
-in a card, a border on a border, a shadow, an icon, a label that explains the title. The page reads as busy, and
-the reader looks for what matters. Principle 6 of `docs/design.md` is the rule: be terse. This is the
-[refit-code](../refit-code/SLOP.md) lens applied to the UI.
+Slop is UI that draws correctly and carries more than it needs: a card in a card, a border on a border, a shadow,
+an icon, a label that explains the title. The reader looks for what matters. Principle 6 of `docs/design.md` is the
+rule: be terse. This is the [refit-code](../refit-code/SLOP.md) lens applied to the UI.
 
 ## Signals
 
@@ -17,8 +16,7 @@ the reader looks for what matters. Principle 6 of `docs/design.md` is the rule: 
 - a hint on `empty()`, which takes none.
 
 **Drawn view.** Follow [verify-ui](../verify-ui/SKILL.md). Screenshot the page at desktop width in light and dark.
-Cover each part in turn: if the page reads the same, the part is a candidate. Count the lines of border, the
-shadows and the icons per screen.
+Cover each part in turn: if the page reads the same, the part is a candidate. Count the borders, shadows and icons per screen.
 
 ## Proof
 
@@ -39,8 +37,7 @@ Leave a part that the doc names.
 
 ## Guard
 
-A model guard in `check`: a new note, label or caption in a plan is at most two words. No tool guard yet: a count
-of words in UI text waits for a retro finding.
+Model, in `check`: a new note, label or caption in a plan is at most two words. No tool guard yet.
 
 ## Check
 

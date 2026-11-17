@@ -1,7 +1,6 @@
 # Dead lens
 
-Does each CSS rule match an element, each token have a use, and each Kit specimen draw a live component? Ask
-**is it used?** before **how do I improve this?** A rule that matches nothing still ships, still reads as
+Ask **is it used?** before **how do I improve this?** A rule that matches nothing still ships, still reads as
 design, and still gets copied. This is the [refit-code](../refit-code/DEAD.md) lens applied to the UI.
 
 ## Signals
@@ -41,8 +40,7 @@ names a deleted part is reported as a proposal: the doc changes only through des
 
 ## Guard
 
-Unchecked: a script that lists each CSS rule with no match in the markup and each token with no use. Its finding
-has not come back from a retro, and a guard moves up to tool only when its finding comes back.
+Unchecked: no script lists each CSS rule with no match and each token with no use. A guard becomes a tool only when its finding comes back from a retro.
 
 ## Check
 

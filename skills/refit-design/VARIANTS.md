@@ -1,7 +1,7 @@
 # Variants lens
 
-Is each component drawn one way? Two builds of one component make the UI read as two UIs, and a fix to one build
-leaves the other. The apply lens asks whether a value follows a rule; this lens asks whether two places agree.
+Two builds of one component make the UI read as two UIs, and a fix to one build leaves the other. The apply lens
+asks whether a value follows a rule. This lens asks whether two places agree.
 
 ## Signals
 
@@ -34,8 +34,7 @@ build, report a proposal to amend the doc and change no code.
 
 ## Guard
 
-A model guard in `check`: a plan that draws a component a second way from its specimen is stopped before the build.
-No tool guard yet: it comes when a retro finds a variant that a script could list.
+Model, in `check`: stop a plan that draws a component a second way from its specimen. No tool guard yet.
 
 ## Check
 

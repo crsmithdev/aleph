@@ -1,7 +1,7 @@
 # Stress lens
 
-Does the page hold with long text, many rows, a missing value and no data? A page built on three tidy fixture rows
-shows its faults only on real data: clipped text, a table that pushes the page wider, a column of `0` for a gap.
+A page built on three tidy fixture rows shows its faults only on real data: clipped text, a table that pushes the
+page wider, a column of `0` for a gap.
 
 ## Signals
 
@@ -36,8 +36,8 @@ Add the guard the doc names: a clamp with the full text in `title`, `miss(reason
 
 ## Guard
 
-A model guard in `check`: a new list, table or text field in a plan names its limit for long text and many rows.
-No tool guard yet: a Kit specimen with extreme fixtures waits for a retro finding.
+Model, in `check`: a new list, table or text field in a plan names its limit for long text and many rows. No tool
+guard yet.
 
 ## Check
 

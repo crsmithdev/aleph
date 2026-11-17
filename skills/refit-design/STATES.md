@@ -1,7 +1,6 @@
 # States lens
 
-Does each component draw its empty, loading, error, hover, focus, disabled and phone-width state? A component
-that draws only its full state breaks on the first empty list, slow fetch or narrow screen.
+A component that draws only its full state breaks on the first empty list, slow fetch or narrow screen.
 
 ## Signals
 
@@ -40,7 +39,7 @@ state in `ui/app.css` from tokens.
 
 ## Guard
 
-A model guard in `check`: a new component in a plan names its empty, loading and error state. A tool guard: the Kit
+Model, in `check`: a new component in a plan names its empty, loading and error state. Tool: the Kit
 test in `ui/browser.test.ts` fails when `#kit-states`, `#kit-table-empty` or `#kit-chart-empty` stops drawing its
 empty or loading line.
 

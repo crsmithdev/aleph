@@ -1,20 +1,18 @@
 # Design retro report
 
-The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Overview
-(repo line, links, counts of fixed and waiting findings), Units, Findings, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
-class names are in refit-code's [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design.
-A design report uses the design language of the UI it scans: aleph classes and tokens from `ui/app.css`, no Tailwind.
-It cites only rules of `docs/design.md`.
+The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md), with the
+scaffold and class names of [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design. The
+report uses the aleph classes and tokens of `ui/app.css`, no Tailwind. It cites only rules of `docs/design.md`.
 
 ## Directory
 
-Write `<tmpdir>/refit-design-retro-<timestamp>/`. Besides `index.html` and `app.css` it holds
-`shots/<route>-<theme>-<width>.png`: each screenshot, as a file. Link it with a relative path.
+The directory is `<tmpdir>/refit-design-retro-<timestamp>/`. Besides `index.html` and `app.css` it holds
+`shots/<route>-<theme>-<width>.png`, one file per screenshot, linked by a relative path.
 
-The report links the live Kit by its absolute URL, such as `http://aleph.home/#/kit`, because the shelf serves the
-report from another host, where `/#/kit` finds nothing (Chris, 2026-11-17). The link text names the specimen by its
-id, the first argument of a `spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that
-id has the anchor `kit-<id>`.
+Link the live Kit by its absolute URL, such as `http://aleph.home/#/kit`, because the shelf serves the report from
+another host, where `/#/kit` finds nothing. The link text names the specimen by its id, the first argument of a
+`spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that id has the anchor
+`kit-<id>`.
 
 ## Differences from the shared shape
 
@@ -22,25 +20,24 @@ id has the anchor `kit-<id>`.
    markup and slop.
 2. **Units.** The unit is a component kind of the page, in the page's order, as an `h3.sub-head`. Under it, list
    the findings in the page's order. List only the components with a broken rule: a component that passes gets
-   no line, badge or list (Chris, 2026-11-16). A metric card is one component for all its variants unless a
+   no line, badge or list. A metric card is one component for all its variants unless a
    variant differs. A table is its own component when its columns or rows differ from the specimen.
 3. **Proposals.** Each change to `docs/design.md` that the scan asks for: where, the evidence (3 or more uses, with
    `file:line`) and the sentence the doc needs.
 
 ## Finding
 
-The finding comes first, and the components it breaks come under its title (Chris, 2026-11-17). A finding is a
+The finding comes first, and the components it breaks come under its title. A finding is a
 `<div class="finding" id="f<n>">`, in this order:
 
 1. the title: its number, the change as an imperative, and the chips of its lens, kind and tier (**auto** or **ask**),
-   then its result as refit-code's REPORT.md gives it: the commit, "reverted" with the failed command, or "found during fix";
-   then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
+   then its result as refit-code's REPORT.md gives it, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
    Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that breaks a rule in two
-   components sits under the kind of the first. No line under the title names the component again (Chris, 2026-11-17);
+   components sits under the kind of the first. No line under the title names the component again;
 2. the fix, one sentence as PROVE.md's step 2 gives it;
 3. a screenshot of the part the finding names, as drawn on the page, cropped from the shots, with no caption: its
    `alt` names it. Show it at most 480px wide, as a link that opens the full shot in a new tab. Show no Kit
-   specimen: the Kit link stands for the rule (Chris, 2026-11-17). Show each picture once;
+   specimen: the Kit link stands for the rule. Show each picture once;
 4. one closed `<details>`, summary "Details", that holds the rest: the rule (its `docs/design.md` section and the
    rule text, quoted), the locations (`file:line`, one each), a "Shot: see" line with a link to the finding that
    shows a repeated picture, and the guard, one sentence.
@@ -65,10 +62,9 @@ Proposals when 3 or more places use it.
 </section>
 ```
 
-Size shows rank, and no part outranks its parent (Chris, 2026-11-16). The page title, the card head and the kind
-head step down from `--fs-metric` to `--fs-2xl`. A finding's title is below them at `--fs-lg`, then the fix at
-`--fs-md`. The rule, the locations and the guard recede at `--fs-sm` in `--muted`. Set it in
-the report's `<style>`, from tokens:
+Size shows rank, and no part outranks its parent. The page title, the card head and the kind head
+step down from `--fs-metric` to `--fs-2xl`. A finding's title is below them at `--fs-lg`, then the fix at `--fs-md`.
+The rule, the locations and the guard recede at `--fs-sm` in `--muted`. Set it in the report's `<style>`, from tokens:
 
 ```css
 .ph h1 { font-size: var(--fs-metric); }
@@ -80,5 +76,4 @@ the report's `<style>`, from tokens:
 .finding .aux, .finding ul.locs { font-size: var(--fs-sm); color: var(--muted); }
 ```
 
-Give an image its
-`max-width` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.
+Give an image its `max-width` through a `style` attribute only when `app.css` has no class for it. Add no `<script>`.
