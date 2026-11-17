@@ -9,7 +9,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
 import { allRuns, isWaiting, isAgentRun, isBuild, loadRegistry, onOf, type Repo } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, lastRun, latestJob, openJob } from "../records/job.ts";

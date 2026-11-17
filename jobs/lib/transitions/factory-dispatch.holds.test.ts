@@ -9,7 +9,7 @@ import { dispatchIssues, suiteStep } from "./factory.ts";
 import { holdBackend, readHolds } from "../gates/holds.ts";
 import * as record from "../records/record.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { change, ctx, mk, newIssue, notes, setup, sh, teardown } from "./factory.testkit.ts";
 
 beforeEach(setup);

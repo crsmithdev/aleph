@@ -16,7 +16,7 @@ import { conn, getJson } from "../../../lib/db.ts";
 import { git } from "../../../lib/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { seed as seedJob } from "../../job.testkit.ts";
 import * as record from "../records/record.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";

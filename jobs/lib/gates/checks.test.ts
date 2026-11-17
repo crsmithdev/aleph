@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addedLines, CHECK_SLOTS, failedTests, failureLine, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { flakes } from "./tables.ts";
 import { readSection } from "../records/run-files.ts";
 import type { CheckResult, Repo } from "../records/ledger.ts";

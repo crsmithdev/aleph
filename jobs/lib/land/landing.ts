@@ -12,7 +12,7 @@ import { fetchOrigin, followMain, git } from "../../../lib/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { key, parseKey } from "../../../lib/naming.ts";
 import { allRuns, isWaiting, isAgentRun, onOf, type Check, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
-import { judge } from "../../../lib/judge.ts";
+import { judge } from "../roles/judge.ts";
 import { writeLine } from "../roles/title.ts";
 import { MODELS } from "../../../lib/models.ts";
 import { putJson } from "../../../lib/db.ts";

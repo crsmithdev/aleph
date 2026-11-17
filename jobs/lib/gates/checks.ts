@@ -10,7 +10,7 @@ import { recordFlake } from "./tables.ts";
 import { admit, realAdmission, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { git } from "../../../lib/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";

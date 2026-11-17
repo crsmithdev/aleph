@@ -139,7 +139,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
 | Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
-| Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer |
+| Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer, title, judge |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
 | Flow class | derived | landed, returned, failed, reran, dropped |

@@ -13,7 +13,7 @@ import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
 import { issueKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
-import { held } from "../infra/locks.ts";
+import { held } from "../../../lib/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { causeOf, policyOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";

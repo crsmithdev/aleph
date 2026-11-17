@@ -4,13 +4,12 @@
  * Each call is a run of its role in the job store, so the Agents page counts it; the Jobs list leaves it out, and `shown` keeps it out of the report.
  * Like every role's run it ends `done`; a call that gave no reply says why in `reason` and has the cause `unanswered`.
  */
-import { readModels } from "../jobs/lib/routing/models.ts";
+import { readModels } from "../routing/models.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { callAgent, type Reply } from "../jobs/lib/roles/agent-call.ts";
-import { makeJob, setState } from "../jobs/lib/records/record.ts";
-import type { Run } from "../jobs/lib/records/ledger.ts";
+import { callAgent, type Reply } from "./agent-call.ts";
+import { makeJob, setState } from "../records/record.ts";
 
 const FALLBACK = "haiku";
 
@@ -22,7 +21,7 @@ export async function oneShot(role: "title" | "judge", cmd: string, system: stri
     MAX_THINKING_TOKENS: "0", // measured: 3 s without thinking, 15-45 s with it, same verdicts
   };
   const model = readModels()[role].model;
-  const run = makeJob({ role: role as Run["role"], name: role, model, told: true, shown: true }).id;
+  const run = makeJob({ role: role, name: role, model, told: true, shown: true }).id;
   let r: Reply | undefined;
   const dir = mkdtempSync(join(tmpdir(), "aleph-one-shot-"));
   const [stdout, stderr] = [join(dir, "out"), join(dir, "err")];

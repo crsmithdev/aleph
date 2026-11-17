@@ -7,7 +7,7 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 import { allRuns, type Run } from "../records/ledger.ts";
 import { getRun, makeJob, patchRun, setState } from "../records/record.ts";
-import { lock, lockSync } from "../infra/locks.ts";
+import { lock, lockSync } from "../../../lib/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
 import { logStream, logTo, runFile } from "../records/run-files.ts";
 import { callAgent } from "./agent-call.ts";

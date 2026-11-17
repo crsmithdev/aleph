@@ -13,8 +13,8 @@ import * as record from "../records/record.ts";
 import { setState } from "../records/record.ts";
 import { layout, readEvents } from "../../../lib/layout.ts";
 import { reseed, seed } from "../../job.testkit.ts";
-import * as locks from "../infra/locks.ts";
-import { held } from "../infra/locks.ts";
+import * as locks from "../../../lib/locks.ts";
+import { held } from "../../../lib/locks.ts";
 import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -27,7 +27,7 @@ import { loadRegistry } from "../records/ledger.ts";
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
 const real = { ...locks };
-mock.module("../infra/locks.ts", () => ({ ...real, held: (name: string) => { const r = real.held(name); afterHeld?.(name); return r; } }));
+mock.module("../../../lib/locks.ts", () => ({ ...real, held: (name: string) => { const r = real.held(name); afterHeld?.(name); return r; } }));
 
 beforeEach(setup);
 afterEach(teardown);

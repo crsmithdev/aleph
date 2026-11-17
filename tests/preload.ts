@@ -40,7 +40,7 @@ const vars: Record<string, string> = {
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 // The shell always sets XDG_RUNTIME_DIR, and lock names such as tick, admit and land-<repo> are global
-// (jobs/lib/infra/locks.ts): under the shell's folder a test would take the live factory's locks.
+// (lib/locks.ts): under the shell's folder a test would take the live factory's locks.
 process.env.XDG_RUNTIME_DIR = vars.XDG_RUNTIME_DIR;
 // A test that deletes one of these and does not put it back would send every later test in the process to the
 // live folder under ~/.aleph (records written to ~/.aleph/jobs on 2026-11-04). After each test, a deleted one is set again.

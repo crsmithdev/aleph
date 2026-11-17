@@ -35,7 +35,7 @@ import { git } from "../../../lib/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";
 import { allJobs, allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { housekeeperDetached, intakeDetached, suiteDetached } from "./launch.ts";
 import { housekeepDue } from "../roles/housekeeper.ts";
 import { monitorStep } from "../roles/monitor.ts";

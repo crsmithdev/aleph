@@ -29,6 +29,10 @@ test("lib/, vault/, jobs/ and issues/ do not import ui/", () => {
   expect(offenders(/from "(?:\.\.\/)+ui\//, [], ["lib/**", "vault/**", "jobs/**", "issues/**"])).toEqual([]);
 });
 
+test("lib/ does not import jobs/", () => {
+  expect(offenders(/from "(?:\.\.\/)+jobs\//, [], ["lib/**"])).toEqual([]);
+});
+
 test("only lib/langfuse.ts builds Langfuse's authorization", () => {
   expect(offenders(/publicKey\}:\$\{cfg\.secretKey|Basic \$\{/, ["lib/langfuse.ts"])).toEqual([]);
 });

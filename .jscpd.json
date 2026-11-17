@@ -13,13 +13,13 @@
     {
       "name": "locks",
       "code": [
-        "jobs/lib/infra/locks.ts"
+        "lib/locks.ts"
       ],
       "notIn": [
         "**"
       ],
       "allow": [
-        "jobs/lib/infra/locks.ts",
+        "lib/locks.ts",
         "**/*.test.ts"
       ],
       "disable": [

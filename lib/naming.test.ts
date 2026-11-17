@@ -71,6 +71,7 @@ describe("words", () => {
     expect(() => n.detailOf("failed", "after")).toThrow(/action "failed"/);
   });
   test("credit is a cause with a phrase", () => expect(n.because("credit")).toBe("out of credit"));
+  test("the one-shot roles are roles", () => expect(n.ROLES).toEqual(expect.arrayContaining(["title", "judge"])));
   test("every set is lower case with no separator marks", () => {
     const sets = [n.STATUSES, n.ACTIONS, n.ACTORS, n.ROLES, n.STAGES, n.LANES, n.SPEEDS];
     for (const w of sets.flat()) expect(w).toMatch(/^[a-z][a-z-]*$/);

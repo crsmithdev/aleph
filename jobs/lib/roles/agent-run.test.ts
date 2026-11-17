@@ -7,7 +7,7 @@ import { allRuns } from "../records/ledger.ts";
 import { getRun } from "../records/record.ts";
 import { readSection } from "../records/run-files.ts";
 import { backendHold } from "../gates/holds.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 
 let base: string;
 const saved = { ...process.env };

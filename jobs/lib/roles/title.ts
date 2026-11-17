@@ -4,7 +4,7 @@
  * `writeLine` is the one-shot call that the rule writer makes.
  */
 import { ruleCmd } from "../infra/settings.ts";
-import { oneShot } from "../../../lib/one-shot.ts";
+import { oneShot } from "./one-shot.ts";
 
 const TITLE = 60;
 /** The time box of one call, and of its wait for the GPU slot. */

@@ -14,7 +14,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { isRedMain, itemsDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, hasIssue, reader, setAfter, setIntake, setPlan, sort, sourceOf, type Effects, type File } from "../../../issues/lib/store.ts";
 import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { causeOf } from "../records/outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { gates } from "../gates/factory-status.ts";

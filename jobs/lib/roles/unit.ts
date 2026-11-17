@@ -19,7 +19,7 @@ import { jobGrep, trailerLine } from "../records/status.ts";
 import { heldRule, parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord, allJobs, isOpen } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { jobById, openJob } from "../records/job.ts";

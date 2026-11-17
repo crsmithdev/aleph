@@ -23,7 +23,7 @@ export const ACTORS: readonly string[] = [...SUBJECTS, ...OLD_ROLES];
 /** The kinds of an issue. */
 export const ISSUE_KINDS = ["task", "bug", "check", "flake"] as const;
 /** The roles of a job: what it does. `review` is the reviewer's job, its `prev` the build it reviews. */
-export const ROLES = ["build", "plain", "land", "review", "intake", "recheck", "director", "monitor", "lens", "housekeeper", "maintainer"] as const;
+export const ROLES = ["build", "plain", "land", "review", "intake", "recheck", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge"] as const;
 export type State = (typeof STATES)[number];
 export type Role = (typeof ROLES)[number];
 /** The roles that one agent call opens (`openRun`): the others start a unit or a command. */

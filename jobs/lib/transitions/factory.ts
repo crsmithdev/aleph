@@ -15,7 +15,7 @@ import { factoryDir, logEvent } from "../../../lib/layout.ts";
 import { itemOnMain, landedIndex, revertedIn } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, isWaiting, loadRegistry, onOf, type Entry, type Repo, allJobs, isOpen } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { holdsWork, isLive, isRunning } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { issueBrief } from "./continuation.ts";

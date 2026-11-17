@@ -17,7 +17,7 @@ import { digest, readEntries, userGrantedSkip } from "./digest.ts";
 import { docClaimProblems } from "./docclaims.ts";
 import { denials, snap } from "./handshake.ts";
 import { backing, unbackedHashes } from "./hashes.ts";
-import { judge as realJudge } from "../../lib/judge.ts";
+import { judge as realJudge } from "../../jobs/lib/roles/judge.ts";
 import { changedFiles, isCode, snapshot } from "./snapshot.ts";
 import { postTurnSpan } from "./trace.ts";
 

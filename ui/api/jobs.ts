@@ -119,7 +119,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", lens: "lens", housekeeper: "housekeeper", maintainer: "maintainer" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", lens: "lens", housekeeper: "housekeeper", maintainer: "maintainer", title: "worker", judge: "worker" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",

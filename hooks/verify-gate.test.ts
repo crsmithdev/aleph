@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { digest, userGrantedSkip } from "./lib/digest.ts";
 import { changedFiles, isCode, snapshot, type Snapshot } from "./lib/snapshot.ts";
 import { gate } from "./lib/gate.ts";
-import type { JudgeResult } from "../lib/judge.ts";
+import type { JudgeResult } from "../jobs/lib/roles/judge.ts";
 
 const HOOKS = import.meta.dir;
 const run = (cwd: string, ...args: string[]) => { const p = Bun.spawnSync(["git", "-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd, stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };

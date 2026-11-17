@@ -17,7 +17,7 @@ import { runFile } from "../records/run-files.ts";
 import { askOfItem, asking } from "../asks/ask.ts";
 import { paused } from "../gates/pause.ts";
 import { git } from "../../../lib/git.ts";
-import { held, lock } from "../infra/locks.ts";
+import { held, lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";

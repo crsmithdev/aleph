@@ -13,7 +13,7 @@ import { outcome, write } from "../../../vault/lib/ops.ts";
 import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { addDays } from "../learning/monitor-table.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";

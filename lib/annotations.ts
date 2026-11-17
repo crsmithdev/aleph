@@ -6,7 +6,7 @@
  * A note is v 2 of the kit's shape. `url` "" puts a note on every page where its selector finds an element, which is
  * how an agent pins a note on an item by its `data-annotate` id without knowing which page shows it.
  */
-import { lockSync } from "../jobs/lib/infra/locks.ts";
+import { lockSync } from "./locks.ts";
 import { readJsonOr, writeJson } from "./json.ts";
 import { annotationsFile } from "./paths.ts";
 import { refuse } from "./refusal.ts";

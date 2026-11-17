@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { admit, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Run } from "./ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 import { writeRepos, type Repos } from "../../../tests/projects.testkit.ts";
 

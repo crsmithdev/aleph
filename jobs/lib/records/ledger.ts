@@ -7,7 +7,7 @@ import { loadavg } from "node:os";
 import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../../../lib/layout.ts";
 import * as record from "./record.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { isLive } from "../infra/process.ts";
 import { jobFolder } from "./run-files.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";

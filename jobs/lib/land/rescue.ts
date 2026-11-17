@@ -24,7 +24,7 @@ import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
 import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import type { MainState } from "../gates/tables.ts";

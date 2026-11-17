@@ -21,7 +21,7 @@ import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn, askOfItem } from "../asks/ask.ts";
 import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { endLost, openRun } from "./agent-run.ts";

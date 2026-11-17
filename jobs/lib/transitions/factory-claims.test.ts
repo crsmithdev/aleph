@@ -8,7 +8,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { setPaused } from "../gates/pause.ts";
 import { allJobs, allRuns } from "../records/ledger.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { ctx, newIssue, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.testkit.ts";
 import { markRescued } from "./continuation.ts";
 import { ciStep } from "../gates/ci.ts";

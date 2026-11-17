@@ -26,8 +26,8 @@ and as the bar for a card. Sections are by lens.
   `jobs/lib/records/ledger.ts:282` (`lock`, reclaims under a guard).
 - **Disagreement**: two waiters that both see a dead owner can remove the live lock one of them then took.
   `ledger.ts:304` names the race; `record.ts:171` still had it.
-- **Owner**: `jobs/lib/infra/locks.ts` with the guarded reclaim. Landed as c5742f10d.
-- **Lint**: `mkdirSync(` on a `.lock` path outside `infra/locks.ts`.
+- **Owner**: `lib/locks.ts` with the guarded reclaim. Landed as c5742f10d.
+- **Lint**: `mkdirSync(` on a `.lock` path outside `lib/locks.ts`.
 
 ## Page scope: two meanings of one parameter
 

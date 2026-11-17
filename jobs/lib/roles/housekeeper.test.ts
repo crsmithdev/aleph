@@ -7,7 +7,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { itemsDir, readList, writeList } from "../../../issues/lib/store.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
-import { lock } from "../infra/locks.ts";
+import { lock } from "../../../lib/locks.ts";
 import { setModel } from "../routing/models.ts";
 import { setAsk, type Ask } from "../asks/ask.ts";
 import { BATCH, housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
