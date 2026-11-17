@@ -26,7 +26,6 @@ const turn = (fill: number) => ({ type: "assistant", message: { usage: { input_t
 test("fill is the last request, not the sum", () => {
   const r = read(transcript([turn(50_000), turn(90_000)]));
   expect(r.fill).toBe(90_000);
-  expect(r.requests).toBe(2);
   expect(r.compacted).toBe(false);
 });
 
@@ -47,7 +46,7 @@ test("a microcompact boundary is not compaction", () => {
 });
 
 test("a missing transcript reads as empty", () => {
-  expect(read(join(root, "gone.jsonl"))).toEqual({ fill: 0, compacted: false, requests: 0 });
+  expect(read(join(root, "gone.jsonl"))).toEqual({ fill: 0, compacted: false });
 });
 
 test("the threshold follows the window, env over settings over default", () => {
@@ -63,24 +62,24 @@ test("the threshold follows the window, env over settings over default", () => {
 
 test("quiet, then warn, then gate", () => {
   const limit = 167_000;
-  expect(assess({ fill: 100_000, compacted: false, requests: 3 }, limit, false, false).kind).toBe("quiet");
-  const warn = assess({ fill: 130_000, compacted: false, requests: 3 }, limit, false, false);
+  expect(assess({ fill: 100_000, compacted: false }, limit, false, false).kind).toBe("quiet");
+  const warn = assess({ fill: 130_000, compacted: false }, limit, false, false);
   expect(warn.kind).toBe("warn");
   if (warn.kind === "warn") expect(warn.message).toContain("130k of the 167k budget");
-  const gate = assess({ fill: 40_000, compacted: true, requests: 9 }, limit, false, false);
+  const gate = assess({ fill: 40_000, compacted: true }, limit, false, false);
   expect(gate.kind).toBe("gate");
   if (gate.kind === "gate") expect(gate.reason).toContain("aleph:handoff");
 });
 
 test("the gate fires once a session and never on a retry", () => {
-  const reading = { fill: 40_000, compacted: true, requests: 9 };
+  const reading = { fill: 40_000, compacted: true };
   expect(assess(reading, 167_000, true, false).kind).toBe("quiet");
   expect(assess(reading, 167_000, false, true).kind).toBe("quiet");
 });
 
 test("the warn fraction is tunable", () => {
   process.env.ALEPH_CONTEXT_WARN = "0.5";
-  expect(assess({ fill: 90_000, compacted: false, requests: 3 }, 167_000, false, false).kind).toBe("warn");
+  expect(assess({ fill: 90_000, compacted: false }, 167_000, false, false).kind).toBe("warn");
 });
 
 function hook(payload: object, env: Record<string, string> = {}): string {

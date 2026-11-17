@@ -447,7 +447,8 @@ describe("obs hook waits for the transcript", () => {
     // The transcript is a FIFO: the hook's first read opens it, and that open is the event the test waits for.
     expect(Bun.spawnSync(["mkfifo", transcript]).exitCode).toBe(0);
     const posted: any[] = [];
-    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); return new Response("{}"); } });
+    const arrived = Promise.withResolvers<void>();
+    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); arrived.resolve(); return new Response("{}"); } });
     const spool = mkdtempSync(join(tmpdir(), "aleph-late-spool-"));
     const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
       stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-late", cwd: "/tmp/proj", hook_event_name: "Stop", prompt_id: "pl", transcript_path: transcript, last_assistant_message: "all done here" })),
@@ -462,10 +463,41 @@ describe("obs hook waits for the transcript", () => {
     writeSync(fd, first.map((l) => JSON.stringify(l)).join("\n") + "\n");
     closeSync(fd);
     expect(await proc.exited).toBe(0);
+    // The hook that found the final entry missing handed the post to a late copy.
+    await arrived.promise;
     server.stop();
     const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
     const gens = spans.filter((s: any) => s.attributes.some((a: any) => a.key === "langfuse.observation.type" && a.value.stringValue === "generation"));
     expect(gens.map((g: any) => g.attributes.find((a: any) => a.key === "langfuse.observation.metadata.request_id").value.stringValue)).toEqual(["req_1", "req_2"]);
+    rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
+  });
+
+  test("the Stop hook exits before the transcript settles, and a late copy still posts the turn", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-defer-"));
+    const transcript = join(dir, "t.jsonl");
+    const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    const lines = [
+      { type: "user", promptId: "pd", isSidechain: false, timestamp: "2026-09-03T10:00:00.000Z", message: { role: "user", content: "hi" } },
+      { type: "assistant", isSidechain: false, requestId: "req_1", timestamp: "2026-09-03T10:00:01.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } },
+    ];
+    writeFileSync(transcript, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    const posted: any[] = [];
+    const arrived = Promise.withResolvers<void>();
+    const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); arrived.resolve(); return new Response("{}"); } });
+    const spool = mkdtempSync(join(tmpdir(), "aleph-defer-spool-"));
+    const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
+      stdin: new TextEncoder().encode(JSON.stringify({ session_id: "s-defer", cwd: "/tmp/proj", hook_event_name: "Stop", prompt_id: "pd", transcript_path: transcript, last_assistant_message: "never written" })),
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
+      stdout: "pipe", stderr: "pipe",
+    });
+    expect(await proc.exited).toBe(0);
+    // The late copy waits 2 s for a message that never lands, so nothing is posted yet.
+    expect(posted).toHaveLength(0);
+    await arrived.promise;
+    server.stop();
+    const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
+    expect(spans.map((s: any) => s.name)).toContain("turn");
+    expect(spans.filter((s: any) => s.attributes.some((a: any) => a.key === "langfuse.observation.type" && a.value.stringValue === "generation"))).toHaveLength(1);
     rmSync(dir, { recursive: true, force: true }); rmSync(spool, { recursive: true, force: true });
   });
 });

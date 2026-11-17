@@ -140,19 +140,23 @@ async function taskType(prompt: string | undefined, finalMessage: string): Promi
   }
 }
 
+/** Whether an assistant entry carries the final message. An empty message has nothing to wait for. */
+function landed(entries: Record<string, any>[], finalMessage: string): boolean {
+  const needle = finalMessage.trim().slice(0, 80);
+  return !needle || entries.some((e) => e.type === "assistant" && Array.isArray(e.message?.content)
+    && e.message.content.some((block: any) => block.type === "text" && typeof block.text === "string" && block.text.includes(needle)));
+}
+
 /**
  * Stop fires while the last assistant entry may still be on its way to disk
  * (measured: the final request was missing from the transcript at Stop). Wait,
- * briefly, until an assistant entry carries the final message.
+ * briefly, until an assistant entry carries the final message. Only the late
+ * copy of the hook waits: the Stop hook is synchronous.
  */
 function settledEntries(transcriptPath: string, promptId: string, finalMessage: string) {
-  const needle = finalMessage.trim().slice(0, 80);
   for (let attempt = 0; attempt < 20; attempt++) {
     const entries = readEntries(transcriptPath, promptId);
-    if (!needle) return entries;
-    const landed = entries.some((e) => e.type === "assistant" && Array.isArray(e.message?.content)
-      && e.message.content.some((block: any) => block.type === "text" && typeof block.text === "string" && block.text.includes(needle)));
-    if (landed) return entries;
+    if (landed(entries, finalMessage)) return entries;
     Bun.sleepSync(100);
   }
   return readEntries(transcriptPath, promptId);
@@ -273,9 +277,16 @@ switch (event) {
     const start = turnSlot!.get()?.start ?? now;
     const failed = event === "StopFailure";
     const message: string = input.last_assistant_message ?? "";
+    // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
+    if (!failed && input.transcript_path && !process.env.ALEPH_OBS_LATE && !landed(readEntries(input.transcript_path, input.prompt_id), message)) {
+      const late = Bun.spawn(["bun", import.meta.path], { detached: true, stdin: "pipe", stdout: "ignore", stderr: "ignore", env: { ...process.env, ALEPH_OBS_LATE: "1", ALEPH_NOW: new Date(now).toISOString() } });
+      late.stdin.write(JSON.stringify(input));
+      await late.stdin.end();
+      late.unref();
+      process.exit(0);
+    }
     const tag = failed ? {} : await taskType(turnSlot!.get()?.input, message);
     spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
-    // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
     if (input.transcript_path) {
       const entries = settledEntries(input.transcript_path, input.prompt_id, failed ? "" : message);
       spans.push(...generations(entries, turnSpanId));

@@ -19,7 +19,7 @@
 import { readJsonOr } from "./json.ts";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readLines } from "./jsonl.ts";
+import { entriesBackward, readText } from "./jsonl.ts";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;
@@ -28,24 +28,25 @@ export const DEFAULT_WARN = 0.75;
 export interface Reading {
   fill: number;
   compacted: boolean;
-  requests: number;
 }
 
-/** The last assistant request's context size, and whether the session has compacted. */
+/** The last assistant request's context size, and whether the session has compacted. Both are read from the end, parsing only the lines that can answer. */
 export function read(transcriptPath: string): Reading {
+  const text = readText(transcriptPath);
   let fill = 0;
-  let compacted = false;
-  let requests = 0;
-  for (const e of readLines(transcriptPath)) {
-    if (e.isSidechain) continue;
-    if (e.type === "system" && e.subtype === "compact_boundary") compacted = true;
-    if (e.isCompactSummary) compacted = true;
-    const usage = e.type === "assistant" ? e.message?.usage : undefined;
+  for (const e of entriesBackward(text, /"usage"/)) {
+    const usage = e.type === "assistant" && !e.isSidechain ? e.message?.usage : undefined;
     if (!usage) continue;
-    requests++;
     fill = (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    break;
   }
-  return { fill, compacted, requests };
+  let compacted = false;
+  for (const e of entriesBackward(text, /"compact_boundary"|"isCompactSummary"/)) {
+    if (e.isSidechain || !(e.isCompactSummary || (e.type === "system" && e.subtype === "compact_boundary"))) continue;
+    compacted = true;
+    break;
+  }
+  return { fill, compacted };
 }
 
 /** Claude Code's settings file: ALEPH_CLAUDE_SETTINGS, else ~/.claude/settings.json. */

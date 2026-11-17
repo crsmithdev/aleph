@@ -26,3 +26,19 @@ export function readLines(transcriptPath: string): Entry[] {
   parsed = { path: transcriptPath, size, entries };
   return entries;
 }
+
+/** The text of a JSONL transcript, or "" when the file cannot be read. */
+export function readText(transcriptPath: string): string {
+  try { return readFileSync(transcriptPath, "utf8"); } catch { return ""; }
+}
+
+/** The entries of JSONL `text` from the last back. Only a line that matches `grep` is parsed, so a search for a rare entry does not pay a parse of the whole text. */
+export function* entriesBackward(text: string, grep: RegExp): Generator<Entry> {
+  for (let end = text.length; end > 0;) {
+    const start = text.lastIndexOf("\n", end - 1) + 1;
+    const line = text.slice(start, end);
+    end = start - 1;
+    if (!grep.test(line)) continue;
+    try { yield JSON.parse(line); } catch { /* partial last line */ }
+  }
+}
