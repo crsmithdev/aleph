@@ -42,7 +42,7 @@ as a follow-up.
 - Stack: TypeScript first, bun for runtime, packages and tests, SQLite through
   `bun:sqlite`; React, Fastify and Vite for UI and servers. Python, Go or Rust
   only where the repo already uses them.
-- Code: follow the Style rules in `~/aleph/skills/write-code/SKILL.md`. A
+- Code: follow the Style rules in `~/aleph/skills/write-code/RULES.md`. A
   repo's own style guide wins over them, and an edit matches the style of its
   file.
 - Commit subject: imperative, lowercase, no trailing punctuation, at most 50

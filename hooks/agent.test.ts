@@ -33,3 +33,10 @@ test("an agent's start context is AGENT.md and the core lines, without MEMORY.md
   expect(chris).not.toContain("# Voice");
   expect(agent).not.toContain("Chris's profile.");
 });
+
+test("an agent's code style rule points at write-code/RULES.md, not SKILL.md", async () => {
+  const start = { hook_event_name: "SessionStart", cwd: vault };
+  const agent = JSON.parse(await hook([join(ROOT, "hooks", "vault-context.ts")], start, true)).hookSpecificOutput.additionalContext;
+  expect(agent).toContain("skills/write-code/RULES.md");
+  expect(agent).not.toContain("skills/write-code/SKILL.md");
+});
