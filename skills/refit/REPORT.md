@@ -2,7 +2,7 @@
 
 The report of a refit run, drawn from its `findings.json` ([FINDINGS.md](FINDINGS.md)). All six refit skills write
 this shape. A skill names its unit and its Overview additions in its own SKILL.md. refit-design adds the rules in its
-[REPORT.md](../refit-design/REPORT.md). [HTML.md](HTML.md) has the scaffold, the diagram patterns and the tone.
+[REPORT.md](../refit-design/REPORT.md). [HTML.md](HTML.md) has the scaffold, the figure and the tone.
 
 ## Directory
 
@@ -20,9 +20,9 @@ a variant is an `<h3 class="sub-head">`, not a card.
 
 1. **Overview.** One card, with no part said twice:
    - **Repo line.** Repo name, date, the commit scanned, the scope and the lenses run, as one `.facts` line. A
-     skill's own additions follow (see its SKILL.md). refit-code adds a legend (box = module or copy, dark box = owner or deep module, red dashed line =
-     disagreement or leak, grey box = caller) and a seed line: the top files, pairs and copies that
-     `cochange.ts seed` gave.
+     skill's own additions follow (see its SKILL.md). refit-code adds a legend of the figure's classes (`.node` box = module or copy, `.own` dark box = owner or
+     deep module, `.gone` grey dashed box = caller or removed copy, `.leak` red dashed line = disagreement or leak)
+     and a seed line: the top files, pairs and copies that `cochange.ts seed` gave.
    - **Counts.** Two counts after the repo line: the findings fixed, with the commit hash of each, and the findings
      waiting for Chris (the ask findings). A `scan` run fixes none.
    - **Links.** The page head links back to the shelf, at the shelf's base URL (the first line of
@@ -56,10 +56,12 @@ locations. The card holds, in this order:
 3. **Fix**: one sentence from the lens's Fix section. When a shared helper makes the fault, such as a fetch that
    writes the error line, the fix changes the helper, and every caller gets it. Mark a
    finding that needs [DEEPEN.md](../refit-code/DEEPEN.md).
-4. **Before / after diagram**: before shows the copies, the shallow cluster or the crossing reads, with red
-   dashed edges for disagreements and leaks; after shows the owner or deep module as one dark box, with the
-   former copies as grey callers. Dead and slop findings may skip the diagram and show the lines removed. A layout
-   finding shows the before and after file tree. A skill whose finding is text shows the text before and after.
+4. **Before / after**: by the finding's `figure` field. With `figure` true (the fix changes how two or more files
+   relate: it merges copies, moves an owner, closes a leak or collapses a call path), one figure of
+   [HTML.md](HTML.md): panels "Before" and "After", with the copies, the shallow cluster or the crossing reads
+   before, red dashed edges for disagreements and leaks, and after the owner or deep module as the one dark box,
+   the former copies as grey callers. With `figure` false (a finding in one file), the lines or text before and
+   after in a `<pre>`, and no figure. A layout finding shows the before and after file tree as text.
 5. **Details**: one closed `<details>`, summary "Details", that holds the rest:
    - **Locations**: a list, one `file:line` each, the owner first and marked.
    - **Guard**: the boundary rule as JSON in `<pre>`, or the lint pattern or tool rule in `<code>`, or "model:

@@ -23,7 +23,7 @@ directory holds:
       "id": "f1", "lens": "one-way", "unit": "lib/naming.ts", "title": "Parse issue refs in one place",
       "signal": "twin parsers", "strength": "Disagrees",
       "locations": ["lib/naming.ts:77 (owner)", "ui/issue.ts:32"],
-      "fix": "ui/issue.ts calls parseRef from lib/naming.ts.", "guard": "a lint test for the regex outside lib/naming.ts",
+      "fix": "ui/issue.ts calls parseRef from lib/naming.ts.", "figure": true, "guard": "a lint test for the regex outside lib/naming.ts",
       "tier": "ask", "trigger": "changes a CLI flag",
       "status": "open", "reason": null, "commit": null, "rider": null
     }
@@ -35,6 +35,9 @@ directory holds:
 - `id`: `f<n>` for a finding, `d<n>` for a candidate that is not a finding. Numbers count from 1 over the run.
 - `unit`: the skill's report unit that holds the finding. A finding over many units sits in its owner's unit.
 - `strength`: the lens's badge, such as `Disagrees`, a tier `T2` or a rating `4`.
+- `figure`: `true` when the fix changes how two or more files relate (merges copies, moves an owner, closes a leak or
+  collapses a call path), else `false`. PROVE.md step 2 sets it. The report draws a figure for `true` only, and a
+  later `fix <run dir>` reads it to draw the same figures.
 - `tier`: `auto`, `ask`, or `none` in a skill with no fix.
 - `trigger`: for an ask finding, the PROVE.md trigger, in one sentence.
 - `rider`: the id of the finding whose fix found it, else `null`.

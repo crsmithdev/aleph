@@ -20,7 +20,9 @@ Step 3 of [PROCESS.md](PROCESS.md), and the pick of its step 6. The skill suppli
    8. pushes, force-pushes or deletes a remote branch.
 
    Name the trigger of each ask finding in one sentence. Every other finding is **auto**. A skill with no fix
-   (refit-data) gives the tier `none`. Done when every finding has an owner, a guard and a tier.
+   (refit-data) gives the tier `none`. Also set its `figure`: `true` when the fix changes how two or more files
+   relate (it merges copies, moves an owner, closes a leak or collapses a call path), `false` for a finding in one
+   file. Done when every finding has an owner, a guard, a tier and a `figure`.
 
 ## Pick
 
