@@ -302,6 +302,24 @@ test("a project handoff shows its summary line", async () => {
   }
 });
 
+test("a pane's handoff and a named handoff show, as handoff-start offers them", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "proj-"));
+  mkdirSync(join(dir, "projects", "aleph"), { recursive: true });
+  writeFileSync(join(dir, "projects", "aleph", "p7.md"), "summary: Pane work\n");
+  writeFileSync(join(dir, "voice.md"), "summary: Voice work\n");
+  const restore = withEnv({ ALEPH_HANDOFFS_DIR: dir });
+  try {
+    const all = await items(join(base, "vault"), [], {});
+    expect(all.filter((i) => i.source === "handoff").map((i) => [i.key, i.scope, i.title, i.text])).toEqual([
+      ["projects/aleph/p7.md", "aleph", "aleph p7 handoff", "Pane work"],
+      ["voice.md", "", "voice handoff", "Voice work"],
+    ]);
+  } finally {
+    restore();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("/api/memory lists each scope's core lines and the start-context bytes against the budget", async () => {
   const { loadVault, startContext, coreNotes } = await import("../vault/lib/vault.ts");
   const root = join(base, "vault");

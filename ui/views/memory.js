@@ -398,7 +398,7 @@ function mount(root, m) {
     if (row && !(e.metaKey || e.ctrlKey || e.shiftKey)) {
       e.preventDefault();
       setQuery({ item: row.dataset.id });
-      redraw(true).then(() => { if (innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" }); });
+      redraw(true).then(() => { if (onPage(root) && innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" }); });
     }
   };
   // The forms of the inspector (a core line, a link, an alias, the editor) submit here; Enter in a field submits too.

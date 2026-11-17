@@ -5,7 +5,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
-import { daysAgo, today } from "../../lib/day.ts";
+import { clock, daysAgo, today } from "../../lib/day.ts";
 import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { probe } from "../../lib/git.ts";
@@ -120,11 +120,6 @@ export function trimRecallLog(root: string): void {
     if (existsSync(recallLog(root))) writeFileSync(recallLog(root), readRecallLog(root).map((e) => JSON.stringify(e) + "\n").join(""));
   } catch (e) { recordRun(root, "recall trim", "failed", errText(e)); throw e; }
   recordRun(root, "recall trim", "ok");
-}
-
-export function clock(d = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 /** One op line of a daily note. `title` is a note's title for the ops that link it, else free text. */

@@ -8,20 +8,19 @@
  * no Herdr pane), the file is hc-<HC_TERMINAL_ID>.md and the cycle runs on `hc`.
  * Any other path prints nothing.
  */
-import { basename, dirname, join, resolve } from "node:path";
-import { handoffsDir } from "../lib/paths.ts";
+import { join } from "node:path";
+import { handoffOf } from "../lib/handoffs.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 const path = String(input.tool_input?.file_path ?? "");
-const projects = join(resolve(handoffsDir()), "projects");
-const at = dirname(resolve(path));
-if (!path.endsWith(".md") || (at !== projects && dirname(at) !== projects)) process.exit(0);
+const h = handoffOf(path);
+if (h?.kind !== "project" && h?.kind !== "pane") process.exit(0);
 
 const pane = process.env.HERDR_ENV === "1" ? process.env.HERDR_PANE_ID : undefined;
 const term = !pane ? process.env.HC_TERMINAL_ID : undefined;
 const me = pane ?? (term ? `hc-${term}` : undefined);
-const cycle = !!me && basename(path) === `${me}.md` && dirname(at) === projects;
-if (cycle) Bun.spawn(["bun", join(import.meta.dir, "handoff-cycle.ts"), pane ? "herdr" : "hc", pane ?? term!, resolve(path)], { detached: true, stdio: ["ignore", "ignore", "ignore"] }).unref();
+const cycle = h.kind === "pane" && h.name === me;
+if (cycle) Bun.spawn(["bun", join(import.meta.dir, "handoff-cycle.ts"), pane ? "herdr" : "hc", pane ?? term!, h.path], { detached: true, stdio: ["ignore", "ignore", "ignore"] }).unref();
 
 console.log(JSON.stringify({
   continue: false,

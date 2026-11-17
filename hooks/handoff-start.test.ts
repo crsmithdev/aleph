@@ -45,9 +45,16 @@ test("headless sessions and factory jobs print nothing", () => {
   expect(run(join(root, "proj"), { ALEPH_JOB_ID: "j1" })).toBe("");
 });
 
-test("a handoff with no summary line still shows", () => {
+test("a handoff with no summary line shows its Intent line", () => {
   write("proj", "## Intent\nx\n");
-  expect(JSON.parse(run(join(root, "proj"))).systemMessage).toEndWith(": no summary line");
+  expect(JSON.parse(run(join(root, "proj"))).systemMessage).toEndWith(": x");
+});
+
+test("an empty summary line does not take the next line, and the Intent line shows", () => {
+  write("proj", `summary:\nstray-line-5521\n\n## Intent\nintent-line-7730\n\n${"x".repeat(10000)}\n`);
+  const ctx = JSON.parse(run(join(root, "proj"))).hookSpecificOutput.additionalContext;
+  expect(ctx).not.toContain("stray-line-5521");
+  expect(ctx).toContain("intent-line-7730");
 });
 
 test("the context holds the handoff text, while the system message keeps the summary", () => {

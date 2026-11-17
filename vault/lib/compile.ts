@@ -2,10 +2,10 @@
  * The compile digest: one day's Langfuse turns, handoffs and daily note,
  * plus the trace ids already cited, so the agent proposes writes from it.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuse, type Langfuse, type Observation, type Trace } from "../../lib/langfuse.ts";
-import { handoffsDir } from "../../lib/paths.ts";
+import { handoffs } from "../../lib/handoffs.ts";
 import { citedTraces, loadVault } from "./vault.ts";
 import { errText } from "../../lib/errtext.ts";
 
@@ -65,17 +65,15 @@ async function traceDigest(lf: Langfuse, date: string): Promise<{ text: string; 
   return { text: parts.length ? parts.join("\n\n") : "no traces on this date" };
 }
 
-function handoffsFor(dir: string, date: string): string {
-  if (!existsSync(dir)) return "";
-  return readdirSync(dir).filter((f) => f.startsWith(date) && f.endsWith(".md")).sort()
-    .map((f) => `### ${f}\n${readFileSync(join(dir, f), "utf8").slice(0, 6000)}`).join("\n\n");
+function handoffsFor(date: string): string {
+  return handoffs().filter((h) => h.day === date).map((h) => `### ${h.key}\n${readFileSync(h.path, "utf8").slice(0, 6000)}`).join("\n\n");
 }
 
 /** The digest of `date` under the vault at `root`, as `aleph memory compile` prints it. `empty` is true when the day has no traces (and no Langfuse error), no handoff and no daily note. */
 export async function compileDigest(root: string, date: string): Promise<{ text: string; empty: boolean }> {
   const lf = langfuse();
   const traces = lf ? await traceDigest(lf, date) : { text: "", error: "no Langfuse keys" };
-  const handoffs = handoffsFor(handoffsDir(), date);
+  const handoffs = handoffsFor(date);
   const dailyPath = join(root, "daily", `${date}.md`);
   const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";
   const cited = citedTraces(await loadVault(root));

@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { useLog } from "../../lib/episode-use.ts";
 import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
+import { handoffOf } from "../../lib/handoffs.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
 import { adopt, commitAndPush, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
 import { daysAgo, today } from "../../lib/day.ts";
@@ -74,7 +75,7 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
   report.core = { ...report.core, fixed: cores.map((c) => ({ note: c.n.title, was: c.was, now: c.now })) };
 
   // A handoff counts as compiled when `aleph memory compile` ran for its day.
-  const dated = (f: string) => f.match(/^(\d{4}-\d{2}-\d{2})-\d{6}(-.*)?\.md$/)?.[1] ?? null;
+  const dated = (f: string) => handoffOf(f)?.day || null;
   const compiled = compiledDays(root);
   report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, daysAgo(HANDOFF_DAYS), (d) => compiled.includes(d));
 

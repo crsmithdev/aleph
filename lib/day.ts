@@ -3,6 +3,10 @@
 export const today = (d = new Date()): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
+/** The local time of `d` as zero-padded `HH:MM`. */
+export const clock = (d = new Date()): string =>
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
 /** The local date `n` calendar days after `day` (YYYY-MM-DD). Noon keeps a DST change from moving it, which `n` times 24 hours of ms does not. */
 export function addDays(day: string, n: number): string {
   const d = new Date(`${day}T12:00:00`);

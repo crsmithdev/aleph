@@ -21,7 +21,7 @@ import { activity } from "./activity.ts";
 import { langfuse } from "../lib/langfuse.ts";
 import { sessionRows, windowTraces } from "./api/sessions.ts";
 import { later } from "../lib/sources.ts";
-import { handoffsDir } from "../lib/paths.ts";
+import { handoffs, intent, type Handoff } from "../lib/handoffs.ts";
 import { memoryIn } from "./api/scope.ts";
 import { errText } from "../lib/errtext.ts";
 
@@ -38,16 +38,6 @@ const mtime = (p: string): string => statSync(p).mtime.toISOString();
 const read = (p: string): string => readFileSync(p, "utf8");
 const files = (dir: string, re: RegExp): string[] => { try { return readdirSync(dir).filter((f) => re.test(f)).sort(); } catch { return []; } };
 const IDENTITY = join(import.meta.dir, "..", "identity");
-
-/** A handoff's `summary:` line, else the first non-blank line under its `## Intent`, else its first line. */
-function intent(text: string): string {
-  const summary = text.match(/^summary:[ \t]*(.+)/m)?.[1].trim();
-  if (summary) return clip(summary, 160);
-  const lines = text.split("\n");
-  const at = lines.findIndex((l) => /^##\s+intent\s*$/i.test(l));
-  const from = at < 0 ? lines : lines.slice(at + 1);
-  return clip(from.find((l) => l.trim() && !/^#/.test(l)) ?? "", 160);
-}
 
 /** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. One read serves every build
  * until the 10 min usage poll: Memory's Langfuse reads are slow, so they do not run on the 30 s Langfuse poll. */
@@ -157,15 +147,14 @@ async function procedural(): Promise<Item[]> {
 }
 
 function working(): Item[] {
-  const dir = handoffsDir();
-  const one = (rel: string, title: string, scope: string, effect: string): Item => {
-    const body = read(join(dir, rel));
-    return { type: "working", source: "handoff", key: rel, title, text: intent(body), scope, at: mtime(join(dir, rel)), read: null, body, effect };
+  const all = handoffs();
+  const one = (h: Handoff, title: string, effect: string): Item => {
+    const body = read(h.path);
+    return { type: "working", source: "handoff", key: h.key, title, text: intent(body), scope: h.scope, at: mtime(h.path), read: null, body, effect };
   };
   return [
-    ...(existsSync(join(dir, "current.md")) ? [one("current.md", "current handoff", "", "Read by /aleph:pickup at the next session start.")] : []),
-    ...files(join(dir, "projects"), /\.md$/).map((f) => one(`projects/${f}`, `${f.slice(0, -3)} handoff`, f.slice(0, -3), `Read by /aleph:pickup in ${f.slice(0, -3)}.`)),
-    ...files(dir, /^\d{4}-\d{2}-\d{2}-.*\.md$/).reverse().map((f) => one(f, `handoff ${f.slice(0, -3)}`, "", "History: vault compile reads it for its day.")),
+    ...all.filter((h) => h.kind !== "dated").map((h) => one(h, `${`${h.scope} ${h.name}`.trim()} handoff`, h.scope ? `Read by /aleph:pickup in ${h.scope}.` : `Read by /aleph:pickup ${h.name}.`)),
+    ...all.filter((h) => h.kind === "dated").reverse().map((h) => one(h, `handoff ${h.key.slice(0, -3)}`, "History: vault compile reads it for its day.")),
   ];
 }
 

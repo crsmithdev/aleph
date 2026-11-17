@@ -14,7 +14,8 @@ import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, cli, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
-import { handoffsDir, vaultDir } from "../../lib/paths.ts";
+import { vaultDir } from "../../lib/paths.ts";
+import { handoffOf } from "../../lib/handoffs.ts";
 import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
@@ -281,7 +282,7 @@ type Post = (b: Record<string, string>) => Promise<unknown>;
 const write = (f: Post) => post((b, params) => f({ ...strings(b), ...params }));
 
 /** The file a handoff is, or null for a key outside its folder. */
-const handoffFile = (key: string): string | null => (/^(projects\/)?[^/\\.][^/\\]*\.md$/.test(key) ? join(handoffsDir(), key) : null);
+const handoffFile = (key: string): string | null => handoffOf(key)?.path ?? null;
 
 /** The text of a handoff, an episode or MEMORY.md, or null when there is none. */
 function textOf(source: string, key: string): string | null {

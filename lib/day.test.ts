@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { addDays, daysAgo, today, yesterday } from "./day.ts";
+import { addDays, clock, daysAgo, today, yesterday } from "./day.ts";
 
 const tz = process.env.TZ;
 beforeEach(() => { process.env.TZ = "America/Los_Angeles"; });
@@ -8,6 +8,11 @@ afterEach(() => { process.env.TZ = tz ?? "UTC"; });
 test("today is the local date, zero-padded", () => {
   expect(today(new Date("2026-11-11T04:00:00Z"))).toBe("2026-11-10");
   expect(today(new Date("2026-03-04T12:00:00Z"))).toBe("2026-03-04");
+});
+
+test("clock is the local hour and minute, zero-padded", () => {
+  expect(clock(new Date("2026-11-11T04:05:00Z"))).toBe("20:05");
+  expect(clock(new Date("2026-11-11T08:07:00Z"))).toBe("00:07");
 });
 
 test("addDays moves a date by calendar days across a month, a year and a DST change", () => {

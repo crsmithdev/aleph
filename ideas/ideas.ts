@@ -7,7 +7,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../lib/frontmatter.ts";
-import { today } from "../lib/day.ts";
+import { clock, today } from "../lib/day.ts";
 import { next } from "../lib/db.ts";
 import { key, parseKey } from "../lib/naming.ts";
 import { itemsDir, writeFiles } from "../issues/lib/store.ts";
@@ -66,7 +66,7 @@ export function add(title: string, writeup: string, target?: string): { slug: st
 }
 
 /** The local time `YYYY-MM-DD HH:MM`. */
-const stamp = (d = new Date()): string => `${today(d)} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+const stamp = (d = new Date()): string => `${today(d)} ${clock(d)}`;
 
 /** The idea's lens results, oldest first. `file` is the name beside `idea.md`. */
 export function lenses(slug: string): { lens: string; at: string; file: string }[] {
