@@ -905,7 +905,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     for (let i = 0; i < 600 && !saved.length; i++) { await page.ev("new Promise((r) => requestAnimationFrame(r))"); saved = await server(); }
     expect(saved.map((n) => [n.note, n.by])).toEqual([["rename this", "you"]]);
     // An agent's note, added with the CLI, reaches the open page through the change signal, with its own pin.
-    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
     expect(cli(["add", "--selector", ".mark", "--", "from the agent"]).exitCode).toBe(0);
     await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "2"');
     expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
@@ -922,7 +922,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   const chatRig = async () => {
     await page.width(1200);
     await page.go("#/");
-    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
     const chat = 'document.getElementById("kit-chat").shadowRoot', note = 'document.getElementById("kit-annotate")';
     await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
       ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response("event: end\\ndata: {}\\n\\n", { headers: { "content-type": "text/event-stream" } })))

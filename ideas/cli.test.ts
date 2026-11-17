@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run } from "../jobs/commands.ts";
+import { run } from "../cli/commands.ts";
 import { allRuns } from "../jobs/lib/records/ledger.ts";
 import { setModel } from "../jobs/lib/routing/models.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";

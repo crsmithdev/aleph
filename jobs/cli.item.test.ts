@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { aleph, base, other, remote, repo, sh, state, worktree, setup, teardown } from "./cli.testkit";
 import { actionJob, drop, issueAdd, issueShow, job, land } from "./flow.testkit.ts";
 
-// The jobs list, whose reading of fate from git is in jobs/cli.ts itself.
+// The jobs list, whose reading of fate from git is in cli/cli.ts itself.
 beforeAll(setup);
 afterAll(teardown);
 

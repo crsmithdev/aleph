@@ -45,7 +45,7 @@ Chris works in Claude Code sessions and on the UI. Both write through the `aleph
 | Process | Started by | Lives | Code |
 |---|---|---|---|
 | Hooks | Claude Code, per event | One event | `hooks/*.ts` |
-| `aleph` CLI | Chris, a session, the UI | One command | `jobs/cli.ts` |
+| `aleph` CLI | Chris, a session, the UI | One command | `cli/cli.ts` |
 | `aleph tick` | `aleph-tick.timer`, each minute | Seconds | `jobs/lib/transitions/tick.ts` |
 | `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/transitions/baseline.ts` `suiteStep` |
 | Dispatch, intake, director | A transition, as a transient systemd unit | Until done | `jobs/lib/transitions/launch.ts` |
@@ -62,8 +62,9 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `hooks/` | One script per hook; `hooks/lib/` has the secret rules and the snapshots |
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
 | `vault/` | `vault/lib/`, run by `aleph memory`: notes, the FTS index, git |
-| `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs) |
-| `jobs/` | `jobs/cli.ts` and `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
+| `cli/` | `cli/cli.ts` (the `aleph` entry) and `cli/commands.ts` (the command table) |
+| `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs); `issues/cli.ts` parses and prints `aleph issue` |
+| `jobs/` | `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
 | `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts` |
 | `identity/` | The global `CLAUDE.md` and `VOICE.md` |

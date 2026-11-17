@@ -12,8 +12,8 @@ import { LOW, type Repo } from "../records/ledger.ts";
 import { dispatchOn, jobForeground } from "../infra/settings.ts";
 import { errText } from "../../../lib/errtext.ts";
 
-/** jobs/cli.ts, the `aleph` command. */
-export const CLI = join(import.meta.dir, "..", "..", "cli.ts");
+/** cli/cli.ts, the `aleph` command. */
+export const CLI = join(import.meta.dir, "..", "..", "..", "cli", "cli.ts");
 
 /** The caller's PATH with ~/.local/bin and the directory of this bun added at the end when missing. */
 export function runPath(env: Record<string, string | undefined> = process.env): string {

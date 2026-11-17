@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** `aleph`, the command line: the commands are jobs/commands.ts. */
+/** `aleph`, the command line: the commands are cli/commands.ts. */
 import { writeSync } from "node:fs";
 import { run } from "./commands.ts";
 

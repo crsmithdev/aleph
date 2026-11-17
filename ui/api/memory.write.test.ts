@@ -8,7 +8,7 @@ import { updater } from "../updater.ts";
 import { writeRepos } from "../../tests/projects.testkit.ts";
 
 // The Memory page's search and writes against a real vault: `aleph memory init`, then notes through `aleph memory write`.
-const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
+const CLI = join(import.meta.dir, "..", "..", "cli", "cli.ts");
 const day = "2026-11-04";  // write checks only the date format, so a fixed one serves
 let base: string, vault: string, hand: string, eps: string, restore: () => void, stop: () => void;
 let at: (p: string, init?: RequestInit) => Promise<Response>;

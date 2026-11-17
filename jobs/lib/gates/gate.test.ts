@@ -15,8 +15,8 @@ beforeAll(() => {
   git("init", "-q", "-b", "main");
   put("a.test.ts", 'test("a", () => {});\n');
   put("src/x.ts", "export const x = 1;\n");
-  put("jobs/cli.ts", "// held\n");
-  put("jobs/cli.test.ts", 'test("held", () => {});\n');
+  put("cli/cli.ts", "// held\n");
+  put("cli/cli.test.ts", 'test("held", () => {});\n');
   git("add", "."); git("commit", "-qm", "init");
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -26,13 +26,13 @@ function rule(change: () => void): string | null {
   git("switch", "-q", "-C", "b", "main");
   change();
   git("add", "-A"); git("commit", "-qm", "change", "--allow-empty");
-  return heldRule(dir, ["jobs/**"], "main", "b");
+  return heldRule(dir, ["cli/**"], "main", "b");
 }
 
 const findings = (change: () => void) => { rule(change); return testFindings(dir, "main", "b"); };
 
 test("a held path that is not a test needs Chris; test changes are findings, not holds", () => {
-  expect(rule(() => put("jobs/cli.ts", "// changed\n"))).toBe("held path jobs/cli.ts");
+  expect(rule(() => put("cli/cli.ts", "// changed\n"))).toBe("held path cli/cli.ts");
   expect(rule(() => git("rm", "-q", "a.test.ts"))).toBeNull();
   expect(findings(() => git("rm", "-q", "a.test.ts"))).toEqual(["deletes the test a.test.ts"]);
   expect(findings(() => git("mv", "a.test.ts", "b.test.ts"))).toEqual(["renames the test a.test.ts to b.test.ts"]);
@@ -51,13 +51,13 @@ test("a security path is found by name, also when a rename takes it away; its te
   expect(on(() => put("package.json", "{}\n"))).toBe("package.json");
   expect(on(() => put("identity/CLAUDE.md", "x\n"))).toBe("identity/CLAUDE.md");
   expect(on(() => put("jobs/lib/gates/gate.test.ts", "x\n"))).toBeNull();
-  expect(on(() => put("jobs/cli.ts", "// changed\n"))).toBeNull();
+  expect(on(() => put("cli/cli.ts", "// changed\n"))).toBeNull();
 });
 
 test("additions to an existing test give no finding, also under a held path", () => {
   expect(findings(() => put("a.test.ts", 'const run = () => 1;\ntest("a", () => {});\ntest("b", () => { expect(run()).toBe(1); });\n'))).toEqual([]);
-  expect(findings(() => put("jobs/cli.test.ts", 'test("held", () => {});\ntest("more", () => {});\n'))).toEqual([]);
-  expect(rule(() => put("jobs/cli.test.ts", 'test("held", () => { expect(1).toBe(2); });\n'))).toBeNull();
+  expect(findings(() => put("cli/cli.test.ts", 'test("held", () => {});\ntest("more", () => {});\n'))).toEqual([]);
+  expect(rule(() => put("cli/cli.test.ts", 'test("held", () => { expect(1).toBe(2); });\n'))).toBeNull();
   expect(findings(() => put("a.test.ts", 'test("a", () => {});\ntest.only("b", () => {});\n'))).toEqual(["adds .skip, .only or .todo in a.test.ts"]);
 });
 

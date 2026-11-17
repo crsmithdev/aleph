@@ -1,10 +1,10 @@
 /**
  * `aleph` in the test's own process, for the tests that need a command's effects and not a process of its own: each
- * call runs jobs/commands.ts `run` under the environment and working directory that `aleph` gets from cli.testkit,
+ * call runs cli/commands.ts `run` under the environment and working directory that `aleph` gets from cli.testkit,
  * and gives the result in the shape of `aleph()`: the exit code, stdout, stderr and the printed JSON.
  */
 import { base, env } from "./cli.testkit";
-import { run as aleph } from "./commands.ts";
+import { run as aleph } from "../cli/commands.ts";
 import { Refusal } from "../lib/refusal.ts";
 import { findJob, view } from "./lib/records/job.ts";
 import type { Fate } from "./lib/records/outcome.ts";

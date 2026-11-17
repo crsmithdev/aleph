@@ -1,7 +1,7 @@
 /**
  * The job transitions: start a job or a plain run, land, recheck, drop, and
  * close a manual check. Each takes explicit arguments, refuses with a
- * `Refusal`, and returns what `aleph` prints as JSON; jobs/cli.ts only parses
+ * `Refusal`, and returns what `aleph` prints as JSON; cli/cli.ts only parses
  * argv. The factory and the unit call them in-process. Starting the run's unit
  * is the launcher's (launch.ts). See docs/workflow.md.
  */

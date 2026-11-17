@@ -1,2 +1,2 @@
 #!/bin/sh
-exec bun "$(dirname "$(readlink -f "$0")")/../jobs/cli.ts" "$@"
+exec bun "$(dirname "$(readlink -f "$0")")/../cli/cli.ts" "$@"

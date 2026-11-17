@@ -1,6 +1,6 @@
 /**
  * The test files that depend on a set of files, read from the tree of one commit. A test depends on a file when it
- * reaches the file through quoted paths: imports, path strings such as "jobs/cli.ts" that a test spawns, and paths
+ * reaches the file through quoted paths: imports, path strings such as "cli/cli.ts" that a test spawns, and paths
  * that `join(import.meta.dir, ...)` writes in parts. Also the build run's choice of the test files to run.
  */
 import { dirname, join, normalize } from "node:path";
@@ -9,7 +9,7 @@ import type { Check, Repo } from "../records/ledger.ts";
 
 const MODULE = /\.(?:tsx?|m?js|cjs)$/;
 const QUOTED = /["'`]((?:\.{1,2}\/)[^"'`\s]+|[\w@./-]+\.(?:tsx?|m?js|cjs))["'`]/g;
-/** `join(import.meta.dir, "..", "jobs", "cli.ts")`: the quoted parts after the folder. */
+/** `join(import.meta.dir, "..", "cli", "cli.ts")`: the quoted parts after the folder. */
 const JOINED = /import\.meta\.dir\s*,\s*((?:["'][^"'\s]+["']\s*,?\s*)+)\)/g;
 const ENDINGS = ["", ".ts", ".tsx", ".js", "/index.ts", "/index.js"];
 

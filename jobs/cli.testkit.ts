@@ -12,7 +12,7 @@ import { renderItem } from "../issues/lib/todo.ts";
 import { fixture } from "../tests/git.testkit.ts";
 import { issueKey } from "../lib/naming.ts";
 
-export const CLI = join(import.meta.dir, "cli.ts");
+export const CLI = join(import.meta.dir, "..", "cli", "cli.ts");
 export let base: string, remote: string, repo: string, other: string, itemsRemote: string, jobsDir: string, fakeLog: string, setupLog: string;
 let items: string, fake: string, reviewer: string;
 let server: ReturnType<typeof Bun.serve>;

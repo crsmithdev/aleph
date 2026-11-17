@@ -6,7 +6,7 @@ import { setState } from "./lib/records/record.ts";
 beforeAll(setup);
 afterAll(teardown);
 
-// `aleph drop --quiet` keeps one CLI test: jobs/cli.ts maps --quiet to no fate.
+// `aleph drop --quiet` keeps one CLI test: cli/cli.ts maps --quiet to no fate.
 describe("an item that is already on main", () => {
   const runsOf = (name: string) => jobRuns(name).map((d) => ({ id: d, ...state(d) }));
 

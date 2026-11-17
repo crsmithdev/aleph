@@ -69,7 +69,7 @@ test("the Markdown groups notes by page and shows who wrote them, the replies an
 });
 
 test("aleph annotation lists open notes as Markdown and refuses a bad put", () => {
-  const cli = (args: string[], stdin?: string) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "annotation", ...args], { env: process.env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
+  const cli = (args: string[], stdin?: string) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdin: stdin === undefined ? "ignore" : new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
   expect(cli(["put"], JSON.stringify(page)).exitCode).toBe(0);
   expect(cli(["add", "--on", "a1", "--", "look"]).exitCode).toBe(0);
   expect(cli(["resolve", "p1"]).exitCode).toBe(0);

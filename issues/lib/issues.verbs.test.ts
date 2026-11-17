@@ -13,7 +13,7 @@ import { askOf, grant, refIn, revoke, setAsk, askOfItem } from "../../jobs/lib/a
 
 setDefaultTimeout(30000);
 
-// The verbs of `aleph issue`, called in-process as jobs/cli.ts calls them, under the CLI's environment.
+// The verbs of `aleph issue`, called in-process as cli/cli.ts calls them, under the CLI's environment.
 // issues/cli.test.ts keeps the CLI test of each verb's wiring.
 useFixture();
 let saved: Record<string, string | undefined> = {};

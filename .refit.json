@@ -63,12 +63,12 @@
     {
       "concept": "the COMMANDS table rows of the aleph CLI",
       "copies": [
-        "jobs/commands.ts:56-63",
-        "jobs/commands.ts:57-64",
-        "jobs/commands.ts:56-64",
-        "jobs/commands.ts:64-72",
-        "jobs/commands.ts:68-76",
-        "jobs/commands.ts:72-80"
+        "cli/commands.ts:56-63",
+        "cli/commands.ts:57-64",
+        "cli/commands.ts:56-64",
+        "cli/commands.ts:64-72",
+        "cli/commands.ts:68-76",
+        "cli/commands.ts:72-80"
       ],
       "reason": "COMMANDS is the one table of each command's usage and purpose. Its rows share one shape on purpose: help, --help and every usage refusal read the table, so each row is data, not a second way."
     },
@@ -127,7 +127,7 @@
     {
       "copies": [
         "jobs/lib/transitions/tick.ts:19-25",
-        "jobs/commands.ts:14-20"
+        "cli/commands.ts:14-20"
       ],
       "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
     },

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, section, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.testkit";
 import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
 
-// The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
+// The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in cli/cli.ts itself: the jobs list,
 // the news, the --fate check, and six `aleph job` processes at once. The other cases run in-process in jobs/lib/roles/unit.flow.test.ts.
 beforeAll(setup);
 afterAll(teardown);

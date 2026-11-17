@@ -6,7 +6,7 @@ import { cli } from "./flow.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { memory, use } from "../lib/langfuse.ts";
 
-// The wiring in jobs/commands.ts of `aleph doctor --fix`, `aleph tick` and `aleph suite`, each outside call faked.
+// The wiring in cli/commands.ts of `aleph doctor --fix`, `aleph tick` and `aleph suite`, each outside call faked.
 beforeAll(setup);
 afterAll(teardown);
 

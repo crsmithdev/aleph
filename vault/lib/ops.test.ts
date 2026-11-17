@@ -12,8 +12,8 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
 // Each op runs in-process through `run`, as `aleph memory` runs it. A test marked as the CLI test of its op spawns
-// `bun jobs/cli.ts memory` instead, for the op's wiring.
-const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
+// `bun cli/cli.ts memory` instead, for the op's wiring.
+const CLI = join(import.meta.dir, "..", "..", "cli", "cli.ts");
 let base: string;
 let vault: string;
 let drafts: string;
@@ -81,7 +81,7 @@ afterEach(() => rmSync(base, { recursive: true, force: true }));
 
 describe("init", () => {
   test("lays down the layout, config and first commit", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`, on a path no vault holds yet.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`, on a path no vault holds yet.
     vault = join(base, "fresh");
     const r = (await spawnCli("init"));
     expect(r.code).toBe(0);
@@ -107,7 +107,7 @@ describe("init", () => {
 
 describe("write", () => {
   test("files by kind, logs the day, sets health, commits with the trailer", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     const r = (await spawnCli("write", note("Stop Hook Block Shape"), "--why", "measured three shapes"));
     expect(r.code).toBe(0);
     expect(r.json).toMatchObject({ op: "write", title: "Stop Hook Block Shape", path: "wiki/gotchas/Stop Hook Block Shape.md", archived: [] });
@@ -246,7 +246,7 @@ describe("write", () => {
 
 describe("lint", () => {
   test("reports warnings as JSON, exit 0 when nothing refuses, and sets health", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     const r = (await spawnCli("lint"));
     expect(r.json.refuse).toEqual([]);
     expect(r.code).toBe(0);
@@ -441,7 +441,7 @@ describe("push", () => {
 
 describe("rename-scope", () => {
   test("read-only by default; --apply moves every note and touches no other line", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     (await cli("write", note("Old Scope One", { scope: "voice-bridge-mcp" }), "--why", "x"));
     (await cli("write", note("Old Scope Two", { scope: "voice-bridge-mcp" }), "--why", "x"));
     const paths = ["Old Scope One", "Old Scope Two"].map((t) => join(vault, `wiki/gotchas/${t}.md`));
@@ -479,7 +479,7 @@ describe("rename-scope", () => {
 
 describe("adopt", () => {
   test("commits an in-vault draft, forgiving the template but not the schema", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     const rel = "wiki/decisions/Drafted In Place.md";
     const p = join(vault, rel);
     // A real note with real sources, in the looser body shape: no `as of`
@@ -548,7 +548,7 @@ describe("archive", () => {
     expect(r.json).toMatchObject({ op: "archive", title: "Aliased Subject" });
   });
   test("retires a note with no replacement, drops its Home line, names its callers", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     (await cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x"));
     const home = join(vault, "Home.md");
     expect(readFileSync(home, "utf8")).toContain("- [[Retired Subject]]");
@@ -697,7 +697,7 @@ describe("recall", () => {
     expect(readFileSync(file, "utf8")).toBe(logged);
   });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));
     expect((await spawnCli("recall", "verify gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 0 });
     expect((await cli("recall", "stop gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 1 });
@@ -792,7 +792,7 @@ describe("compile", () => {
   const env = (port: number | undefined) => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
 
   test("digests turns, handoffs, daily note and cited traces", async () => {
-    // The CLI test of this op: it spawns `bun jobs/cli.ts memory`.
+    // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     expect((await cli("write", note("Cites A Trace"), "--why", "x")).code).toBe(0);
     const r = await spawnRun(env(server.port), "compile", "2026-09-04");
     expect(r.code).toBe(0);

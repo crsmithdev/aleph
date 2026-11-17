@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run } from "../jobs/commands.ts";
+import { run } from "../cli/commands.ts";
 import { add, drop, note } from "../ideas/ideas.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page

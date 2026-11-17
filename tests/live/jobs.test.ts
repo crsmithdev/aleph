@@ -11,7 +11,7 @@ import { writeRepos } from "../projects.testkit.ts";
 
 const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;
-const CLI = join(import.meta.dir, "../../jobs/cli.ts");
+const CLI = join(import.meta.dir, "../../cli/cli.ts");
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 
 describeLive("live job", () => {

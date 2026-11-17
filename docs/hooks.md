@@ -11,8 +11,8 @@ After you change a hook, run `/reload-plugins`.
 | every event | | `obs.ts` | 5–10 | Sends spans to Langfuse |
 | `SessionStart` | | `vault-context.ts` | 10 | Injects `MEMORY.md` and the `core:` lines |
 | `SessionStart` | `startup\|clear` | `handoff-start.ts` | 10 | Injects a waiting handoff |
-| `SessionStart` | | `jobs/cli.ts report --hook` | 20 | Injects the factory report |
-| `SessionStart` | | `jobs/cli.ts help --brief` | 10 | Injects one line per `aleph` command, for factory agents too |
+| `SessionStart` | | `cli/cli.ts report --hook` | 20 | Injects the factory report |
+| `SessionStart` | | `cli/cli.ts help --brief` | 10 | Injects one line per `aleph` command, for factory agents too |
 | `UserPromptSubmit` | | `verify-gate.ts` | 10 | Snapshots the repo for the Stop check |
 | `UserPromptSubmit` | | `vault-recall.ts` | 5 | Injects up to 3 vault notes |
 | `PreToolUse` | `Edit\|Write\|NotebookEdit` | `git-guard.ts` | 10 | Denies edits on `main`, in the work store and on `VAULT.md` |
@@ -44,7 +44,7 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### aleph report
 
-`aleph report --hook` (`reportCmd` in `jobs/commands.ts`) injects the lines `hookLines` in `jobs/lib/transitions/factory.ts` builds:
+`aleph report --hook` (`reportCmd` in `cli/commands.ts`) injects the lines `hookLines` in `jobs/lib/transitions/factory.ts` builds:
 
 - `factory paused`, when the factory is paused;
 - the count of the asks that wait for Chris and the first 5 of their refs;

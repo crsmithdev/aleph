@@ -90,7 +90,7 @@ const DEFAULTS: Truth["defaults"] = {
 export function repoTruth(root = ROOT): Truth {
   const files = repoFiles(root);
   const read = (fs: string[]) => fs.map((f) => { try { return readFileSync(join(root, f), "utf8"); } catch { return ""; } }).join("\n");
-  const code = (f: string) => /^(hooks|jobs|issues|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
+  const code = (f: string) => /^(cli|hooks|jobs|issues|ideas|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
     wordSets: { "Issue status": n.STATUSES, "Job state": n.STATES, Action: n.ACTIONS, "Ask action": n.ASK_ACTIONS, "Ask reason": Object.keys(ASK_REASONS), Subject: n.ACTORS, Role: n.ROLES, Stage: n.STAGES, "Report lane": n.LANES, "Flow class": n.SPEEDS },

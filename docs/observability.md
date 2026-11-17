@@ -94,7 +94,7 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 | The updater | Polls `PRAGMA data_version` of `aleph.db` every 100 ms on its own connection. A new event row changes the source `events`, and the updater rebuilds the keys that read it. The UI's own writes move `data_version` too, because the poll has its own connection. A write with no event (usage, tick, a job row) waits for the quiet refresh timer. `change` names only the keys whose rebuilt answer differs | `ui/updater.ts:293` |
 | Director | The `director` events of the job records, for its decision list | `readRecord` in `jobs/lib/roles/director.ts` |
 | Monitor | The records, the holds, the flake list, the usage rows | `jobs/lib/learning/monitor-table.ts:318` |
-| `aleph report` | The runs not yet shown, the health lines, the flake lines and the newest monitor report. It does not read the event log | `jobs/commands.ts:427` |
+| `aleph report` | The runs not yet shown, the health lines, the flake lines and the newest monitor report. It does not read the event log | `cli/commands.ts:267` |
 
 ## Where stores overlap
 

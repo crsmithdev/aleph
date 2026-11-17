@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 const initVault = () => {
-  const p = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "..", "jobs", "cli.ts"), "memory", "init"], { env: { ...process.env, ...GIT }, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "..", "cli", "cli.ts"), "memory", "init"], { env: { ...process.env, ...GIT }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(p.stderr.toString());
 };
 

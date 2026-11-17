@@ -10,7 +10,7 @@ import { join } from "node:path";
 
 const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;
-const CLI = join(import.meta.dir, "../../jobs/cli.ts");
+const CLI = join(import.meta.dir, "../../cli/cli.ts");
 
 describeLive("live vault", () => {
   let vault: string;

@@ -182,7 +182,7 @@ test("user is granted on any reason but a memory proposal, and a stored grant st
   expect(always("question")).toBeNull();
 });
 
-const CLI = join(import.meta.dir, "..", "..", "cli.ts");
+const CLI = join(import.meta.dir, "..", "..", "..", "cli", "cli.ts");
 const cli = (...args: string[]) => {
   const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_FACTORY_DIR: dir, ALEPH_DB: join(dir, "aleph.db") }, stdout: "pipe", stderr: "pipe" });
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };

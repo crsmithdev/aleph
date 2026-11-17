@@ -3,54 +3,52 @@
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: the projects of $ALEPH_ITEMS or
  * ~/.aleph/items. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
- * `run` takes the argv and gives what it printed and its exit code: jobs/cli.ts calls it for the
+ * `run` takes the argv and gives what it printed and its exit code: cli/cli.ts calls it for the
  * command line, and a test calls it in its own process.
  * See docs/workflow.md and docs/factory.md.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { allRuns, loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "./lib/records/ledger.ts";
-import { isLive } from "./lib/infra/process.ts";
-import { findJob, issue as issueOf, issueTitle, openJobOfIssue, readFile, stateOf, view, type Job } from "./lib/records/job.ts";
-import { counting, patchRun, setState } from "./lib/records/record.ts";
-import { unit } from "./lib/roles/unit.ts";
-import { onMain } from "./lib/records/status.ts";
-import { settleOnMain } from "./lib/land/landing.ts";
+import { allRuns, loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
+import { isLive } from "../jobs/lib/infra/process.ts";
+import { findJob, issue as issueOf, issueTitle, readFile, stateOf, view, type Job } from "../jobs/lib/records/job.ts";
+import { counting, patchRun, setState } from "../jobs/lib/records/record.ts";
+import { unit } from "../jobs/lib/roles/unit.ts";
+import { onMain } from "../jobs/lib/records/status.ts";
+import { settleOnMain } from "../jobs/lib/land/landing.ts";
 import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
 import { yesterday } from "../lib/day.ts";
-import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
+import { todoCmd } from "../issues/cli.ts";
+import { ideaCmd } from "../ideas/cli.ts";
 import * as notes from "../lib/annotations.ts";
-import * as ideas from "../ideas/ideas.ts";
-import { askOfItem, grant, readAlways, revoke } from "./lib/asks/ask.ts";
-import { readTimeouts, setTimeoutOf } from "./lib/asks/timeout.ts";
-import { behind, directorStep, hookLines, intakeNow } from "./lib/transitions/factory.ts";
-import { runDispatch, runNow } from "./lib/transitions/dispatch.ts";
-import { suiteStep } from "./lib/transitions/baseline.ts";
-import { report } from "./lib/transitions/report.ts";
-import { setPaused } from "./lib/gates/pause.ts";
-import { dispatchAfterIssue, filing } from "./lib/transitions/filing.ts";
-import { maintainAll, runTick } from "./lib/transitions/tick.ts";
+import { grant, readAlways, revoke } from "../jobs/lib/asks/ask.ts";
+import { readTimeouts, setTimeoutOf } from "../jobs/lib/asks/timeout.ts";
+import { behind, directorStep, hookLines, intakeNow } from "../jobs/lib/transitions/factory.ts";
+import { runDispatch, runNow } from "../jobs/lib/transitions/dispatch.ts";
+import { suiteStep } from "../jobs/lib/transitions/baseline.ts";
+import { report } from "../jobs/lib/transitions/report.ts";
+import { setPaused } from "../jobs/lib/gates/pause.ts";
+import { maintainAll, runTick } from "../jobs/lib/transitions/tick.ts";
 import { vaultDir } from "../lib/paths.ts";
-import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
-import { health } from "./lib/gates/factory-status.ts";
-import { flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
-import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
-import { housekeep } from "./lib/roles/housekeeper.ts";
-import { cutTitle, fit } from "./lib/roles/title.ts";
-import { checkName, checked, drop, land, recheck, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
-import type { Fate } from "./lib/records/outcome.ts";
+import { dispatchDetached } from "../jobs/lib/transitions/launch.ts";
+import { health } from "../jobs/lib/gates/factory-status.ts";
+import { flakeLines, renderTable, reportLine } from "../jobs/lib/learning/monitor-table.ts";
+import { runMonitor, tableOf } from "../jobs/lib/roles/monitor.ts";
+import { housekeep } from "../jobs/lib/roles/housekeeper.ts";
+import { cutTitle } from "../jobs/lib/roles/title.ts";
+import { checkName, checked, drop, land, recheck, startJob, startPlain, type Start } from "../jobs/lib/transitions/transitions.ts";
+import type { Fate } from "../jobs/lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
-import * as doctor from "./lib/infra/doctor.ts";
-import { facts, repoStages, stages } from "./lib/records/status.ts";
-import type { Stage } from "./lib/records/stage.ts";
-import { readModels, setModel } from "./lib/routing/models.ts";
-import { issueKey, key, parseId, parseKey, shortText, shownKey } from "../lib/naming.ts";
-import { projectName } from "../issues/lib/projects.ts";
+import * as doctor from "../jobs/lib/infra/doctor.ts";
+import { facts, repoStages, stages } from "../jobs/lib/records/status.ts";
+import type { Stage } from "../jobs/lib/records/stage.ts";
+import { readModels, setModel } from "../jobs/lib/routing/models.ts";
+import { shortText } from "../lib/naming.ts";
 import { errText } from "../lib/errtext.ts";
-import { isAgent, jobId } from "../lib/env.ts";
+import { isAgent } from "../lib/env.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -98,7 +96,7 @@ const usage = (cmd: string) => `usage: ${COMMANDS[cmd].usage}`;
 interface Io { stdout?: (s: string) => void; stderr?: (s: string) => void; stdin?: () => Promise<string> }
 
 /** One call's argv, parsed, with its output and its exit code. */
-interface Ctx {
+export interface Ctx {
   rest: string[];
   tail: string[];
   positional: string[];
@@ -236,167 +234,9 @@ function jobs(ctx: Ctx): void {
   });
 }
 
-/**
- * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
- * registry has a list in the work store. The verbs are issues/lib/issues.ts; this
- * parses argv, prints, and starts the dispatch or intake a write calls for.
- */
-async function todoCmd(ctx: Ctx): Promise<void> {
-  let [verb, repoKey, ...args] = ctx.positional;
-  const json = ctx.rest.includes("--json");
-  const fixing = ctx.rest.includes("--fix");
-  const stat = ctx.flag("status");
-  const label = ctx.flag("label");
-  // `--request -` or `--spec -` reads that part from stdin: it is prose of several lines.
-  const requestArg = ctx.flag("request"), specArg = ctx.flag("spec");
-  const labelsArg = ctx.flag("labels");
-  const afterArg = ctx.flag("after"), refsArg = ctx.flag("refs");
-  const fields: verbs.Fields = {
-    title: ctx.flag("title"),
-    kind: ctx.flag("kind"),
-    request: requestArg === undefined ? undefined : (requestArg === "-" ? await ctx.stdin() : requestArg).trim(),
-    spec: specArg === undefined ? undefined : (specArg === "-" ? await ctx.stdin() : specArg).trim(),
-    priority: ctx.flag("priority"),
-    labels: labelsArg === undefined ? undefined : labelsArg.split(",").map((s) => s.trim()).filter(Boolean),
-    source: ctx.flag("source"),
-    status: stat,
-    ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
-    ...(refsArg === undefined ? {} : { refs: refsArg.split(",").map((s) => s.trim()).filter(Boolean) }),
-    // `--media <file>` may repeat.
-    media: ctx.rest.flatMap((a, i) => (a === "--media" && ctx.rest[i + 1] !== undefined ? [ctx.rest[i + 1]] : [])),
-  };
-  const sub = verb ?? refuse(usage("issue"));
-  const registry = loadRegistry();
-  const named = parseKey(repoKey);
-  const ref = named?.kind === "issue" ? null : parseId(repoKey);
-  if (named?.kind === "issue" && sub !== "add") {
-    repoKey = store.projectOfIssue(named.n) ?? refuse(`no issue ${repoKey}`);
-    args = [String(named.n), ...args];
-  } else if (ref && sub !== "add") {
-    repoKey = ref.repo;
-    args = [String(ref.n), ...args];
-  }
-  if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(ctx, sub, registry, { status: stat, label, kind: ctx.flag("kind") }, json);
-  const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
-  verbs.checkFields(fields);
-  const id = parseKey(args[0])?.n ?? Number(args[0]);
-  const text = args.slice(1).join(" ").trim();
-  const warn = (follow: string | null | undefined) => { if (follow) ctx.err(`warn: ${follow}`); };
-
-  switch (sub) {
-    case "add": {
-      const a = await verbs.add(repo, args.join(" "), fields, filing);
-      warn(a.follow);
-      for (const m of a.result.maybeSame ?? []) ctx.err(`${shownKey(issueKey(m.id), repo.code)} may be the same task: ${m.title}`);
-      ctx.out(a.result);
-      return;
-    }
-    case "list": {
-      const rows = verbs.list(repo, { status: stat, label, kind: ctx.flag("kind") });
-      if (json) { ctx.out(rows.map(verbs.brief)); return; }
-      if (!rows.length) { ctx.log("no issues"); return; }
-      printRows(ctx, rows, repo.key);
-      return;
-    }
-    case "show": {
-      const i = verbs.show(repo, id);
-      if (json) { ctx.out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
-      ctx.log(`## ${shown(repo.key, i)}. ${i.title}`);
-      const ask = askOfItem(i);
-      ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
-      ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${store.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
-      ctx.log(`ask ${ask ? `${ask.reason}: ${ask.question}` : "-"}`);
-      if (i.request.trim()) ctx.log(`\n## Request\n\n${i.request}`);
-      if (i.spec.trim()) ctx.log(`\n${i.spec}`);
-      if (i.notes.length) ctx.log(`\n### Notes\n${i.notes.join("\n")}`);
-      const media = store.mediaOf(i);
-      if (media.length) ctx.log(`\n### Media\n${media.map((m) => `- ${m}`).join("\n")}`);
-      return;
-    }
-    case "note": {
-      // Chris's answer to an issue that waits for them: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
-      const n = verbs.note(repo, id, text, verbs.isAnswer(text, jobId()));
-      warn(n.follow);
-      ctx.out(n.result);
-      if (n.answered) intakeDetached(repo, n.result.id);
-      return;
-    }
-    case "attach": {
-      // `aleph issue attach <repo> <n> <file>...`: images or PDFs.
-      const a = verbs.attach(repo, id, args.slice(1));
-      warn(a.follow);
-      ctx.out(a.result);
-      return;
-    }
-    case "decide": {
-      const d = verbs.decide(repo, id, text, fields);
-      warn(d.follow);
-      ctx.out(d.result);
-      // The note is Chris's answer: the intake that follows a note takes the issue from here.
-      intakeDetached(repo, d.item.id);
-      return;
-    }
-    case "edit": {
-      const e = verbs.edit(repo, id, fields, text);
-      warn(e.follow);
-      ctx.out(e.result);
-      dispatchAfterIssue(repo, e.item);
-      return;
-    }
-    case "done":
-    case "drop": {
-      const c = verbs.close(repo, id, sub, text);
-      warn(c.follow);
-      ctx.out(c.result);
-      // The dropped issue's open job goes with it, or its Ask outlives the issue. The close note is the issue's record.
-      const open = sub === "drop" ? openJobOfIssue(repo.key, id)?.[0].run.name : undefined;
-      if (open) await drop(open, { reason: `issue ${repo.key}-${id} was dropped`, quiet: true });
-      // An issue that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
-      if (repo.sandbox) dispatchDetached();
-      return;
-    }
-    case "retitle": {
-      const r = await verbs.retitle(repo, fit);
-      warn(r.follow);
-      for (const t of r.result.retitled) ctx.log(`${shownKey(issueKey(t.id), repo.code)}: ${t.title}`);
-      return;
-    }
-    case "lint": {
-      if (fixing) {
-        const l = verbs.lintFix(repo);
-        warn(l.follow);
-        ctx.out(l.result);
-        if (l.result.remaining.length) ctx.code = 1;
-        return;
-      }
-      const l = verbs.lint(repo);
-      if (!l.findings.length) { ctx.out({ repo: l.repo, items: l.items, findings: [] }); return; }
-      for (const f of l.findings) ctx.err(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
-      refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
-    }
-    default: refuse(usage("issue"));
-  }
-}
-
 /** The registry's repos with a ledger run or an item update in the last 7 days, the latest first, each with its list. */
 function listRecent(): { repo: Repo; doc: issues.Doc | null }[] {
   return verbs.recentLists(Object.values(loadRegistry()));
-}
-
-/** `aleph issue list` and `aleph issue lint` with no repo: each recent repo. */
-function todoRecent(ctx: Ctx, sub: "list" | "lint", registry: Record<string, Repo>, o: { status?: string; label?: string; kind?: string }, json: boolean): void {
-  const repos = Object.values(registry);
-  if (sub === "lint") {
-    const results = verbs.lintRecent(repos);
-    for (const r of results) for (const f of r.findings) ctx.err(`${r.repo} item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
-    ctx.out(results);
-    if (results.some((r) => r.findings.length)) ctx.code = 1;
-    return;
-  }
-  const rows = verbs.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
-  if (json) { ctx.out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief) }))); return; }
-  if (!rows.length) { ctx.log("no issues"); return; }
-  for (const r of rows) { ctx.log(r.repo); printRows(ctx, r.items, r.repo, "  "); }
 }
 
 /** `aleph intake <repo>-<n>`: take in one issue now, under the dispatch's gates. */
@@ -483,72 +323,6 @@ function statusRecent(ctx: Ctx): void {
   for (const { key, code, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`, code)); }
 }
 
-/** An issue key as the terminal shows it, with the code of the project that holds that issue. */
-const shownRef = (r: string): string => {
-  const name = store.projectsOnMain().get(parseKey(r)?.n ?? 0);
-  return shownKey(r, name && loadRegistry()[name]?.code);
-};
-const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");
-/** The issue's key as the terminal shows it: `a1234`, with its project's code. */
-const shown = (key: string, i: issues.Issue): string => shownKey(issueKey(i.id), loadRegistry()[key]?.code);
-
-function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): void {
-  const refs = rows.map((i) => shown(key, i));
-  const w = refs.reduce((m, r) => Math.max(m, r.length), 0);
-  for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
-}
-
-const IDEA_USAGE = usage("idea");
-/** The idea number as text from the first argument, or a usage refusal. */
-const ideaArg = (arg: string | undefined): string => ideas.slugOf(arg ?? refuse(IDEA_USAGE));
-/** An issue named in `idea built`, as its key: `issue.5`, a shown form such as `a1234`, or an old `aleph-5`. */
-const builtRef = (ref: string): string => { const k = parseKey(ref) ?? (parseId(ref) && { kind: "issue", n: parseId(ref)!.n }); return k && k.kind === "issue" ? key("issue", k.n) : refuse(`not an issue: ${ref}`); };
-
-/** `aleph idea ...`: the ideas store (ideas/ideas.ts). `-` as a text flag reads stdin. */
-async function ideaCmd(ctx: Ctx): Promise<void> {
-  const [verb, ...args] = ctx.positional;
-  const text = async (name: string) => { const v = ctx.flag(name); return v === "-" ? await ctx.stdin() : v ?? ""; };
-  const warn = (w: string | null) => { if (w) ctx.err(w); };
-  switch (verb) {
-    case "add": {
-      const target = ctx.flag("target");
-      if (target && !loadRegistry()[target]) refuse(`no repo named ${target}`);
-      const a = ideas.add(args.join(" "), await text("sketch"), target);
-      warn(a.warn);
-      ctx.log(shownKey(key("idea", Number(a.slug))));
-      return;
-    }
-    case "list":
-      for (const r of ideas.list(ctx.flag("status"))) ctx.log([shownKey(key("idea", Number(r.idea.slug))), projectName(String(r.idea.fm.project ?? "")) ?? "new project", r.lenses.join(",") || "-", r.last].join("  "));
-      return;
-    case "show": {
-      const slug = ideaArg(args[0]);
-      ideas.read(slug);
-      const results = ideas.lenses(slug).map((l) => `- ${l.lens} ${l.at} ${l.file}`);
-      ctx.write(`${readFileSync(ideas.file(slug), "utf8")}\n## Lens results\n\n${results.join("\n") || "none"}\n`);
-      return;
-    }
-    case "edit": return warn(ideas.edit(ideaArg(args[0]), await text("writeup")));
-    case "note": return warn(ideas.note(ideaArg(args[0]), args.slice(1).join(" ")));
-    case "built": return warn(ideas.built(ideaArg(args[0]), args.slice(1).map(builtRef)));
-    case "drop": return warn(ideas.drop(ideaArg(args[0])));
-    case "lens": {
-      const l = await ideas.lens(ideaArg(args[0]), args[1] ?? refuse(IDEA_USAGE));
-      warn(l.warn);
-      ctx.log(l.file);
-      return;
-    }
-    case "save": {
-      const [slug, lens, from] = args;
-      const s = ideas.save(ideaArg(slug), lens ?? refuse(IDEA_USAGE), resolve(from ?? refuse(IDEA_USAGE)));
-      warn(s.warn);
-      ctx.log(s.file);
-      return;
-    }
-    default: refuse(IDEA_USAGE);
-  }
-}
-
 const ANNOTATION_USAGE = usage("annotation");
 
 /** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
@@ -607,7 +381,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "doctor": await doctorCmd(ctx); break;
     case "doc-claims": {
       // Each doc claim of this repo the code does not back, read now: run it after the last edit of a doc.
-      const r = (await import("./lib/gates/doc-claims-repo.ts")).docClaimsReport();
+      const r = (await import("../jobs/lib/gates/doc-claims-repo.ts")).docClaimsReport();
       ctx.log(r.text);
       if (!r.ok) ctx.code = 1;
       break;
@@ -638,9 +412,9 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "unit": await unit(resolve(ctx.positional[0])); break;
     case "land": await started(ctx, await land(ctx.positional[0], { checked: ctx.rest.includes("--checked") }, { command: ctx.command, by: "human" })); break;
     case "checked": ctx.out(checked(ctx.positional[0])); break;
-    case "issue": await todoCmd(ctx); break;
+    case "issue": await todoCmd(ctx, usage("issue")); break;
     case "annotation": await annotationCmd(ctx); break;
-    case "idea": await ideaCmd(ctx); break;
+    case "idea": await ideaCmd(ctx, usage("idea")); break;
     case "tick": await tickCmd(ctx); break;
     case "director": ctx.out(await directorStep()); break;
     case "housekeep": ctx.out(await housekeep(Date.now()) ?? refuse("another housekeeper holds the lock")); break;

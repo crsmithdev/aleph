@@ -2,7 +2,7 @@
  * The `aleph issue` verbs over the work store (store.ts), with explicit
  * arguments: a repo, an issue number, text and options. Each returns what
  * `aleph issue` prints as JSON and throws a `Refusal` when it refuses. No argv,
- * no stdout, no exit code: jobs/cli.ts parses, prints and exits, and starts the
+ * no stdout, no exit code: cli/cli.ts parses, prints and exits, and starts the
  * detached dispatch that follows an edit; `add` gets the `effects` a new issue
  * starts from its caller. A store `follow` warning
  * comes back in the result for the caller to print.

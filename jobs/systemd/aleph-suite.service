@@ -9,4 +9,4 @@ Description=aleph full suite on origin/main
 Type=oneshot
 Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
 WorkingDirectory=%h/aleph
-ExecStart=%h/.bun/bin/bun %h/aleph/jobs/cli.ts suite
+ExecStart=%h/.bun/bin/bun %h/aleph/cli/cli.ts suite

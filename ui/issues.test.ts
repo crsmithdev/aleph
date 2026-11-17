@@ -12,7 +12,7 @@ import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 import { state } from "./state.ts";
-import { run as alephRun } from "../jobs/commands.ts";
+import { run as alephRun } from "../cli/commands.ts";
 
 // The fixtures change between tests, with no watcher to see it: each test starts with no kept answer.
 beforeEach(() => updater.reset());
@@ -192,7 +192,7 @@ describe("GET /api/issues", () => {
 // Runs fn with ALEPH_CLI pointed at the real CLI, so a route's command writes the store.
 async function withRealCli(fn: () => Promise<void>) {
   const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
-  writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
+  writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "cli", "cli.ts")} "$@"\n`);
   chmodSync(wrap, 0o755);
   process.env.ALEPH_CLI = wrap;
   try { await fn(); } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }

@@ -83,7 +83,7 @@ test("a dry compile runs the model, reports the titles, writes nothing and recor
 
 // The fake runs a vault recall that returns a note the vault already holds.
 const recallOf = (dry: boolean) => {
-  process.env.FAKE_RECALL = join(import.meta.dir, "../../cli.ts");
+  process.env.FAKE_RECALL = join(import.meta.dir, "../../../cli/cli.ts");
   mkdirSync(join(root, "wiki", "decisions"), { recursive: true });
   writeFileSync(join(root, "wiki", "decisions", "Keep The Digest.md"), render(note("Keep The Digest"), DAY));
   reply([]);

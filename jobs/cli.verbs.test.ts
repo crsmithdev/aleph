@@ -3,7 +3,7 @@ import { getJson } from "../lib/db.ts";
 import { join } from "node:path";
 import { aleph, base, CLI, env, setup, teardown } from "./cli.testkit";
 
-// The wiring in jobs/commands.ts of the verbs whose logic is tested in-process: always, judge, annotation, monitor and doc-claims.
+// The wiring in cli/commands.ts of the verbs whose logic is tested in-process: always, judge, annotation, monitor and doc-claims.
 beforeAll(setup);
 afterAll(teardown);
 

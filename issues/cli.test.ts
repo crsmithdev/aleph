@@ -10,9 +10,9 @@ import { writeRepos } from "../tests/projects.testkit.ts";
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
 setDefaultTimeout(30000);
 
-// The CLI tests of `aleph issue`: one for each verb's wiring, and the ones whose output jobs/cli.ts builds. The
+// The CLI tests of `aleph issue`: one for each verb's wiring, and the ones whose output cli/cli.ts builds. The
 // verbs' other behaviour is tested in-process in issues/lib/issues.verbs.test.ts.
-const CLI = join(import.meta.dir, "..", "jobs", "cli.ts");
+const CLI = join(import.meta.dir, "..", "cli", "cli.ts");
 
 function aleph(...args: string[]): { code: number; out: string; err: string } {
   return alephWith({}, ...args);

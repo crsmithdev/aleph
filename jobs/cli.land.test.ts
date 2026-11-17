@@ -58,7 +58,7 @@ describe("land", () => {
     expect(item.request).toContain("phonelater");
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
     expect(told).toContain(`${r.json.run} landed`);
-    // The list of `aleph jobs` is built in jobs/cli.ts, not in a library: a landed job stays in it while its check is open.
+    // The list of `aleph jobs` is built in cli/cli.ts, not in a library: a landed job stays in it while its check is open.
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
 
     const c = await checked("phonelater");

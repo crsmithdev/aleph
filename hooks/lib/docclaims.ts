@@ -100,7 +100,7 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
     });
     if (!comparing.length) {
       problems.push(`no run after the last edit reads the doc and compares it with the code, so nothing backs ${claims.slice(0, 3).map(quote).join(", ")}`);
-    } else if (!comparing.some((c) => /\b(aleph|bun\s+jobs\/cli\.ts)\s+doc-claims\b/.test(String(c.input.command ?? "")) && c.visible.includes("every checked doc claim matches the code"))) {
+    } else if (!comparing.some((c) => /\b(aleph|bun\s+cli\/cli\.ts)\s+doc-claims\b/.test(String(c.input.command ?? "")) && c.visible.includes("every checked doc claim matches the code"))) {
       // A passing doc-claims run backs every value a claim gives.
       const shown = comparing.map((c) => c.out).join("\n").toLowerCase();
       const values = new Set<string>();

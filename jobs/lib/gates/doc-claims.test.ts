@@ -158,7 +158,7 @@ describe("a run reads the docs as they are at that moment", () => {
 });
 
 test("aleph doc-claims runs the check and exits 0 on this tree", () => {
-  const p = Bun.spawnSync(["bun", join(ROOT, "jobs", "cli.ts"), "doc-claims"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(["bun", join(ROOT, "cli", "cli.ts"), "doc-claims"], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
   expect(p.stdout.toString().trim()).toBe("every checked doc claim matches the code");
   expect(p.exitCode).toBe(0);
 });

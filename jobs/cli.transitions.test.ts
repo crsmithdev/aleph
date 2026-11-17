@@ -11,7 +11,7 @@ afterAll(teardown);
 
 // Every transition dispatches at once: none of these tests runs `aleph tick`. The dispatch is on, the
 // timer is not, so a run that starts did so from the process call or its detached dispatch. The edit keeps its CLI
-// test: the dispatch after an edit is started by jobs/cli.ts. The other transitions are called in-process.
+// test: the dispatch after an edit is started by cli/cli.ts. The other transitions are called in-process.
 describe("every transition dispatches at once", () => {
   let startLog: string, startCmd: string;
   const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
