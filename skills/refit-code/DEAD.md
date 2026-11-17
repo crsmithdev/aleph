@@ -6,9 +6,7 @@ it in one more abstraction, is work on code that should be deleted.
 ## Signals
 
 Detect the stack from the manifest, then run its detectors. [DETECTORS.md](DETECTORS.md) has the per-stack tool
-table, how to run each without touching the repo's dependencies, and what each one's output actually means.
-Run a detector only if it is installed or runs from a throwaway cache (`bunx`, `npx -y`, `uvx`). Where no
-detector exists, use the grep sweep in DETECTORS.md.
+table, how to run each, how to read its output, and the grep sweep for a stack with no detector.
 
 Scope by `git log`: mass accumulates where nobody has looked in a long time, so the cold files are the first
 candidates here, unlike the other lenses.
@@ -45,22 +43,22 @@ finding is to drop the `export`, not the code.
 
 Each finding gets one tier; the tier sets the proof burden and the approval `act` needs.
 
-| Tier | What it is | Approval | Your time |
-|---|---|---|---|
-| T1 | Unreferenced files, abandoned experiments, commented-out blocks, unused dependencies, an export nothing imports | The proof table | minutes |
-| T2 | An export, flag or branch no live path reaches; a test whose subject moved | The proof table, plus every call site read | ~an hour |
-| T3 | A feature nobody uses; a module whose deletion concentrates complexity | The user decides | a day |
-| T4 | A layer, an abstraction, a whole subsystem | An ADR | scheduled work, not this run |
+| Tier | What it is | Approval |
+|---|---|---|
+| T1 | Unreferenced files, abandoned experiments, commented-out blocks, unused dependencies, an export nothing imports | The proof table |
+| T2 | An export, flag or branch no live path reaches; a test whose subject moved | The proof table, plus every call site read |
+| T3 | A feature nobody uses; a module whose deletion concentrates complexity | The user decides |
+| T4 | A layer, an abstraction, a whole subsystem | An ADR |
 
-A T1 that takes an hour was a T2 you misjudged: re-tier it and continue. T4 findings are reported, never acted
+A T1 that needs call sites read is a T2: re-tier it and continue. T4 findings are reported, never acted
 on.
 
 ## Fix
 
 Delete the whole finding in one commit per tier, lowest first: the code, its tests, its fixtures, its exports,
 its docs entry, its dependency line. For a store nothing reads, delete both the write and the store: the
-table, column, field, file or key, and its migration, path function and env name. A red baseline reverts the finding, marked "proof failed" with the hatch
-you missed: that is a finding about the proof, not a reason to loosen it.
+table, column, field, file or key, and its migration, path function and env name. A red baseline reverts the finding by [Act](SKILL.md#act):
+record the hatch you missed.
 
 ## Report
 
@@ -69,8 +67,7 @@ entry points, dynamic dispatch and string lookups the codebase relies on, which 
 
 ## Guard
 
-knip with the repo's real entry points, as a shrink-only ratchet on unused files and exports. Not wired yet:
-the guards table lists it as unchecked.
+knip with the repo's real entry points, as a shrink-only ratchet on unused files and exports.
 
 ## Check
 

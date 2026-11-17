@@ -28,7 +28,7 @@ seam, or give it its second adapter when a test needs one.
 ## Guard
 
 A dependency-cruiser rule: only the owner reads the field or imports the internal file, or imports go only
-through entry points. Not wired yet: the guards table lists it as unchecked.
+through entry points.
 
 ## Check
 

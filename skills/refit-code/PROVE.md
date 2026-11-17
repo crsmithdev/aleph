@@ -21,8 +21,7 @@ supplies its lens files, its `.refit.json` and its report path.
    8. pushes, force-pushes or deletes a remote branch.
 
    Every other finding is **auto**. Then fix each auto finding with no question before any fix, in the skill's Act
-   lens order, by refit-code's [Act](SKILL.md#act): one commit each, with the baseline after it, and a revert on
-   red. A reverted finding shows as "reverted" with the failed command. A skill with no Act (refit-data) gives no
+   lens order, by refit-code's [Act](SKILL.md#act). A skill with no Act (refit-data) gives no
    tier and runs no fix.
 
    During the fix, an item in a touched file, or in a file the finding names, that one of the skill's lenses

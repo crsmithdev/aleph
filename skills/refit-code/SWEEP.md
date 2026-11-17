@@ -1,9 +1,7 @@
 # Sweep
 
-Is this junk, or in the wrong place? A sweep acts only where a check answers yes or no. Nothing here turns on
-whether a thing is worth keeping; the moment it does, it is a candidate for a lens.
-
-That line runs through tests and docs, so place each one by where its check falls:
+Is this junk, or in the wrong place? A sweep acts only where a check answers yes or no. A question of whether a
+thing is worth keeping goes to a lens:
 
 - A test whose subject no longer exists → **sweep**. The path does not resolve.
 - A test that duplicates three others → the **one-way** lens. That is a judgment.
@@ -12,17 +10,13 @@ That line runs through tests and docs, so place each one by where its check fall
 
 ## Tracked and untracked
 
-Settle this before deleting anything. A tracked file is recoverable: `git rm` it and the content stays in
-history. An untracked file has never been committed, so deleting it destroys the only copy.
-
 **Delete tracked findings once their check passes. List untracked findings and get explicit confirmation, every
-run.** An untracked file is often exactly the scratch a sweep hunts, and it is also the uncommitted work someone
-left open. No check tells those apart.
+run.** Git history keeps a tracked file. An untracked file can be scratch or someone's open work, and no check
+tells those apart.
 
 ## Find
 
-The sweep runs over the whole repo; it is cheap. Take the baseline of the retro first (green build, tests and
-lint from the manifest).
+The sweep runs over the whole repo, after the retro's baseline.
 
 | Category | How to find it | The check |
 |---|---|---|

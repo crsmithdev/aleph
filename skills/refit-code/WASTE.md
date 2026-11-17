@@ -1,7 +1,6 @@
 # Waste lens
 
-Does this code do work it does not need? Slop is code bigger than its job; waste is code that runs more than its
-job. A slow path that a user or a test waits on is a finding; one nobody waits on is not.
+Does this code do work it does not need? A slow path that a user or a test waits on is a finding; one nobody waits on is not.
 
 ## Signals
 
@@ -28,7 +27,7 @@ bound the growth. Keep the change only when the measurement moves.
 
 ## Guard
 
-A timing test or benchmark with a ceiling on the path; unchecked until one exists.
+A timing test or benchmark with a ceiling on the path.
 
 ## Check
 

@@ -4,10 +4,6 @@ Can a reader find a thing where they would look for it? This lens works on files
 code inside a file. A good tree has one directory per concept, files sized to one job each, and names that
 follow one pattern. In a bad tree, every change needs a search first.
 
-The line with the sweep: the sweep moves a file when the repo's own majority convention says it is in the wrong
-place, which is a yes or no check ([SWEEP.md](SWEEP.md)). This lens asks whether the convention and the tree
-are right, which is a judgment.
-
 ## Signals
 
 Layout is a property of the whole tree, so its hunt runs over the whole repo, not one directory at a time.
@@ -70,8 +66,7 @@ does not do it.
 ## Guard
 
 `check` asks where each new file goes. The tool guards are a dependency-cruiser rule on which directories may
-import which, and a shrink-only ratchet on file size. Neither is wired yet, so the guards table lists them as
-unchecked.
+import which, and a shrink-only ratchet on file size.
 
 ## Check
 

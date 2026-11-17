@@ -1,15 +1,12 @@
 ---
 name: refit-code
 description: >
-  Refit a codebase: find where it does one thing more than one way, where a
-  module is shallow or leaks, where code is bigger than its job, dead or does
-  work it does not need, where
-  files and directories are not where a reader looks, and sweep junk files. Use
-  when asked to improve, review, clean up, simplify, deslop or tidy code,
-  find duplication, drift, dead code or architecture problems, reorganize or
-  restructure files and directories, before you add a function, module,
-  parser, constant, route or doc section (check), or when the refit-code Stop
-  hook blocks.
+  Refit a codebase: find code done more than one way, shallow or leaky
+  modules, code bigger than its job, dead or wasted work, and files not where a
+  reader looks, and sweep junk files. Use when asked to improve, review, clean
+  up, simplify, deslop or tidy code, find duplication, drift, dead code or
+  architecture problems, reorganize files, before you add code (check), or
+  when the refit-code Stop hook blocks.
 ---
 
 Takes in Matt Pocock's `improve-codebase-architecture` (github.com/mattpocock/skills @4ae2317), aleph's `tidy`
@@ -63,13 +60,10 @@ convention is right is **layout**. Report a candidate under one lens only.
    most in the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
 4. **Hunt.** Spawn one Explore subagent per lens per two or three directories, in one message. Give each its
    lens file's Signals section verbatim, the scope, and the seed lines for its directories. The layout lens gets
-one subagent over the whole repo, with the full seed. Each returns
-   candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
+   one subagent over the whole repo, with the full seed. Each returns candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
-5. **Prove, guard, fix and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files: it tiers each
-   finding **auto** or **ask**, fixes every auto finding by Act below with no question first, and asks only about
-   the ask findings. The report goes to `<tmpdir>/refit-code-retro-<timestamp>/`, and its unit is a module. Done
-   when its report is written and the ask findings, if any, are asked.
+5. **Prove, guard, fix and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report's
+   unit is a module. Done when PROVE.md's step 3 is done.
 
 ## Act
 
@@ -83,8 +77,7 @@ their contents are final.
    record which proof step missed and the failed command, which the report shows as "reverted"; never carry a
    red build into the next finding.
 
-A rider found during the loop follows [PROVE.md](PROVE.md) step 2: an auto rider is a finding of its own with
-its own commit, an ask rider waits for Chris, and an item outside the lenses goes to `aleph issue add`.
+A rider found during the loop follows [PROVE.md](PROVE.md) step 2.
 
 A finding that needs a new interface is **ask**: follow [DEEPEN.md](DEEPEN.md) before step 1. It designs the
 interface with the user, then hands the design back here.

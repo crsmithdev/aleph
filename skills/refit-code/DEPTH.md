@@ -30,8 +30,7 @@ the user before code.
 
 ## Guard
 
-Mostly judgment. `check` asks the deletion test of every new module. A lint for one-line pass-through functions
-is the only tool guard, and it is not wired.
+`check` asks the deletion test of every new module.
 
 ## Check
 

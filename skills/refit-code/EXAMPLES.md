@@ -102,8 +102,6 @@ and as the bar for a card. Sections are by lens.
 - **Proof**: the escape-hatch table for each candidate.
 - **Fix**: 116 exports lost `export`, 17 dead functions went with their tests, one stale doc reference was
   fixed: −190 net lines over 53 files, landed as 8262b64 in that repo. T1 and T2 only.
-- **Lesson**: on aleph, 21 of 23 knip candidates traced to one manifest knip had not been pointed at
-  (DETECTORS.md, entry-point blindness).
 
 # Looked alike, not a finding
 

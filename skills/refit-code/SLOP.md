@@ -39,8 +39,7 @@ Delete or shrink the line, on lines the branch owns. Lines outside the branch ar
 ## Guard
 
 typescript-eslint `no-unnecessary-condition` and `no-unnecessary-type-assertion` for impossible fallbacks and
-needless casts; a shrink-only ratchet for empty or swallowing `catch` and `any`. Not wired yet: the guards table
-lists them as unchecked.
+needless casts; a shrink-only ratchet for empty or swallowing `catch` and `any`.
 
 ## Check
 
