@@ -42,8 +42,9 @@ as a follow-up.
 - Stack: TypeScript first, bun for runtime, packages and tests, SQLite through
   `bun:sqlite`; React, Fastify and Vite for UI and servers. Python, Go or Rust
   only where the repo already uses them.
-- Code: follow `~/aleph/identity/STYLE.md`. A repo's own style guide wins over
-  it, and an edit matches the style of its file.
+- Code: follow the Style rules in `~/aleph/skills/write-code/SKILL.md`. A
+  repo's own style guide wins over them, and an edit matches the style of its
+  file.
 - Commit subject: imperative, lowercase, no trailing punctuation, at most 50
   characters, no conventional-commit prefix. A body only when the why is not
   in the diff.

@@ -41,7 +41,7 @@ Each ask includes an option to grant it permanently with no constraints.
 
 @~/aleph/identity/VOICE.md
 
-Code follows `~/aleph/identity/STYLE.md`. A repo's own style guide wins, and an edit matches its file.
+Invoke `aleph:write-code` before you write, edit or delete code. A repo's own style guide wins, and an edit matches its file.
 
 ## Git
 

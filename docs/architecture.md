@@ -66,7 +66,7 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `jobs/` | `jobs/cli.ts` and `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
 | `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts` |
-| `identity/` | The global `CLAUDE.md` and `STYLE.md` |
+| `identity/` | The global `CLAUDE.md` and `VOICE.md` |
 | `compose/` | Langfuse in Docker |
 | `tests/` | Repo-wide tests, `tests/live/` against real services |
 

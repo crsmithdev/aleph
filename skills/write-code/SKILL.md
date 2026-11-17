@@ -46,6 +46,24 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 - Remove the imports, variables and functions that your change made unused.
 - Record pre-existing dead code, a bug or a slow path that you find as a follow-up (in the `followups` field when your brief defines it), and leave that code as it is.
 
+### Style
+
+Code is minimal and good to look at. A repo's own style guide, glossary or principles win over these rules. When the repo runs a formatter, the formatter has the last word on whitespace.
+
+1. **Short names.** A name grows with its scope: `lo`, `hi` in a loop, `runs`, `edges` in a function, `NAME_MAX` in a module. Not `wordIndex` or `separatorValues`.
+2. **The glossary's words.** A thing the repo's glossary names keeps that name, whole, at every scope. Do not shorten it or invent a second word for it.
+3. **No noise in a name.** No type (`payloadArr`), no `data`, `info`, `value`, `num` or `List`. A plural is a collection: `runs`, `states`.
+4. **Two characters or more.** A one-letter name lives only in a loop, a callback or a one-line lambda.
+5. **A legend for abbreviations.** When a module uses short forms in many places, its top comment lists them once, as aleph's `lib/naming.ts:4` does. A glossary term is never abbreviated.
+6. **Whole collections, not loops.** A `map`, `filter` or query shows the shape of the operation. A loop is for a step that depends on the step before it.
+7. **Short functions.** A function does one job in a few lines. Its doc comment is one line that says what it returns.
+8. **Flat.** Return early. No `else` after `return`. No more than two levels of indent inside a function.
+9. **Parallel things look parallel.** Code that does the same job for different cases has the same shape, line for line, with related lines in the same order.
+10. **No defence the inputs do not need.** Check input once, at the boundary. No `??`, `try` or check for a case the types or callers rule out.
+11. **Tables stay tables.** A table of data can keep its column alignment behind `// prettier-ignore`. Do this only for data, never for logic.
+12. **A comment gives what the code cannot:** a field meaning, a reason, a source. It never says what the next line does. Good: `// The dash is the old shown form: a copied \`j-06802\` still reads.` (aleph, `lib/naming.ts:77`).
+13. **Give the shape or the unit** of a value where the code makes it: `const NAME_MAX = 255; // bytes one file name may take` (aleph, `jobs/lib/learning/episode.ts:86`).
+
 ### Tests
 
 - Before you write a test, name the code change that would make it fail. If you cannot name one, the test checks nothing.
