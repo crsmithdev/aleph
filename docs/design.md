@@ -1567,7 +1567,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Quiet labels inside a line are hand `span.quiet`: the Next line, the check name after a failed test, the `logs:` label of a run's log buttons, a run's job ID in its event, the Work lane's head. `note()` makes a whole line, not a label | `renderJob()`, `logButtons()`, `jobEvent()`, `jobSegments()` in `ui/views/jobs.js` | follow-up |
 | A transcript's steps are hand `div.step`: no helper for a tool call with its input and result | `renderTranscript()` in `ui/views/jobs.js` | follow-up |
 | Parts of the Automation page written by hand, with no helper: the `dl.held-paths` list that sets each scope's label beside one `code` line per held path, and the log content cell with its clamp button | `renderHeld()`, `renderLog()` in `ui/views/gates.js` | follow-up |
-| The File an Issue Project select takes its options from the registry after the page is drawn, written as hand `<option>` tags | `projectOptions()` in `ui/views/issues.js` | follow-up |
 
 ## Appendix
 

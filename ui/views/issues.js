@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, four charts, filters, fuzzy search, a sortable
-// table and a form that files an issue. `data` is /api/issues: { issues, projects }.
+// table that offers to file the search text as an issue. `data` is /api/issues: { issues, projects }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { issueApi, postJson, projectKeysOnce, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
+import { issueApi, postJson, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { count, days, plural, dur, money, pct, when } from "./lib/format.js";
 import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
@@ -193,17 +193,25 @@ export function renderRow(r, { fold, sub } = {}) {
     `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
 }
 
+/** The project a filed search goes to: the scoped one, else aleph, else the first. */
+export const fileProject = (project, projects = []) => project || (projects.includes("aleph") ? "aleph" : projects[0] ?? "");
+
+/** The table's first row when the search box has text: it offers to file that text. `span` is the column count. */
+export const fileRow = (query, project, span) =>
+  `<tr class="file-row"><td class="wide" colspan="${span}"><button type="button" class="link" data-file="${esc(query)}">File “${esc(query)}”</button> <span class="quiet">in ${esc(project)}</span></td></tr>`;
+
 export function renderTable(rows, o = {}) {
   const flat = ordered(filterRows(rows, o), o), group = kept("issues.group", false), open = new Set(kept("issues.open", []));
   const ids = new Set(flat.map((r) => r.id)), parents = new Set(flat.map((r) => r.parent)), under = (r) => group && r.parent && ids.has(r.parent);
   const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
   const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
-  if (!all.length) return empty();
+  const file = (o.q ?? "").trim() ? fileRow(o.q.trim(), fileProject(o.project, o.projects), COLUMNS.length + (group ? 1 : 0)) : "";
+  if (!all.length) return file ? dataTable("", file) : empty();
   const shown = pageRows(all, o.page ?? 1, PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   // The fold column has no name (design.md, Table).
   const head = (group ? "<th></th>" : "") + COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
+  return `${dataTable(head, file + shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
 }
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
@@ -375,18 +383,13 @@ function renderLive(projects, rows, o) {
     numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
     detail: renderCharts(o, scoped),
     count: shown,
-    table: renderTable(rows, o),
+    table: renderTable(rows, { ...o, projects }),
   };
 }
 
 const projectsOf = (d) => [...new Set([...(d?.projects ?? []), ...(d?.issues ?? []).map((r) => r.repo)])].sort();
 
 const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
-
-/** The Project select's options, one per registry key, `project` selected. */
-function projectOptions(keys, project) {
-  return keys.map((k) => `<option value="${esc(k)}"${k === project ? " selected" : ""}>${esc(k)}</option>`).join("");
-}
 
 let live = null;
 /** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
@@ -411,41 +414,45 @@ function refill() {
   draw(root);
 }
 
-/** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
-export async function mount(root, d) {
+/** Set while a filing POST runs, so a second Enter does not file the issue twice. */
+let filing = false;
+/** Files the search text as a new issue and opens it; the error shows beside `el`. */
+async function fileFromSearch(el, title) {
+  if (filing) return;
+  filing = true;
+  const repo = fileProject(live.o().project, live.projects);
+  try {
+    const data = await postJson("/api/issues", { repo, title, body: BODY_TEMPLATE, labels: [], after: "", media: [] });
+    location.hash = `/issues/${encodeURIComponent(repo)}/${data.added}`;
+  } catch (err) { say(el, `Could not file it: ${err.message}`); } finally { filing = false; }
+}
+
+/** Draws the charts and keeps the data for the filters. Enter in the search box or a click on the File row files the search text. */
+export function mount(root, d) {
   live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
   if (root.querySelector?.(".chartbox")) draw(root);
   const table = root.querySelector?.('section[aria-label="Issues"]');
-  if (table) wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
+  if (!table) return;
+  wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
+  table.addEventListener("keydown", (e) => {
+    const title = e.target.value?.trim();
+    if (e.key !== "Enter" || e.isComposing || !e.target.matches?.('[data-ui="inv-search"]') || !title) return;
+    fileFromSearch(e.target, title);
+  });
+  table.addEventListener("click", (e) => {
+    const b = e.target.closest?.("button[data-file]");
+    if (b) fileFromSearch(b, b.dataset.file);
+  });
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
     root.querySelector(`button[data-tile="${k}"]`)?.focus();
   });
-  const select = root.querySelector?.('select[name="repo"]');
-  if (!select) return;
-  const keys = await projectKeysOnce();
-  if (keys.length) select.innerHTML = projectOptions(keys, select.value);
-}
-
-function renderForm(rows, o = {}) {
-  const repos = [...new Set(rows.map((r) => r.repo))];
-  const area = `<textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea>`;
-  return card("File an Issue", fold("Open the form", formOf("issue-form", [
-    field("Project", selectBox("Project", "repo", o.keys ?? repos, o.project, { attrs: " required" })),
-    field("Title", inputBox("title", "", { attrs: " required" })),
-    field("Text", area),
-    field("Media", mediaInput),
-    field("Labels", inputBox("labels", "", { attrs: ' placeholder="comma separated"' })),
-    field("Spec", `<input type="checkbox" name="spec" title="The text is a spec: build it in the factory">`, { check: true }),
-    field("After", inputBox("after", "", { attrs: ' placeholder="a3202, a3203"' })),
-  ], "File issue"), { cls: "new" }), { label: "File an issue" });
 }
 
 export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
   return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
-    renderForm(d?.issues ?? [], o) +
     `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
     `<div id="issues-table">${parts.table}</div>`, { count: parts.count })}</div>`;
@@ -690,18 +697,6 @@ if (typeof document !== "undefined") {
       location.reload();
     } catch (err) { say(form.querySelector("button"), `Could not save it: ${err.message}`); }
   });
-  document.addEventListener("submit", async (e) => {
-    const form = e.target.closest && e.target.closest('form[data-ui="issue-form"]');
-    if (!form) return;
-    e.preventDefault();
-    const v = (n) => form.elements[n].value.trim();
-    const labels = v("labels").split(",").map((s) => s.trim()).filter(Boolean);
-    if (form.elements.spec.checked && !labels.includes("spec")) labels.push("spec");
-    try {
-      const data = await postJson("/api/issues", { repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after"), media: await mediaOf(form) });
-      location.hash = `/issues/${encodeURIComponent(v("repo"))}/${data.added}`;
-    } catch (err) { say(form.querySelector("button"), `Could not file it: ${err.message}`); }
-  });
 }
 
 if (typeof document !== "undefined") {
@@ -763,7 +758,7 @@ if (typeof document !== "undefined") {
   });
   document.addEventListener("focusout", (e) => { const p = e.target.matches?.(".ref-search") && pickerOf(e.target); if (p) close(p); });
 
-  const MEDIA_FORMS = 'form[data-ui="issue-form"], form[data-ui="issue-media"]';
+  const MEDIA_FORMS = 'form[data-ui="issue-media"]';
   const accepted = (f) => /^image\/(png|jpeg|gif|webp)$|^application\/pdf$/.test(f.type);
   // A pasted screenshot goes to the media input of the form it was pasted in.
   document.addEventListener("paste", (e) => {

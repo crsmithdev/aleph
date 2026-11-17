@@ -391,7 +391,7 @@ describe("views", () => {
     expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
     expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
-    expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
+    expect(v.view.render(d, {}, new URLSearchParams())).not.toContain("File an");
   });
 
   test("the project filter is a select with what the other filters leave", async () => {
@@ -659,7 +659,30 @@ describe("views", () => {
     expect(head).toContain('<select name="project"');
     expect(head.indexOf('<select name="project"')).toBeLessThan(head.indexOf('data-name="window"'));
     expect(head).not.toContain('data-act="pause"');
-    expect(page.indexOf('<details class="new">')).toBeLessThan(page.indexOf('id="issues-table"'));
+    expect(page).not.toContain("File an");
+    expect(page).not.toContain("issue-form");
+  });
+
+  test("the table offers to file the search text, in the scoped project", () => {
+    const rows = { issues: [{ repo: "aleph", n: 1, title: "alpha thing", status: "open", labels: [] }], projects: ["aleph", "fac"] };
+    const page = (o: object) => v.renderIssues(rows, o);
+    expect(page({})).not.toContain("data-file");
+    expect(page({ q: "   " })).not.toContain("data-file");
+    const h = page({ q: "alpha <b>" });
+    expect(h).toContain('data-file="alpha &lt;b&gt;">File “alpha &lt;b&gt;”</button> <span class="quiet">in aleph</span>');
+    expect(page({ q: "alpha", project: "fac" })).toContain('<span class="quiet">in fac</span>');
+    // The File row comes before the matches, and stands alone when nothing matches.
+    const m = page({ q: "alpha" });
+    expect(m.indexOf("data-file")).toBeLessThan(m.indexOf('class="rowlink'));
+    const none = v.renderTable([], { q: "zzz", projects: ["fac"] });
+    expect(none).toContain('<span class="quiet">in fac</span>');
+    expect(none).not.toContain('class="empty"');
+  });
+
+  test("fileProject picks the scoped project, else aleph, else the first", () => {
+    expect(v.fileProject("fac", ["aleph", "fac"])).toBe("fac");
+    expect(v.fileProject("", ["aleph", "fac"])).toBe("aleph");
+    expect(v.fileProject("", ["fac", "zed"])).toBe("fac");
   });
 
   test("each number column sorts; age counts to the closing", () => {
