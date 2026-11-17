@@ -46,8 +46,9 @@ convention is right is **layout**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, guard, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro |
+| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, guard, tier, fix, report | Find what to improve and fix the auto findings |
+| `scan [lens ...]` | The retro without the fix: report only | Find what to improve, change nothing |
+| `act` | The fix of each ask finding Chris approves | After a retro |
 | `check` | Each new thing in a plan, spec or diff, under every lens | Before or during a build |
 
 ## Retro
@@ -65,23 +66,28 @@ convention is right is **layout**. Report a candidate under one lens only.
 one subagent over the whole repo, with the full seed. Each returns
    candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
    each subagent has returned.
-5. **Prove, guard and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report goes to
-   `<tmpdir>/refit-code-retro-<timestamp>/`, and its unit is a module. Done when its report
-   is written and the question asked.
+5. **Prove, guard, fix and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files: it tiers each
+   finding **auto** or **ask**, fixes every auto finding by Act below with no question first, and asks only about
+   the ask findings. The report goes to `<tmpdir>/refit-code-retro-<timestamp>/`, and its unit is a module. Done
+   when its report is written and the ask findings, if any, are asked.
 
 ## Act
 
-For each finding the user picks, in the order lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once
+For each auto finding of a retro, or each ask finding Chris approves, in the order lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once
 their contents are final.
 
 1. Make the lens's fix. Delete or change whole: the code, its tests, fixtures, exports, docs entry and
-   dependency line. Edit only lines the branch owns or the user named; report the rest.
+   dependency line. Edit only the lines the finding names, its riders and what the user named; report the rest.
 2. Add the finding's guard when its tool exists in the repo.
 3. Run the baseline commands. Green: commit, naming the lens and the finding. Red: revert that finding and
-   record which proof step missed; never carry a red build into the next finding.
+   record which proof step missed and the failed command, which the report shows as "reverted"; never carry a
+   red build into the next finding.
 
-For a finding that needs a new interface, follow [DEEPEN.md](DEEPEN.md) before step 1. It designs the interface
-with the user, then hands the design back here.
+A rider found during the loop follows [PROVE.md](PROVE.md) step 2: an auto rider is a finding of its own with
+its own commit, an ask rider waits for Chris, and an item outside the lenses goes to `aleph issue add`.
+
+A finding that needs a new interface is **ask**: follow [DEEPEN.md](DEEPEN.md) before step 1. It designs the
+interface with the user, then hands the design back here.
 
 ## Check
 

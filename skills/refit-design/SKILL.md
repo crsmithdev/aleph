@@ -35,8 +35,9 @@ restyles a kit class is seams. A class that no element uses is dead.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [route]` (default: the whole UI) | Baseline, inventory, shots, compare, prove, report | Find where the UI leaves the doc |
-| `act` | The fix of each finding the user picks | After a retro |
+| `retro [route]` (default: the whole UI) | Baseline, inventory, shots, compare, prove, fix, report | Find where the UI leaves the doc and fix the auto findings |
+| `scan [route]` | The retro without the fix | Find what to improve, change nothing |
+| `act` | The fix of each ask finding Chris approves | After a retro |
 | `check` | Each new view, style rule or component in a plan, spec or diff | Before or during a build |
 
 `route` is one page, such as `#/issues`. With none, the run covers each route of the UI's router.
@@ -54,7 +55,7 @@ restyles a kit class is seams. A class that no element uses is dead.
    candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also returns, per component, the
    rules it breaks and the rules it follows (each by `docs/design.md` section and rule text) and the Kit specimen id.
    Done when each route has returned and each component has an entry.
-4. **Prove, guard and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
+4. **Prove, guard, fix and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files, but write
    the report of this skill's [REPORT.md](REPORT.md) to `<tmpdir>/refit-design-retro-<timestamp>/`, with a component
    kind as its unit. Done when PROVE.md's step 3 is done.
 

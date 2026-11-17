@@ -1,7 +1,7 @@
 # Design retro report
 
 The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md): Overview
-(repo line, themes, findings table), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
+(repo line, counts of fixed and waiting findings, themes, findings table), Units, Proposals, in a directory with `index.html` and `app.css`. Its scaffold and
 class names are in refit-code's [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design.
 A design report uses the design language of the UI it scans: aleph classes and tokens from `ui/app.css`, no Tailwind.
 It cites only rules of `docs/design.md`.
@@ -31,7 +31,8 @@ anchor `kit-<id>`. A report opened from a host that has no Kit says so in the Ov
 The finding comes first, and the components it breaks come under its title (Chris, 2026-11-17). A finding is a
 `<div class="finding" id="f<n>">`, in this order:
 
-1. the title: its number, the change as an imperative, and the chips of its lens and kind;
+1. the title: its number, the change as an imperative, and the chips of its lens, kind and tier (**auto** or **ask**),
+   then its result as refit-code's REPORT.md gives it: the commit, "reverted" with the failed command, or "found during fix";
 2. one `p.on` line per component the finding breaks: the component in bold, its variant in `span.quiet` if it
    has one, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the line, with the kind and the
    variant as the Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that
@@ -51,7 +52,7 @@ Proposals when 3 or more places use it.
   <div class="sh"><h2>Components</h2></div>
   <h3 class="sub-head">{{kind}}</h3>
   <div class="finding" id="f{{n}}">
-    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span></p>
+    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span><span class="chip">{{tier}}</span> <span class="quiet">{{result}}</span></p>
     <p class="on" data-annotate="{{kind}}/{{variant}}"><b>{{component}}</b> <span class="quiet">{{variant}}</span> <a href="/#/kit">Kit: {{id}}</a></p>
     <p class="fix"><b>Fix</b>: ...</p>
     <figure><img src="shots/{{file}}.png" alt="{{part}}"></figure>

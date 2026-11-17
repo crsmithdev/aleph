@@ -57,7 +57,8 @@ its label is **scope**. Report a candidate under one lens only.
 5. **Prove, guard and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lenses.
    A mismatch is a finding only with both values, the query and the moment of the read. The report goes to
    `<tmpdir>/refit-data-retro-<timestamp>/`, and its unit is a shown number. Its Overview opens with a table of each number: the shown value, the
-   recomputed value and the verdict.
+   recomputed value and the verdict. This skill has no `act` and no fix step: PROVE.md's tier and fix do not apply,
+   and its pick is the findings to file as issues.
 
 Rules:
 

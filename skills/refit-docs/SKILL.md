@@ -43,8 +43,9 @@ is **rot**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro |
+| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve and fix the auto findings |
+| `scan [lens ...]` | The retro without the fix | Find what to improve, change nothing |
+| `act` | The fix of each ask finding Chris approves | After a retro |
 | `lint` | `refs.ts` and the installed tools only, no model judgment, report in the terminal | A quick pass, or before a commit that touches docs |
 | `check` | Each new page, section, flag, env var or config key in a plan, spec or diff | Before or during a build |
 

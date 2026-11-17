@@ -41,8 +41,9 @@ production code is **hollow**. Report a candidate under one lens only.
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, measure, hunt, prove, fix and guard, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro |
+| `retro [lens ...]` (default: all) | Baseline, measure, hunt, prove, fix and guard, report | Find what to improve and fix the auto findings |
+| `scan [lens ...]` | The retro without the fix | Find what to improve, change nothing |
+| `act` | The fix of each ask finding Chris approves | After a retro |
 | `check` | Each new test, helper, fixture, skip and wait in a plan, spec or diff | Before or during a build |
 
 `stats.ts` in this directory gives the numbers; `bun <skill dir>/stats.ts` prints its commands. It reads a report,

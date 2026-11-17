@@ -54,8 +54,9 @@ prose that copies that usage is **drift**; a hook that fails open is **safety**,
 
 | Mode | Runs | Reach for it |
 |---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve |
-| `act` | The fix of each finding the user picks | After a retro |
+| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve and fix the auto findings |
+| `scan [lens ...]` | The retro without the fix | Find what to improve, change nothing |
+| `act` | The fix of each ask finding Chris approves | After a retro |
 | `lint` | agnix, `load.ts`, `content.ts` and `install.ts` only, no model judgment, report in the terminal | A quick pass, or before a commit that touches agent files |
 | `check` | Each new agent file, line, skill, hook or CLI command in a plan, spec or diff, under every lens | Before or during a build |
 
