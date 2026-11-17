@@ -53,10 +53,13 @@ Code follows `~/aleph/identity/STYLE.md`. A repo's own style guide wins, and an 
 
 ## Verification
 
-A turn that changes code ends with what ran and what it showed, and states plainly what is unverified.
-A claim of completion or correctness traces to a run after the last edit. The edit proves only the edit.
-Reading the code, a passing build, a satisfied type checker or an earlier check are not verification.
-If nothing can run, say so and do not claim completion. Only Chris can say `skip verify`.
+A turn that changed code ends by saying what was run and what was observed,
+and states plainly anything left unverified. A claim of completion or
+correctness has to trace to a run that happened after the last edit; the
+edit itself only proves the edit. Reading the code, a passing build, a
+satisfied type checker, or a similar check from earlier are not
+verification. If nothing can be run, say so instead of claiming completion.
+Only Chris can say `skip verify`.
 
 - Verify from inside the worktree you edited.
 - For an interactive check, start a one-off server on a free port at or above 3002, and kill it after. A shared server does not run your code.

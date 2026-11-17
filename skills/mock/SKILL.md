@@ -1,6 +1,6 @@
 ---
 name: mock
-description: Build a design draft for Chris and put it on the shelf. Use when Chris asks for a mock or to see design options.
+description: "Mock: build a design draft (HTML pages, images, a canvas) for Chris, put it on the shelf and wait for his notes. Use when Chris asks for a mock, or when design options need to be shown."
 ---
 
 # Mock
