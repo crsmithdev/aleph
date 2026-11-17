@@ -44,7 +44,7 @@ const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 export const KEYED = new Set([
   "/api/factory", "/api/status", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/jobs", "/api/jobs/:id",
   "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
-  "/api/memory", "/api/memory/log", "/api/memory/processes", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
+  "/api/memory", "/api/memory/log", "/api/memory/processes", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key", "/api/context",
 ]);
 
 /** The key of a request: its path and its non-empty query parameters, sorted. */
@@ -337,6 +337,8 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   follow(dirname(notes), (f) => f === basename(notes), "annotations");
   const every = (ms: number, f: () => unknown) => { const t = setInterval(f, ms); t.unref?.(); stops.push(() => clearInterval(t)); };
   every(POLL_MS, () => updater.poll());
+  // No watcher: ~/.claude/projects holds thousands of folders. The sessions of /api/context are due every poll instead.
+  every(POLL_MS, () => updater.changed("transcripts"));
   every(FETCH_MS, () => updater.fetchStore());
   every(SWEEP_MS, () => updater.sweep());
   if (restore) updater.restore();

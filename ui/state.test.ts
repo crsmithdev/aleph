@@ -309,7 +309,10 @@ describe("the Herald's attempts and chats", () => {
     writeFileSync(join(projects, "-repo", "old-1.jsonl"), turn("user", ago(30), "yesterday's"));
     for (const id of ["chat-1", "old-1"]) mkdirSync(join(sessions, id), { recursive: true });
     const end = withEnv({ ALEPH_CLAUDE_PROJECTS: projects });
-    try { expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "and the header" }]); } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
+    try {
+      expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "and the header" }]);
+      expect(state(now, false).herald!.chats).toEqual([]);
+    } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
   });
 });
 

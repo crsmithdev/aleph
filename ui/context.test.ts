@@ -1,8 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import * as fs from "node:fs";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { call, parse, parseExact } from "./context.ts";
+import { updater } from "./updater.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
 
 const req = (id: string, input: number, cacheRead: number, cacheWrite: number) => ({ type: "assistant", requestId: id, message: { usage: { input_tokens: input, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: cacheWrite, output_tokens: 7 } } });
@@ -247,6 +249,21 @@ test("GET /api/context lists the newer session first and /api/context/:id return
   expect((await at("/api/context/nope")).status).toBe(404);
 });
 
+test("GET /api/context is a kept key, built again when the transcripts change", async () => {
+  const sessions = async () => ((await at("/api/context").then((r) => r.json())) as any).sessions.map((s: any) => s.id);
+  expect((await at("/api/context")).headers.get("x-aleph-keys")).toBe("/api/context");
+  // A kept key is built again after the settle time, and `change` names it.
+  const rebuilt = () => { const done = new Promise<void>((ok) => updater.onChange((keys) => keys.includes("/api/context") && ok())); updater.changed("transcripts"); return done; };
+  const added = join(base, "-p", "added.jsonl");
+  writeFileSync(added, JSON.stringify(req("b", 1, 0, 10)));
+  try {
+    await rebuilt();
+    expect(await sessions()).toContain("added");
+  } finally { rmSync(added); }
+  await rebuilt();
+  expect(await sessions()).not.toContain("added");
+});
+
 test("GET /api/context/:id returns the window the context gate reads: the default, then the autoCompactWindow setting", async () => {
   const settings = join(base, "settings.json");
   const restore = withEnv({ ALEPH_CLAUDE_SETTINGS: settings });
@@ -260,6 +277,22 @@ test("GET /api/context/:id returns the window the context gate reads: the defaul
     restore();
     if (env !== undefined) process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW = env;
   }
+});
+
+test("a session and then one of its calls read the transcript once, and a write to it is read again", async () => {
+  const read = spyOn(fs, "readFileSync");
+  const file = join(base, "-p", "once.jsonl");
+  writeFileSync(file, drill);
+  const reads = () => read.mock.calls.filter(([f]) => f === file).length;
+  try {
+    await at("/api/context/once");
+    await at("/api/context/once/calls/u2");
+    expect(reads()).toBe(1);
+    writeFileSync(file, drill + "\n");
+    utimesSync(file, 5000, 5000);
+    await at("/api/context/once/calls/u2");
+    expect(reads()).toBe(2);
+  } finally { read.mockRestore(); rmSync(file); }
 });
 
 test("GET /api/context/:id/calls/:call returns one call, and 404 for an unknown call or session", async () => {

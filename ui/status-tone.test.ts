@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { setPaused } from "../jobs/lib/gates/pause.ts";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { verdict } from "../lib/status-words.ts";
+import { closePass, openPass } from "../lib/sources.ts";
+import { stateBody } from "./api/now.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 
 let base: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -35,4 +37,9 @@ test("the status tone is the Status page's verdict, and its change is signalled 
   expect(text).toContain("/api/status");
   expect(await (await get("/api/status")).json()).toEqual({ tone: "warning" });
   expect(verdict(await (await get("/api/factory")).json()).tone).toBe("warning");
+});
+
+test("the body of all projects is built once per pass: /api/status and /api/factory share it", () => {
+  openPass({}, "tone");
+  try { expect(stateBody(null)).toBe(stateBody(null)); expect(stateBody("p")).not.toBe(stateBody("p")); } finally { closePass(); }
 });

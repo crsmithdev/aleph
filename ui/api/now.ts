@@ -7,6 +7,7 @@ import { heraldRows } from "../herald.ts";
 import { reader } from "../../issues/lib/store.ts";
 import { allRuns } from "../../jobs/lib/records/ledger.ts";
 import type { EventRow } from "../../lib/naming.ts";
+import { once } from "../../lib/sources.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
 
@@ -29,12 +30,18 @@ export function heraldNow(project: string | null) {
 }
 
 /** The `/api/factory` body for one project (null for all), with its asks and the Herald as rows. */
-export async function stateBody(project: string | null) {
-  const { doneStamps, herald, ...s } = forProject(state(), project);
+async function build(project: string | null) {
+  const { doneStamps, herald, ...s } = forProject(state(new Date(), !project), project);
   const fit = await currentFit();
   annotate([...s.stuck, ...s.running], fit);
   return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
+
+/** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */
+const SOURCES = ["registry", "store", "events", "records", "runs", "usage", "factory", "action"];
+
+/** The `/api/factory` body for one project; the body of all projects is built once per change of its sources, for `/api/status` too. */
+export const stateBody = (project: string | null): ReturnType<typeof build> => (project ? build(project) : once("state-body", SOURCES, () => build(null)));
 
 export const routes: Routes = {
   /** `GET /api/status`: the tone of the status sentence over all projects, for the sidebar. It is the verdict the Status page draws. */

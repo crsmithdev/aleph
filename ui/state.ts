@@ -333,7 +333,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   return { lists, toJob, stagesOf: at.stagesOf, decide: at.decide, blocker, blockers };
 }
 
-export function state(now = new Date()): State {
+/** The state at `now`; `withChats` false leaves the Herald's conversations out (a scoped body drops them, and each is a transcript read). */
+export function state(now = new Date(), withChats = true): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs();
@@ -473,7 +474,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), lists), chats: chats(now.getTime() - 86_400_000) },
+    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), lists), chats: withChats ? chats(now.getTime() - 86_400_000) : [] },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
