@@ -5,15 +5,18 @@
  * through. The target is the repo named by `-R`/`--repo`, by a github.com URL,
  * by `repos/<owner>/<repo>` in `gh api`, or else the origin of the directory
  * the command runs in. A write whose target cannot be found asks. The user is
- * `ALEPH_GH_USER`, or else the login of `gh api user`.
+ * `ALEPH_GH_USER`, or else the login of `gh api user`, asked once a day.
  */
 /*
  * A hook that exits 1 does not block the tool, so a guard that throws before
  * its verdict exits 2 (deny) with its name and the error on stderr.
  */
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { GH_USER_CMD } from "../lib/env.ts";
+import { today } from "../lib/day.ts";
 import { probe } from "../lib/git.ts";
+import { readJsonOr, writeJson } from "../lib/json.ts";
+import { spoolDir } from "./lib/handshake.ts";
 
 try {
   const input = JSON.parse(await Bun.stdin.text());
@@ -69,8 +72,18 @@ try {
   }
   if (owners.length === 0) process.exit(0);
 
-  const user = process.env.ALEPH_GH_USER
-    || Bun.spawnSync(GH_USER_CMD, { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
+  /** The login of `gh api user`: a network call, so a login is kept in the spool for the day. */
+  function ghLogin(): string {
+    const file = join(spoolDir(), "gh-user.json");
+    const day = today();
+    const kept = readJsonOr<{ day: string; login: string } | null>(file, null);
+    if (kept?.day === day) return kept.login;
+    const login = Bun.spawnSync(GH_USER_CMD, { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
+    if (login) writeJson(file, { day, login });
+    return login;
+  }
+
+  const user = process.env.ALEPH_GH_USER || ghLogin();
   const foreign = owners.filter((o) => o === null || o.toLowerCase() !== user.toLowerCase());
   if (foreign.length === 0) process.exit(0);
 

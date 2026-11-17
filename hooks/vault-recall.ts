@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
-import { claimLine, recall } from "../vault/lib/index.ts";
-import { appendRecallLog, coreNotes, loadWiki, recordRun, repoScope, type Note } from "../vault/lib/vault.ts";
+import { claimLine, recallWiki } from "../vault/lib/index.ts";
+import { appendRecallLog, recordRun, repoScope } from "../vault/lib/vault.ts";
 import { vaultDir } from "../lib/paths.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
@@ -67,12 +67,11 @@ async function main() {
   if (prompt.length < MIN_PROMPT || judgeChoice() === "haiku") return;
   const start = Date.now();
   const root = vaultDir();
-  const notes = await loadWiki(root);
   const seen = readSeen(root, input.session_id);
-  const scope = repoScope(input.cwd ?? process.cwd());
+  const { ranked, core } = await recallWiki(root, prompt, repoScope(input.cwd ?? process.cwd()));
   // A core note's line is already in the start context.
-  const skip = new Set([...seen, ...coreNotes(notes, scope).map((n) => n.rel)]);
-  const all = recall(root, notes, prompt, scope).map((r) => r.note).filter((n) => !skip.has(n.rel));
+  const skip = new Set([...seen, ...core.map((n) => n.rel)]);
+  const all = ranked.map((r) => r.note).filter((n) => !skip.has(n.rel));
   const candidates = all.slice(0, MAX_ASKED);
   const meta: Parameters<typeof postSpan>[2] = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }
@@ -86,7 +85,7 @@ async function main() {
     return nouls({ prompt }, questions, JEV_TIMEOUT_MS);
   }));
   const errors: string[] = [];
-  const scored: { n: Note; p: number }[] = [];
+  const scored: { n: (typeof all)[number]; p: number }[] = [];
   settled.forEach((s, b) => {
     if (s.status === "rejected") { errors.push(errText(s.reason)); return; }
     batches[b].forEach((n, i) => scored.push({ n, p: s.value.p[`n${i}`] }));

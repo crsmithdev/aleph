@@ -9,7 +9,7 @@
 import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { screenWords as words, type Note } from "./vault.ts";
+import { coreNotes, loadWiki, screenWords as words, type Note } from "./vault.ts";
 import { probe } from "../../lib/git.ts";
 import { tmpName } from "../../lib/json.ts";
 
@@ -19,9 +19,12 @@ const K = 60;
 const FTS_LIMIT = 200;
 
 /** The first paragraph of a note's body on one line. */
-export const claimLine = (n: Note): string => n.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
+export const claimLine = (n: Pick<Note, "body">): string => n.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim();
 
-const aliasesOf = (n: Note): string[] => {
+/** A note as the index returns it: no path and no text. */
+type Hit = Pick<Note, "rel" | "title" | "fm" | "body" | "wiki" | "archived">;
+
+const aliasesOf = (n: Pick<Note, "fm">): string[] => {
   const a = n.fm.aliases;
   return (Array.isArray(a) ? a : a ? [a] : []).map((x) => String(x).toLowerCase());
 };
@@ -31,36 +34,49 @@ function head(root: string): string {
   return p.ok ? p.out : "";
 }
 
-/** The index for `notes`, rebuilt first when the vault HEAD moved. */
-function openIndex(root: string, notes: Note[]): Database {
+// The suffix names the columns of the table: an index at the same HEAD with fewer is rebuilt.
+const stamp = (at: string): string => (at ? `${at}:fm` : "");
+
+/** The open index when it holds the vault HEAD `at`, else null. */
+function current(root: string, at: string): Database | null {
+  const file = join(root, ".index", "vault.sqlite");
+  if (!at || !existsSync(file)) return null;
+  const db = new Database(file);
+  try {
+    if ((db.query("select value from meta where key = 'head'").get() as { value: string } | null)?.value === at) return db;
+  } catch (e) {
+    // A vault.sqlite with no meta table is rebuilt; a busy or corrupt file is not.
+    if (!/no such table/.test((e as Error).message)) { db.close(); throw e; }
+  }
+  db.close();
+  return null;
+}
+
+/** The index for `notes` at the vault HEAD `at`, built beside the file and renamed in. */
+function build(root: string, at: string, notes: Note[]): Database {
+  // A hook that reads at the same time sees the old index or the new one.
   const dir = join(root, ".index");
   const file = join(dir, "vault.sqlite");
-  const at = head(root);
-  if (at && existsSync(file)) {
-    const db = new Database(file);
-    try {
-      if ((db.query("select value from meta where key = 'head'").get() as { value: string } | null)?.value === at) return db;
-    } catch (e) {
-      // A vault.sqlite with no meta table is rebuilt; a busy or corrupt file is not.
-      if (!/no such table/.test((e as Error).message)) { db.close(); throw e; }
-    }
-    db.close();
-  }
-  // Build beside the file and rename, so a hook that reads at the same time sees the old index or the new one.
   mkdirSync(dir, { recursive: true });
   const tmp = tmpName(file);
   rmSync(tmp, { force: true });
   const db = new Database(tmp);
   db.run("create table meta (key text primary key, value text)");
-  db.run(`create virtual table notes using fts5(title, aliases, claim, body, rel unindexed, scope unindexed, kind unindexed, updated unindexed, tokenize = "porter unicode61")`);
-  const add = db.prepare("insert into notes values (?, ?, ?, ?, ?, ?, ?, ?)");
+  db.run(`create virtual table notes using fts5(title, aliases, claim, body, rel unindexed, scope unindexed, kind unindexed, updated unindexed, fm unindexed, tokenize = "porter unicode61")`);
+  const add = db.prepare("insert into notes values (?, ?, ?, ?, ?, ?, ?, ?, ?)");
   db.transaction(() => {
-    for (const n of notes) add.run(n.title, aliasesOf(n).join(" "), claimLine(n), n.body, n.rel, String(n.fm.scope ?? ""), String(n.fm.kind ?? ""), String(n.fm.updated ?? ""));
+    for (const n of notes) add.run(n.title, aliasesOf(n).join(" "), claimLine(n), n.body, n.rel, String(n.fm.scope ?? ""), String(n.fm.kind ?? ""), String(n.fm.updated ?? ""), JSON.stringify(n.fm));
     db.run("insert into meta values ('head', ?)", [at]);
   })();
   db.close();
   renameSync(tmp, file);
   return new Database(file);
+}
+
+/** The index for `notes`, rebuilt first when the vault HEAD moved. */
+function openIndex(root: string, notes: Note[]): Database {
+  const at = stamp(head(root));
+  return current(root, at) ?? build(root, at, notes);
 }
 
 /** The rel paths of the notes that match any query word, best bm25 first. A query with no word of four letters, such as `bun`, searches on all its tokens. */
@@ -77,7 +93,7 @@ function search(db: Database, query: string): string[] {
  * 1 an alias is, 2 the title or an alias holds the query or one of its words.
  * Undefined when none of these.
  */
-function titleTier(n: Note, q: string, want: Set<string>): { tier: number; hits: number } | undefined {
+function titleTier(n: Hit, q: string, want: Set<string>): { tier: number; hits: number } | undefined {
   const title = n.title.toLowerCase(), aliases = aliasesOf(n);
   if (title === q) return { tier: 0, hits: Infinity };
   if (aliases.includes(q)) return { tier: 1, hits: Infinity };
@@ -87,7 +103,7 @@ function titleTier(n: Note, q: string, want: Set<string>): { tier: number; hits:
   return hits ? { tier: 2, hits } : undefined;
 }
 
-interface Ranked { note: Note; rank: number }
+interface Ranked<T = Note> { note: T; rank: number }
 
 /**
  * The index for `notes`, searched for `query` among `among` (all of `notes` by default) and closed again.
@@ -110,7 +126,7 @@ export function recallAll(root: string, notes: Note[], queries: string[], scope?
  * two lists is returned; the third list orders them and adds none.
  * `rank` is the title tier (0, 1 or 2), or 3 for a body-only hit.
  */
-function rankNotes(db: Database, notes: Note[], query: string, scope?: string): Ranked[] {
+function rankNotes<T extends Hit>(db: Database, notes: T[], query: string, scope?: string): Ranked<T>[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const want = new Set(words(q));
@@ -130,4 +146,18 @@ function rankNotes(db: Database, notes: Note[], query: string, scope?: string): 
   return [...matched]
     .sort((a, b) => score.get(b)! - score.get(a)! || byRel.get(a)!.title.localeCompare(byRel.get(b)!.title))
     .map((rel) => ({ note: byRel.get(rel)!, rank: tiers.get(rel) ?? 3 }));
+}
+
+/**
+ * The wiki notes that match `query`, as `recall` ranks them, and the core notes of `scope`, read from the index
+ * for the vault HEAD: a note file is read only when the index is stale.
+ */
+export async function recallWiki(root: string, query: string, scope: string): Promise<{ ranked: Ranked<Hit>[]; core: Hit[] }> {
+  const at = stamp(head(root));
+  const db = current(root, at) ?? build(root, at, await loadWiki(root));
+  try {
+    const rows = (db.query("select title, body, rel, fm from notes where rel like 'wiki/%'").all() as { title: string; body: string; rel: string; fm: string }[])
+      .map((r): Hit => ({ ...r, fm: JSON.parse(r.fm), wiki: true, archived: false }));
+    return { ranked: rankNotes(db, rows, query, scope), core: coreNotes(rows, scope) };
+  } finally { db.close(); }
 }

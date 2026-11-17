@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -80,4 +80,32 @@ test("a write in a later part of a compound command asks", () => {
 
 test("a command without gh goes through", () => {
   expect(decide("git push origin main")).toBe("");
+});
+
+/** The decision for a write to the user's own repo with no ALEPH_GH_USER, where a fake login lookup prints `login` and notes each call in `calls`. */
+function viaLookup(login: string, spool: string, calls: string): string {
+  const bin = join(root, "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "gh"), `#!/bin/sh\necho x >> ${calls}\n[ -n "${login}" ] && echo ${login}\nexit 0\n`);
+  chmodSync(join(bin, "gh"), 0o755);
+  const r = Bun.spawnSync(["bun", HOOK], {
+    stdin: Buffer.from(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "gh issue create -t x -b y" }, cwd: join(root, "mine") })),
+    env: { ...process.env, ALEPH_GH_USER: "", ALEPH_SPOOL: spool, PATH: `${bin}:${process.env.PATH}` },
+    stdout: "pipe", stderr: "pipe",
+  });
+  const out = r.stdout.toString().trim();
+  return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "";
+}
+const lookups = (calls: string) => readFileSync(calls, "utf8").split("\n").filter(Boolean).length;
+
+test("the gh login is asked of gh once a day, and a login that gh does not give is not kept", () => {
+  const spool = join(root, "spool-day"), calls = join(root, "calls-day");
+  writeFileSync(calls, "");
+  expect(viaLookup("", spool, calls)).toBe("ask");
+  expect(viaLookup("crsmithdev", spool, calls)).toBe("");
+  expect(viaLookup("crsmithdev", spool, calls)).toBe("");
+  expect(lookups(calls)).toBe(2);
+  writeFileSync(join(spool, "gh-user.json"), JSON.stringify({ day: "2000-01-01", login: "suebtwist" }));
+  expect(viaLookup("crsmithdev", spool, calls)).toBe("");
+  expect(lookups(calls)).toBe(3);
 });

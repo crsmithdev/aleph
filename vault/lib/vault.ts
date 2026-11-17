@@ -200,7 +200,7 @@ export const loadVault = (root: string): Promise<Note[]> => load(root, root);
  */
 export const loadWiki = (root: string): Promise<Note[]> => load(root, join(root, "wiki"));
 
-export function wikiNotes(notes: Note[]): Note[] {
+export function wikiNotes<T extends Pick<Note, "wiki">>(notes: T[]): T[] {
   return notes.filter((n) => n.wiki);
 }
 
@@ -534,10 +534,10 @@ const CORE_MAX = 160;
 /** The bytes the SessionStart context may take: Claude Code shows a 2 KB preview in place of hook output over about 10,000 characters. */
 export const START_BUDGET = 6000;
 
-const byNewest = (a: Note, b: Note) => String(b.fm.updated ?? "").localeCompare(String(a.fm.updated ?? "")) || a.title.localeCompare(b.title);
+const byNewest = (a: Pick<Note, "title" | "fm">, b: Pick<Note, "title" | "fm">) => String(b.fm.updated ?? "").localeCompare(String(a.fm.updated ?? "")) || a.title.localeCompare(b.title);
 
 /** The live notes whose `core:` line is always on in `scope`: those of `scope` and of `global`, newest first. */
-export function coreNotes(notes: Note[], scope: string): Note[] {
+export function coreNotes<T extends Pick<Note, "title" | "fm" | "wiki" | "archived">>(notes: T[], scope: string): T[] {
   return wikiNotes(notes).filter((n) => !n.archived && typeof n.fm.core === "string" && [scope, "global"].includes(String(n.fm.scope))).sort(byNewest);
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { session } from "../../hooks/lib/handshake.ts";
@@ -205,6 +205,42 @@ test("a copy the base already had does not block, and an accepted pair does not 
   expect(stop({ hook_event_name: "Stop", session_id: "s6", cwd: root })).toContain("a copy the base did not have");
   write(".refit.json", JSON.stringify({ accepted: [{ copies: ["ui/web.ts", "lib/money.ts", "ui/pay.ts"], reason: "web needs its own" }] }));
   expect(stop({ hook_event_name: "Stop", session_id: "s7", cwd: root })).toBe("");
+});
+
+test("the hook keeps its jscpd result for a tree, and runs jscpd again when the tree changes", () => {
+  process.env.ALEPH_SPOOL = mkdtempSync(join(tmpdir(), "refit-spool-"));
+  write("lib/money.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify(RENAMES));
+  write("ui/pay.ts", RENAMED);
+  for (const id of ["k1", "k2", "k3"]) session(id).set({ start: 1 });
+  const first = JSON.parse(stop({ hook_event_name: "Stop", session_id: "k1", cwd: root })).reason;
+  const cached = () => readdirSync(process.env.ALEPH_SPOOL!).filter((f) => f.startsWith("jscpd-"));
+  expect(cached().length).toBe(1);
+  const at = () => statSync(join(process.env.ALEPH_SPOOL!, cached()[0])).mtimeMs;
+  const kept = at();
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "k2", cwd: root })).reason).toBe(first);
+  expect(at()).toBe(kept);
+  write("ui/web.ts", RENAMED.replaceAll("payout", "webPay"));
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "k3", cwd: root })).reason).toContain("ui/web.ts");
+  rmSync(process.env.ALEPH_SPOOL!, { recursive: true, force: true });
+});
+
+test("the hook runs jscpd again when an untracked file moves with the same content", () => {
+  process.env.ALEPH_SPOOL = mkdtempSync(join(tmpdir(), "refit-spool-"));
+  write("lib/money.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify(RENAMES));
+  write("ui/pay.ts", RENAMED);
+  for (const id of ["m1", "m2"]) session(id).set({ start: 1 });
+  const kept = () => {
+    const [file] = readdirSync(process.env.ALEPH_SPOOL!).filter((f) => f.startsWith("jscpd-"));
+    return JSON.parse(readFileSync(join(process.env.ALEPH_SPOOL!, file), "utf8")).key;
+  };
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "m1", cwd: root })).reason).toContain("ui/pay.ts");
+  const before = kept();
+  sh("mv", "ui/pay.ts", "ui/cash.ts");
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "m2", cwd: root })).reason).toContain("ui/cash.ts");
+  expect(kept()).not.toBe(before);
+  rmSync(process.env.ALEPH_SPOOL!, { recursive: true, force: true });
 });
 
 test("scan throws with jscpd's stderr when jscpd writes no report", () => {

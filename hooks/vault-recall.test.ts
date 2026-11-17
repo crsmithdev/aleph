@@ -127,6 +127,18 @@ test("a core note of the session's scope is not asked about: its line is already
   expect(asked0).not.toContain("Jev Screen Is Always On");
 });
 
+test("a vault at the same HEAD answers from its index: an edit not yet committed is not read", async () => {
+  const v = mkdtempSync(join(tmpdir(), "aleph-recall-head-"));
+  note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");
+  const git = (...args: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: v });
+  git("init", "-q"); git("add", "."); git("commit", "-qm", "notes");
+  await run(v, PROMPT, {}, turn());
+  note(v, "Jev Screens Bounded Judgments", "Jev answers nothing now.");
+  await run(v, PROMPT, {}, turn());
+  rmSync(v, { recursive: true, force: true });
+  expect(questionsOf()[1][0]).toContain("Jev answers bounded questions before Haiku.");
+});
+
 test("each injected note is appended to the recall log, and nothing is appended when none is injected", async () => {
   const v = mkdtempSync(join(tmpdir(), "aleph-recall-log-"));
   note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");

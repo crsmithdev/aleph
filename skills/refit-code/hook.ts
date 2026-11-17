@@ -36,6 +36,19 @@ function headRules(root: string): Map<string, Rule[]> {
   return all;
 }
 
+/** The `scan` of the working tree against `from`: jscpd takes seconds, so one file per repo keeps its result for the tree it came from (HEAD, the uncommitted diff and the untracked files) and the base. */
+function treeScan(root: string, from: string): ReturnType<typeof scan> {
+  const untracked = probe(root, "ls-files", "--others", "--exclude-standard", "-z").out.split("\0").filter(Boolean);
+  const tree = [from, probe(root, "rev-parse", "HEAD").out, probe(root, "diff", "HEAD").out, untracked.join("\0"), untracked.length ? probe(root, "hash-object", "--", ...untracked).out : ""];
+  const key = createHash("sha1").update(tree.join("\0")).digest("hex");
+  const file = join(spoolDir(), `jscpd-${createHash("sha1").update(root).digest("hex").slice(0, 12)}.json`);
+  const kept = readJsonOr<{ key: string; found: ReturnType<typeof scan> } | null>(file, null);
+  if (kept?.key === key) return kept.found;
+  const found = scan(root, from || undefined);
+  writeJson(file, { key, found });
+  return found;
+}
+
 /** The block reason for the findings, or null when there are none. */
 function reason(root: string, since = 0): string | null {
   const from = base(root);
@@ -43,7 +56,7 @@ function reason(root: string, since = 0): string | null {
   if (!change.size) return null;
   const ok = accepted(root);
   const left = holes(root, change, headRules(root), ok);
-  const { clones, violations } = scan(root, from || undefined);
+  const { clones, violations } = treeScan(root, from);
   const copies = violations.filter((v) => change.has(v.copy.name));
   const pasted = clones.filter((c) => c.isNew && (change.has(c.a.name) || change.has(c.b.name)) && !copies.some((v) => v.copy.name === c.a.name || v.copy.name === c.b.name) && !isAccepted(ok, c.a.name, c.b.name));
   if (!left.length && !copies.length && !pasted.length) return null;
