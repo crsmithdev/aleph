@@ -1,6 +1,6 @@
 # Gates lens
 
-Does a red test stop a merge? A suite that does not gate is advice. Every other lens assumes this one holds.
+Does a red test stop a merge? A suite that does not gate is advice. Every other lens assumes it does.
 
 ## Signals
 
@@ -25,8 +25,7 @@ it. A rerun on failure keeps the record of the first failure (aleph: the `flaky`
 
 ## Guard
 
-A lint test that each skip names its reason (an anchor in `tests/flaky.md` or an issue); a shrink-only ratchet on
-the skip count.
+See [Guards](SKILL.md#guards).
 
 ## Check
 

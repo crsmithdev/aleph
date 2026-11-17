@@ -28,7 +28,7 @@ Quarantine (a skip that names its `tests/flaky.md` entry) only while the cause i
 
 ## Guard
 
-The clock lint for waits and wall clock; an age limit on each `tests/flaky.md` entry.
+See [Guards](SKILL.md#guards).
 
 ## Check
 

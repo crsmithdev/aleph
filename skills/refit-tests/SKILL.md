@@ -3,9 +3,9 @@ name: refit-tests
 description: >
   Refit a test suite: find tests that do not gate a merge, flake, pass when
   the code is wrong, reach the network or clock, sleep, miss code, run slow,
-  repeat each other, or grow faster than the code. Use when asked to audit,
-  speed up, clean up or deflake tests, or before you add tests (check). NOT
-  for: writing tests (use write-tests); one failing test (use diagnosing-bugs).
+  repeat each other, or grow faster than the code. Use to audit, speed up,
+  clean up or deflake tests, or before you add tests (check). NOT for:
+  writing tests (use write-tests); one failing test (use diagnosing-bugs).
 ---
 
 # Refit tests
@@ -13,9 +13,8 @@ description: >
 [refit-code](../refit-code/SKILL.md) for the test suite. Nine **lenses** each ask one question. Read `.refit.json`
 at the repo root when it exists: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose.
 
-The order of the lenses is the order of harm. A suite that does not gate, or that cries wolf, teaches people to
-ignore it; flakes come mostly from async waits, concurrency and test order (Luo et al., FSE 2014), and half of the
-flakes in iDFlakies depend on order (Lam et al., ICST 2019). A slow or large suite costs time, not trust.
+The lenses run in the order of harm. A suite that does not gate, or that cries wolf, teaches people to ignore it.
+A slow or large suite costs time, not trust.
 
 ## Lenses
 
@@ -31,11 +30,14 @@ flakes in iDFlakies depend on order (Lam et al., ICST 2019). A slow or large sui
 | **merge** | Which tests check the same behaviour twice? | [MERGE.md](MERGE.md) |
 | **growth** | Does the suite grow with the code, or faster? | [GROWTH.md](GROWTH.md) |
 
-Where they meet: a skipped or focused test is **gates** when it hides a failure from the merge, else **smells**; a
-sleep is **smells**, and **flake** when a flake record names the test; a test that reads the clock is **hermetic**
-until it flakes, then **flake**; a test that asserts nothing is **hollow**, a test that asserts what another test
-asserts is **merge**; a slow test is **runtime**, and **smells** when the time is a sleep; a test-only seam in the
-production code is **hollow**. Report a candidate under one lens only.
+Report a candidate under one lens only. Where lenses meet:
+
+- A skipped or focused test is **gates** when it hides a failure from the merge, else **smells**.
+- A sleep is **smells**, and **flake** when a flake record names the test.
+- A test that reads the clock is **hermetic** until it flakes, then **flake**.
+- A test that asserts nothing is **hollow**. A test that asserts what another test asserts is **merge**.
+- A slow test is **runtime**, and **smells** when the time is a sleep.
+- A test-only seam in the production code is **hollow**.
 
 ## Modes
 
@@ -46,8 +48,8 @@ production code is **hollow**. Report a candidate under one lens only.
 | `act` | The fix of each ask finding Chris approves | After a retro |
 | `check` | Each new test, helper, fixture, skip and wait in a plan, spec or diff | Before or during a build |
 
-`stats.ts` in this directory gives the numbers; `bun <skill dir>/stats.ts` prints its commands. It reads a report,
-the tree or git, and never runs the suite.
+`stats.ts` in this directory gives the numbers (`bun <skill dir>/stats.ts` prints its commands). It reads a
+report, the tree or git, and never runs the suite.
 
 ## Retro
 
@@ -62,25 +64,25 @@ the tree or git, and never runs the suite.
    rerun has a pass count.
 3. **Hunt.** Spawn one Explore subagent per lens in one message, except **runtime** and **growth**, which you read
    from the measures yourself. Give each its lens file's Signals section verbatim, the measures for its lens, and
-   the test files in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done
-   when each subagent has returned.
+   the test files in its scope. Each returns candidates as: lens, file and line, the signal. Done when each
+   subagent has returned.
 4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
    files. A `stats.ts` hit is a candidate, never a finding: a pattern inside a fixture string, or random data for
-   a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>/`, and its unit is a test file;
-   its Overview adds the test count, wall time, p95, the flake count, and the growth rows as a small chart; a card
-   shows the test before and after. Done when PROVE.md's step 3 is done.
+   a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>/`. Its
+   unit is a test file. Its Overview adds the test count, wall time, p95, the flake count, and the growth rows as a
+   small chart. A card shows the test before and after. Done when PROVE.md's step 3 is done.
 
 ## Act
 
 refit-code's [Act](../refit-code/SKILL.md#act), in this order: gates, smells, hermetic, flake, runtime, hollow,
-merge, then gaps, so that the suite gates and runs the same each time before a test goes, and goes before a test
-comes.
+merge, then gaps. The suite then gates and runs the same each time before a test goes, and a test goes before a
+test comes.
 
 - **Delete or merge** a test only with two proofs. First, run the baseline's coverage command with the test
   removed, then `stats.ts lcov <before.lcov> <after.lcov>`. Each line it lists lost the only test that reached
   it: keep the test, or move its assertion into the survivor first. Second, break the code the test checks and
-  show that a kept test goes red. Line coverage alone can pass: bun marks a one-line function covered when its
-  file loads. A **hollow** test, proven to pass when the code is wrong, needs neither proof.
+  show that a kept test goes red. Line coverage alone can pass, because bun marks a one-line function covered when
+  its file loads. A **hollow** test, proven to pass when the code is wrong, needs neither proof.
 - **Fix a flake** at its cause. Reproduce it first, under the parallel load of the full suite, and report the
   pass rate from that run before and after. Done when the test passes 10 reruns alone and one full randomized
   run.
@@ -112,5 +114,4 @@ comes.
 - **You fixed a flake with a sleep, a retry or a longer timeout.** That hides the race. Wait for the event, inject
   the clock, or isolate the state.
 - **You deleted a test because it looked redundant.** Without the lcov proof, the deletion is a guess.
-- **You set a coverage percentage as a goal.** Coverage shows what no test reaches; it does not show what a test
-  checks.
+- **You set a coverage percentage as a goal.** Coverage shows what no test reaches, not what a test checks.

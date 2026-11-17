@@ -31,7 +31,7 @@ Restore each env var the test sets, in `afterEach`.
 
 ## Guard
 
-The clock lint for the clock; a shrink-only lint test of the same shape for network, fixed ports and shared paths.
+See [Guards](SKILL.md#guards).
 
 ## Check
 

@@ -1,7 +1,7 @@
 # Hollow lens
 
-Which tests pass when the code is wrong? A hollow test adds runtime and false trust, and no protection. The
-`hollow` lens also takes a test-only seam: production code that exists only so a test can reach in.
+Which tests pass when the code is wrong? A hollow test adds runtime and false trust, and no protection. This lens also takes a test-only seam: production
+code that exists only so a test can reach in.
 
 ## Signals
 

@@ -1,7 +1,6 @@
 # Merge lens
 
-Which tests check the same behaviour twice? A copy costs runtime and a second edit at each change, and it gives no
-second protection.
+Which tests check the same behaviour twice? A copy costs runtime and a second edit at each change, and adds no protection.
 
 ## Signals
 

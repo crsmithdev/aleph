@@ -1,7 +1,6 @@
 # Growth lens
 
-Does the suite grow with the code, or faster? No surveyed test-audit skill tracks this. A suite that grows faster
-than the code it tests grows its runtime and its upkeep, often through copies and hollow tests.
+Does the suite grow with the code, or faster? A suite that grows faster than the code grows its runtime and upkeep, often through copies and hollow tests.
 
 ## Signals
 

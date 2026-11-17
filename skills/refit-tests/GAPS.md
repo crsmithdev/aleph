@@ -1,7 +1,6 @@
 # Gaps lens
 
-Which code that matters does no test reach? Coverage shows what no test runs; it does not show what a test checks,
-so this lens names the untested code and never a percentage.
+Which code that matters does no test reach? This lens names the untested code and never a percentage.
 
 ## Signals
 
@@ -21,12 +20,11 @@ wrong result. Generated code, a type, and a log line drop with that reason.
 
 ## Fix
 
-Write the test through the public interface, red first ([write-tests](../write-tests/SKILL.md)). One test per behaviour, not one
-per line.
+Write the test through the public interface, red first ([write-tests](../write-tests/SKILL.md)). Write one test per behaviour, not per line.
 
 ## Guard
 
-`stats.ts lcov` on the base and the branch: a branch that drops a covered line names why.
+See [Guards](SKILL.md#guards).
 
 ## Check
 

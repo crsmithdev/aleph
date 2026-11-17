@@ -1,7 +1,6 @@
 # Runtime lens
 
-Where does the suite spend its time? A slow suite runs less often, and its failures arrive after the author left
-the change.
+Where does the suite spend its time? A slow suite runs less often, and its failures arrive late.
 
 ## Signals
 
@@ -31,7 +30,7 @@ runs before land, not on each save.
 
 ## Guard
 
-A ceiling on the wall time and on one test's time, read from the JUnit report.
+See [Guards](SKILL.md#guards). Set the ceiling on one test's time too.
 
 ## Check
 
