@@ -3,7 +3,7 @@ import { conn } from "../../../lib/db.ts";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentCause, callAgent, resultOf } from "./agent-call.ts";
+import { agentCause, callAgent, resultOf, transcriptOf } from "./agent-call.ts";
 import { backendHold } from "../gates/holds.ts";
 import { stallSeconds } from "../infra/settings.ts";
 
@@ -80,6 +80,16 @@ test("resultOf takes the model the CLI ran on from its init event", () => {
   const res = '{"type":"result","is_error":false,"result":"done"}';
   expect(resultOf(`{"type":"system","subtype":"init","model":"claude-opus-5-5"}\n{"type":"assistant"}\n${res}\n`).model).toBe("claude-opus-5-5");
   expect(resultOf(`${res}\n`).model).toBeUndefined();
+});
+
+test("transcriptOf gives the entries that parse, and the text of the result event, else of the last assistant text", () => {
+  const say = (text: string) => JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text }] } });
+  const res = JSON.stringify({ type: "result", is_error: false, result: "final" });
+  const log = `${say("first")}\nnot json\n${say("second")}\n`;
+  expect(transcriptOf(log).entries.map((e) => e.type)).toEqual(["assistant", "assistant"]);
+  expect(transcriptOf(log).text).toBe("second");
+  expect(transcriptOf(`${log}${res}\n`).text).toBe("final");
+  expect(transcriptOf("").text).toBe("");
 });
 
 test("resultOf reads the last result event; only is_error false is ok", () => {

@@ -11,8 +11,8 @@ import { type Repo, type Run } from "../records/ledger.ts";
 import { getRun } from "../records/record.ts";
 import { logTo, readSection, runFile } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";
-import { branchPorts, reviewDiff, reviewPrompt, reviewRange } from "./unit.ts";
-import { workerVerdict } from "../gates/worker-verdict.ts";
+import { reviewDiff, reviewRange } from "./unit.ts";
+import { branchPorts, reviewPrompt, workerVerdict } from "../gates/worker-verdict.ts";
 
 let root = "";
 let repo: Repo;

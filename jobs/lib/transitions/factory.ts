@@ -31,7 +31,7 @@ import { listEpisodes, writeEpisodes } from "../learning/episode.ts";
 import { waitingToLand } from "../land/landing.ts";
 import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks.ts";
 import { drop, land, recheck, refusal, startIssue, type Refused } from "./transitions.ts";
-import { startKept } from "../roles/unit.ts";
+import { startKept } from "./kept.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
 import { issueJob, changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";

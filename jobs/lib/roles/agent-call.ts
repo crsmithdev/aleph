@@ -14,6 +14,7 @@ import { policyOf } from "../records/outcome.ts";
 import { killGroup } from "../infra/process.ts";
 import { roleCmd, stallSeconds } from "../infra/settings.ts";
 import { logEvent } from "../../../lib/layout.ts";
+import { jsonLines, type Entry } from "../../../lib/jsonl.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */
@@ -87,6 +88,19 @@ export interface Outcome { found: boolean; ok: boolean; line: string; result: st
 export function resultOf(stdout: string): Outcome {
   const out = answerOf(stdout), model = initModel(stdout);
   return model ? { ...out, model } : out;
+}
+
+/**
+ * What a stream-json transcript holds: its `entries` (a line that is not JSON is skipped), and its `text`: the last
+ * `result` event's (resultOf), else the last assistant text, else empty.
+ */
+export function transcriptOf(stdout: string): { entries: Entry[]; text: string } {
+  const entries = jsonLines(stdout);
+  let text = "";
+  for (const ev of entries) {
+    if (ev?.type === "assistant") for (const block of ev.message?.content ?? []) if (block?.type === "text" && block.text) text = block.text;
+  }
+  return { entries, text: resultOf(stdout).result || text };
 }
 
 /** The model of the CLI's init event: the one a call with no --model ran on. */

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reviewPrompt } from "../roles/unit.ts";
+import { reviewPrompt } from "./worker-verdict.ts";
 import { heldRule, securityChange, testFindings, parseReview, parseWorker } from "./gate.ts";
 
 let dir: string;

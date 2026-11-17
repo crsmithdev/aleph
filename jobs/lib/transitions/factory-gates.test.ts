@@ -16,7 +16,7 @@ import { reseed, seed } from "../../job.testkit.ts";
 import * as locks from "../../../lib/locks.ts";
 import { held } from "../../../lib/locks.ts";
 import { startJob } from "./transitions.ts";
-import { startKept } from "../roles/unit.ts";
+import { startKept } from "./kept.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.testkit.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
