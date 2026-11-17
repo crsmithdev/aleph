@@ -3,7 +3,7 @@ import { heldEvent, type Bound, type Gate, type Hold } from "./issue-decision.ts
 import { detailOf, event, type Event, OLD_HOLDS, parseKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, logEvent, readEvents } from "../../../lib/layout.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
-import { tell } from "../records/ledger.ts";
+import { realTell, type Tell } from "../records/ledger.ts";
 import type { Via } from "../../../lib/models.ts";
 import { BACKENDS, probeBackend } from "../routing/models.ts";
 
@@ -86,11 +86,11 @@ export function holdGoal(name: string): void {
  * Holds the backend of a call that ended with the API credit error, and tells Chris once. A backend already held keeps
  * its line, so the jobs that follow it write no second alert.
  */
-export async function holdBackend(via: Via, why: string): Promise<void> {
+export async function holdBackend(via: Via, why: string, tell: Tell = realTell): Promise<void> {
   if (backendHold()?.via === via) return;
   putJson("state", "backend-hold", { via, why, since: new Date().toISOString() });
   logEvent({ subject: "gate", action: "changed", object: "settings", detail: detailOf("changed", "credit", `on: ${via}: ${why}`) });
-  await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
+  await tell.send(`the factory holds ${BACKENDS[via]}: ${why}`);
 }
 
 /** Probes the held backend and lifts the hold when it answers, with one line. Returns that line, or null. */

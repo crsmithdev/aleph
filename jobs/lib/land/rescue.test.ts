@@ -46,6 +46,19 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   expect(f.specs.length).toBe(1);
 });
 
+test("a spec edit tells Chris through the rescue's Tell, not the network", async () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
+  const lines: string[] = [];
+  const f = fakes();
+  const rescue = { ...f.rescue, tell: { send: async (line: string) => { lines.push(line); return true; } } };
+  await dispatchIssues(f.start, undefined, rescue);
+  const asked = lines.length;
+  writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
+  await dispatchIssues(f.start, undefined, rescue);
+  expect(lines.slice(asked)).toEqual([`fac/issue.${id}: the spec was edited; the goal starts again`]);
+});
+
 test("a rescue that throws gives a failed event whose note holds the failure", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });

@@ -283,25 +283,30 @@ export function newsLine(e: Entry, note?: string): string {
   return said ? `${line}\n  ${said}` : line;
 }
 
+/** Where a line for Chris goes: `send` gives true when it arrived. Tests give a recorder. */
+export interface Tell { send: (line: string) => Promise<boolean> }
+
 /** POST one line to Sidetone's /tell. True on a 2xx reply. */
-export async function tell(line: string): Promise<boolean> {
-  const url = process.env.SIDETONE_TELL_URL ?? "https://127.0.0.1:3100/tell";
-  // The certificate names the tailnet host, not the loopback, so skip the check there only.
-  const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: line }),
-      signal: AbortSignal.timeout(10_000),
-      tls: loopback ? { rejectUnauthorized: false } : undefined,
-    } as RequestInit);
-    return res.ok;
-  } catch (e) {
-    console.error(`warn: tell failed: ${(e as Error).message}`);
-    return false;
-  }
-}
+export const realTell: Tell = {
+  send: async (line) => {
+    const url = process.env.SIDETONE_TELL_URL ?? "https://127.0.0.1:3100/tell";
+    // The certificate names the tailnet host, not the loopback, so skip the check there only.
+    const loopback = ["127.0.0.1", "localhost", "[::1]"].includes(new URL(url).hostname);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: line }),
+        signal: AbortSignal.timeout(10_000),
+        tls: loopback ? { rejectUnauthorized: false } : undefined,
+      } as RequestInit);
+      return res.ok;
+    } catch (e) {
+      console.error(`warn: tell failed: ${(e as Error).message}`);
+      return false;
+    }
+  },
+};
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
 

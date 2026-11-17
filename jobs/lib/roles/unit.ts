@@ -17,7 +17,7 @@ import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { branchFacts, jobGrep, trailerLine } from "../records/status.ts";
 import { parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA } from "../gates/gate.ts";
 import { branchPorts, recorder, reviewPrompt, waiting, workerVerdict, type Outcome, type ReviewCall } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, allRuns, loadRegistry, newsLine, readEnvFile, tell, type Entry, type Repo, type Run, allJobs } from "../records/ledger.ts";
+import { admit, isAgentRun, allRuns, loadRegistry, newsLine, readEnvFile, realTell, type Entry, type Repo, type Run, type Tell, allJobs } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
@@ -127,7 +127,7 @@ export function docClaims(folder: string, result: string): string | null {
 }
 
 
-export async function unit(folder: string): Promise<void> {
+export async function unit(folder: string, tell: Tell = realTell): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
   process.on("SIGTERM", () => {
     if (child) killGroup(child.pid, "SIGKILL");
@@ -182,7 +182,7 @@ export async function unit(folder: string): Promise<void> {
   jobRecord.copyEnd(id);
   process.exitCode = code;
   if (isAgentRun(run.role) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
-  if (await tell(newsLine({ id, folder, run: ended }, repo?.note))) jobRecord.patchRun(id, { told: true });
+  if (await tell.send(newsLine({ id, folder, run: ended }, repo?.note))) jobRecord.patchRun(id, { told: true });
   if (next) await start(folder, ended, next);
   if (run.role !== "plain" && dispatchOn()) await dispatchFree(folder);
 }

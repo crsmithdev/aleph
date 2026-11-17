@@ -21,7 +21,7 @@ import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
-import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, repoOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, repoOf, realTell, type Entry, type Repo, type Run, type Tell } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -41,6 +41,8 @@ export interface Rescue {
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   /** Start a recheck of the job. */
   recheck: (name: string) => Promise<string | null>;
+  /** Where the rescue's lines for Chris go; Sidetone when absent. */
+  tell?: Tell;
 }
 
 /** Land the job again: returns the refusal, or null. */
@@ -160,6 +162,7 @@ export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
  * about, the run is dropped and the Ask comes off the item, so the next dispatch starts a run on the edited spec.
  */
 async function releaseEdited(act: Rescue): Promise<void> {
+  const tell = act.tell ?? realTell;
   for (const runs of editedWaits(allJobs())) {
     const r = counting(runs).run;
     const { question } = waitsForSpecEdit(counting(runs))!;
@@ -171,7 +174,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
       if (why) { logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
       if (askOf(issueKey(issue))?.question === question) clearAsk(issueKey(issue));
-      await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
+      await tell.send(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e) {
       logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${errText(e)}` });
     } finally {
@@ -312,6 +315,7 @@ function sendToIntake(repo: Repo, issue: number): string | null {
 
 /** Choose the rescue of one job, and do it. The once-only rule is here: a mark on the run counts the case against the issue. */
 async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
+  const tell = act.tell ?? realTell;
   const last = counting(runs);
   const r = last.run;
   const repo = repoOf(r.repo);
@@ -323,7 +327,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.state };
   const { reason } = stuck;
 
-  const say = (line: string) => tell(`${shortId(name)}: ${line}`);
+  const say = (line: string) => tell.send(`${shortId(name)}: ${line}`);
   // Code writes no issue note: a rescue that closes the issue logs `done`, any other step logs `changed`.
   const record = (text: string, opts: { done?: boolean } = {}) => {
     if (issue !== undefined && !opts.done) logEvent({ subject: "gate", action: "changed", object: keyOf("issue", Number(issue)), detail: text });
@@ -342,7 +346,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
       if (!why) {
         logAlways("rescue", name, "reran", { detail: `dropped ${runs[0].id}` });
         record("always: Rerun");
-        await tell(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
+        await tell.send(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
         return;
       }
       logEvent({ subject: "gate", action: "failed", object: name, detail: `always Rerun failed (${why})` });
