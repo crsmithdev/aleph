@@ -3,6 +3,7 @@
  * route reads it: null, undefined or "" is no filter, and everything belongs. A key that is not in the registry
  * is a filter that matches nothing.
  */
+import { scopeOfCwd } from "../../lib/paths.ts";
 import { once } from "../../lib/sources.ts";
 import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
 import { projectsOnMain } from "../../issues/lib/store.ts";
@@ -71,15 +72,10 @@ export const withProjects = <T extends EventRow>(rows: T[]): T[] => {
 /** Whether a memory item with `scope` belongs to `project`: its own project's, or global or unscoped (a rule section, a skill, a hook) in every known project. */
 export const memoryIn = (scope: string, project: Project) => !project || ((!scope || scope === "global" || scope === project) && known(project));
 
-/** The registry key a trace belongs to: its cwd is the key's path or under it, else (no cwd) its `project:` tag is a key; "" for none. */
+/** The registry key a trace belongs to: the key of its cwd, else (no cwd) its `project:` tag; "" for none, also for a sandbox or test directory. */
 export function traceProject(cwd: string | undefined, tags: string[] | undefined): string {
-  const reg = loadRegistry();
-  if (cwd) {
-    for (const r of Object.values(reg)) if (cwd === r.path || cwd.startsWith(r.path.replace(/\/+$/, "") + "/")) return r.key;
-    return ""; // sandbox and test directories are not projects
-  }
-  const tag = tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
-  return Object.hasOwn(reg, tag) ? tag : "";
+  const key = cwd ? scopeOfCwd(cwd, false) : tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
+  return known(key) ? key : "";
 }
 
 /** Whether a Langfuse trace belongs to `project`. */

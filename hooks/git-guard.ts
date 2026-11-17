@@ -12,12 +12,11 @@
  * Its non-builtin imports are dynamic for that reason.
  */
 import { existsSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
 try {
   const { itemsDir } = await import("../issues/lib/store.ts");
-  const { vaultDir } = await import("../lib/paths.ts");
+  const { home, vaultDir } = await import("../lib/paths.ts");
   const { probe } = await import("../lib/git.ts");
 
   const input = JSON.parse(await Bun.stdin.text());
@@ -49,8 +48,8 @@ try {
 
   const top = git("rev-parse", "--show-toplevel");
   if (!top) process.exit(0);
-  const home = homedir();
-  if ([home, resolve(home, ".claude"), resolve(home, ".aleph")].includes(top)) process.exit(0);
+  const user = home();
+  if ([user, resolve(user, ".claude"), resolve(user, ".aleph")].includes(top)) process.exit(0);
 
   const vault = existsSync(vaultDir()) ? realpathSync(vaultDir()) : resolve(vaultDir());
   if (realpathSync(top) === vault) {

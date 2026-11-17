@@ -9,9 +9,9 @@
  *                     otherwise ask the judge; deny with its reason
  *                     record a guardrail span and a score, unless unchanged
  */
-import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { isAgent, langfuseConfig, sessionEnvironment } from "../../lib/env.ts";
+import { expand, home } from "../../lib/paths.ts";
 import { postScore, truncate, turnTraceIdFor } from "../../lib/otlp.ts";
 import { digest, readEntries, userGrantedSkip } from "./digest.ts";
 import { docClaimProblems } from "./docclaims.ts";
@@ -50,7 +50,7 @@ export async function gate(input: Record<string, any>, deps = { judge: realJudge
   // of the turn names a path in it. A path's worktree is the deepest one that holds it; a relative path resolves from the cwd of its tool call, else the Stop cwd.
   const trees = [...new Set(Object.keys({ ...before, ...after }).map((k) => k.split("\0")[0]))];
   const treeOf = (p: string) => trees.filter((t) => p === t || p.startsWith(`${t}/`)).sort((a, b) => b.length - a.length)[0];
-  const named = new Set([[cwd], ...d.dirs.map(([t, dir]) => t.replace(/\$\{?HOME\}?/g, homedir()).split(/[\s'"`<>|;&()=,]+/).map((p) => resolve(dir ?? cwd, p.replace(/^~(?=\/|$)/, homedir()))))]
+  const named = new Set([[cwd], ...d.dirs.map(([t, dir]) => t.replace(/\$\{?HOME\}?/g, home()).split(/[\s'"`<>|;&()=,]+/).map((p) => resolve(dir ?? cwd, expand(p))))]
     .flat().map(treeOf));
   const codeChanged = before !== null && after !== null && changedFiles(before, after).some((f) => isCode(f) && named.has(treeOf(f)));
   const changed = codeChanged || (after === null && d.edits.some(isCode));

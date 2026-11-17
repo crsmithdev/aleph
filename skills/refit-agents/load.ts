@@ -13,7 +13,7 @@
  * Tokens are chars / 4, close enough to rank and to watch a total move.
  */
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { expand, home as homeDir } from "../../lib/paths.ts";
 import { dirname, join, relative, resolve } from "node:path";
 import { splitFrontmatter } from "../../lib/frontmatter.ts";
 
@@ -40,7 +40,7 @@ function memory(file: string, seen: Set<string>, depth = 0): string[] {
   if (!existsSync(file) || depth > 5 || seen.has(realpathSync(file))) return [];
   seen.add(realpathSync(file));
   const text = readFileSync(file, "utf8").replace(/```[\s\S]*?```/g, "").replace(/`[^`]*`/g, "");
-  const refs = [...text.matchAll(/(?:^|\s)@((?:~|\.{0,2})\/?[\w./-]+)/g)].map((m) => m[1].replace(/^~/, homedir()));
+  const refs = [...text.matchAll(/(?:^|\s)@((?:~|\.{0,2})\/?[\w./-]+)/g)].map((m) => expand(m[1]));
   return [file, ...refs.flatMap((r) => memory(resolve(dirname(file), r), seen, depth + 1))];
 }
 
@@ -55,7 +55,7 @@ function chain(root: string, home: string): string[] {
   return [join(home, ".claude/CLAUDE.md"), ...dirs.reverse().flatMap((d) => [join(d, "CLAUDE.md"), join(d, "CLAUDE.local.md")])].flatMap((f) => memory(f, seen));
 }
 
-export function load(root: string, home = homedir()): Load {
+export function load(root: string, home = homeDir()): Load {
   const at = (f: string) => (f.startsWith(join(root, "/")) ? relative(root, f) : f.replace(home, "~"));
   const always: Item[] = chain(root, home).map((f) => ({ file: at(f), kind: "memory", tokens: tokens(readFileSync(f, "utf8")) }));
   const skills: Skill[] = glob(root, "skills/*/SKILL.md", ".claude/skills/*/SKILL.md").map((f) => {
@@ -86,7 +86,7 @@ export function main(fn: (root: string, home: string) => unknown): void {
   const args = process.argv.slice(2);
   const i = args.indexOf("--home");
   const root = args.find((a, j) => !a.startsWith("--") && args[j - 1] !== "--home") ?? process.cwd();
-  console.log(JSON.stringify(fn(resolve(root), i >= 0 ? args[i + 1] : homedir()), null, 2));
+  console.log(JSON.stringify(fn(resolve(root), i >= 0 ? args[i + 1] : homeDir()), null, 2));
 }
 
 if (import.meta.main) main(load);

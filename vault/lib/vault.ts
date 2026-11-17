@@ -8,7 +8,6 @@ import { basename, dirname, join, relative } from "node:path";
 import { clock, daysAgo, today } from "../../lib/day.ts";
 import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
-import { probe } from "../../lib/git.ts";
 import { errText } from "../../lib/errtext.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
@@ -527,12 +526,6 @@ export function renameScope(notes: Note[], from: string, to: string): { note: No
     out.push({ note: n, text: `---\n${lines.join("\n")}\n---\n${body}` });
   }
   return out.sort((a, b) => a.note.rel.localeCompare(b.note.rel));
-}
-
-/** The scope of a session in `cwd`: the main checkout's folder name, so a worktree at `<repo>/.worktrees/<name>` takes the scope of `<repo>`. */
-export function repoScope(cwd: string): string {
-  const common = probe(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir");
-  return common.ok ? basename(dirname(common.out)) : basename(cwd);
 }
 
 /** The longest `core:` line, in characters. */

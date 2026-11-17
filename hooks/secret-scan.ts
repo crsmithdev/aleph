@@ -18,6 +18,7 @@ import type { Finding } from "./lib/scan.ts";
 try {
   const { scanDiff, scanFile } = await import("./lib/scan.ts");
   const { probe } = await import("../lib/git.ts");
+  const { expand } = await import("../lib/paths.ts");
 
   const input = JSON.parse(await Bun.stdin.text());
   const command: string = input.tool_input?.command ?? "";
@@ -29,7 +30,7 @@ try {
   function pathWord(word: string): string | null {
     const unquoted = word.replace(/^(["'])(.*)\1$/, "$2");
     if (word[0] !== "'" && /[$`]/.test(unquoted)) return null;
-    return unquoted.replace(/^~(?=\/|$)/, process.env.HOME ?? "~");
+    return expand(unquoted);
   }
 
   // The repo is where the commit runs: every cd before it, then its git -C, from the session cwd.

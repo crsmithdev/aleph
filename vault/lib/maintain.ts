@@ -2,9 +2,9 @@
  * `aleph memory maintain`: the mechanical pass of the memory maintainer. No model runs. With `dry` it reports each
  * step and changes nothing. Files outside git are moved to ~/.aleph/backups/maintain/<day>/, never deleted.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { useLog } from "../../lib/episode-use.ts";
+import { readUses } from "../../lib/episode-use.ts";
 import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
@@ -80,7 +80,7 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
   report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, daysAgo(HANDOFF_DAYS), (d) => compiled.includes(d));
 
   // An episode page shown often and never opened does not help: it moves to the backup, and nothing is deleted.
-  const uses = existsSync(useLog()) ? readFileSync(useLog(), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+  const uses = readUses();
   const shown = (t: string, event: string) => uses.filter((u) => u.title === t && u.event === event).length;
   const pages = join(layout().factory, "episodes");
   report.episodes = (existsSync(pages) ? readdirSync(pages) : []).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3))

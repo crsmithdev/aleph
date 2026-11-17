@@ -11,8 +11,8 @@ import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, recallWiki } from "../vault/lib/index.ts";
-import { appendRecallLog, recordRun, repoScope } from "../vault/lib/vault.ts";
-import { vaultDir } from "../lib/paths.ts";
+import { appendRecallLog, recordRun } from "../vault/lib/vault.ts";
+import { scopeOfCwd, vaultDir } from "../lib/paths.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
 
@@ -68,7 +68,7 @@ async function main() {
   const start = Date.now();
   const root = vaultDir();
   const seen = readSeen(root, input.session_id);
-  const { ranked, core } = await recallWiki(root, prompt, repoScope(input.cwd ?? process.cwd()));
+  const { ranked, core } = await recallWiki(root, prompt, scopeOfCwd(input.cwd ?? process.cwd()));
   // A core note's line is already in the start context.
   const skip = new Set([...seen, ...core.map((n) => n.rel)]);
   const all = ranked.map((r) => r.note).filter((n) => !skip.has(n.rel));

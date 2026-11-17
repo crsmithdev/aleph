@@ -5,7 +5,9 @@
  */
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { readProjects } from "../issues/lib/projects.ts";
+import { probe } from "./git.ts";
 import { touch } from "./sources.ts";
 
 /** HOME, else the OS's home folder. */
@@ -46,3 +48,14 @@ export const vaultDir = (): string => { touch("vault"); return alephPath("ALEPH_
 export const handoffsDir = (): string => { touch("handoffs"); return expand(process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs")); };
 /** The notes pinned on UI pages, and the answers to them (lib/annotations.ts). */
 export const annotationsFile = (): string => { touch("annotations"); return alephPath("ALEPH_ANNOTATIONS", "annotations.json"); };
+
+/** The registry key of the repo that `cwd` is in, a worktree of it too; else the folder name of the main checkout. With `git` false: the key whose path holds `cwd`, else "", and no git run. */
+export function scopeOfCwd(cwd: string, git = true): string {
+  touch("registry");
+  const repos = readProjects().filter((p) => p.fields.path).map((p) => ({ key: p.name, path: expand(p.fields.path) }));
+  const at = (dir: string) => repos.find((r) => dir === r.path || dir.startsWith(`${r.path.replace(/\/+$/, "")}/`));
+  if (!git) return at(cwd)?.key ?? "";
+  const common = probe(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir");
+  const root = common.ok ? dirname(common.out) : cwd;
+  return (at(cwd) ?? at(root))?.key ?? basename(root);
+}

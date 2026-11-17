@@ -22,7 +22,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { handoffs, intent, type Handoff } from "../lib/handoffs.ts";
-import { repoScope } from "../vault/lib/vault.ts";
+import { scopeOfCwd } from "../lib/paths.ts";
 import { probe } from "../lib/git.ts";
 import { jobId } from "../lib/env.ts";
 import { clock } from "../lib/day.ts";
@@ -31,7 +31,7 @@ const input = JSON.parse((await Bun.stdin.text()) || "{}");
 if (jobId() || process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk")) process.exit(0);
 
 const cwd = resolve(input.cwd ?? process.cwd());
-const scope = repoScope(cwd);
+const scope = scopeOfCwd(cwd);
 const all = handoffs();
 const own = all.find((h) => h.kind === "project" && h.scope === scope);
 const under = (text: string) => {

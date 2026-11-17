@@ -16,8 +16,8 @@
  *   bun content.ts [root] [--home <dir>]   JSON, the files with most hits first
  */
 import { readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { home as homeDir } from "../../lib/paths.ts";
 import { load, main } from "./load.ts";
 
 type Hit = { line: number; check: string; text: string };
@@ -56,7 +56,7 @@ export function tools(text: string): string[] {
   return [...new Set(words)].filter((w) => Bun.which(w)).sort();
 }
 
-function content(root: string, home = homedir()) {
+function content(root: string, home = homeDir()) {
   const l = load(root, home);
   const abs = (f: string) => (f.startsWith("~") ? join(home, f.slice(1)) : join(root, f));
   const real = new Map([...l.always, ...l.lazy].map((i) => [realpathSync(abs(i.file)), i.file]));

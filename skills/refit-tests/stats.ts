@@ -9,9 +9,9 @@
  *   bun stats.ts lcov <before> <after>   per source file, the lines covered before and not after
  */
 import { readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { isTestFile } from "../../lib/test-files.ts";
-import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { scopeOfCwd } from "../../lib/paths.ts";
 import { git as run } from "../../lib/git.ts";
 import { flakes as allFlakes, suiteHistory as suiteRecords } from "../../jobs/lib/gates/tables.ts";
 
@@ -108,15 +108,9 @@ export function growth(cwd: string, months = 12, now = new Date()) {
   return { months: rows, suite: suiteHistory(cwd) };
 }
 
-/** aleph's registry key of the repo at `cwd`, also from a worktree; else the folder name. */
-function repoKey(cwd: string): string {
-  const root = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir").trim().replace(/\/\.git$/, "");
-  return Object.values(loadRegistry()).find((r) => resolve(r.path) === root)?.key ?? root.split("/").pop() ?? "";
-}
-
 /** aleph's full-suite records for this repo, one per month (the last of each): ran, failed, skipped. Empty outside aleph. */
 function suiteHistory(cwd: string) {
-  const rows = suiteRecords(repoKey(cwd));
+  const rows = suiteRecords(scopeOfCwd(cwd));
   const last = new Map(rows.map((r) => [r.at.slice(0, 7), r]));
   return [...last].map(([month, r]) => ({ month, ran: r.ran, failed: r.failed, skipped: r.skipped, rerunPassed: r.rerunPassed }));
 }
@@ -187,7 +181,7 @@ if (import.meta.main) {
     cmd === "runtime" ? runtime(readFileSync(args[0], "utf8")) :
     cmd === "growth" ? growth(cwd, Number(flag(args, "--months") ?? 12)) :
     cmd === "smells" ? smells(cwd, args) :
-    cmd === "flakes" ? flakes(flag(args, "--repo") ?? repoKey(cwd)) :
+    cmd === "flakes" ? flakes(flag(args, "--repo") ?? scopeOfCwd(cwd)) :
     cmd === "lcov" ? lost(readFileSync(args[0], "utf8"), readFileSync(args[1], "utf8")) :
     null;
   if (!out) {
