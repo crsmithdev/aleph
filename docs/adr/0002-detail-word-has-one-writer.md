@@ -19,6 +19,7 @@ The word is part of the detail, and `lib/naming.ts` is its only writer and reade
 
 - A new word needs one line in `WORDS` in `lib/naming.ts`. A writer with a word nobody listed fails in its first test.
 - A column is the next step only when a SQL query must filter on the word. Until then a reader gets the word from the detail.
-- The `question` events of an Ask (`no-commit: 3 / 3 jobs with no commit`) still write their reason by hand: the reasons of `ASK_REASONS` in `jobs/lib/asks/ask.ts` include a `proposal-*` family, and a fixed set in `lib/naming.ts` cannot hold it. `askReason` reads through `wordOf`.
+- The `question` events of an Ask (`no-commit: 3 / 3 jobs with no commit`) go through `askDetail` in `jobs/lib/asks/ask.ts`, which calls `detailOf` with the reasons of `ASK_REASONS` as the set. The set stays in `ask.ts`, so `WORDS` in `lib/naming.ts` does not hold a copy. `askReason` reads through `wordOf`.
+- An Ask with a reason that `ASK_REASONS` does not name (an old stored `manual`) reads as `question`: `issue_state` maps each Ask through `reasonOf` when it reads and writes it, so the check never throws inside the write transaction.
 - A build start written before this change has the detail `model haiku`, with no colon. The Herald reads it as a note, not as the model.
 - The model of a build start stays in the detail. The `event_rows` join takes its model from the object's job, and the object of a start is the issue, which has no job yet.

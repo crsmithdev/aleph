@@ -11,6 +11,7 @@ import { RUN_CAP } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { detailOf, type Event } from "../../../lib/naming.ts";
 import { POLICY } from "../records/outcome.ts";
+import { askDetail } from "../asks/ask.ts";
 
 /** Runs of one issue in a row that may end with no commit before the dispatch stops starting it. */
 export const NO_COMMIT_LIMIT = 3;
@@ -110,12 +111,12 @@ export function issueDecision(f: IssueFacts): IssueDecision {
   if (f.creditWait && f.creditWait.ago < POLICY.credit.waitMs) return { kind: "credit", why: "waits for API credit", text: `Waits for API credit: the last run ended with the API credit error, so it starts again ${POLICY.credit.waitMs / 60_000} minutes later`, ev: heldEvent("credit", `${f.creditWait.job} hit the API credit error`) };
   if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) {
     const facts = `${f.noCommits} / ${NO_COMMIT_LIMIT} jobs with no commit`;
-    return { kind: "ask", ask: "no-commit", facts, why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "question", detail: `no-commit: ${facts}` } };
+    return { kind: "ask", ask: "no-commit", facts, why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "question", detail: askDetail({ reason: "no-commit", facts }) } };
   }
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
   if (starts >= RUN_CAP()) {
     const facts = `${starts} starts in 1h`;
-    return { kind: "ask", ask: "run-cap", starts, facts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "question", detail: `run-cap: ${facts}` } };
+    return { kind: "ask", ask: "run-cap", starts, facts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "question", detail: askDetail({ reason: "run-cap", facts }) } };
   }
   return { kind: "ready", why: "ready", text: "Starts at the next dispatch" };
 }

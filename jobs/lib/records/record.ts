@@ -12,7 +12,7 @@
  */
 import { mkdirSync } from "node:fs";
 import type { Database } from "bun:sqlite";
-import type { Ask } from "../asks/ask.ts";
+import { askDetail, reasonOf, type Ask } from "../asks/ask.ts";
 import type { CheckResult, Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
@@ -303,8 +303,10 @@ interface IssueState {
 
 interface StateRow { issue: string; ask: string | null; ask_job: string | null; ci: string | null }
 
+/** `ask` with a reason the table names: an unknown one, such as an old `manual`, reads as a plain question. */
+const known = (ask: Ask): Ask => ({ ...ask, reason: reasonOf(ask.reason) });
 const stateOfRow = (r: StateRow): IssueState => ({
-  ask: r.ask ? JSON.parse(r.ask) : null, ...(r.ask_job ? { askJob: r.ask_job } : {}),
+  ask: r.ask ? known(JSON.parse(r.ask)) : null, ...(r.ask_job ? { askJob: r.ask_job } : {}),
   ...(r.ci ? { ci: JSON.parse(r.ci) } : {}),
 });
 
@@ -326,6 +328,7 @@ function editState(d: Database, key: string, fn: (s: IssueState) => void): void 
   const r = d.query("SELECT * FROM issue_state WHERE issue = ?").get(key) as StateRow | null;
   const s = r ? stateOfRow(r) : { ask: null } as IssueState, had = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null, was = s.ask;
   fn(s);
+  if (s.ask) s.ask = known(s.ask);
   writes++;
   const has = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null;
   if (!s.ask && !s.ci) d.query("DELETE FROM issue_state WHERE issue = ?").run(key);
@@ -333,7 +336,7 @@ function editState(d: Database, key: string, fn: (s: IssueState) => void): void 
     .run(key, s.ask ? JSON.stringify(s.ask) : null, s.askJob ?? null, s.ci ? JSON.stringify(s.ci) : null);
   if (has === had) return;
   if (was) logEvent({ subject: "gate", action: "answered", object: key });
-  if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: s.ask.facts ? `${s.ask.reason}: ${s.ask.facts}` : s.ask.reason });
+  if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: askDetail(s.ask) });
 }
 
 /** Read-modify-write the state of `key` under the write lock. */

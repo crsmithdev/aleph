@@ -154,9 +154,9 @@ const WORDS: Record<string, readonly string[]> = {
   changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge", ...Object.keys(EDITS)],
   started: ["model"],
 };
-/** The detail `<word>: <facts>` of an event of `action`, or the bare word with no facts; throws on a word outside its set. The one writer of a detail word: a later `word` column changes only this and `wordOf`. */
-export function detailOf(action: string, word: string, facts?: string | number): string {
-  if (!WORDS[action]?.includes(word)) throw new Error(`naming: detail word "${word}" is not in the set of action "${action}"`);
+/** The detail `<word>: <facts>` of an event of `action`, or the bare word with no facts; throws on a word outside `words`, the set of `action` by default. The one writer of a detail word: a later `word` column changes only this and `wordOf`. */
+export function detailOf(action: string, word: string, facts?: string | number, words: readonly string[] | undefined = WORDS[action]): string {
+  if (!words?.includes(word)) throw new Error(`naming: detail word "${word}" is not in the set of action "${action}"`);
   return facts ? `${word}: ${facts}` : word;
 }
 /** The word of a detail: its start up to the first colon and space, or all of it with none. */

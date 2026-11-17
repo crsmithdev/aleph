@@ -111,6 +111,14 @@ test("an Ask set on the issue and cleared logs a question and an answered event,
   ]);
 });
 
+test("an Ask whose reason the table does not name reads, writes and logs as a plain question", () => {
+  conn().query("INSERT INTO issue_state (issue, ask) VALUES (?, ?)").run("issue.33", JSON.stringify({ ...ASK, reason: "manual" }));
+  expect(record.read("issue.33")!.ask!.reason).toBe("question");
+  record.setIssueAsk("issue.34", { ...ASK, reason: "manual" });
+  expect(record.read("issue.34")!.ask!.reason).toBe("question");
+  expect(mine("issue.34")).toEqual([{ subject: "gate", action: "question", object: "issue.34", detail: "question" }]);
+});
+
 test("a run's Ask lives in issue_state with the run as its owner, not in the issue's own Ask", () => {
   const { id } = record.makeJob({ role: "build", name: "issue.7", target: "issue.7", state: "waiting", ask: ASK });
   const s = record.read("issue.7")!;

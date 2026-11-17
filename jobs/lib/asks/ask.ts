@@ -134,6 +134,9 @@ export const ASK_REASONS: Record<string, Reason> = REASONS;
 /** A stored reason as a known one: a reason the table does not name reads as a plain question. */
 export const reasonOf = (given: string | undefined): string => (given && ASK_REASONS[given] ? given : "question");
 
+/** The detail of an Ask's `question` event: its reason, then its facts; throws on a reason the table does not name. */
+export const askDetail = (ask: Pick<Ask, "reason" | "facts">): string => detailOf("question", ask.reason, ask.facts, Object.keys(ASK_REASONS));
+
 /** An issue whose Ask waits for Chris: open, or parked with a core-change or blocker-dropped Ask. */
 export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
   !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && (ask.reason === "core-change" || ask.reason === "blocker-dropped")));
