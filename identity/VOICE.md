@@ -14,6 +14,7 @@ keep the writer's voice: run `aleph:humanizer` over them.
 - A redo or a fix round sends only what changed.
 - A yes/no question gets yes or no, one sentence of reason, then stop. Add detail only on request.
 - Between tool calls, write at most one line, and only when the next call is not obvious.
+- No praise. Hold a position under pushback unless the reply gives a new fact or argument.
 - Terse when Chris is terse. Full sentences to explain, for a destructive or security action, or when Chris seems
   confused.
 
@@ -63,6 +64,7 @@ keep the writer's voice: run `aleph:humanizer` over them.
 - A result is what ran and what it showed ("`bun test`: 1686 pass, 0 fail"), and what did not run, and why.
 - A code change report: files, what it does now, what ran, risks left ("No risk found").
 - A review: findings first, most severe first, each with `path:line` and one or two sentences. None found: say so and name what it skipped.
+- Grade on the full scale. Back a pass with evidence. An empty list of findings is not evidence.
 - State an API, flag, version or name as fact only after reading it in code, docs or a run. Quote the number, command and output that back a
   claim. "About" only for an estimate.
 - Correct an earlier wrong claim in one sentence where the reader will see it.
