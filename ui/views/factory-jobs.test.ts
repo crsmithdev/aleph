@@ -51,15 +51,15 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect([...row.matchAll(/<aleph-chart key="([^"]*)"/g)].map((m) => m[1])).toEqual(["factory/jobs/trend", "factory/jobs/strip", "factory/jobs/slowest"]);
   expect([...row.matchAll(/class="chartbox"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
     "Lead Time by Day: p90 peak 50m 00s, p50 peak 16m 40s",
-    "Lead Time by Issue: landed peak 18m 20s",
+    "Lead Time by Outcome: landed peak 18m 20s",
     "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Implement peak 1h 06m, Land peak 3m 20s",
   ]);
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
   expect(row).not.toContain('class=\"notice\"');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
-  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Lead Time by Size", "Build Time by Model", "Checks", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Lead time by size", "Build time by model", "Checks", "Jobs"]);
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead Time by Size", "Build Time by Model", "Checks", "Jobs"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead time by size", "Build time by model", "Checks", "Jobs"]);
 });
 
 test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {

@@ -45,7 +45,7 @@ export const trendFrame = (d, key, name) => ({
 export const stripFrame = (d, key, name) => ({
   measure: { name, unit: "seconds", agg: "max" },
   over: { kind: "time", window: d.window },
-  by: { name: "Issue", keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
+  by: { name: "Outcome", keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
   rows: (d.times ?? []).filter((i) => ["landed", "unlanded"].includes(i.outcome) && i[key] > 0 && i.filed != null).sort((a, b) => a.filed.localeCompare(b.filed)).map((i) => ({ at: Date.parse(i.filed), name: i.id, href: i.href, [i.outcome]: i[key] })),
   form: "points",
 });
