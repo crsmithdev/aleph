@@ -1,8 +1,8 @@
 /**
  * `aleph doctor`: one command that checks the machine after an outage. Read-only
- * unless `fix` is set; `fix` starts the tick and nothing else.
+ * unless `fix` is set; `fix` starts the tick and deletes a leftover gc.log.
  */
-import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readlinkSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "../../../lib/git.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
@@ -20,11 +20,24 @@ const bad = (name: string, detail: string): Check => ({ name, ok: false, detail 
 const CLOCK_WINDOW_MS = () => doctorClockMs();
 const HOME_URL = () => homeUrl();
 
-/** The repo's object directory (a worktree's .git is a file, so ask git), or null when it is not a repo. */
-function objectsDir(path: string): string | null {
+/** The path git keeps `name` at in a repo (a worktree's .git is a file, so ask git), or null when it is not a repo. */
+function gitPath(path: string, name: string): string | null {
   if (!existsSync(path)) return null;
-  const r = git(path, "rev-parse", "--path-format=absolute", "--git-path", "objects");
+  const r = git(path, "rev-parse", "--path-format=absolute", "--git-path", name);
   return r.ok ? resolve(path, r.out) : null;
+}
+
+/** The repo's object directory, or null when it is not a repo. */
+const objectsDir = (path: string): string | null => gitPath(path, "objects");
+
+/** Each repo with a leftover gc.log — git's log of a failed automatic cleanup, which stops gc until it is deleted — with the key that names it. */
+function gcLogs(repos: { key: string; path: string }[]): { key: string; path: string }[] {
+  const found: { key: string; path: string }[] = [];
+  for (const repo of repos) {
+    const log = gitPath(repo.path, "gc.log");
+    if (log && existsSync(log)) found.push({ key: repo.key, path: log });
+  }
+  return found;
 }
 
 /**
@@ -79,8 +92,10 @@ export function gitChecks(): Check[] {
     for (const f of emptyObjects(repo.path)) empties.push(`${repo.key}: ${f}`);
     if (objectsDir(repo.path) && !git(repo.path, "fsck", "--no-dangling").ok) broken.push(repo.key);
   }
+  const logs = gcLogs(repos).map((l) => `${l.key}: ${l.path}`);
   return [
     empties.length ? bad("empty objects", `${empties.length} in ${repos.length} repos: ${empties.join("; ")}`) : ok("empty objects", `none in ${repos.length} repos`),
+    logs.length ? bad("gc log", `${logs.length} in ${repos.length} repos: ${logs.join("; ")}`) : ok("gc log", `none in ${repos.length} repos`),
     broken.length ? bad("git fsck", `fails in ${broken.join(", ")}`) : ok("git fsck", `clean in ${repos.length} repos`),
   ];
 }
@@ -164,10 +179,14 @@ export async function doctor(): Promise<Check[]> {
   return [...clock, ...gitChecks(), ...unitChecks(), home, lostCheck(), linkCheck()];
 }
 
-/** The safe repair: the tick starts. An empty object stays: `aleph doctor` names it, and Chris decides. */
+/** The safe repair: the tick starts and a leftover gc.log goes, so git's automatic cleanup runs again. An empty object stays: `aleph doctor` names it, and Chris decides. */
 export function fix(): string[] {
   const said: string[] = [];
   const t = systemctl("start", "--no-block", "aleph-tick.service");
   said.push(t.ok ? "started aleph-tick.service" : `could not start aleph-tick.service: ${t.out}`);
+  for (const { path } of gcLogs(Object.values(loadRegistry()))) {
+    rmSync(path, { force: true });
+    said.push(`deleted ${path}`);
+  }
   return said;
 }

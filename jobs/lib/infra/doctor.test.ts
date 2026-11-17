@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wallStepSince } from "./clock.ts";
@@ -50,6 +50,18 @@ describe("git", () => {
     expect(gitChecks().find((c) => c.name === "empty objects")?.ok).toBe(true);
     fakeCtl("exit 0");
     expect(fix()).toEqual(["started aleph-tick.service"]);
+  });
+
+  test("a leftover gc.log fails the check, and fix deletes it so git's automatic cleanup runs again", () => {
+    const log = join(repo, ".git/gc.log");
+    writeFileSync(log, "fatal: failed to run repack\n");
+    const c = gitChecks().find((x) => x.name === "gc log");
+    expect(c).toMatchObject({ ok: false });
+    expect(c!.detail).toContain(`r: ${log}`);
+    fakeCtl("exit 0");
+    expect(fix()).toEqual(["started aleph-tick.service", `deleted ${log}`]);
+    expect(existsSync(log)).toBe(false);
+    expect(gitChecks().find((x) => x.name === "gc log")?.ok).toBe(true);
   });
 });
 
