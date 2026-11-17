@@ -663,20 +663,14 @@ describe("views", () => {
     expect(page).not.toContain("issue-form");
   });
 
-  test("the table offers to file the search text, in the scoped project", () => {
+  test("the search box files its text in the scoped project, and the table gets no row for it", () => {
     const rows = { issues: [{ repo: "aleph", n: 1, title: "alpha thing", status: "open", labels: [] }], projects: ["aleph", "fac"] };
     const page = (o: object) => v.renderIssues(rows, o);
-    expect(page({})).not.toContain("data-file");
-    expect(page({ q: "   " })).not.toContain("data-file");
-    const h = page({ q: "alpha <b>" });
-    expect(h).toContain('data-file="alpha &lt;b&gt;">File “alpha &lt;b&gt;”</button> <span class="quiet">in aleph</span>');
-    expect(page({ q: "alpha", project: "fac" })).toContain('<span class="quiet">in fac</span>');
-    // The File row comes before the matches, and stands alone when nothing matches.
-    const m = page({ q: "alpha" });
-    expect(m.indexOf("data-file")).toBeLessThan(m.indexOf('class="rowlink'));
-    const none = v.renderTable([], { q: "zzz", projects: ["fac"] });
-    expect(none).toContain('<span class="quiet">in fac</span>');
-    expect(none).not.toContain('class="empty"');
+    // The action sits in the search box's .fbar, right after the field, so CSS can hide it while the field is empty.
+    expect(page({ q: "alpha" })).toMatch(/data-ui="inv-search"[^>]*><button type="button" class="hint" data-file[^>]*>Ctrl\+↵ File in aleph<\/button><\/div>/);
+    expect(page({ project: "fac" })).toContain(">Ctrl+↵ File in fac</button>");
+    expect(v.renderTable([], { q: "zzz" })).toContain('class="empty"');
+    expect(page({ q: "alpha" })).not.toContain("file-row");
   });
 
   test("fileProject picks the scoped project, else aleph, else the first", () => {

@@ -231,6 +231,7 @@ function renderKit(d, query) {
     ])) +
     spec("pager", "Pager", pager(1, 345) + pager(2, 345) + pager(7, 345)) +
     spec("search", "Search box", searchBox("kit-search", "", "Search ids and titles")) +
+    spec("search/action", "Search box, action", searchBox("kit-search-act", "chevron fold", "Search ids and titles", `<button type="button" class="hint">Ctrl+↵ File in aleph</button>`)) +
     spec("tabs", "Tabs", tabs("Kit tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
     spec("select", "Select", row(selectBox("Model", "model", ["opus", "sonnet", { value: "haiku", disabled: true }], "sonnet"))) +
     spec("field", "Field and form", form("kit-form", [

@@ -277,8 +277,8 @@ export function filterBar(groups) {
   return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label && !g.bare ? `<span class="fl">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
 }
 /** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
-export const searchBox = (ui, value, placeholder) =>
-  `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></div>`;
+export const searchBox = (ui, value, placeholder, action = "") =>
+  `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">${action}</div>`;
 /** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes. */
 export const tabs = (label, items, panes, on = items[0]?.[0]) =>
   `<div class="tabs">${seg(label, items.map(([id, l]) => ({ label: l, on: id === on, attrs: ` data-tab="${esc(id)}"` })))}` +

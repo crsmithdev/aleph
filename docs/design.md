@@ -1233,7 +1233,7 @@ A filter bar is a row of filters over a table.
 
 | Helper | Reference |
 |---|---|
-| `filterBar(groups)`; `searchBox(ui, value, placeholder)` | `ui/views/jobs.js` |
+| `filterBar(groups)`; `searchBox(ui, value, placeholder, action)` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1260,16 +1260,18 @@ A search box is one text field over a table. It filters the rows by the text.
 
 | Helper | Reference |
 |---|---|
-| `searchBox(ui, value, placeholder)` | `ui/views/factory-jobs.js` |
+| `searchBox(ui, value, placeholder, action)` | `ui/views/factory-jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Field | The text to search for | | `input[type="search"]` on `--sunk`; `--ctl-h` high; at least 240px wide, fills the row |
+| 2 | Action | A `button.hint` that acts on the text, such as filing it | yes | inside the field's right end, `--fs-xs`, `--muted`; shows only while the field has text |
 
 - Name what it searches in the placeholder: `Search ids and titles`. The placeholder is the accessible name too.
 - Put it above the filter bar, outside the part that redraws, so it keeps the focus. Give its `ui` key to `wireTable({ search })`.
 - Send the text to the address with `setQuery({ q })` and draw the table again. Wait about 200 ms after a key. Do not fetch on each key.
 - Use one size on every page. The wide field of the Memory page is a deviation.
+- Give the action a key with a modifier, such as Ctrl+Enter, and name the key in its label. Plain Enter stays with the search.
 
 | Do | Don't |
 |---|---|

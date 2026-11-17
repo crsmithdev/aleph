@@ -508,6 +508,12 @@ table.tbl td.labels { max-width: 24ch; overflow: hidden; text-overflow: ellipsis
 .fbar .fl { font-size: var(--fs-xs); color: var(--muted); }
 .fbar select { min-height: var(--ctl-h); }
 .fbar input[type="search"] { flex: 1 1 240px; min-width: 0; min-height: var(--ctl-h); }
+/* A search box's action sits inside the field's right end, so the page does not move when it shows. */
+.fbar:has(> .hint) { position: relative; }
+.fbar:has(> .hint) input[type="search"] { padding-right: 18ch; }
+.fbar > .hint { position: absolute; right: var(--sp-6); top: 50%; transform: translateY(-50%); padding: var(--sp-2) var(--sp-6); border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); color: var(--muted); font: var(--fs-xs) var(--sans); cursor: pointer; }
+.fbar > .hint:hover { color: var(--ink); }
+.fbar input:placeholder-shown ~ .hint { display: none; }
 .ph .aside .fbar { margin: 0; }
 .seg { display: inline-flex; max-width: 100%; min-height: var(--ctl-h); font: var(--fs-sm) var(--sans); border: 1px solid var(--rule); border-radius: var(--r-ctl); overflow-x: auto; }
 .seg button { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; padding: 0 var(--sp-12); flex: none; white-space: nowrap; cursor: pointer; color: var(--muted); border-left: 1px solid var(--rule); }

@@ -196,22 +196,21 @@ export function renderRow(r, { fold, sub } = {}) {
 /** The project a filed search goes to: the scoped one, else aleph, else the first. */
 export const fileProject = (project, projects = []) => project || (projects.includes("aleph") ? "aleph" : projects[0] ?? "");
 
-/** The table's first row when the search box has text: it offers to file that text. `span` is the column count. */
-export const fileRow = (query, project, span) =>
-  `<tr class="file-row"><td class="wide" colspan="${span}"><button type="button" class="link" data-file="${esc(query)}">File “${esc(query)}”</button> <span class="quiet">in ${esc(project)}</span></td></tr>`;
+/** The search box's action: it files the search text in `project`. CSS shows it only while the box has text. */
+export const fileHint = (project) =>
+  `<button type="button" class="hint" data-file title="File the search text as an issue (Ctrl+Enter)">Ctrl+↵ File in ${esc(project)}</button>`;
 
 export function renderTable(rows, o = {}) {
   const flat = ordered(filterRows(rows, o), o), group = kept("issues.group", false), open = new Set(kept("issues.open", []));
   const ids = new Set(flat.map((r) => r.id)), parents = new Set(flat.map((r) => r.parent)), under = (r) => group && r.parent && ids.has(r.parent);
   const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
   const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
-  const file = (o.q ?? "").trim() ? fileRow(o.q.trim(), fileProject(o.project, o.projects), COLUMNS.length + (group ? 1 : 0)) : "";
-  if (!all.length) return file ? dataTable("", file) : empty();
+  if (!all.length) return empty();
   const shown = pageRows(all, o.page ?? 1, PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   // The fold column has no name (design.md, Table).
   const head = (group ? "<th></th>" : "") + COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, file + shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
+  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
 }
 
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
@@ -383,7 +382,8 @@ function renderLive(projects, rows, o) {
     numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
     detail: renderCharts(o, scoped),
     count: shown,
-    table: renderTable(rows, { ...o, projects }),
+    table: renderTable(rows, o),
+    hint: fileHint(fileProject(o.project, projects)),
   };
 }
 
@@ -411,6 +411,7 @@ function refill() {
   const parts = renderLive(live.projects, live.rows, live.o());
   for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
   root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
+  root.querySelector("button[data-file]").outerHTML = parts.hint;
   draw(root);
 }
 
@@ -427,7 +428,7 @@ async function fileFromSearch(el, title) {
   } catch (err) { say(el, `Could not file it: ${err.message}`); } finally { filing = false; }
 }
 
-/** Draws the charts and keeps the data for the filters. Enter in the search box or a click on the File row files the search text. */
+/** Draws the charts and keeps the data for the filters. Ctrl+Enter in the search box or a click on its File button files the search text. */
 export function mount(root, d) {
   live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
   if (root.querySelector?.(".chartbox")) draw(root);
@@ -436,12 +437,14 @@ export function mount(root, d) {
   wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
   table.addEventListener("keydown", (e) => {
     const title = e.target.value?.trim();
-    if (e.key !== "Enter" || e.isComposing || !e.target.matches?.('[data-ui="inv-search"]') || !title) return;
+    // Plain Enter stays with the search; Cmd+Enter is the Mac's Ctrl+Enter.
+    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.isComposing || !e.target.matches?.('[data-ui="inv-search"]') || !title) return;
     fileFromSearch(e.target, title);
   });
   table.addEventListener("click", (e) => {
     const b = e.target.closest?.("button[data-file]");
-    if (b) fileFromSearch(b, b.dataset.file);
+    const title = table.querySelector('[data-ui="inv-search"]').value.trim();
+    if (b && title) fileFromSearch(b, title);
   });
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
@@ -453,7 +456,7 @@ export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
   return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
-    `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
+    `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels", parts.hint)}` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
     `<div id="issues-table">${parts.table}</div>`, { count: parts.count })}</div>`;
 }
