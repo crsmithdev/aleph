@@ -62,14 +62,14 @@ function roles(a, m) {
   const outs = a.outcomes ?? [], set = m?.models ?? {}, open = new Set(kept("agents.open", []));
   // The figures of one outcome. Its output is landed builds for a worker, verdicts for the reviewer and OK runs for another role.
   const stats = (o) => {
-    if (!o) return `<td class="num">${gone}</td>`.repeat(num.length) + `<td>${gone}</td>`;
+    if (!o) return `<td class="num">${gone}</td>`.repeat(num.length) + `<td class="out">${gone}</td>`;
     const few = o.ended < MIN_ENDED, worker = o.role === "worker", reviewer = o.role === "reviewer";
     const out = worker ? o.built : reviewer ? o.pass + o.fail : o.succeeded, noun = NOUNS[o.role] ?? "run";
     const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(share(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
     const q = worker ? ` <span class="quiet">· ${share(o.built ? o.firstPass / o.built : null)} first · ${share(o.reviewPass)} review</span>` : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td>${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td class="out">${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
   const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
   const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? " checked" : ""}> `;
@@ -80,7 +80,7 @@ function roles(a, m) {
     const past = last.filter((o) => o !== cur), off = key in SIZES && set[key] && !set[key].enabled, shut = !open.has(key);
     const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : `<span class="fold" aria-hidden="true"></span> `;
     const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="quiet" title="Goes to ${goesTo(key, set)}">Off</span>` : sel(key, label)}`;
-    return `<tr><td class="wide" title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
+    return `<tr><td title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
       (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="quiet">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
   };
   const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));

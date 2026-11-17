@@ -39,23 +39,23 @@ test("Per output is cost over built for a size, over verdicts for the reviewer a
   expect(per(row(h, "Intake"))).toBe('<td class="num">$0.50</td>');
   expect(row(h, "Small")).toMatch(/<td class="num warn">60%/);
   expect(row(h, "Intake")).not.toContain("warn");
-  expect(row(h, "Small")).toContain('<td>4 landed <span class="quiet">· 75% first · 50% review</span></td>');
-  expect(row(h, "Reviewer")).toContain("<td>6 verdicts</td>");
+  expect(row(h, "Small")).toContain('<td class="out">4 landed <span class="quiet">· 75% first · 50% review</span></td>');
+  expect(row(h, "Reviewer")).toContain('<td class="out">6 verdicts</td>');
 });
 
-const row = (h: string, name: string) => h.match(new RegExp(`<tr><td class="wide" title="${name}">${name}</td>.*?</tr>`))![0];
+const row = (h: string, name: string) => h.match(new RegExp(`<tr><td title="${name}">${name}</td>.*?</tr>`))![0];
 
 test("an outcome on a full model id joins the row of its short model; an unset model never reads not recorded", () => {
   const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, ended: runs, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
   const outcomes = [o("intake", "claude-opus-5-5", 151), { ...o("worker", "claude-haiku-4-5-20251001", 7), size: "small" }, o("reviewer", "unset", 3)];
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<\/select><\/td><td class="num">151<\/td>/);
-  expect(h.match(/<td class="wide" title="Intake">Intake<\/td>/g)!.length).toBe(1);
+  expect(h.match(/<td title="Intake">Intake<\/td>/g)!.length).toBe(1);
   expect(row(h, "Small")).toMatch(/<\/select><\/td><td class="num">7<\/td>/);
   expect(h).not.toMatch(/<td>claude-/);
   // The reviewer's unset outcome is an earlier model under its one row.
   expect(row(h, "Reviewer")).toContain('data-fold="review"');
-  expect(h.match(/<td class="wide" title="Reviewer">/g)!.length).toBe(1);
+  expect(h.match(/<td title="Reviewer">/g)!.length).toBe(1);
   expect(h).not.toContain("not recorded");
 });
 
@@ -338,11 +338,17 @@ test("the Workers group holds Small, Medium, Large and an Unsized row with no co
   const h = page([full("worker", "sonnet", { size: null, runs: 17 })]);
   const [workers, rolesPart] = h.split('<tr class="grp"><th colspan="10">Other</th></tr>');
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
-  expect([...workers.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
+  expect([...workers.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
   const un = row(h, "Unsized");
   expect(un).toContain('<td><span class="fold" aria-hidden="true"></span> sonnet</td><td class="num">17</td>');
   expect(un).not.toMatch(/<select|checkbox/);
-  expect([...rolesPart.matchAll(/<td class="wide" title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
+  expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
+});
+
+test("no Agent cell stretches; the Output column takes the spare width and holds its whole text", () => {
+  const h = page([full("worker", "haiku", { size: "small", runs: 4, built: 4, firstPass: 3, reviewPass: 0.5 })]);
+  expect(h).not.toContain('class="wide"');
+  expect(row(h, "Small")).toMatch(/<td class="out">4 landed <span class="quiet">· 75% first · 50% review<\/span><\/td><\/tr>$/);
 });
 
 test("an off size says where its work goes and shows no select or figures, and the last size on keeps a live checked box", () => {
@@ -401,7 +407,7 @@ test("a Roles count goes through count()", () => {
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(html, "Director")).toMatch(new RegExp(`</select></td>${'<td class="num"><span title="no runs in this window">–</span></td>'.repeat(7)}<td><span title="no runs in this window">–</span></td>`));
+  expect(row(html, "Director")).toMatch(new RegExp(`</select></td>${'<td class="num"><span title="no runs in this window">–</span></td>'.repeat(7)}<td class="out"><span title="no runs in this window">–</span></td>`));
 });
 
 test("an empty Roles table shows the empty line", () => {
