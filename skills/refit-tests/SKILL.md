@@ -4,14 +4,14 @@ description: >
   Refit a test suite: find tests that do not gate a merge, flake, pass when
   the code is wrong, reach the network or clock, sleep, miss code, run slow,
   repeat each other, or grow faster than the code. Use to audit, speed up,
-  clean up or deflake tests, or before you add tests (check). NOT for:
+  clean up or deflake tests. NOT for:
   writing tests (use write-tests); one failing test (use diagnosing-bugs).
 ---
 
 # Refit tests
 
-[refit-code](../refit-code/SKILL.md) for the test suite. Nine **lenses** each ask one question. Read `.refit.json`
-at the repo root when it exists: its `accepted` list, shared with refit-code, holds what the repo keeps on purpose.
+[refit-code](../refit-code/SKILL.md) for the test suite. Nine **lenses** each ask one question. Follow
+[refit/PROCESS.md](../refit/PROCESS.md) for the modes, the steps and the Act loop. This file holds what differs.
 
 The lenses run in the order of harm. A suite that does not gate, or that cries wolf, teaches people to ignore it.
 A slow or large suite costs time, not trust.
@@ -41,42 +41,32 @@ Report a candidate under one lens only. Where lenses meet:
 
 ## Modes
 
-| Mode | Runs | Reach for it |
-|---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, measure, hunt, prove, fix and guard, report | Find what to improve and fix the auto findings |
-| `scan [lens ...]` | The retro without the fix | Find what to improve, change nothing |
-| `act` | The fix of each ask finding Chris approves | After a retro |
-| `check` | Each new test, helper, fixture, skip and wait in a plan, spec or diff | Before or during a build |
+`scan`, `fix` and `fix <run dir>` of PROCESS.md. The scope is lens names. The report's unit is a test file.
 
 `stats.ts` in this directory gives the numbers (`bun <skill dir>/stats.ts` prints its commands). It reads a
 report, the tree or git, and never runs the suite.
 
-## Retro
+## Find
 
-1. **Baseline.** Run the repo's full test command from its manifest, with the JUnit reporter and lcov coverage
-   where the runner has them (bun: `--reporter=junit --reporter-outfile=<tmp>/junit.xml --coverage
-   --coverage-reporter=lcov --coverage-dir=<tmp>/cov`). A red baseline ends the run. Done when the baseline is
-   green and its commit, JUnit file and lcov file are recorded.
-2. **Measure.** From the repo root, run `stats.ts runtime <junit.xml>`, `growth`, `smells` and `flakes`. Read
+The baseline runs the repo's full test command with the JUnit reporter and lcov coverage where the runner has them
+(bun: `--reporter=junit --reporter-outfile=<tmp>/junit.xml --coverage --coverage-reporter=lcov
+--coverage-dir=<tmp>/cov`), and records the JUnit file and the lcov file.
+
+1. **Measure.** From the repo root, run `stats.ts runtime <junit.xml>`, `growth`, `smells` and `flakes`. Read
    `tests/flaky.md` and each skip marker that points at it. For each test in `flakes` or `flaky.md`, and each
    file `smells` flags as sleep or timer wait, rerun the file alone 10 times (`--rerun-each=10`) and once in the
    full suite with `--randomize --seed=<n>`. Record each seed. Done when every command's JSON is saved and each
    rerun has a pass count.
-3. **Hunt.** Spawn one Explore subagent per lens in one message, except **runtime** and **growth**, which you read
-   from the measures yourself. Give each its lens file's Signals section verbatim, the measures for its lens, and
-   the test files in its scope. Each returns candidates as: lens, file and line, the signal. Done when each
-   subagent has returned.
-4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
-   files. A `stats.ts` hit is a candidate, never a finding: a pattern inside a fixture string, or random data for
-   a unique temp name, drops with that reason. The report goes to `<tmpdir>/refit-tests-retro-<timestamp>/`. Its
-   unit is a test file. Its Overview adds the test count, wall time, p95, the flake count, and the growth rows as a
-   small chart. A card shows the test before and after. Done when PROVE.md's step 3 is done.
+2. **Hunt** by PROCESS.md. Read **runtime** and **growth** from the measures yourself. Each subagent gets the
+   measures for its lens and the test files in its scope. A `stats.ts` hit is a candidate, never a finding: a
+   pattern inside a fixture string, or random data for a unique temp name, drops with that reason. The Overview
+   adds the test count, wall time, p95, the flake count, and the growth rows as a small chart. A card shows the
+   test before and after.
 
-## Act
+## Act order
 
-refit-code's [Act](../refit-code/SKILL.md#act), in this order: gates, smells, hermetic, flake, runtime, hollow,
-merge, then gaps. The suite then gates and runs the same each time before a test goes, and a test goes before a
-test comes.
+gates, smells, hermetic, flake, runtime, hollow, merge, then gaps. The suite then gates and runs the same each
+time before a test goes, and a test goes before a test comes.
 
 - **Delete or merge** a test only with two proofs. First, run the baseline's coverage command with the test
   removed, then `stats.ts lcov <before.lcov> <after.lcov>`. Each line it lists lost the only test that reached
@@ -87,13 +77,6 @@ test comes.
   pass rate from that run before and after. Done when the test passes 10 reruns alone and one full randomized
   run.
 
-## Check
-
-1. **List the new things.** From the plan, spec or diff: each new test, helper, fixture, mock, skip, `only`, wait,
-   timeout, port, temp path and env read in a test, and each export or parameter that only a test uses.
-2. **Ask each lens's Check question** of each item. Record the answer.
-3. **Judge.** Each item gets one verdict: **keep**, **reuse** (name the helper or test), **fix** (name the lens and
-   the change), or **cut**. Done when every item has a verdict.
 
 ## Guards
 
@@ -107,7 +90,7 @@ test comes.
 | hermetic | A network call, fixed port or shared path in a test | unchecked | a shrink-only lint test like the clock lint |
 | gaps | Coverage of the changed lines falls | unchecked | `stats.ts lcov` on the base and the branch |
 | runtime | The suite or one test grows slower | unchecked | a ceiling on wall time from the JUnit report |
-| hollow, merge, growth | A judgment | model | `check` |
+| hollow, merge, growth | A judgment | rule | write-tests RULES.md |
 
 ## Red flags
 

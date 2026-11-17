@@ -5,8 +5,8 @@ description: >
   modules, code bigger than its job, dead or wasted work, and files not where a
   reader looks, and sweep junk files. Use when asked to improve, review, clean
   up, simplify, deslop or tidy code, find duplication, drift, dead code or
-  architecture problems, reorganize files, before you add code (check), or
-  when the refit-code Stop hook blocks.
+  architecture problems, reorganize files, or when the refit-code Stop hook
+  blocks. NOT for: writing code (use write-code).
 ---
 
 Takes in Matt Pocock's `improve-codebase-architecture` (github.com/mattpocock/skills @4ae2317), aleph's `tidy`
@@ -15,11 +15,8 @@ interface, depth, seam, adapter, leverage, locality) exactly.
 
 # Refit code
 
-One skill for the quality of a codebase. Seven **lenses** each ask one question of the code; the modes below
-decide where and how they run. Read `PRINCIPLES.md`, the [glossary](../domain-modeling/SKILL.md) and `docs/adr/` first when
-they exist: they name owners and settled decisions. Read `.refit.json` at the repo root when it exists: its
-`accepted` list holds what the repo keeps on purpose, each `{"concept", "copies": ["file[:line]", ...],
-"reason"}`, and an accepted candidate is reported as accepted, not as a finding.
+One skill for the quality of a codebase. Seven **lenses** each ask one question of the code. Follow
+[refit/PROCESS.md](../refit/PROCESS.md) for the modes, the steps and the Act loop. This file holds what differs.
 
 ## Lenses
 
@@ -41,64 +38,30 @@ convention is right is **layout**. Report a candidate under one lens only.
 
 ## Modes
 
-| Mode | Runs | Reach for it |
-|---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, sweep, scope, hunt, prove, owner, guard, tier, fix, report | Find what to improve and fix the auto findings |
-| `scan [lens ...]` | The retro without the fix: report only | Find what to improve, change nothing |
-| `act` | The fix of each ask finding Chris approves | After a retro |
-| `check` | Each new thing in a plan, spec or diff, under every lens | Before or during a build |
+`scan`, `fix` and `fix <run dir>` of PROCESS.md. The scope is lens names. The report's unit is a module.
 
-## Retro
+## Find
 
-1. **Baseline.** Run the repo's own build, test and lint commands from its manifest; a red baseline ends the
-   run. Record the commit, `git status --porcelain`, and the file and line count. Done when the baseline is
-   green and recorded.
-2. **Sweep.** Follow [SWEEP.md](SWEEP.md): remove junk files, build output and orphaned fixtures, and move
-   misplaced files, each where a yes-or-no check passes. Done when SWEEP.md's own bar is met.
-3. **Scope.** Take the scope the user named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files
-   fixed most, pairs that change together, jscpd's copies of code) and take its directories, the files changed
-   most in the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
-4. **Hunt.** Spawn one Explore subagent per lens per two or three directories, in one message. Give each its
-   lens file's Signals section verbatim, the scope, and the seed lines for its directories. The layout lens gets
-   one subagent over the whole repo, with the full seed. Each returns candidates as: lens, concept or module, every location with `file:line`, the signal that found it. Done when
-   each subagent has returned.
-5. **Prove, guard, fix and report.** Follow [PROVE.md](PROVE.md) with this skill's lens files. The report's
-   unit is a module. Done when PROVE.md's step 3 is done.
+1. **Sweep.** In `fix`, follow [SWEEP.md](SWEEP.md): remove junk files, build output and orphaned fixtures, and
+   move misplaced files, each where a yes-or-no check passes. In `scan`, run SWEEP.md's Find only and list its
+   results in the Overview. Done when SWEEP.md's own bar is met.
+2. **Scope.** Take the scope Chris named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files fixed
+   most, pairs that change together, jscpd's copies of code) and take its directories, the files changed most in
+   the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
+3. **Hunt** by PROCESS.md, with one subagent per lens per two or three directories, each with the seed lines for
+   its directories. The layout lens gets one subagent over the whole repo, with the full seed. Prove with
+   [EXAMPLES.md](EXAMPLES.md). The Overview adds the seed's top files, pairs and copies.
 
-## Act
+## Act order
 
-For each auto finding of a retro, or each ask finding Chris approves, in the order lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once
-their contents are final.
+Lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once their contents
+are final. A finding that needs a new interface is **ask**: follow [DEEPEN.md](DEEPEN.md) before its fix. It
+designs the interface with Chris, then hands the design back to the Act loop.
 
-1. Make the lens's fix. Delete or change whole: the code, its tests, fixtures, exports, docs entry and
-   dependency line. Edit only the lines the finding names, its riders and what the user named; report the rest.
-2. Add the finding's guard when its tool exists in the repo.
-3. Run the baseline commands. Green: commit, naming the lens and the finding. Red: revert that finding and
-   record which proof step missed and the failed command, which the report shows as "reverted"; never carry a
-   red build into the next finding.
-
-A rider found during the loop follows [PROVE.md](PROVE.md) step 2.
-
-A finding that needs a new interface is **ask**: follow [DEEPEN.md](DEEPEN.md) before step 1. It designs the
-interface with the user, then hands the design back here.
-
-## Check
-
-1. **List the new things.** From the plan, spec or diff: each new function, module, type, parser, constant,
-   literal, route, CLI flag, record field, dependency, guard, option, comment and doc section.
-2. **Ask each lens's Check question** of each item ([ONE-WAY.md](ONE-WAY.md) and the other lens files), with
-   the searches it names. Record the searches and hit counts.
-3. **Judge.** Each item gets one verdict: **new**, **reuse** (name the path), **extend** (name the path),
-   **cut** (no case reaches it), or **second way** (on purpose: add it to `.refit.json` `accepted` with the
-   reason). Done when every item has a verdict with `file:line` or its search record.
-4. **Guards.** When the change makes one copy the owner of a concept or a module the owner of a seam, add its
-   guard in the same change.
 
 ## Guards
 
-A guard keeps a fixed finding fixed. Each one has a kind: **tool** (the hook runs it), **model** (`check` asks
-it) or **unchecked** (only a retro finds it). A finding that comes back moves up: unchecked, then model, then
-tool.
+The kinds are those of PROCESS.md. The hook runs each **tool** guard.
 
 | Lens | Guard | Kind | Repo config |
 |---|---|---|---|
@@ -110,10 +73,10 @@ tool.
 | slop | An impossible fallback or a needless assertion | unchecked | typescript-eslint, not yet wired |
 | slop | An empty or swallowing `catch`, an `any` | unchecked | a shrink-only ratchet, not yet wired |
 | dead | An export or file nothing uses | unchecked | knip, not yet wired |
-| dead | A new store with a writer and no reader | model | `check` |
+| dead | A new store with a writer and no reader | rule | write-code `RULES.md` |
 | waste | A path a user or test waits on grows slower | unchecked | a timing test with a ceiling, not yet wired |
-| depth | A one-line pass-through | model | `check` |
-| layout | A new file outside the directory of its callers and kind | model | `check` |
+| depth | A one-line pass-through | rule | write-code `RULES.md` |
+| layout | A new file outside the directory of its callers and kind | rule | write-code `RULES.md` |
 | layout | An import between directories that the tree does not allow | unchecked | dependency-cruiser rules, not yet wired |
 | layout | A file that grows past the repo's size limit | unchecked | a shrink-only ratchet, not yet wired |
 
@@ -129,5 +92,3 @@ reason. [ONE-WAY.md](ONE-WAY.md) has the rules of its checks.
 ## Red flags
 
 - **You are writing more lines than you delete, outside [DEEPEN.md](DEEPEN.md).** Stop: the work is a design question.
-- **You loosened a proof bar to keep a finding.** The finding goes; the bar stays.
-- **A change "should be safe".** It is proven by a green baseline, or it is not done.

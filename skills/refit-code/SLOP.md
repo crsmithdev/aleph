@@ -2,7 +2,7 @@
 
 PRINCIPLES rule 11: a line that serves a case that cannot happen goes. Slop is code that runs but is bigger
 than its job, the shape AI-written code takes: defence for impossible states, hidden failures, narration.
-The Style rules in `skills/write-code/SKILL.md` are what the code should meet (rules 10 and 12 in particular).
+The rules in [write-code/RULES.md](../write-code/RULES.md) tagged (slop) are what the code should meet.
 
 ## Signals
 
@@ -41,6 +41,3 @@ Delete or shrink the line, on lines the branch owns. Lines outside the branch ar
 typescript-eslint `no-unnecessary-condition` and `no-unnecessary-type-assertion` for impossible fallbacks and
 needless casts; a shrink-only ratchet for empty or swallowing `catch` and `any`.
 
-## Check
-
-Does each new guard, fallback, option and comment have a case that reaches it? Name the case or cut the line.

@@ -29,6 +29,3 @@ bound the growth. Keep the change only when the measurement moves.
 
 A timing test or benchmark with a ceiling on the path.
 
-## Check
-
-Does each new loop, call or cache run once per what it needs, and does anything wait on it?

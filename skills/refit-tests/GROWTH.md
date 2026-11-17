@@ -25,8 +25,5 @@ Growth has no fix of its own: name the lens the growth comes from (merge, hollow
 
 ## Guard
 
-Model: `check`.
+Rule: write-tests RULES.md 7 and 16.
 
-## Check
-
-Does the change add more test lines than the behaviour needs? Name the behaviour each new test covers.

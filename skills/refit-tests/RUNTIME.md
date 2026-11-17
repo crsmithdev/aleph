@@ -32,6 +32,3 @@ runs before land, not on each save.
 
 See [Guards](SKILL.md#guards). Set the ceiling on one test's time too.
 
-## Check
-
-Does a new test start a process, a browser or a server, build the project, or wait? Name its expected time.

@@ -38,8 +38,5 @@ Delete the override rule.
 
 ## Guard
 
-Model, in `check`: stop a plan that styles a kit class in a view, or writes kit markup by hand. No tool guard yet.
+Rule (write-code RULES.md, UI): stop a plan that styles a kit class in a view, or writes kit markup by hand. No tool guard yet.
 
-## Check
-
-Does each new view call the kit helper for each component it draws? Does it set a property of a kit class?

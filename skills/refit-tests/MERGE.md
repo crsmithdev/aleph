@@ -22,8 +22,5 @@ input-only variants into one table test.
 
 ## Guard
 
-Model: `check`.
+Rule: write-tests RULES.md 15.
 
-## Check
-
-Does a new test assert what an existing test asserts? Name the existing test, or extend it.

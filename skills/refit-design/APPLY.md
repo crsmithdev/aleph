@@ -54,10 +54,5 @@ One change per finding, in the view or style file. Use the token, helper or comp
 
 Tool: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
 `literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` is unchecked: it is not yet
-a test. Model, in `check`: a new component has a section in the doc and a specimen on `#/kit`.
+a test. Rule (write-code RULES.md, UI): a new component has a section in the doc and a specimen on `#/kit`.
 
-## Check
-
-For each new view, rule, value or component: which rule of `docs/design.md` covers it, which token or helper gives
-the value, and which specimen on `#/kit` shows it? A literal with a token, a hand-built component that the doc
-names, or a pattern with no rule is the finding.

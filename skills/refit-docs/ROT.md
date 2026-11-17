@@ -26,8 +26,5 @@ Rewrite a dated line without the date, or delete it.
 
 ## Guard
 
-Model: `check`.
+Rule: write-docs RULES.md 7.
 
-## Check
-
-Does the new line say "now", "new" or a date? Write it so it stays true, or put it in the changelog.

@@ -5,8 +5,8 @@ description: >
   need that no doc says, sentences with two readings, pages that mix reader
   tasks, docs a reader cannot reach, topics said twice, and docs that no
   longer earn their place. Use when asked to improve, review, audit, lint or
-  clean up docs, a README or a docs site, find stale or broken docs or links,
-  or before you add a doc page or section (check). NOT for: CLAUDE.md,
+  clean up docs, a README or a docs site, or find stale or broken docs or
+  links. NOT for: CLAUDE.md,
   AGENTS.md or skills (use refit-agents); a new page (use write-docs).
 ---
 
@@ -14,8 +14,8 @@ description: >
 
 [refit-code](../refit-code/SKILL.md) for the docs people read: README, `docs/`, how-tos, references, ADRs, the
 changelog, and doc blocks in code. Agent files belong to [refit-agents](../refit-agents/SKILL.md). Seven **lenses**
-each ask one question. Read `.refit.json` at the repo root when it exists: its `accepted` list, shared with
-refit-code, holds what the repo keeps on purpose.
+each ask one question. Follow [refit/PROCESS.md](../refit/PROCESS.md) for the modes, the steps and the Act loop.
+This file holds what differs.
 
 The lenses run in the order of harm. In a survey of 323 developers, incorrectness, obsoleteness, incompleteness
 and ambiguity were blockers. Bloat, fragmentation and tangled pages were not (Uddin and Robillard, IEEE Software
@@ -41,51 +41,24 @@ Report a candidate under one lens only.
 
 ## Modes
 
-| Mode | Runs | Reach for it |
-|---|---|---|
-| `retro [lens ...]` (default: all) | Baseline, inventory, hunt, prove, fix and guard, report | Find what to improve and fix the auto findings |
-| `scan [lens ...]` | The retro without the fix | Find what to improve, change nothing |
-| `act` | The fix of each ask finding Chris approves | After a retro |
-| `lint` | `refs.ts` and the installed tools only, no model judgment, report in the terminal | A quick pass, or before a commit that touches docs |
-| `check` | Each new page, section, flag, env var or config key in a plan, spec or diff | Before or during a build |
+`scan`, `fix` and `fix <run dir>` of PROCESS.md. The scope is lens names. The report's unit is a doc page.
 
-## Retro
+## Find
 
-1. **Baseline.** Run the repo's own build and test commands from its manifest. A red baseline ends the run.
-   Record the commit. Done when the baseline is green and recorded.
-2. **Inventory.** Run `bun <skill dir>/refs.ts <repo>` (broken references, undocumented env vars, orphan docs).
+1. **Inventory.** Run `bun <skill dir>/refs.ts <repo>` (broken references, undocumented env vars, orphan docs).
    Run each installed tool of [TOOLS.md](TOOLS.md) and list the ones missing with their install line. Classify
    each doc by its Diátaxis type (`write-docs` rule `structure-diataxis`). Done when you have the refs JSON, the
    tool output and a type for each doc.
-3. **Hunt.** Spawn one Explore subagent per lens in one message, except **true** and **find**, whose mechanical
-   part you read from the inventory yourself. Give each its lens file's Signals section verbatim, the inventory,
-   and the docs in its scope. Each returns candidates as: lens, file and line, the signal that found it. Done when
-   each subagent has returned.
-4. **Prove, fix and guard, report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with this skill's lens
-   files. The report goes to `<tmpdir>/refit-docs-retro-<timestamp>/`. Its unit is a doc page. Its Overview adds the
-   doc count, the `refs.ts` counts and the tools that ran. A card shows the text before and after. Done when
-   PROVE.md's step 3 is done.
+2. **Hunt** by PROCESS.md. Read the mechanical part of **true** and **find** from the inventory yourself. Each
+   subagent gets the inventory and the docs in its scope. The Overview adds the doc count, the `refs.ts` counts
+   and the tools that ran. A card shows the text before and after.
 
-## Act
+## Act order
 
-refit-code's [Act](../refit-code/SKILL.md#act), in this order: true, rot, copies, gaps, find, shape, clear. A doc
-is then right before it moves and placed before it is reworded. A new page or a rewrite follows
-[write-docs](../write-docs/SKILL.md)'s writing workflow. After each finding, run `refs.ts` and the tools again. A
-new broken reference is red.
+true, rot, copies, gaps, find, shape, clear. A doc is then right before it moves and placed before it is
+reworded. A new page or a rewrite follows [write-docs](../write-docs/SKILL.md)'s writing workflow. After each
+finding, run `refs.ts` and the tools again. A new broken reference is red.
 
-## Lint
-
-1. Run `refs.ts` and each installed tool of [TOOLS.md](TOOLS.md).
-2. Report in the terminal: each broken reference with `doc:line`, the undocumented env vars, the orphans, each
-   tool's counts, and the tools not installed with their install line.
-
-## Check
-
-1. **List the new things.** From the plan, spec or diff: each new page, section, CLI command or flag, env var,
-   config key, public symbol and example.
-2. **Ask each lens's Check question** of each item. Record the answer.
-3. **Judge.** Each item gets one verdict: **keep**, **document** (name the page), **link** (name the page that
-   already says it), **cut**, or **fix** (name the lens and the change). Done when every item has a verdict.
 
 ## Guards
 
@@ -97,7 +70,7 @@ new broken reference is red.
 | gaps | A public symbol with no doc block | unchecked | the coverage tool of [TOOLS.md](TOOLS.md) with a floor |
 | find | An orphan doc | tool | `refs.ts` orphans empty, held by `refs.test.ts` on aleph |
 | find | A broken heading order, an image with no alt text | unchecked | `markdownlint-cli2` |
-| clear, shape, copies, rot | A judgment | model | `check` |
+| clear, shape, copies, rot | A judgment | rule | write-docs RULES.md |
 
 ## Red flags
 

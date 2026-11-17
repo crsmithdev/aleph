@@ -49,11 +49,6 @@ Each other copy becomes a call to the owner, or goes.
 - A literal, env name or query parameter: a lint test in the style of `tests/clock-lint.test.ts`, since jscpd
   does not see a copy that small.
 
-## Check
-
-Does a path already do this job? Search by the item's name, two synonyms of its verb, its literals and
-regexes, its inputs and outputs, and the library or API calls it makes. Read each hit that could do the same
-job.
 
 ## The hook's checks
 

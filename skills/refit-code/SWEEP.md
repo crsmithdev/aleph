@@ -16,7 +16,7 @@ tells those apart.
 
 ## Find
 
-The sweep runs over the whole repo, after the retro's baseline.
+The sweep runs over the whole repo, after the baseline.
 
 | Category | How to find it | The check |
 |---|---|---|

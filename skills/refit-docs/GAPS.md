@@ -31,7 +31,3 @@ in the CLI's usage text, and point at that.
 
 `refs.ts` undocumented list as a shrink-only ratchet; the coverage tool with a floor.
 
-## Check
-
-Does the change add a command, flag, env var, config key or public symbol? Name the page or usage line that
-documents it.

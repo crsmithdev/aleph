@@ -34,9 +34,5 @@ build, report a proposal to amend the doc and change no code.
 
 ## Guard
 
-Model, in `check`: stop a plan that draws a component a second way from its specimen. No tool guard yet.
+Rule (write-code RULES.md, UI): stop a plan that draws a component a second way from its specimen. No tool guard yet.
 
-## Check
-
-Does each component in the change look like its specimen on `#/kit` and like its other uses? Does the change add
-a second way to draw a part that has one?

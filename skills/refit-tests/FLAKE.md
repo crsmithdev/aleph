@@ -9,7 +9,7 @@ iDFlakies, 50.5% of flakes depended on order (Lam et al., ICST 2019).
 - **aleph's records.** `stats.ts flakes`: each test that failed and then passed on the rerun, with its count, first
   and last date. Rows with no test named come from runs that did not record names.
 - **`tests/flaky.md`.** Each quarantined test, its likely cause and its age.
-- **Reruns of step 2 of the retro.** A test that fails at least once in 10 reruns alone is flaky alone; one that
+- **Reruns of the Measure step.** A test that fails at least once in 10 reruns alone is flaky alone; one that
   passes alone and fails in the randomized full run depends on order or load. Record the seed.
 - **The cause classes.** For each candidate, read the test for: a wait on time, not on an event (async); shared
   state between tests: a module-level variable, a file, a port, an env var, a database row (order); a race between
@@ -30,7 +30,3 @@ Quarantine (a skip that names its `tests/flaky.md` entry) only while the cause i
 
 See [Guards](SKILL.md#guards).
 
-## Check
-
-Does a new test wait, read the clock, share a file, port or env var with another test, or start a process? Name
-the event it waits for and the state it owns.

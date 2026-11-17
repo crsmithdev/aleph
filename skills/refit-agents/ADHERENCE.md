@@ -58,9 +58,5 @@ holds under a condition. Then delete the loser, or state both conditions.
 
 ## Guard
 
-See [Guards](SKILL.md#guards): `content.ts` counts as a shrink-only ratchet beside the `load.ts` total, and `check` is the model guard.
+See [Guards](SKILL.md#guards): `content.ts` counts as a shrink-only ratchet beside the `load.ts` total, and write-agents RULES.md 6 is the rule guard.
 
-## Check
-
-For each new line: does it contradict a line in context, can the agent find it by looking, and does it give a bar
-the agent can check, in plain case?

@@ -52,8 +52,5 @@ to the scope that needs it. Uninstall a plugin that no settings file enables.
 
 ## Guard
 
-Unchecked: no hook runs `install.ts`, because the state lives outside the repo. `lint` runs it by hand.
+Unchecked: no hook runs `install.ts`, because the state lives outside the repo. The find step runs it.
 
-## Check
-
-Does the new item install at the scope that needs it, and does its file live in the repo that owns it?

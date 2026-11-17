@@ -60,15 +60,11 @@ in the same commit. Merge or split by concept. Rename to the repo's pattern for 
 
 Before you act, list the open branches and worktrees that touch the files you move (`git branch`,
 `git worktree list`, `git diff --stat main...<branch>`). A move gives each of them a conflict, so report them.
-A reshape of more than one top-level directory is reported as a proposed tree, and the user decides. `act`
+A reshape of more than one top-level directory is reported as a proposed tree, and the user decides. The Act loop
 does not do it.
 
 ## Guard
 
-`check` asks where each new file goes. The tool guards are a dependency-cruiser rule on which directories may
+Rule: write-code RULES.md 30. The tool guards are a dependency-cruiser rule on which directories may
 import which, and a shrink-only ratchet on file size.
 
-## Check
-
-Does the new file go in the directory where its callers and its kind live? Does it make a grab-bag, or a second
-home for a concept that has one? Does its name follow the repo's pattern for its kind?

@@ -1,12 +1,12 @@
-# Retro report
+# Report
 
-The report of a refit `retro`. All six refit skills write this shape. A skill adds to the Overview's repo line or names its unit in
-its own SKILL.md. refit-design adds the rules in its [REPORT.md](../refit-design/REPORT.md). The sweep reports in
-the terminal instead. [HTML.md](HTML.md) has the scaffold, the diagram patterns and the tone.
+The report of a refit run, drawn from its `findings.json` ([FINDINGS.md](FINDINGS.md)). All six refit skills write
+this shape. A skill names its unit and its Overview additions in its own SKILL.md. refit-design adds the rules in its
+[REPORT.md](../refit-design/REPORT.md). [HTML.md](HTML.md) has the scaffold, the diagram patterns and the tone.
 
 ## Directory
 
-Write `<tmpdir>/refit-<skill>-retro-<timestamp>/`, with `<tmpdir>` from `$TMPDIR`, else `/tmp`:
+The run directory of FINDINGS.md holds the report:
 
 - `index.html`: the report.
 - `app.css`: a copy of `ui/app.css` from the scanned commit (`git show <commit>:ui/app.css`), so the report keeps its
@@ -28,9 +28,8 @@ a variant is an `<h3 class="sub-head">`, not a card.
    - **Links.** The page head links back to the shelf, at the shelf's base URL (the first line of
      `~/.local/share/aleph-tools/shelf/url`) plus `/shelf/`. The repo line links each mock the run made, by the URL that
      `shelf.ts put` printed for it, so put a mock on the shelf before the report.
-   - No themes and no baseline line: the units carry the order, and a red baseline ends the run before a report
-    .
-2. **Units.** One section per unit the skill scanned, in the scan's order, with `data-annotate="<unit id>"`. A unit
+   - No themes and no baseline line: the units carry the order, and a red baseline ends the run before a report.
+2. **Units.** One section per unit the skill scanned, in the find order, with `data-annotate="<unit id>"`. A unit
    with findings shows one finding card each. A unit with no finding is one line: "No issues." The SKILL.md of
    each skill names its unit: refit-code a module, refit-docs a doc page, refit-tests a test file, refit-agents a
    loaded file (CLAUDE.md, skill or hook), refit-data a shown number, refit-design a component kind.
@@ -39,7 +38,7 @@ a variant is an `<h3 class="sub-head">`, not a card.
    Lens. A finding row links its title to its card. The findings come first, grouped by kind. The rows that are not
    findings come last in `tr.quiet`: dropped, accepted, and for the dead lens a survivor. Their Kind cell is the
    verdict, and the reason sits under the title in `<small>`.
-4. **Proposals.** Each change to the skill's reference doc that the scan asks for: where, the evidence and the
+4. **Proposals.** Each change to the skill's reference doc that the run asks for: where, the evidence and the
    sentence the doc needs. Omit the part when there are none. The skill changes no doc text.
 
 ## Finding card
@@ -56,7 +55,7 @@ locations. The card holds, in this order:
    "found during fix" for a rider. A `scan` run shows the tier alone.
 3. **Fix**: one sentence from the lens's Fix section. When a shared helper makes the fault, such as a fetch that
    writes the error line, the fix changes the helper, and every caller gets it. Mark a
-   finding that needs [DEEPEN.md](DEEPEN.md).
+   finding that needs [DEEPEN.md](../refit-code/DEEPEN.md).
 4. **Before / after diagram**: before shows the copies, the shallow cluster or the crossing reads, with red
    dashed edges for disagreements and leaks; after shows the owner or deep module as one dark box, with the
    former copies as grey callers. Dead and slop findings may skip the diagram and show the lines removed. A layout

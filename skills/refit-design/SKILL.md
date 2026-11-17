@@ -12,8 +12,9 @@ description: >
 # Refit design
 
 [refit-code](../refit-code/SKILL.md) for the look of a UI. `docs/design.md` is the reference and the code is the
-truth: where they differ, the finding says which one to change. Read `PRINCIPLES.md` and `.refit.json` first. This
-skill changes no `docs/design.md` text: a gap in the doc is a proposal.
+truth: where they differ, the finding says which one to change. This skill changes no `docs/design.md` text: a gap
+in the doc is a proposal. Follow [refit/PROCESS.md](../refit/PROCESS.md) for the modes, the steps and the Act loop.
+This file holds what differs.
 
 ## Lenses
 
@@ -33,58 +34,38 @@ restyles a kit class is seams. A class that no element uses is dead. A part that
 
 ## Modes
 
-| Mode | Runs | Reach for it |
-|---|---|---|
-| `retro [route]` (default: the whole UI) | Baseline, inventory, shots, compare, prove, fix, report | Find where the UI leaves the doc and fix the auto findings |
-| `scan [route]` | The retro without the fix | Find what to improve, change nothing |
-| `act` | The fix of each ask finding Chris approves | After a retro |
-| `check` | Each new view, style rule or component in a plan, spec or diff | Before or during a build |
+`scan [route]`, `fix [route]` and `fix <run dir>` of PROCESS.md. `route` is one page, such as `#/issues`. With
+none, the run covers each route of the router. The report's unit is a component kind, by [REPORT.md](REPORT.md).
 
-`route` is one page, such as `#/issues`. With none, the run covers each route of the router.
+## Find
 
-## Retro
-
-1. **Baseline.** Run the repo's build and test commands. A red baseline ends the run. Record the commit and
-   `git status --porcelain`. Done when the baseline is green and recorded.
-2. **Scope.** The route's view file and the shared files it imports, or every view for the whole UI. Done when you
+1. **Scope.** The route's view file and the shared files it imports, or every view for the whole UI. Done when you
    have a list of files and routes.
-3. **Hunt.** First list the page's components from its view code and the screenshot: each kind and variant, with an
-   id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/kit.js`. Then follow each lens
-   file: the code view, then the drawn view. For the whole UI, spawn one Explore subagent per route in one message,
-   each with the Signals sections of the lens files and the component list verbatim. Each returns the
-   candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also returns, per component, the
-   rules it breaks and the rules it follows (each by `docs/design.md` section and rule text) and the Kit specimen id.
-   Done when each route has returned and each component has an entry.
-4. **Prove, guard, fix and report.** Follow refit-code's [PROVE.md](../refit-code/PROVE.md) with the lens files.
-   Write the report of [REPORT.md](REPORT.md), with a component kind as its unit. Done when PROVE.md's step 3 is
-   done.
+2. **Hunt.** First list the page's components from its view code and the screenshot: each kind and variant, with
+   an id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/kit.js`. Then follow each lens
+   file: the code view, then the drawn view. For the whole UI, spawn one Explore subagent per route in one
+   message, in place of one per lens, each with the Signals sections of the lens files and the component list
+   verbatim. Each returns the candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also
+   returns, per component, the rules it breaks and the rules it follows (each by `docs/design.md` section and rule
+   text) and the Kit specimen id. Done when each route has returned and each component has an entry.
 
-## Act
+## Act order
 
-refit-code's [Act](../refit-code/SKILL.md#act) with these changes:
+Local defect, one-off, mismatch, then missing token. A proposal to amend the doc is not fixed: report it. Two
+additions to the Act loop:
 
-1. **Baseline.** Run Retro step 1 and take a `verify-ui` screenshot of the page before any change.
-2. **One commit per finding.** Order: local defect, one-off, mismatch, then missing token. Edit only the lines the
-   finding names. A proposal to amend the doc is not fixed: report it.
-3. **Prove each finding.** Run the baseline commands, then take the `verify-ui` screenshots again in light and
-   dark at both widths. Green and the page matches the Kit: commit, naming the rule and the finding. Red: revert
-   that finding and record which proof step missed.
+1. Before the first fix, take a `verify-ui` screenshot of the page.
+2. After each fix, take the `verify-ui` screenshots again in light and dark at both widths. The baseline is
+   green only when the page also matches the Kit. The commit names the rule and the finding.
 
-## Check
-
-1. **List the new things.** From the plan, spec or diff: each new view, style rule, colour, size, font, format,
-   component and piece of UI text.
-2. **Ask** the Check question of each lens file about each item. Record the `docs/design.md` rule or the Kit specimen that backs it.
-3. **Judge.** Each item gets one verdict: **keep**, **reuse** (name the token, helper or component), **fix** (name
-   the rule), or **amend** (the doc does not cover it: report a proposal). Done when every item has a verdict.
 
 ## Guards
 
-Each lens file's Guard section names its guard and its kind (tool, model or unchecked).
+Each lens file's Guard section names its guard and its kind (tool, rule or unchecked).
 
 ## Red flags
 
 - **You judged from the code alone.** A rule can hold in the CSS and fail on the page: draw it.
-- **You fixed a pattern the doc does not cover.** That is a proposal to amend the doc. `act` leaves it.
+- **You fixed a pattern the doc does not cover.** That is a proposal to amend the doc. The Act loop leaves it.
 - **You changed the doc to fit the page.** The doc changes only through design-language, with a proposal.
 - **You compared the page to your taste.** A finding names a rule of `docs/design.md`, or it is dropped.

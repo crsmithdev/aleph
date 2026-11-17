@@ -12,7 +12,7 @@ The report uses the aleph classes of `app.css`: `page`, `card`, `sh`, `sub-head`
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Refit retro for {{repo}}</title>
+  <title>Refit {{mode}} for {{repo}}</title>
   <link rel="stylesheet" href="app.css">
   <style>
     /* the diagram layer: tokens from app.css, so light and dark both work */
@@ -32,7 +32,7 @@ The report uses the aleph classes of `app.css`: `page`, `card`, `sh`, `sub-head`
 </head>
 <body>
 <div class="page sp">
-  <header class="ph"><h1>Refit Retro</h1><span class="count">{{skill}}</span><div class="aside"><a href="{{shelf base}}/shelf/">Shelf</a></div></header>
+  <header class="ph"><h1>Refit</h1><span class="count">{{skill}}</span><div class="aside"><a href="{{shelf base}}/shelf/">Shelf</a></div></header>
 
   <section class="card" id="overview" aria-label="Overview">
     <div class="sh"><h2>Overview</h2><span class="count">{{n}} findings</span></div>

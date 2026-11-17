@@ -37,8 +37,5 @@ Leave a part that the doc names.
 
 ## Guard
 
-Model, in `check`: a new note, label or caption in a plan is at most two words. No tool guard yet.
+Rule (write-code RULES.md, UI): a new note, label or caption in a plan is at most two words. No tool guard yet.
 
-## Check
-
-Is each new card, border, shadow, icon and label needed for its job? Is each label of one or two words?

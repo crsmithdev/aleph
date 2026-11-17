@@ -4,7 +4,7 @@ Request (Chris, 2026-11-16): one report shape across the refit skills, shown on 
 `#/factory/agents`. This round acts on his six shelf notes on the sample `20261116-220823-nedh`.
 
 `index.html` is the sample. `app.css` links to `ui/app.css`, as in `agents-retro`. A real report copies the
-CSS of the scanned commit, as `skills/refit-code/REPORT.md` (Directory) asks. A copy in the repo would repeat
+CSS of the scanned commit, as `skills/refit/REPORT.md` (Directory) asks. A copy in the repo would repeat
 `ui/app.css`. `shots/` holds the screenshots the findings use.
 
 ## Decisions
@@ -24,7 +24,7 @@ CSS of the scanned commit, as `skills/refit-code/REPORT.md` (Directory) asks. A 
      "Do not fill a space because it is there").
    - A finding shown in two entries (3, 5, 12, 16) keeps its block in the first and an "Also" link in the second.
 
-The shape rules changed with the sample: `skills/refit-code/REPORT.md`, `skills/refit-code/HTML.md` and
+The shape rules changed with the sample: `skills/refit/REPORT.md`, `skills/refit/HTML.md` and
 `skills/refit-design/REPORT.md`.
 
 ## Round 3

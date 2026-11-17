@@ -26,10 +26,6 @@ on both sides of an overlap. Merge two skills only when no prompt picks one over
 
 ## Guard
 
-Model: `check`. A routing eval (`claude plugin eval` with a tool-called grader on the skill) holds a trigger that
+Rule: write-agents RULES.md 4. A routing eval (`claude plugin eval` with a tool-called grader on the skill) holds a trigger that
 came back.
 
-## Check
-
-Which existing description would the new one's triggers also match? Search the descriptions for each trigger
-phrase; record the hits.

@@ -29,6 +29,3 @@ pointer to the CLI's usage, after the CLI has one (an **interface** finding when
 
 See [Guards](SKILL.md#guards).
 
-## Check
-
-Does the new line restate something the code or another agent file says? Point at it instead.

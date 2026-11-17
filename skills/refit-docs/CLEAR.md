@@ -24,8 +24,5 @@ Rewrite the sentence with one reading, per the rule it breaks. Define the term o
 
 ## Guard
 
-Model: `check`. Vale with the repo's style in CI, when the user picks it.
+Rule: write-docs RULES.md 3. Vale with the repo's style in CI, when the user picks it.
 
-## Check
-
-For each new sentence: can a reader take it two ways, and does it hold on every platform and version it claims?

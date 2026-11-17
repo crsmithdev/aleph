@@ -52,9 +52,5 @@ skill with two jobs. Record the body tokens before and after.
 
 ## Guard
 
-See [Guards](SKILL.md#guards). Orphans and chains are unchecked: only a retro finds them.
+See [Guards](SKILL.md#guards). Orphans and chains are unchecked: only a refit finds them.
 
-## Check
-
-Does each new section load only on the branch that needs it? Does each new file have a pointer that says when to
-open it, and does a script do each fixed sequence?

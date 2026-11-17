@@ -30,6 +30,3 @@ seam, or give it its second adapter when a test needs one.
 A dependency-cruiser rule: only the owner reads the field or imports the internal file, or imports go only
 through entry points.
 
-## Check
-
-Does the change read a record, file or module past its owner's interface? Does it add a seam with one adapter?

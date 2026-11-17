@@ -56,7 +56,7 @@ Every step ends on a **completion criterion**, the condition that tells the agen
 
 The strongest criteria are both checkable and exhaustive.
 
-When you create or edit a document, read the `## Check` section of [refit-agents](../refit-agents/SKILL.md) and run its steps on the files you changed. Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
+When you create or edit a document, follow [write/PROCESS.md](../write/PROCESS.md): its step 5 checks the files you changed against [RULES.md](./RULES.md). Done when your summary lists each item with its verdict, and each verdict other than keep is applied.
 
 ## When to split
 

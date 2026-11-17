@@ -39,11 +39,7 @@ state in `ui/app.css` from tokens.
 
 ## Guard
 
-Model, in `check`: a new component in a plan names its empty, loading and error state. Tool: the Kit
+Rule (write-code RULES.md, UI): a new component in a plan names its empty, loading and error state. Tool: the Kit
 test in `ui/browser.test.ts` fails when `#kit-states`, `#kit-table-empty` or `#kit-chart-empty` stops drawing its
 empty or loading line.
 
-## Check
-
-Does each new component or control draw its empty, loading, error, hover, focus, disabled and phone-width state,
-or does the plan say which one it leaves out and why?

@@ -41,7 +41,7 @@ finding is to drop the `export`, not the code.
 
 ## Tiers
 
-Each finding gets one tier; the tier sets the proof burden and the approval `act` needs.
+Each finding gets one tier; the tier sets the proof burden and the approval a fix needs.
 
 | Tier | What it is | Approval |
 |---|---|---|
@@ -57,7 +57,7 @@ on.
 
 Delete the whole finding in one commit per tier, lowest first: the code, its tests, its fixtures, its exports,
 its docs entry, its dependency line. For a store nothing reads, delete both the write and the store: the
-table, column, field, file or key, and its migration, path function and env name. A red baseline reverts the finding by [Act](SKILL.md#act):
+table, column, field, file or key, and its migration, path function and env name. A red baseline reverts the finding by the Act loop of [refit/PROCESS.md](../refit/PROCESS.md):
 record the hatch you missed.
 
 ## Report
@@ -69,7 +69,3 @@ entry points, dynamic dispatch and string lookups the codebase relies on, which 
 
 knip with the repo's real entry points, as a shrink-only ratchet on unused files and exports.
 
-## Check
-
-Does a new export, file or dependency have a caller? Does the change leave something without one? Does each new
-store (table, column, field, file, cache key, env name) have a reader?

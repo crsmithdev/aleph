@@ -1,12 +1,12 @@
-# Design retro report
+# Design report
 
-The report of a refit-design `retro`. It has the shape of refit-code's [REPORT.md](../refit-code/REPORT.md), with the
-scaffold and class names of [HTML.md](../refit-code/HTML.md). This file holds only what is specific to design. The
+The report of a refit-design run. It has the shape of [refit/REPORT.md](../refit/REPORT.md), with the
+scaffold and class names of [refit/HTML.md](../refit/HTML.md). This file holds only what is specific to design. The
 report uses the aleph classes and tokens of `ui/app.css`, no Tailwind. It cites only rules of `docs/design.md`.
 
 ## Directory
 
-The directory is `<tmpdir>/refit-design-retro-<timestamp>/`. Besides `index.html` and `app.css` it holds
+The run directory of [refit/FINDINGS.md](../refit/FINDINGS.md), besides `index.html` and `app.css` it holds
 `shots/<route>-<theme>-<width>.png`, one file per screenshot, linked by a relative path.
 
 Link the live Kit by its absolute URL, such as `http://aleph.home/#/kit`, because the shelf serves the report from
@@ -31,7 +31,7 @@ The finding comes first, and the components it breaks come under its title. A fi
 `<div class="finding" id="f<n>">`, in this order:
 
 1. the title: its number, the change as an imperative, and the chips of its lens, kind and tier (**auto** or **ask**),
-   then its result as refit-code's REPORT.md gives it, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
+   then its result as refit/REPORT.md gives it, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
    Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that breaks a rule in two
    components sits under the kind of the first. No line under the title names the component again;
 2. the fix, one sentence as PROVE.md's step 2 gives it;

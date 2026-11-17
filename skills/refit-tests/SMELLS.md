@@ -38,6 +38,3 @@ behaviour.
 
 See [Guards](SKILL.md#guards). Add a rule to the lint test for each rule that the repo fixes.
 
-## Check
-
-Does a new test sleep, poll, focus, print, use unseeded random data, or test more than one behaviour?

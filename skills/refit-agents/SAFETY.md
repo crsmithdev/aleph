@@ -31,6 +31,3 @@ package version. Wrap a guard so it blocks when it fails. Fence untrusted text a
 
 A secret scan on agent files in the pre-commit hook; agnix `MCP-` and hook rules in CI.
 
-## Check
-
-What does the new hook, server, grant or script run, with whose rights, and on what input?

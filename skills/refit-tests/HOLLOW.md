@@ -29,9 +29,5 @@ the seam injects a dependency (a clock, a spawner), keep it and record why in `.
 
 ## Guard
 
-Model: `check`.
+Rule: write-tests RULES.md 1, 4, 5, 6 and 17.
 
-## Check
-
-For each new test: which change to the code makes it fail? For each new export or parameter: which production
-caller uses it?

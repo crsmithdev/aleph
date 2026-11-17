@@ -30,9 +30,5 @@ the user before code.
 
 ## Guard
 
-`check` asks the deletion test of every new module.
+Rule: write-code RULES.md 22.
 
-## Check
-
-Would the new module pass the deletion test? Does its seam have a second adapter (production and test), or is
-it a hypothetical seam? Does an existing module do most of the job, so the change deepens it instead?

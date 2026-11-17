@@ -28,6 +28,3 @@ name its target. Add the alt text.
 
 `refs.ts` orphans empty in a test; `markdownlint-cli2` in CI.
 
-## Check
-
-Which page links to the new page, and which heading would a reader search for?

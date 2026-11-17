@@ -36,9 +36,6 @@ Add the guard the doc names: a clamp with the full text in `title`, `miss(reason
 
 ## Guard
 
-Model, in `check`: a new list, table or text field in a plan names its limit for long text and many rows. No tool
+Rule (write-code RULES.md, UI): a new list, table or text field in a plan names its limit for long text and many rows. No tool
 guard yet.
 
-## Check
-
-What happens to each new list, table and text field with 200 characters, 500 rows, a `null` and an empty list?

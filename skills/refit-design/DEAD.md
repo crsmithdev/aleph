@@ -40,9 +40,5 @@ names a deleted part is reported as a proposal: the doc changes only through des
 
 ## Guard
 
-Unchecked: no script lists each CSS rule with no match and each token with no use. A guard becomes a tool only when its finding comes back from a retro.
+Unchecked: no script lists each CSS rule with no match and each token with no use. A guard becomes a tool only when its finding comes back from a refit.
 
-## Check
-
-Does each new rule match an element, each new token have a use, and each new specimen draw a live component?
-Does the change leave a rule or a token with no user?

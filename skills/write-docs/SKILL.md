@@ -36,10 +36,10 @@ Docs writing progress:
 - [ ] Step 3: Draft: bottom line up front, quick start for getting-started docs, runnable example per concept, next steps for tutorials and how-tos
 - [ ] Step 4: Apply the type-relevant rules to concrete weaknesses in the draft
 - [ ] Step 5: Verify with `review-defaults` and `review-verify-links`; quote the command output
-- [ ] Step 6: Run the `## Check` steps of refit-docs on the pages you changed; list each item with its verdict, and apply each verdict other than keep
+- [ ] Step 6: Check the pages you changed by step 5 of write/PROCESS.md against RULES.md; list each item with its verdict, and apply each verdict other than keep
 ```
 
-For a README, start from `readme-template.md`. For step 6, read [refit-docs](../refit-docs/SKILL.md).
+For a README, start from `readme-template.md`. For step 6, read [write/PROCESS.md](../write/PROCESS.md) and [RULES.md](./RULES.md).
 
 ## Type-gating table
 

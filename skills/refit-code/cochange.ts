@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Co-change from git history: which files change together, and which files the history says are fixed again and
- * again. The seed adds jscpd's copies of code (clones.ts). The retro seeds its hunt with it (`seed`); the Stop hook asks it which companions a change left out (`holes`).
+ * again. The seed adds jscpd's copies of code (clones.ts). The find step seeds its hunt with it (`seed`); the Stop hook asks it which companions a change left out (`holes`).
  *
  * A rule A → B says: a commit that changes A also changes B. Its confidence is the Wilson lower bound of
  * co(A,B) / n(A), so a pair seen 3 times of 3 does not outrank one seen 40 times of 44. Merges and commits of more
@@ -126,7 +126,7 @@ export function holes(root: string, change: Set<string>, all: Map<string, Rule[]
   return [...best.values()].sort((x, y) => y.conf - x.conf);
 }
 
-/** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the retro's first candidates. */
+/** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the find step's first candidates. */
 export function seed(root: string, since = "90.days") {
   const commits = history(root, 5000, since);
   const fixes = new Map<string, string[]>();

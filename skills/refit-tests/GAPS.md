@@ -26,6 +26,3 @@ Write the test through the public interface, red first ([write-tests](../write-t
 
 See [Guards](SKILL.md#guards).
 
-## Check
-
-Does the change add a behaviour with no test, or fix a bug with no test that fails before the fix?

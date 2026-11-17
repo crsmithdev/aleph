@@ -28,6 +28,3 @@ the user, not a doc fix.
 
 `refs.ts` broken list empty in a test; the doc-test runner in CI; `aleph doc-claims` in aleph.
 
-## Check
-
-Does each new doc line name a path, command, flag, default or behavior? Point at the line of code that backs it.

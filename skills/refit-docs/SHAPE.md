@@ -24,8 +24,5 @@ Split the section out to a page of its type and link to it, or cut it. Add the m
 
 ## Guard
 
-Model: `check`.
+Rule: write-docs RULES.md 4.
 
-## Check
-
-What is the new page's type? Does each new section serve that type's reader?

@@ -33,7 +33,3 @@ Restore each env var the test sets, in `afterEach`.
 
 See [Guards](SKILL.md#guards).
 
-## Check
-
-Does a new test read the clock, the network, a fixed port, a path outside its temp dir, or an env var it does not
-set?

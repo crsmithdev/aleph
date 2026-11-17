@@ -41,7 +41,3 @@ Move it down the ladder: to a linked file, to the skill body, to the environment
 
 The `load.ts` always total as a shrink-only ratchet in a test. A change that raises it records the new total and why.
 
-## Check
-
-Does the new line need to be loaded on every turn? Name the branch that needs it before the pointer fires, or put
-it behind a pointer.

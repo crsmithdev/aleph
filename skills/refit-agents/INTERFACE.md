@@ -36,6 +36,3 @@ refusal, a non-interactive flag, a manifest script. Then point the memory file a
 
 See [Guards](SKILL.md#guards). Add a CI job from a fresh clone.
 
-## Check
-
-Can an agent find and run the new command, flag or step without reading its source? Name where its usage lives.

@@ -122,7 +122,7 @@ File nothing and change nothing until Chris picks findings for `act`.
      some do. A worker's prompt or schema when only headless workers hit it.
 
    Done when each finding has one place.
-2. **Gate.** Run `/aleph:refit-agents check` on each proposed agent-file line: cut it when the agent can find
+2. **Gate.** Check each proposed agent-file line against [write-agents/RULES.md](../write-agents/RULES.md): cut it when the agent can find
    it by looking, write it as a plain imperative with its reason, and make sure it contradicts no line in
    context.
 3. **Propose.** Show each change as a diff with a one-line why. Apply only what the user approves; code

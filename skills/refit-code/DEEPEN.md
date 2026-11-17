@@ -17,7 +17,7 @@ interface is proposed before this step.
    - The user rejects the finding with a load-bearing reason: offer an ADR, framed as "Want me to record this
      as an ADR so future reviews don't re-suggest it?" Only when a future reviewer would need the reason;
      skip ephemeral ones ("not worth it right now") and self-evident ones.
-4. **Hand on.** The decided design goes to the build as a spec (`/aleph:to-spec`) or straight to `act` when it
+4. **Hand on.** The decided design goes to the build as a spec (`/aleph:to-spec`) or straight to the Act loop when it
    is small. Add its guard (one-way or seams) in the same change.
 
 **ADR conflicts.** A finding that contradicts an ADR in `docs/adr/` is surfaced only when the friction is real

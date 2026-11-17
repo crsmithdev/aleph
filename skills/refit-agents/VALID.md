@@ -47,6 +47,3 @@ Fix by hand. Run agnix `--fix` on one file only, after `--dry-run --show-fixes` 
 `agnix` (with `--strict` once the repo is clean) in `.githooks/pre-commit`. It runs on the staged agent files and
 refuses the commit when agnix fails or is missing. `.agnix.toml` records each rule the repo turns off, with its reason.
 
-## Check
-
-Does the new file pass agnix and, for a plugin, `claude plugin validate`? Run them; record the counts.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * The numbers of a test retro, as JSON. No command runs the suite: each reads a report, the tree or git.
+ * The numbers of a test refit, as JSON. No command runs the suite: each reads a report, the tree or git.
  *
  *   bun stats.ts runtime <junit.xml>     seconds per test: p50, p95, max, the slowest tests and files, zero-assertion tests
  *   bun stats.ts growth [--months 12]    per month: test files, test cases, test and source lines, files added and deleted

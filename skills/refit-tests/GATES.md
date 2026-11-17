@@ -27,7 +27,3 @@ it. A rerun on failure keeps the record of the first failure (aleph: the `flaky`
 
 See [Guards](SKILL.md#guards).
 
-## Check
-
-Does the change add a skip, a `todo`, an `only`, a retry or a test file? Name its reason, and the command that runs
-it on the way to the default branch.

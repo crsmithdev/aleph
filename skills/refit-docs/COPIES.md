@@ -22,8 +22,5 @@ link. Generate a copied block from its source (`cog`, `embedme`) when the reader
 
 ## Guard
 
-jscpd over the docs in a test; model: `check`.
+jscpd over the docs in a test; rule: write-docs RULES.md 6.
 
-## Check
-
-Does the new section say something another doc or the code already says? Link to it.
