@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { putJson } from "./db.ts";
+import { putJson } from "../lib/db.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,8 +7,8 @@ import { CLI } from "../jobs/cli.testkit.ts";
 import { renderItem } from "../issues/lib/todo.ts";
 import { itemsDir } from "../issues/lib/store.ts";
 import { seed } from "../jobs/job.testkit.ts";
-import { layout } from "./layout.ts";
-import { writeRepos } from "../tests/projects.testkit.ts";
+import { layout } from "../lib/layout.ts";
+import { writeRepos } from "./projects.testkit.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
