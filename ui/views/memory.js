@@ -2,7 +2,7 @@
 // the results come grouped by type, each type in its own layout; the inspector shows the selected memory, how it
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
-import { get } from "./lib/router.js";
+import { get, redraw } from "./lib/router.js";
 import { held, mountContext, renderContext } from "./lib/context-panel.js";
 import { mountProcesses, renderProcesses } from "./lib/processes.js";
 import { panelOf } from "./lib/chart.js";
@@ -20,7 +20,8 @@ export const view = {
   order: 1,
   api: (_params, q = new URLSearchParams()) => (q.get("tab") === "context" ? "/api/context" : scope(q).url(TABS[q.get("tab")] ?? "/api/memory")),
   live: true,
-  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : query?.get("tab") === "processes" ? renderProcessesTab(m, query) : renderMemory(m, options(query))),
+  more: (m, query) => (["context", "log", "processes"].includes(query.get("tab")) ? m : found(m, query)),
+  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : query?.get("tab") === "processes" ? renderProcessesTab(m, query) : renderMemory(m, options(query), m.results ?? null)),
   mount: (root, m, query) => (query?.get("tab") === "context" ? mountContext(root, m, query) : query?.get("tab") === "log" ? mountLog(root) : query?.get("tab") === "processes" ? mountProcessesTab(root, m) : mount(root, m)),
 };
 
@@ -277,17 +278,18 @@ export const renderProcessesTab = (m, query = new URLSearchParams()) => `<div cl
 
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));
+  const it = results?.find((x) => idOf(x) === o.item), n = m.note?.error ? null : m.note;
+  const inspector = m.note?.error ? error("Could not load the note.", { detail: m.note.error }) : renderInspector(it ?? null, n, n && status.get(it.key), m.notes?.find((x) => x.title === it?.key)?.history);
   const titles = `<datalist id="mem-titles">${(m.notes ?? []).map((n) => `<option value="${esc(n.title)}">`).join("")}</datalist>`;
   return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more: m.scopes }) })}${renderTabs("", m.project ?? "")}` +
-    `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null)}</div>` +
+    `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null, m.failed)}</div>` +
     `<div class="msearch">${searchBox("mem-search", o.q, "Search every kind of memory")}</div>` +
     `<div id="mem-fresh" data-ui="mem-filter">${freshBar(o)}</div>` +
-    `<div class="browse"><div id="mem-results" aria-live="polite">${renderResults(results, o, status)}</div>` +
-    card("Inspector", `<div id="mem-inspector">${renderInspector(null)}</div>`, { cls: "ins", label: "Memory inspector" }) + `</div>` +
+    `<div class="browse"><div id="mem-results" aria-live="polite">${m.failed ? error("Could not load the search.", { detail: m.failed }) : renderResults(results, o, status)}</div>` +
+    card("Inspector", `<div id="mem-inspector">${inspector}</div>`, { cls: "ins", label: "Memory inspector" }) + `</div>` +
     `<section aria-label="Health" id="mem-health">${sectionHead("Health")}${renderBroad(m, noteRows(m))}</section>${titles}</div>`;
 }
 
-let live = null;
 const here = () => options(hashQuery());
 /** The URL of one note, and of a handoff's, an episode's or MEMORY.md's text. */
 const noteUrl = (title, act = "") => `/api/memory/notes/${encodeURIComponent(title)}${act ? `/${act}` : ""}`;
@@ -295,56 +297,35 @@ const fileUrl = (it, act = "") => `/api/memory/files/${encodeURIComponent(it.sou
 
 /** True while the Memory page is drawn: `root` is the shell's container, and its handlers outlive the page. Loads need
  * no such check (the router drops an answer that comes after the route changed); a click and a typing pause do. */
-const onPage = () => !!live?.root.querySelector(".page.memory");
+const onPage = (root) => !!root.querySelector(".page.memory");
 
-function redraw() {
-  if (!onPage()) return;
-  const o = here();
-  live.root.querySelector("#mem-fresh").innerHTML = freshBar(o);
-  live.root.querySelector("#mem-board").innerHTML = renderTiles(typeCounts(live.results ?? [], o, live.status), o, live.results !== null, live.failed);
-  live.root.querySelector("#mem-results").innerHTML = renderResults(live.results, o, live.status);
+/** A note's `/api/memory/notes/:title` answer, or `{ error }`; null when a later load made it old. */
+async function noteOf(title) {
+  try {
+    const res = await get(noteUrl(title), "mem-note");
+    if (!res) return null;
+    const n = await res.json();
+    return res.ok ? n : { error: n.error ?? `answered ${res.status}` };
+  } catch (e) { return { error: e.message }; }
 }
 
-/** `/api/memory/search` for the query; the router drops an answer that a later query or another page made old. */
-async function search() {
-  live.failed = "";
+/** `m` with `/api/memory/search` for the query as `results`, and the selected note as `note`; a failed search gives `failed`. The router drops an answer that a later query or another page made old. */
+async function found(m, query) {
+  const o = options(query);
   try {
-    const res = await get(scope().url(`/api/memory/search?q=${encodeURIComponent(here().q)}`), "mem-search");
-    if (!res) return;
+    const res = await get(scope(query).url(`/api/memory/search?q=${encodeURIComponent(o.q)}`), "mem-search");
+    if (!res) return m;
     const body = await res.json();
     if (!res.ok) throw new Error(body.error ?? `answered ${res.status}`);
-    live.results = body.results ?? [];
-  } catch (e) { live.results = []; live.failed = "Could not load the search."; redraw(); live.root.querySelector("#mem-results").innerHTML = error(live.failed, { detail: e.message }); return; }
-  redraw();
-  if (here().item) inspect(here().item);
+    const results = body.results ?? [], it = results.find((x) => idOf(x) === o.item);
+    return { ...m, results, note: it?.source === "note" ? await noteOf(it.key) : null };
+  } catch (e) { return { ...m, results: [], failed: e.message }; }
 }
-
-/** Show `id` in the inspector; a note also loads its body and links. */
-async function inspect(id) {
-  const box = live?.root.querySelector("#mem-inspector"), it = live?.results?.find((x) => idOf(x) === id);
-  if (!box) return;
-  if (!it) { box.innerHTML = renderInspector(null); return; }
-  if (it.source !== "note") { box.innerHTML = renderInspector(it); return; }
-  box.innerHTML = loadingLine("the note");
-  try {
-    const res = await get(noteUrl(it.key), "mem-note");
-    if (!res) return;
-    const n = await res.json();
-    live.note = res.ok ? n : null;
-    const row = live.m.notes?.find((x) => x.title === it.key);
-    box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error("Could not load the note.", { detail: n.error ?? `answered ${res.status}` });
-    const chart = box.querySelector("aleph-chart");
-    if (chart) chart.frame = recallFrame(row?.history);
-  } catch (e) { box.innerHTML = error("Could not load the note.", { detail: e.message }); }
-}
-
-/** After a write: search again, so every count and row shows the vault as it is now. */
-const refresh = () => { live.results = null; redraw(); return search(); };
 
 /** The editor for the selected memory's whole text. */
-async function edit(btn, it) {
+async function edit(btn, it, note) {
   const box = btn.closest(".ins").querySelector(".medit");
-  let text = live.note?.text;
+  let text = note?.text;
   try {
     if (it.source !== "note") {
       const res = await get(fileUrl(it), "mem-file");
@@ -376,10 +357,10 @@ const WRITES = {
 /** A write that removes something asks for a second click. */
 const ARMED = new Set(["delete", "file-delete", "drop"]);
 
-async function write(btn, a = btn.dataset.mact) {
-  const it = live.results?.find((x) => idOf(x) === here().item);
+async function write(btn, m, a = btn.dataset.mact) {
+  const it = m.results?.find((x) => idOf(x) === here().item);
   if (!it) return;
-  if (a === "edit") return edit(btn, it);
+  if (a === "edit") return edit(btn, it, m.note);
   if (a === "cancel") { const box = btn.closest(".medit"); box.hidden = true; box.innerHTML = ""; return; }
   if (ARMED.has(a) && arm(btn, `${btn.textContent} ${it.title}? Click again`)) return;
   const ins = btn.closest(".ins"), field = (name) => ins.querySelector(`[name="${name}"]`)?.value ?? "";
@@ -389,19 +370,20 @@ async function write(btn, a = btn.dataset.mact) {
   try {
     await postJson(url, body);
     if (a === "delete" || a === "file-delete" || a === "drop" || a === "approve" || a === "decline" || a === "archive") setQuery({ item: "" });
-    await refresh();
+    await redraw(true);
   } catch (e) { say(btn, `${a} failed: ${e.message}`); btn.disabled = false; }
 }
 
 function mount(root, m) {
-  live = { root, m, results: null, note: null, status: new Map(noteRows(m).map((n) => [n.title, n.status])) };
   scope().wire(root);
+  const chart = root.querySelector("#mem-inspector aleph-chart");
+  if (chart) chart.frame = recallFrame(m.notes?.find((x) => x.title === m.results?.find((r) => idOf(r) === here().item)?.key)?.history);
   let timer;
   // Properties, not listeners: `root` is the page container, and each mount replaces the last one's handlers.
   root.oninput = (e) => {
     if (!e.target.matches?.('[data-ui="mem-search"]')) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (!onPage()) return; setQuery({ q: e.target.value }); live.results = null; redraw(); search(); }, 200);
+    timer = setTimeout(() => { if (!onPage(root)) return; setQuery({ q: e.target.value }); redraw(true); }, 200);
   };
   root.onclick = (e) => {
     const t = e.target;
@@ -410,27 +392,24 @@ function mount(root, m) {
     const seg = t.closest?.("#mem-fresh .seg button");
     if (seg) { setQuery({ fresh: seg.dataset.value }); return redraw(); }
     const btn = t.closest?.("#mem-inspector button[data-mact]");
-    if (btn) return write(btn);
+    if (btn) return write(btn, m);
     const row = t.closest?.(".mrow");
     // A click selects; with a modifier key, the title's link opens its page.
     if (row && !(e.metaKey || e.ctrlKey || e.shiftKey)) {
       e.preventDefault();
       setQuery({ item: row.dataset.id });
-      for (const r of root.querySelectorAll(".mrow")) r.setAttribute("aria-selected", String(r === row));
-      inspect(row.dataset.id);
-      if (innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" });
+      redraw(true).then(() => { if (innerWidth <= 1100) root.querySelector("#mem-inspector").scrollIntoView({ block: "start" }); });
     }
   };
   // The forms of the inspector (a core line, a link, an alias, the editor) submit here; Enter in a field submits too.
   root.onsubmit = (e) => {
     const f = e.target.closest?.("#mem-inspector form[data-mact]");
-    if (f) { e.preventDefault(); write(e.submitter, f.dataset.mact); }
+    if (f) { e.preventDefault(); write(e.submitter, m, f.dataset.mact); }
   };
   // Enter or Space on a focused row is a click on it; a key on the title's link is left to the link.
   root.onkeydown = (e) => {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".mrow")) { e.preventDefault(); e.target.click(); }
   };
-  search();
 }
 
 // A frontmatter key in sentence case: written_by is "Written by", last_verified is "Last verified" (docs/design.md, Words).

@@ -2,8 +2,9 @@
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
 import { setQuery, hashQuery, wireScope, scope } from "./lib/address.js";
+import { redraw } from "./lib/router.js";
 import { count, plural, money, pct, when } from "./lib/format.js";
-import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, barRow, legendHtml, linkButton, meter, miss, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, onTile, pageHead, pager, searchBox, sortHead, pageOf, pageRows, sortRows, wireTable, statCard, tiles } from "./lib/html.js";
+import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, barRow, legendHtml, linkButton, meter, miss, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, onTile, pageHead, pager, searchBox, sortHead, sortOf, pageOf, pageRows, sortRows, wireTable, statCard, tiles } from "./lib/html.js";
 import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
@@ -14,12 +15,10 @@ export const view = {
   order: 0,
   api: (_params, q = new URLSearchParams()) => {
     // The table sorts and filters the whole window, so it asks for the most rows a page holds.
-    const out = new URLSearchParams({ window: named(q.get("days")), limit: "2000" });
-    if (q.get("project")) out.set("project", q.get("project"));
-    return `/api/sessions?${out}`;
+    return scope(q).url(`/api/sessions?${new URLSearchParams({ window: named(q.get("days")), limit: "2000" })}`);
   },
   render: (d, _params, query) => renderSessions(d, options(query)),
-  mount: (root, d) => mount(root, d),
+  mount,
 };
 
 /** The window name of the address's day count: 7, 30 or 90 days, else week. */
@@ -38,7 +37,7 @@ const STEP = 50, ROWS = 10, MIN_FOR_RATE = 5;
 
 /** The state from the route's query: ?days=7&project=x&pick=tool:Bash&q=text&sort=cost&dir=desc&page=2. */
 export function options(q = new URLSearchParams()) {
-  return { days: q.get("days") || "7", project: q.get("project") ?? "", pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: { key: q.get("sort") || "cost", dir: q.get("dir") === "asc" ? 1 : -1 }, page: pageOf(q) };
+  return { days: q.get("days") || "7", project: scope(q).project, pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: sortOf(q, SORT, { key: "cost", dir: -1 }), page: pageOf(q) };
 }
 
 const skillHref = (name) => `#/skills/${encodeURIComponent(name)}`;
@@ -66,7 +65,7 @@ export function shownSessions(d, o) {
   const keep = o.pick ? sessionIds(d, o.pick) : null, q = o.q.trim().toLowerCase();
   return sortRows((d?.sessions?.sessions ?? [])
     .filter((s) => (!o.pick || keep?.has(s.id)) && (!q || `${s.firstPrompt ?? ""} ${s.project ?? ""} ${s.id} ${s.label ?? ""}`.toLowerCase().includes(q))),
-    SORT, { key: SORT[o.sort.key] ? o.sort.key : "cost", dir: o.sort.dir }, (a, b) => SORT.last(b) - SORT.last(a));
+    SORT, o.sort, (a, b) => SORT.last(b) - SORT.last(a));
 }
 
 const rate = (r) => pct(r.rate * 100);
@@ -151,22 +150,12 @@ const renderLive = (d, o) => partialNotice(d) + renderFails(d, o) + `<div class=
 /** The fetch reads a bounded number of pages, so a longer window gets the counts of part of it only. */
 const partialNotice = (d) => (d?.partial ? notice("Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.") : "");
 
-let live = null;
 const here = () => options(hashQuery());
 
-/** Keeps the data for the selection, the sort and the search, which change the page in place. */
-function mount(root, d) {
-  live = { root, d };
+/** Wires the selection, the sort and the search, which change the address and redraw the page through the router. */
+function mount(root) {
   wireScope(root);
-  wireTable(root, { redraw: () => redraw(false), sortOf: (h) => options(new URLSearchParams(h)).sort, downFirst: new Set(["cost", "turns", "start", "last"]), search: "ag-search" });
+  wireTable(root, { redraw, sortOf: (h) => options(new URLSearchParams(h)).sort, downFirst: new Set(["cost", "turns", "start", "last"]), search: "ag-search" });
   // A second press on the selected tile or rank clears it, and "Show all sessions" says "" outright.
-  onTile(root.querySelector("#ag-live"), (v) => { setQuery({ pick: here().pick === v ? "" : v, page: "" }); redraw(true); });
-}
-
-/** Redraw the sessions; `all` also redraws the tiles and ranks, whose pressed state the selection sets. */
-function redraw(all) {
-  if (!live?.root.isConnected) return;
-  const o = here();
-  if (all) live.root.querySelector("#ag-live").innerHTML = renderLive(live.d, o);
-  else live.root.querySelector("#ag-sessions").innerHTML = sessionsCard(live.d, o);
+  onTile(root.querySelector("#ag-live"), (v) => { setQuery({ pick: here().pick === v ? "" : v, page: "" }); redraw(); });
 }

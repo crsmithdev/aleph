@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
-import { loader, keysOf, markOf, moved } from "./views/lib/router.js";
+import { loader, keysOf, markOf, morph, moved } from "./views/lib/router.js";
+// @ts-ignore plain JS, shared with the page
+import { view as issues } from "./views/issues.js";
+// @ts-ignore plain JS, shared with the page
+import { view as sessions } from "./views/sessions.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { markLine } from "./views/lib/format.js";
 
@@ -309,4 +313,8 @@ test("moved keeps the whole query of an old address, a query with a ? in it too"
   expect(moved("#/status/capacity?window=day&q=a?b", ["#/status/capacity"], "#/factory/agents")).toBe("#/factory/agents?window=day&q=a?b");
   expect(moved("#/status/capacity", ["#/status/capacity"], "#/factory/agents")).toBe("#/factory/agents");
   expect(moved("#/jobs/aleph-1", ["#/jobs"], "#/factory/jobs")).toBeNull();
+});
+
+test("a view that redraws through the router is drawn by morph, so the redraw keeps its search box", () => {
+  for (const v of [issues, sessions]) expect(morph.has(v.path)).toBe(true);
 });

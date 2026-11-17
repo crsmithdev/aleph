@@ -10,7 +10,7 @@ import { chart, fitGrid, chartTheme } from "./views/lib/chart-theme.js";
 // @ts-ignore the module is plain JS, shared with the page
 import { plural, localMs, shortModel, when, clock, failMessage, money, pct, wkText, span, dur } from "./views/lib/format.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, filterBar, seg, idLink, pageHead, pager, sortHead, sectionHead, card, cmd, diffHtml, loadDiff, empty, error, esc, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortRows } from "./views/lib/html.js";
+import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, filterBar, seg, idLink, pageHead, pager, sortHead, sectionHead, card, cmd, diffHtml, loadDiff, empty, error, esc, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortOf, sortRows } from "./views/lib/html.js";
 // @ts-ignore the module is plain JS, shared with the page
 import * as lib from "./views/lib/html.js";
 
@@ -295,6 +295,13 @@ test("nextSort flips the current key and starts a new key by downFirst", () => {
   expect(nextSort({ key: "a", dir: -1 }, "a", down)).toEqual({ key: "a", dir: 1 });
   expect(nextSort({ key: "a", dir: 1 }, "cost", down)).toEqual({ key: "cost", dir: -1 });
   expect(nextSort({ key: "a", dir: -1 }, "b", down)).toEqual({ key: "b", dir: 1 });
+});
+
+test("sortOf reads a known sort key and dir from a query or an object, else gives the fallback", () => {
+  const by = { cost: 1 }, none = { key: "x", dir: -1 };
+  expect(sortOf(new URLSearchParams("sort=cost&dir=asc"), by, none)).toEqual({ key: "cost", dir: 1 });
+  expect(sortOf({ sort: "cost" }, by, none)).toEqual({ key: "cost", dir: -1 });
+  for (const q of ["", "sort=bogus&dir=asc", "sort=toString"]) expect(sortOf(new URLSearchParams(q), by, none)).toBe(none);
 });
 
 test("pageOf is 1 unless the page is a larger whole number", () => {

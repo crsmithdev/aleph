@@ -2,10 +2,11 @@
 // table that offers to file the search text as an issue. `data` is /api/issues: { issues, projects }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
 import { issueApi, postJson, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
+import { redraw } from "./lib/router.js";
 import { undecided } from "./lib/decisions.js";
 import { count, days, plural, dur, money, pct, when } from "./lib/format.js";
-import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
-import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
+import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, sortOf, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
+import { buckets, DAY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
 import { askCard } from "./lib/ask-cards.js";
@@ -42,7 +43,7 @@ export function hashOptions(q = new URLSearchParams()) {
   return {
     page: pageOf(q),
     status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") ?? "", window: s.window,
-    sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
+    sort: sortOf(q, SORT, null),
   };
 }
 
@@ -51,8 +52,6 @@ const own = (r) => r.ref;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => issueHref(ref(r));
 
-/** A Factory window, or week for any other value. */
-const winOf = (w) => (FACTORY.includes(w) ? w : "week");
 const ms = (s) => Date.parse(s) || 0;
 /** An ISO UTC time from the store as ms; 0 for none. */
 const isoMs = (s) => Date.parse(s ?? "") || 0;
@@ -139,7 +138,7 @@ function markHits(title, hits = []) {
 /** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
-  const q = (o.q ?? "").trim(), at = within(buckets(winOf(o.window), Date.now()));
+  const q = (o.q ?? "").trim(), at = within(buckets(o.window, Date.now()));
   const inTile = (r) => skip.includes("tile") || o.tile !== "flow" || at(r.createdTime) || (CLOSED.includes(r.status) && at(r.closedTime));
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
@@ -239,15 +238,14 @@ export function stats(rows, now = new Date(), window = "week") {
 const rateOf = (closed, filed) => (filed ? closed / filed : null);
 
 export function renderTiles(s, key = "open", win = "week") {
-  const w = winOf(win);
   const on = (k) => ({ key: k, on: key === k });
   const rate = rateOf(s.closed, s.filed), before = rateOf(s.closedBefore, s.filedBefore);
   return tiles("Issue numbers",
     statCard({ k: "Open", v: count(s.open), ...on("open") }) +
     statCard({ k: "Backlog", v: count(s.parked), ...on("parked") }) +
     statCard({ k: "Filed / Closed", v: count(s.filed), v2: count(s.closed), q: ["filed", "closed"], ...on("flow") }) +
-    statCard({ k: "Time to Close", v: s.p50 == null ? "–" : dur(s.p50), ...(s.p90 == null ? {} : { v2: dur(s.p90), q: ["p50", "p90"] }), trend: cardTrend(s.p50, s.p50Before, s.p50Before, { kind: "relative", lowerIsGood: true, tip: `${dur(s.p50Before)} the ${w} before` }) }) +
-    statCard({ k: "Close Rate", v: rate == null ? "–" : pct(rate * 100), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${before == null ? "–" : pct(before * 100)} the ${w} before` }) }));
+    statCard({ k: "Time to Close", v: s.p50 == null ? "–" : dur(s.p50), ...(s.p90 == null ? {} : { v2: dur(s.p90), q: ["p50", "p90"] }), trend: cardTrend(s.p50, s.p50Before, s.p50Before, { kind: "relative", lowerIsGood: true, tip: `${dur(s.p50Before)} the ${win} before` }) }) +
+    statCard({ k: "Close Rate", v: rate == null ? "–" : pct(rate * 100), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${before == null ? "–" : pct(before * 100)} the ${win} before` }) }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */
@@ -349,7 +347,7 @@ const framesOf = (rows, win, now) => ({
 });
 
 /** The four chart panels under the tiles, in one row of equal panels. */
-const renderCharts = (o, rows) => `<div class="quad">${Object.entries(framesOf(rows, winOf(o.window), new Date())).map(([k, f]) => panelOf(chartKey(k), f)).join("")}</div>`;
+const renderCharts = (o, rows) => `<div class="quad">${Object.entries(framesOf(rows, o.window, new Date())).map(([k, f]) => panelOf(chartKey(k), f)).join("")}</div>`;
 
 const HIGH_FIRST = [...PRIORITIES].reverse();
 const PRIORITY_OPTIONS = [{ value: "", label: "All" }, ...HIGH_FIRST];
@@ -379,7 +377,7 @@ function renderLive(projects, rows, o) {
   return {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
-    numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
+    numbers: renderTiles(stats(scoped, new Date(), o.window), o.tile, o.window),
     detail: renderCharts(o, scoped),
     count: shown,
     table: renderTable(rows, o),
@@ -391,61 +389,50 @@ const projectsOf = (d) => [...new Set([...(d?.projects ?? []), ...(d?.issues ?? 
 
 const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
-let live = null;
-/** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
-const setQuery = (changes) => { setHash(changes); refill(); };
+/** Change the query in place: replaceState fires no hashchange, so the shell does not fetch; the router draws the data again. */
+const setQuery = (changes) => { setHash(changes); redraw(); };
 
-function draw(root) {
-  const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
+function draw(root, rows, o) {
   // Each panel draws the frame of the window shown; its form and hidden series are its own.
-  for (const [k, f] of Object.entries(framesOf(rows, winOf(live.o().window), new Date()))) {
+  for (const [k, f] of Object.entries(framesOf(filterRows(rows, o, ["status", "stage", "tile"]), o.window, new Date()))) {
     const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
     if (el) el.frame = f;
   }
 }
 
-/** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
-function refill() {
-  const root = live?.root;
-  if (!root?.isConnected) return;
-  const parts = renderLive(live.projects, live.rows, live.o());
-  for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
-  root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
-  root.querySelector("button[data-file]").outerHTML = parts.hint;
-  draw(root);
-}
-
 /** Set while a filing POST runs, so a second Enter does not file the issue twice. */
 let filing = false;
 /** Files the search text as a new issue and opens it; the error shows beside `el`. */
-async function fileFromSearch(el, title) {
+async function fileFromSearch(el, title, repo) {
   if (filing) return;
   filing = true;
-  const repo = fileProject(live.o().project, live.projects);
   try {
     const data = await postJson("/api/issues", { repo, title, body: BODY_TEMPLATE, labels: [], after: "", media: [] });
     location.hash = `/issues/${encodeURIComponent(repo)}/${data.added}`;
   } catch (err) { say(el, `Could not file it: ${err.message}`); } finally { filing = false; }
 }
 
-/** Draws the charts and keeps the data for the filters. Ctrl+Enter in the search box or a click on its File button files the search text. */
+/** Draws the charts and wires the table. Ctrl+Enter in the search box or a click on its File button files the search text. */
 export function mount(root, d) {
-  live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
-  if (root.querySelector?.(".chartbox")) draw(root);
+  const o = () => hashOptions(hashQuery()), repo = () => fileProject(o().project, projectsOf(d));
+  if (root.querySelector?.(".chartbox")) draw(root, issueRows(d), o());
   const table = root.querySelector?.('section[aria-label="Issues"]');
   if (!table) return;
-  wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
-  table.addEventListener("keydown", (e) => {
+  wireTable(table, { redraw, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
+  // Properties, not listeners: a redraw keeps `table`, and each mount replaces the last one's handlers.
+  table.onkeydown = (e) => {
     const title = e.target.value?.trim();
     // Plain Enter stays with the search; Cmd+Enter is the Mac's Ctrl+Enter.
     if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.isComposing || !e.target.matches?.('[data-ui="inv-search"]') || !title) return;
-    fileFromSearch(e.target, title);
-  });
-  table.addEventListener("click", (e) => {
+    fileFromSearch(e.target, title, repo());
+  };
+  const sort = table.onclick;
+  table.onclick = (e) => {
     const b = e.target.closest?.("button[data-file]");
     const title = table.querySelector('[data-ui="inv-search"]').value.trim();
-    if (b && title) fileFromSearch(b, title);
-  });
+    if (b && title) fileFromSearch(b, title, repo());
+    else sort(e);
+  };
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
     root.querySelector(`button[data-tile="${k}"]`)?.focus();
@@ -677,13 +664,13 @@ if (typeof document !== "undefined") {
       const open = new Set(kept("issues.open", []));
       if (!open.delete(fold.dataset.fold)) open.add(fold.dataset.fold);
       keep("issues.open", [...open]);
-      return refill();
+      return redraw();
     }
     const win = t?.closest("#inv-scope .seg button");
     if (win) { remember("window", win.dataset.value); return setQuery({ window: win.dataset.value }); }
   });
   document.addEventListener("change", (e) => {
-    if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return refill(); }
+    if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return redraw(); }
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
     if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, page: "" }); }
   });

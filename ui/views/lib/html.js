@@ -486,11 +486,13 @@ export const barList = (rows) => `<div class="bars">${rows}</div>`;
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
 /** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
 export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
+const param = (q, k) => (typeof q.get === "function" ? q.get(k) : q[k]);
 /** The page number in the query `q` (URLSearchParams or object): 1 unless `page` is a larger whole number. */
 export function pageOf(q) {
-  const v = typeof q.get === "function" ? q.get("page") : q.page;
-  return Math.max(1, Number.parseInt(v, 10) || 1);
+  return Math.max(1, Number.parseInt(param(q, "page"), 10) || 1);
 }
+/** The sort of the query `q` (URLSearchParams or object): `sort` and `dir` when `by` has the key, else `fallback`. */
+export const sortOf = (q, by, fallback) => (Object.hasOwn(by, param(q, "sort")) ? { key: param(q, "sort"), dir: param(q, "dir") === "asc" ? 1 : -1 } : fallback);
 /** `page` held to the pages that `total` rows fill, `step` to a page: a page past the end is the last page. */
 const pageIn = (page, total, step) => Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / step)));
 /** The rows of page `page` of `rows`, `step` to a page. */

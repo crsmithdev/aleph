@@ -21,6 +21,12 @@ describe("the Sessions page", () => {
   test("the view replaces the three old addresses and keeps their window and project", () => {
     expect(v.view).toMatchObject({ path: "/sessions", title: "Sessions", group: "claude" });
     expect(v.view.api({}, new URLSearchParams("days=30&project=x&pick=tool:Bash"))).toBe("/api/sessions?window=month&limit=2000&project=x");
+    const g = globalThis as any;
+    g.localStorage = { getItem: (k: string) => (k === "aleph.project" ? '"kept"' : null) };
+    try {
+      expect(v.view.api({}, new URLSearchParams("days=30"))).toBe("/api/sessions?window=month&limit=2000&project=kept");
+      expect(v.options(new URLSearchParams("days=30")).project).toBe("kept");
+    } finally { delete g.localStorage; }
     expect(v.redirect("#/agents")).toBe("#/sessions");
     expect(v.redirect("#/activity?days=30&project=x&q=y")).toBe("#/sessions?days=30&project=x");
     expect(v.redirect("#/skills")).toBe("#/sessions");

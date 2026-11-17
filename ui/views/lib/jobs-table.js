@@ -1,7 +1,7 @@
 // The jobs table of the Jobs page: its data URL, scope bar, filters, rows and wiring. The Job view and the Jobs page share it.
 import { goQuery, hashQuery, scope } from "./address.js";
 import { money, shortModel, span, when } from "./format.js";
-import { badge, dataTable, empty, esc, filterBar, idLink, miss, pageOf, pageRows, pager, sortHead, sortRows, wireTable } from "./html.js";
+import { badge, dataTable, empty, esc, filterBar, idLink, miss, pageOf, pageRows, pager, sortHead, sortOf, sortRows, wireTable } from "./html.js";
 import { ACTORS, shortText, jobHref, STATES } from "../../../lib/naming.ts";
 
 /** The most rows the list asks for: one page of the API holds the whole window. */
@@ -36,18 +36,18 @@ const titleOf = (j) => j.title;
 const SORT = { id: (j) => j.id, title: titleOf, state: (j) => j.state, repo: (j) => j.repo, model: (j) => shortModel(j.model), took: (j) => j.seconds ?? -1, cost: (j) => j.cost ?? -1, started: (j) => Date.parse(j.started) || 0 };
 /** The keys that start with the largest first. */
 const DOWN_FIRST = new Set(["took", "cost", "started"]);
-const sortOf = (f) => (f.sort && SORT[f.sort] ? { key: f.sort, dir: f.dir === "asc" ? 1 : -1 } : { key: "started", dir: -1 });
+const sorted = (f) => sortOf(f, SORT, { key: "started", dir: -1 });
 
 /** The jobs the role and the search keep, in the sort's order. */
 function shownJobs(jobs, f = {}) {
-  const q = (f.q ?? "").trim().toLowerCase(), sort = sortOf(f);
+  const q = (f.q ?? "").trim().toLowerCase(), sort = sorted(f);
   return sortRows(jobs.filter((j) => (!f.role || j.actor === f.role) && (!q || `${j.id} ${titleOf(j)}`.toLowerCase().includes(q))), SORT, sort);
 }
 
 export function renderJobsTable(jobs, f = {}) {
   const all = shownJobs(jobs, f);
   if (!all.length) return empty();
-  const shown = pageRows(all, pageOf(f), PAGE), sort = sortOf(f);
+  const shown = pageRows(all, pageOf(f), PAGE), sort = sorted(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
   // Columns: id, title, state, project, model, took, cost, then started: the Issues table's order.
   const rows = shown.map((j) => {
@@ -61,7 +61,7 @@ export function renderJobsTable(jobs, f = {}) {
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */
 export function wireJobs(root, jobsNow) {
   const redraw = () => { const jobs = jobsNow(); if (jobs) root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
-  wireTable(root, { redraw, sortOf, downFirst: DOWN_FIRST, search: "jobs-search" });
+  wireTable(root, { redraw, sortOf: sorted, downFirst: DOWN_FIRST, search: "jobs-search" });
   const table = root.onclick;
   root.onclick = (e) => {
     const seg = e.target.closest?.(".card .seg button");

@@ -17,6 +17,8 @@ import { run as alephRun } from "../jobs/commands.ts";
 beforeEach(() => updater.reset());
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
+/** The options the page builds from an address, with `o` over them: a view call takes whole options. */
+const full = (o: object = {}) => ({ ...v.hashOptions(new URLSearchParams()), ...o });
 // @ts-ignore plain JS, shared with the page
 import * as lib from "./views/lib/html.js";
 // @ts-ignore plain JS, shared with the page
@@ -407,10 +409,10 @@ describe("views", () => {
     expect(counts({})).toContain('aria-label="Window" data-name="window"');
     expect(counts({})).not.toContain('class="fl">Window');
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
-    expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
-    expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);
-    expect(v.filterRows(rows, { project: "oth" }).length).toBeGreaterThan(0);
-    expect(v.filterRows(rows, { q: "plain" }).map((r: any) => r.title)).toEqual(["plain task"]);
+    expect(v.filterRows(rows, full({ status: "done" })).every((r: any) => r.status === "done")).toBe(true);
+    expect(v.filterRows(rows, full({ project: "oth" })).every((r: any) => r.project === "oth")).toBe(true);
+    expect(v.filterRows(rows, full({ project: "oth" })).length).toBeGreaterThan(0);
+    expect(v.filterRows(rows, full({ q: "plain" })).map((r: any) => r.title)).toEqual(["plain task"]);
   });
 
   const fz = (title: string, extra: object = {}) => ({ id: "fac-1", project: "fac", labels: [], stage: "new", priority: "medium", title, ...extra });
@@ -434,11 +436,11 @@ describe("views", () => {
       { id: 2, ref: "2", repo: "fac", title: "status of the land", status: "open", labels: [], updatedTime: iso("2026-10-01") },
       { id: 3, ref: "3", repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updatedTime: iso("2026-10-31") },
     ] });
-    const titles = (o: object) => [...v.renderTable(rows, { status: "open", ...o }).matchAll(/<td class="wide"[^>]*><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
+    const titles = (o: object) => [...v.renderTable(rows, full({ status: "open", ...o })).matchAll(/<td class="wide"[^>]*><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
     expect(titles({ q: "status" })[0]).toBe("status of the land");
     expect(titles({ q: "status" })).not.toContain("Set up a tiny ultra stack");
     expect(titles({ q: "status", sort: { key: "id", dir: -1 } })).toEqual(["status of the land", "Workstatus page"]);
-    expect(v.renderTable(rows, { status: "open", q: "land" })).toContain("<mark>land</mark>");
+    expect(v.renderTable(rows, full({ status: "open", q: "land" }))).toContain("<mark>land</mark>");
   });
 
   describe("grouping sub-issues", () => {
@@ -459,7 +461,7 @@ describe("views", () => {
 
     test("off, the table is a flat list in sort order with no indent", () => {
       store(false);
-      const html = v.renderTable(rows(), { status: "open" });
+      const html = v.renderTable(rows(), full({ status: "open" }));
       expect(titles(html)).toEqual(["child", "old part", "other", "lone child", "parent"]);
       expect(subs(html)).toBe(0);
       expect(html).not.toContain("data-fold");
@@ -467,7 +469,7 @@ describe("views", () => {
 
     test("on and collapsed, a parent has a chevron and hides its parts; a part with no parent in the filter is top level", () => {
       store(true);
-      const html = v.renderTable(rows(), { status: "open" });
+      const html = v.renderTable(rows(), full({ status: "open" }));
       expect(titles(html)).toEqual(["other", "lone child", "parent"]);
       expect(html.match(/data-fold="fac-1"[^>]*aria-expanded="false"/g)).toHaveLength(1);
       expect(html.match(/data-fold/g)).toHaveLength(1);
@@ -475,16 +477,16 @@ describe("views", () => {
       expect(html).toMatch(/<tr class="rowlink"[^>]*><td><button class="fold" data-fold="fac-1"/);
       expect(html).toMatch(/<tr class="rowlink"[^>]*><td><\/td><td><a class="idl"/);
       expect(html).toMatch(/<thead><tr><th><\/th>/);
-      expect(titles(v.renderTable(rows(), { status: "open", q: "child" })).map((t) => t.replace(/<\/?mark>/g, ""))).toContain("child");
-      expect(v.renderTable(rows(), { status: "open", q: "child" })).not.toContain("sub-row");
+      expect(titles(v.renderTable(rows(), full({ status: "open", q: "child" }))).map((t) => t.replace(/<\/?mark>/g, ""))).toContain("child");
+      expect(v.renderTable(rows(), full({ status: "open", q: "child" }))).not.toContain("sub-row");
     });
 
     test("on and expanded, the parts follow their parent, indented, in the sort order", () => {
       store(true, ["fac-1"]);
-      const html = v.renderTable(rows(), { status: "open", sort: { key: "id", dir: -1 } });
+      const html = v.renderTable(rows(), full({ status: "open", sort: { key: "id", dir: -1 } }));
       expect(titles(html)).toEqual(["lone child", "other", "parent", "child", "old part"]);
       expect(subs(html)).toBe(2);
-      expect(titles(v.renderTable(rows(), { status: "open", sort: { key: "id", dir: 1 } }))).toEqual(["parent", "old part", "child", "other", "lone child"]);
+      expect(titles(v.renderTable(rows(), full({ status: "open", sort: { key: "id", dir: 1 } })))).toEqual(["parent", "old part", "child", "other", "lone child"]);
     });
 
     test("the controls hold a Group checkbox that follows the kept state", () => {
@@ -665,11 +667,11 @@ describe("views", () => {
 
   test("the search box files its text in the scoped project, and the table gets no row for it", () => {
     const rows = { issues: [{ repo: "aleph", n: 1, title: "alpha thing", status: "open", labels: [] }], projects: ["aleph", "fac"] };
-    const page = (o: object) => v.renderIssues(rows, o);
+    const page = (o: object) => v.renderIssues(rows, full(o));
     // The action sits in the search box's .fbar, right after the field, so CSS can hide it while the field is empty.
     expect(page({ q: "alpha" })).toMatch(/data-ui="inv-search"[^>]*><button type="button" class="hint" data-file[^>]*>Ctrl\+↵ File in aleph<\/button><\/div>/);
     expect(page({ project: "fac" })).toContain(">Ctrl+↵ File in fac</button>");
-    expect(v.renderTable([], { q: "zzz" })).toContain('class="empty"');
+    expect(v.renderTable([], full({ q: "zzz" }))).toContain('class="empty"');
     expect(page({ q: "alpha" })).not.toContain("file-row");
   });
 
@@ -703,12 +705,12 @@ describe("views", () => {
     expect(section(def, "issues-table")).toContain("plain task");
     expect(def).toContain(">done</span>");
     expect(def).toContain('data-value="any" aria-pressed="true"');
-    const t = [...v.sortRows(v.filterRows(v.issueRows(d), { status: "open" }))].map((r: any) => Date.parse(r.at) || 0);
+    const t = [...v.sortRows(v.filterRows(v.issueRows(d), full({ status: "open" })))].map((r: any) => Date.parse(r.at) || 0);
     expect(t).toEqual([...t].sort((x, y) => y - x));
   });
 
   test("the Open tile leaves only open rows, and the Backlog tile only parked rows", async () => {
-    const kept = v.filterRows(v.issueRows(await getJson("/api/issues")), v.TILE_FILTER.open);
+    const kept = v.filterRows(v.issueRows(await getJson("/api/issues")), full(v.TILE_FILTER.open));
     expect(kept.length).toBeGreaterThan(0);
     expect(kept.every((r: any) => r.status === "open")).toBe(true);
     expect(v.TILE_FILTER.parked.status).toBe("parked");
@@ -919,11 +921,11 @@ describe("a parked issue", () => {
       { id: 9, ref: "9", repo: "f", title: "d", status: "done", labels: [], createdTime: iso("2026-10-30"), closedTime: iso("2026-11-01") },
     ] });
     expect(v.renderFilters(all, { status: "" })).toContain("parked");
-    const only = v.renderTable(all, { status: "parked" });
+    const only = v.renderTable(all, full({ status: "parked" }));
     expect(only).toContain("shelved thing");
     expect(only).not.toContain(">o<");
     expect(only).toContain('<span class="badge parked">parked</span>');
-    expect(v.renderTable(all, { status: "open" })).not.toContain("shelved thing");
+    expect(v.renderTable(all, full({ status: "open" }))).not.toContain("shelved thing");
     expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ open: 1, parked: 1, closed: 1 });
   });
 });
@@ -1150,7 +1152,7 @@ describe("the labels say sub-issue and job", () => {
 
   test("the Issues page heads its job count Jobs, and no label keeps the old words", async () => {
     const rows = await rowsOf("fac");
-    const h = v.renderIssues({ issues: rows, projects: ["fac"] }, {});
+    const h = v.renderIssues({ issues: rows, projects: ["fac"] }, full());
     expect(h).toContain('<button type="button" data-sort="runs">Jobs');
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });

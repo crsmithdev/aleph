@@ -1,6 +1,6 @@
 // The Ideas views: the list at #/ideas (/api/ideas) and one idea at #/ideas/:slug (/api/ideas/:slug) with a tab for
 // the write-up, one per lens and the log. A lens result is shown from the lens file route in a sandboxed iframe.
-import { goQuery, hashQuery, kept, keep, postJson, scope, wireScope } from "./lib/address.js";
+import { goQuery, kept, keep, postJson, scope, wireScope } from "./lib/address.js";
 import { count, money, when } from "./lib/format.js";
 import { actButton, badge, card, chips, crumb, dataTable, empty, error, esc, filterBar, heads, list, loadingLine, md, pageHead, repoIdLink, say, searchBox, statusRow, subHead, tabs, wireTable, wireTabs } from "./lib/html.js";
 import { issueHref } from "../../lib/naming.ts";
@@ -39,8 +39,8 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => `/api/ideas?status=${encodeURIComponent(q.get("status") || "exploring")}`,
   live: true,
   render: (d, _params, q) => renderIdeas(d, q?.get("status") || "exploring", q?.get("q") || "", scope(q).project),
-  mount: (root, d, q) => {
-    wireTable(root, { redraw: () => { root.querySelector("#ideas-table").innerHTML = ideasTable(d, q?.get("status") || "exploring", hashQuery().get("q") || "", scope(q).project); }, search: "ideas-search" });
+  mount: (root) => {
+    wireTable(root, { redraw, search: "ideas-search" });
     wireScope(root);
     root.onclick = (e) => {
       const b = e.target.closest("[data-name=status] button");
