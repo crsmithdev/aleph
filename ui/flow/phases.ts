@@ -22,8 +22,7 @@ export interface Pct { count: number; p50: number; p90: number }
 export interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 export const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
-/** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
-/** `filed` is the issue's filing time, ISO, or null when the store has none. */
+/** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". `filed` is its filing time, ISO, or null when the store has none. */
 export type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: string | null } & Record<Phase, number | null>;
 
 export const round = (n: number, d = 0) => { const k = 10 ** d; return Math.round(n * k) / k; };

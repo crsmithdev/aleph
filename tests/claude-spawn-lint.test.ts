@@ -12,12 +12,13 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const RUNNER = "jobs/lib/roles/agent-call.ts";
 const SKIPPED = /^(node_modules|vendor|\.worktrees)\/|\.test\.ts$/;
+const EXPORT = String.raw`\bexport\s+(?:async\s+)?`;
 const CLAUDE = String.raw`(?:modelArgv\(|\[\s*["'\`]claude(?![\w-])|["'\`]claude(?![\w-]))`;
 const SPAWN = String.raw`(?<!function\s+)(?:\bspawn|\bspawnSync|\bexecFile|\bexecFileSync|\bexecSync|(?<![.\w])exec)\(\s*(?:\{\s*cmd:\s*)?`;
 
 /** The names in `text` that a claude command is assigned to, or that a function returns it from. */
 const claudeNames = (text: string, prefix = ""): string[] => [
-  ...text.matchAll(new RegExp(String.raw`${prefix}(?:const|let|var)\s+(\w+)\s*=\s*(?:\([^)]*\)\s*=>\s*)?${CLAUDE}`, "g")),
+  ...text.matchAll(new RegExp(String.raw`${prefix}(?:const|let|var)\s+${prefix && String.raw`(?:\w+\s*=[^,;]*,\s*)*`}(\w+)\s*=\s*(?:\([^)]*\)\s*=>\s*)?${CLAUDE}`, "g")),
   ...text.matchAll(new RegExp(String.raw`${prefix}function\s+(\w+)\([^)]*\)[^{]*\{\s*return\s+${CLAUDE}`, "g")),
 ].map((m) => m[1]);
 
@@ -28,10 +29,14 @@ function spawnsClaude(text: string, wrappers: string[] = []): boolean {
   return new RegExp(SPAWN + arg).test(text) || /\$`\s*claude(?![\w-])/.test(text);
 }
 
+test("guard: claudeNames finds a claude command assigned to a later name of an exported declaration", () => {
+  expect(claudeNames('export const a = 1, b = ["claude", "-p"]', EXPORT)).toEqual(["b"]);
+});
+
 test("no source file outside the runner spawns claude", () => {
   const files = [...new Glob("**/*.{ts,js,mjs}").scanSync(ROOT)].filter((f) => f !== RUNNER && !SKIPPED.test(f));
   const text = new Map(files.map((f) => [f, readFileSync(join(ROOT, f), "utf8")]));
-  const wrappers = [...text.values()].flatMap((t) => claudeNames(t, String.raw`\bexport\s+(?:async\s+)?`));
+  const wrappers = [...text.values()].flatMap((t) => claudeNames(t, EXPORT));
   const found = files.filter((f) => spawnsClaude(text.get(f)!, wrappers)).sort();
   expect(found).toEqual([]);
 });

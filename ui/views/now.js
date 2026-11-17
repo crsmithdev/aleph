@@ -22,10 +22,10 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { lastState = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
-  outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
+  outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root);
     root.onchange = (e) => {
@@ -43,16 +43,15 @@ export const view = {
   swap: (root) => heraldMotion(root),
 };
 
-let lastState = null;
-/** What the Herald keeps between draws: the shell's out-of-date verdict, the last rows the stream sent (`{ seq, rows }`), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
-const page = { stale: false, live: null, loaded: null };
+/** What the page keeps between draws: the last rendered state, the shell's out-of-date verdict, the last rows the stream sent (`{ seq, rows }`), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
+const page = { state: null, stale: false, live: null, loaded: null };
 
 /** The Herald drawn again from the last state, with its folds and motion kept. */
 function redrawHerald(root) {
   const h = root.querySelector("#herald");
-  if (!h || !lastState) return;
+  if (!h || !page.state) return;
   const saved = recordState(h), moved = heraldMotion(root);
-  h.outerHTML = renderHerald(lastState);
+  h.outerHTML = renderHerald(page.state);
   restoreState(root.querySelector("#herald"), saved);
   moved();
 }
