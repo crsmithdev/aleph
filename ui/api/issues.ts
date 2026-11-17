@@ -8,7 +8,7 @@
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs, allRuns, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
-import { counting } from "../../jobs/lib/records/record.ts";
+import { view } from "../../jobs/lib/records/job.ts";
 import { git } from "../../lib/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
@@ -22,7 +22,7 @@ import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
-import { card, row, stageOf, type Row } from "../issue.ts";
+import { awaiting, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
@@ -74,9 +74,8 @@ function list(url: URL): Response {
 
 /** A job as the Issue page lists it: the job ID of its run that counts, its name, state, times, cost and how many runs it holds. */
 function jobRow(runs: ReturnType<typeof allJobs>[number]) {
-  const last = counting(runs), r = last.run;
-  const cost = runs.some((e) => e.run.cost !== undefined) ? runs.reduce((a, e) => a + (e.run.cost ?? 0), 0) : undefined;
-  return { id: last.id, name: r.name, state: r.state, kind: r.role, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
+  const v = view(runs);
+  return { id: v.run.id, name: v.name, state: v.state, kind: v.run.role, started: v.started, ended: v.ended ?? null, cost: v.cost ?? null, runs: runs.length };
 }
 
 /**
@@ -151,9 +150,8 @@ function detail(params: Record<string, string>, url: URL): Response {
   const referencedBy = referrersOf(fetched.map((w) => w.item), item).flatMap((i) => link(i.id));
 
   // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
-  const stored = askOfItem(item);
-  let ask: unknown;
-  if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
+  const waiting = awaiting(repo.key, item, mine?.stage ?? "waiting");
+  const ask = waiting && attend({ runs: [], issues: [waiting] }, []).items[0];
 
   return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }

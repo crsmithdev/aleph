@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, openJobOfIssue, readFile, tailOf } from "./job.ts";
+import { addNote, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, openJobOfIssue, readFile, tailOf, view } from "./job.ts";
 import { allJobs, type Run } from "./ledger.ts";
 import { seed, type Seed } from "../../job.testkit.ts";
 import { logTo } from "./run-files.ts";
@@ -82,6 +82,19 @@ describe("the evidence of a delivery", () => {
     expect(lookMinutes(1)).toBe(3);
     expect(lookMinutes(200)).toBe(3);
     expect(lookMinutes(201)).toBe(4);
+  });
+});
+
+describe("view", () => {
+  test("returns the job's cost over its runs, the cause and check of a stopped one, and the ask of a waiting one", () => {
+    run("c", { cost: 1.5 });
+    run("c", { state: "failed", cost: 0.5, cause: "check", checkName: "tests", limit: 30 });
+    expect(view(allJobs()[0])).toMatchObject({ cost: 2, cause: "check", checkName: "tests", limit: 30 });
+    run("w", { state: "waiting", ask: { reason: "question", question: "Which?", options: [], why: [] } });
+    run("p", { state: "waiting" });
+    expect(view(allJobs()[1]).ask).toMatchObject({ reason: "question", question: "Which?" });
+    expect(view(allJobs()[2]).ask).toMatchObject({ reason: "question", question: "" });
+    expect(view(allJobs()[1])).not.toHaveProperty("cause");
   });
 });
 

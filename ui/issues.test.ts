@@ -11,6 +11,7 @@ import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
+import { state } from "./state.ts";
 import { run as alephRun } from "../jobs/commands.ts";
 
 // The fixtures change between tests, with no watcher to see it: each test starts with no kept answer.
@@ -971,6 +972,19 @@ describe("the Issue page shows the ask row", () => {
       ...(stored ? { situation: "Two ways to go.", effects: [{ action: "resolve:A", text: "Goes with A." }, { action: "resolve:B", text: "Goes with B." }], recommend: { action: "resolve:B", why: "smaller" } } : {}) });
     return i.id;
   }, true)!.value;
+
+  test("the Status awaiting list and the Issue page Ask row agree: an open waiting issue and a parked core-change one have both, a parked question has neither", async () => {
+    const [open, core, shelved] = ([["question", "open"], ["core-change", "parked"], ["question", "parked"]] as const).map(([reason, status]) => writeList({ key: "fac" }, "seed", (doc) => {
+      const i = add(doc, `${status} ${reason}`, { request: "x" });
+      setAsk(refIn(i), { reason, question: "Which?", options: [], why: [] });
+      if (status === "parked") setStatus(i, "parked");
+      return i.id;
+    }, true)!.value);
+    const onStatus = (n: number) => state().asks.some((a) => a.id === `fac-${n}`);
+    const onPage = async (n: number) => !!(await getJson(`/api/issues/fac-${n}`)).ask;
+    expect([open, core, shelved].map(onStatus)).toEqual([true, true, false]);
+    expect(await Promise.all([open, core, shelved].map(onPage))).toEqual([true, true, false]);
+  });
 
   test("renderIssue puts the Commit and Subject first in the Commits table", async () => {
     const d = await getJson(`/api/issues/fac-1`);

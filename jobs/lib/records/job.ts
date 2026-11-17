@@ -6,7 +6,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { needsOf } from "../asks/ask.ts";
+import { needsOf, plainAsk, type Ask } from "../asks/ask.ts";
+import { causeOf, failedCheckOf, type Cause } from "./outcome.ts";
 import { allJobs, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "../infra/process.ts";
 import { isSection, readSection, runFile, type RunFile, type Section } from "./run-files.ts";
@@ -87,7 +88,12 @@ export interface JobView {
   job: string; name: string; repo?: string;
   /** The last run: its key, role and start. `started` is the job's first. */
   run: { id: string; role: Run["role"]; started: string };
-  state: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
+  state: State; needs?: ReturnType<typeof needsOf>;
+  /** A returned or failed run: why it stopped, the failed check's name and the time limit it hit. */
+  cause?: Cause; checkName?: string; limit?: number;
+  /** A waiting run: its Ask; a run with none asks a question. */
+  ask?: Ask;
+  phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
   item?: number; cost?: number; model?: string; size?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
@@ -126,6 +132,13 @@ export function view(j: Job): JobView {
   const needs = needsOf(r.ask);
   if (needs) v.needs = needs;
   if (r.ask?.reason === "question" && !v.question) v.question = r.ask.question;
+  if (r.state === "returned" || r.state === "failed") {
+    const cause = causeOf(r), checkName = failedCheckOf(r);
+    if (cause) v.cause = cause;
+    if (checkName) v.checkName = checkName;
+    if (r.limit) v.limit = r.limit;
+  }
+  if (r.state === "waiting") v.ask = r.ask ?? plainAsk("question", "");
   const item = issue(j);
   if (item !== undefined) v.item = item;
   if (j.some((e) => e.run.cost !== undefined)) v.cost = j.reduce((a, e) => a + (e.run.cost ?? 0), 0);
