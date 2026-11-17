@@ -15,6 +15,7 @@ import { allRuns, isWaiting, isAgentRun, onOf, type Check, type Entry, type Repo
 import { lock } from "../../../lib/locks.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive } from "../infra/process.ts";
+import { removeWorktree } from "../infra/git.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
 import { LOCK_BUSY, type Cause } from "../records/outcome.ts";
@@ -109,13 +110,7 @@ const MOVED = "main moved during the land; land again";
 const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph issue`;
 
 /** The job's worktree, when it has one, and its branch. */
-export function removeBranch(repo: Repo, run: Run): void {
-  if (run.worktree) {
-    git(repo.path, "worktree", "remove", "--force", run.worktree);
-    git(repo.path, "worktree", "prune");
-  }
-  if (run.branch) git(repo.path, "branch", "-D", run.branch);
-}
+export const removeBranch = (repo: Repo, run: Run): void => removeWorktree(repo.path, run.worktree, run.branch);
 
 /**
  * Wait until no older land of this repo is still live, then hold the repo's
@@ -206,6 +201,12 @@ function failed(cause: Cause, reason: string, extra: Partial<Verdict> = {}): Lan
   return { outcome: { state: "failed", cause, reason, ...extra }, code: 1 };
 }
 
+/** The conflicted files in the output of a failed `merge-tree --write-tree --name-only`. */
+export function conflictsOf(out: string): string[] {
+  const lines = out.split("\n");
+  return lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+}
+
 /** Merge each run onto the one before it. A conflict, a run with no net change and a run that edits the list leave the chain. */
 function build(ctx: Attempt, list: Member[], from: string): Pending[] {
   const { repo, tips, finish } = ctx;
@@ -224,8 +225,7 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
       }
     }
     if (!merged.ok) {
-      const lines = merged.out.split("\n");
-      const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+      const conflicts = conflictsOf(merged.out);
       m.log("conflicts", conflicts.join("\n"));
       finish(m, failed("conflict", "merge conflict", { conflicts }));
       continue;

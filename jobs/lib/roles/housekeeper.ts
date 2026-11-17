@@ -16,7 +16,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
 import { askOfItem, asking } from "../asks/ask.ts";
 import { paused } from "../gates/pause.ts";
-import { git } from "../../../lib/git.ts";
+import { git, mainRef } from "../../../lib/git.ts";
 import { held, lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { dispatchAfterIssue } from "../transitions/filing.ts";
@@ -45,7 +45,7 @@ export const readState = (): State => ({ main: {}, ...getJson<Partial<State>>("s
 /** One batch: parked issues of one repo, and the land that touched them, if a land is the trigger. */
 export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: string; to: string; files: string[] } }
 
-const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${repo.main}`).out;
+const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", mainRef(repo.path, repo.main)).out;
 /** The parked issues of `repo`, but those whose Ask waits for Chris: the housekeeper must not close or drop them. */
 const parked = (repo: Repo): issues.Issue[] =>
   (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)));

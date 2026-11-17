@@ -21,7 +21,7 @@ import { gates } from "../gates/factory-status.ts";
 import { mainRed } from "../gates/tables.ts";
 import { factoryDir } from "../../../lib/layout.ts";
 import { redCi } from "../gates/ci.ts";
-import { fetchOrigin, git } from "../../../lib/git.ts";
+import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
@@ -237,25 +237,17 @@ function openIssues(repo: Repo, item: issues.Issue): string {
   return others.map((o) => `${issueKey(o.id)}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
 }
 
-/** The ref of the repo's main, `origin/<main>`, when the repo has it. */
-function mainRef(repo: Repo): string | null {
-  const ref = `origin/${repo.main}`;
-  return git(repo.path, "rev-parse", "--verify", "-q", `${ref}^{commit}`).ok ? ref : null;
-}
-
 /** The commits on main since the item was created, one line each: what an issue may already be done by. */
 function mainSince(repo: Repo, item: issues.Issue): string {
-  const ref = mainRef(repo);
-  if (!ref) return "(main is not readable)";
+  const ref = mainRef(repo.path, repo.main);
   const at = new Date(issues.created(item) ?? "");
   const r = git(repo.path, "log", "--oneline", "--no-decorate", ...(isNaN(+at) ? ["-n", "50"] : [`--since=${at.toISOString()}`]), ref);
-  return (r.ok && r.out.trim()) || "(none)";
+  return r.ok ? r.out.trim() || "(none)" : "(main is not readable)";
 }
 
 /** The full sha of `commit` when it is a commit on main, else null. */
 function commitOnMain(repo: Repo, commit: string): string | null {
-  const ref = mainRef(repo);
-  if (!ref) return null;
+  const ref = mainRef(repo.path, repo.main);
   const full = git(repo.path, "rev-parse", "--verify", "-q", `${commit}^{commit}`);
   if (!full.ok) return null;
   const sha = full.out.trim();

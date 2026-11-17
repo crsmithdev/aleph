@@ -19,7 +19,7 @@ import { close, partsOf, reader, setPlan, writeList } from "../../../issues/lib/
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
-import { fetchOrigin, git } from "../../../lib/git.ts";
+import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
 import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
@@ -28,7 +28,7 @@ import { lock } from "../../../lib/locks.ts";
 import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import type { MainState } from "../gates/tables.ts";
-import { onMain } from "../records/status.ts";
+import { branchFacts, onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
 import { counting, read as readRecord, setState, stepOf } from "../records/record.ts";
@@ -281,11 +281,10 @@ function touched({ r, repo }: Pick<Stuck, "r" | "repo">): string {
   return files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
 }
 
-/** Whether a branch has commits ahead of main: the worker's finished work, since commits reach the branch only after the worker ended. */
-function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
+/** Whether a branch carries the worker's finished work, as `branchFacts` decides: commits reach the branch only after the worker ended. */
+export function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
   if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) return false;
-  const ahead = git(repo.path, "rev-list", "--count", `${repo.main}..refs/heads/${r.branch}`);
-  return ahead.ok && Number(ahead.out) > 0;
+  return !!branchFacts(repo, mainRef(repo.path, repo.main), `refs/heads/${r.branch}`);
 }
 
 /** Whether intake cannot split this issue: it is a part (id `n.m`) or a child filed with `from:`, or it has parts. */

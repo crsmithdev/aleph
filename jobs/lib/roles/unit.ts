@@ -14,8 +14,8 @@ import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib
 import { filing } from "../transitions/filing.ts";
 import { callAgent, resultOf, type Reply } from "./agent-call.ts";
 import { addWorktree } from "../infra/git.ts";
-import { fetchOrigin, git } from "../../../lib/git.ts";
-import { jobGrep, trailerLine } from "../records/status.ts";
+import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
+import { branchFacts, jobGrep, trailerLine } from "../records/status.ts";
 import { heldRule, parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, issueKeyOf, loadRegistry, newsLine, readEnvFile, tell, type CheckResult, type Entry, type Repo, type Run, type TestRecord, allJobs, isOpen } from "../records/ledger.ts";
@@ -26,7 +26,7 @@ import { jobById, openJob } from "../records/job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, shell, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { paused } from "../gates/pause.ts";
 import { keepDiff } from "../records/jobdiff.ts";
-import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
+import { conflictsOf, land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
 import { OPUS_MODEL } from "../../../lib/models.ts";
 import { readModels, SIZE_OF } from "../routing/models.ts";
@@ -388,13 +388,13 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     logTo(folder, "setup", `## fetch: failed\n${refetched.out}\n`);
     return fail("infra", `fetch failed: ${refetched.out}`);
   }
-  const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
-  if (git(wt, "rev-list", "--count", `${base}..HEAD`).out === "0") {
+  const bf = branchFacts(repo, mainRef(repo.path, repo.main), `refs/heads/${run.branch!}`);
+  if (!bf) {
     removeBranch(repo, run);
     return { outcome: { state: "done", reason: "no commits" }, code: 0 };
   }
+  const { base, changed } = bf;
   stampJob(wt, base, run, id);
-  const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
   const failed = await runChecks(taskOf(folder, repo, changed, () => phase("verify")), inWorktree(wt, checkEnv));
   if (failed) return { outcome: { state: "failed", ...stopFields(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
@@ -403,22 +403,13 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   return { outcome: { state: "passed", checkedBase: base, checkedTip: git(wt, "rev-parse", "HEAD").out, ...(manual ? { say: manual.say } : {}) }, code: 0 };
 }
 
-/** What the verdict of a branch needs from git: its merge base with `main`, the files it changes, and the base and tip it is checked at. Null when it adds no commit, or only `result.md`. */
-function branchFacts(repo: Repo, main: string, tip: string): { base: string; changed: string[]; checked: { checkedBase: string; checkedTip: string } } | null {
-  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return null;
-  const base = git(repo.path, "merge-base", main, tip).out;
-  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
-  if (changed.length > 0 && changed.every((f) => f === "result.md")) return null;
-  return { base, changed, checked: { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out } };
-}
-
 /**
  * A factory worker's run after its worker: the fields of its structured output, then the worker verdict on its branch.
  * A reply with no structured output fails. Only the branch's commits count: what the worker left uncommitted is not checked.
  */
 async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Reply, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const tip = `refs/heads/${run.branch!}`;
-  const main = `refs/remotes/origin/${repo.main}`;
+  const main = mainRef(repo.path, repo.main);
   const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "failed" as const, cause, reason, ...extra }, code: 1 });
   const reply = parseWorker(w.data);
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? w.text : reply.summary);
@@ -557,7 +548,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
 async function recheck(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const branch = run.branch!;
   const ref = `refs/heads/${branch}`;
-  const main = `refs/remotes/origin/${repo.main}`;
+  const main = mainRef(repo.path, repo.main);
   const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
   const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { state: "failed" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
@@ -568,12 +559,11 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
   phase("merge");
   if (!git(repo.path, "merge-base", "--is-ancestor", upstream, tip.out).ok) {
     const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", tip.out, upstream);
-    const lines = merged.out.split("\n");
     if (!merged.ok) {
-      const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+      const conflicts = conflictsOf(merged.out);
       return stop("conflict", `merge conflict: ${conflicts.join(", ")}`, { conflicts });
     }
-    const c = git(repo.path, "commit-tree", lines[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
+    const c = git(repo.path, "commit-tree", merged.out.split("\n")[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
     if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stop("other", `merge failed: ${c.out}`);
     // The job's worktree has the branch checked out: its files follow the moved branch.
     if (run.worktree && existsSync(run.worktree)) git(run.worktree, "reset", "-q", "--hard");

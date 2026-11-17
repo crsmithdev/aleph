@@ -7,9 +7,10 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { git } from "../../../lib/git.ts";
 import { loadRegistry, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
-import { claimStep, conflictStep, duplicateStep, infraStep, killedStep, rerunStep, rescueCase, type Stuck } from "./rescue.ts";
+import { claimStep, conflictStep, duplicateStep, hasWork, infraStep, killedStep, rerunStep, rescueCase, type Stuck } from "./rescue.ts";
 import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
@@ -141,4 +142,21 @@ test("rescue: each step: a killed run, an infra failure, a land conflict, and a 
   expect(conflictStep(stuck({ role: "land", conflicts: ["a.ts"] }), "abc fix a").rerun).toContain("merge conflict in a.ts, last changed on main by abc fix a");
   expect(rerunStep(stuck({ cause: "no-commit" }, "r-nc", { "result.md": "line 1\nline 2\n" }), "no-commit").rerun).toBe("The last run made no commit. The last 20 lines of its result.md:\n\n```\nline 1\nline 2\n```");
   expect(rerunStep(stuck({ role: "land", cause: "check", reason: "tests" }, "r-none"), "land-checks").rerun).toContain("its checks log:\n\n```\n(empty)\n```");
+});
+
+test("hasWork: a branch whose only change is result.md is not work to rescue, as unit's branchFacts decides; one that changes code is", () => {
+  const path = mkdtempSync(join(tmpdir(), "rescue-git-"));
+  const g = (...a: string[]) => git(path, "-c", "user.name=t", "-c", "user.email=t@t", ...a);
+  g("init", "-q", "-b", "main");
+  g("commit", "-q", "--allow-empty", "-m", "base");
+  const commit = (branch: string, file: string) => {
+    g("checkout", "-q", "-b", branch, "main");
+    writeFileSync(join(path, file), "x\n");
+    g("add", file);
+    g("commit", "-q", "-m", file);
+  };
+  commit("notes", "result.md");
+  commit("code", "a.ts");
+  const at = (branch: string) => hasWork({ r: run({ branch }), repo: { ...repo, path } });
+  expect([at("notes"), at("code"), at("gone")]).toEqual([false, true, false]);
 });

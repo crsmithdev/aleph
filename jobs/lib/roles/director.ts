@@ -27,8 +27,9 @@ import { sandboxRepos } from "../gates/gpu.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { jobById, issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";
-import { git } from "../../../lib/git.ts";
-import { NO_OUTPUT, securityChange } from "../gates/gate.ts";
+import { git, mainRef } from "../../../lib/git.ts";
+import { ofBranch } from "../records/jobdiff.ts";
+import { heldRule, NO_OUTPUT, securityChange } from "../gates/gate.ts";
 import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
@@ -55,7 +56,7 @@ export const MAX_ACTIONS = 10;
 const ONCE_PER_ISSUE = ["run-cap", "rescue"];
 /** The reasons whose first verb a grant takes in `direct`: the other reasons have a rule site of their own. */
 const FIRST_VERB = ["held-path", "review-held", "core-change", "no-commit", "run-cap", "part-dropped"];
-/** Changed files that put a run's land on the escalation list besides the security paths. */
+/** Changed files that put a run's land on the escalation list besides the security paths and the repo's held globs. */
 const HELD_FILES = ["bun.lock"];
 const TAIL = 40;
 const MAX_FILE = 4000;
@@ -160,16 +161,15 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
   return last?.outcome === "escalated" && last.question === questionOf(c);
 };
 
-/** A held path the branch changes (a security path or bun.lock), or null; "unknown" when there is no branch to read. */
+/** The held rule the branch breaks (a security path, one of the repo's held globs or bun.lock), or null; "unknown" when there is no branch to read. */
 function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
-  const main = git(repo.path, "rev-parse", "--verify", "-q", `origin/${repo.main}`).ok ? `origin/${repo.main}` : repo.main;
+  const main = mainRef(repo.path, repo.main);
   const fork = git(repo.path, "merge-base", main, `refs/heads/${branch}`);
   if (!fork.ok) return "unknown";
   const sec = securityChange(repo.path, fork.out.trim(), `refs/heads/${branch}`);
-  if (sec) return sec;
-  const names = git(repo.path, "diff", "--name-only", fork.out.trim(), `refs/heads/${branch}`).out.split("\n");
-  return HELD_FILES.find((f) => names.includes(f)) ?? null;
+  if (sec) return `held path ${sec}`;
+  return heldRule(repo.path, [...repo.held, ...HELD_FILES], fork.out.trim(), `refs/heads/${branch}`);
 }
 
 /** The branch of the run a case is about: the case's own run, or the open job of its item. */
@@ -185,7 +185,7 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
 
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
- * judgement: a memory proposal, a change to a core note, an after link to a dropped issue, a land of a run that changes a security path or bun.lock (or a held run whose branch
+ * judgement: a memory proposal, a change to a core note, an after link to a dropped issue, a land of a run that changes a security path, a path the repo holds or bun.lock (or a held run whose branch
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
@@ -199,7 +199,7 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
   if (b) {
     const held = heldChange(b.repo, b.branch);
     if (held === "unknown" && c.ask.reason === "held-path") return { why: "the held run's branch cannot be read for security paths, so its land is Chris's" };
-    if (held && held !== "unknown") return { why: `the run changes ${held}, a security path or bun.lock, so its land is Chris's`, file: held };
+    if (held && held !== "unknown") return { why: `the run changes ${held}, so its land is Chris's`, file: held };
   }
   return null;
 }
@@ -224,9 +224,8 @@ function reviewOf(e: Entry): string | null {
 function diffStat(repo: Repo | undefined, run: Run): string {
   if (!repo || !run.branch) return "(no branch)";
   if (!existsSync(repo.path)) return "(the repo is not readable)";
-  const main = [`origin/${repo.main}`, repo.main].find((ref) => git(repo.path, "rev-parse", "--verify", "-q", `${ref}^{commit}`).ok);
-  const r = main && git(repo.path, "diff", "--stat", `${main}...${run.branch}`);
-  return r && r.ok ? r.out.trim() || "(no change)" : "(the branch is not readable)";
+  const d = ofBranch(repo, run.branch);
+  return d ? d.stat.trim() || "(no change)" : "(the branch is not readable)";
 }
 
 const section = (title: string, body: string | null | undefined): string => (body && body.trim() ? `\n## ${title}\n\n${body.trim()}\n` : "");
@@ -302,7 +301,7 @@ Reply with the case text only. ${CASE_TEXT(acts)}
 # The rules
 
 - Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
-- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
+- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
 - When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec: a clause that counts text the Goal leaves out, or a clause that needs a name the code does not have.
@@ -533,7 +532,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (c.at !== "run") return no(a, "the Ask is not on a run");
     const b = branchOf(c);
     const held = b ? heldChange(b.repo, b.branch) : "unknown";
-    if (held) return no(a, held === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${held}, a security path or bun.lock, so the land is Chris's`);
+    if (held) return no(a, held === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${held}, so the land is Chris's`);
     // A run held for a path the repo holds lands once the reviewer gave a verdict; a review Ask is the director's call over the reviewer's hold.
     if (c.ask.reason === "held-path") {
       const runs = openJob(c.entry.run.name);
@@ -665,7 +664,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     if (c.at !== "lesson" && FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
       const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
       let why: string | null;
-      // A review-held run lands through the land action, so a run that changes a security path or bun.lock stays Chris's.
+      // A review-held run lands through the land action, so a run that changes a security path, a path the repo holds or bun.lock stays Chris's.
       if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
       else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports); why = "refused" in o ? o.refused : null; }
       if (why) return escalate(c, base, undefined, `a rule's ${granted} was refused: ${why}`);

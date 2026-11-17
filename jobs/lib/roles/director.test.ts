@@ -9,6 +9,7 @@ import { writeList } from "../../../issues/lib/store.ts";
 import { grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
+import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { directorStep } from "../transitions/factory.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { setPaused } from "../gates/pause.ts";
@@ -113,7 +114,7 @@ test("the escalation list: a land on a security path gets case text and no actio
   const out = await direct();
   expect(out.map((d) => [d.ref, d.outcome, d.why])).toEqual([
     [`issue.2`, "decided", undefined],
-    [`issue.1`, "escalated", "the run changes hooks/x.ts, a security path or bun.lock, so its land is Chris's"],
+    [`issue.1`, "escalated", "the run changes held path hooks/x.ts, so its land is Chris's"],
   ]);
   expect(out[1].applied).toEqual([]);
   expect(out[1].refused.every((r) => r.endsWith("the Ask is on the escalation list"))).toBe(true);
@@ -130,7 +131,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
   reply([{ do: "land" }]);
   const [d] = await direct();
-  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes bun.lock, a security path or bun.lock, so its land is Chris's" });
+  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path bun.lock, so its land is Chris's" });
   expect(landed).toEqual([]);
 
   fresh([{ title: "plain", specced: true }]);
@@ -339,6 +340,17 @@ test("a held-path grant lands the run with no director run only in the run's pro
   expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "landed", object: "issue.1" }));
 });
 
+test("a review Ask on a run that changes a path the repo holds is Chris's, as the unit's held rule decides", async () => {
+  fresh([{ title: "held", specced: true }]);
+  writeRepos({ [key]: { path: repoPath(), sandbox: true, autoland: false, held: ["docs/**"] } });
+  branch(`doc${n}`, "docs/a.md");
+  run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `doc${n}` });
+  reply([{ do: "land" }]);
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path docs/a.md, so its land is Chris's" });
+  expect(landed).toEqual([]);
+});
+
 test("a review-held grant does not land a run that changes bun.lock: the refused approve goes to Chris", async () => {
   fresh([{ title: "lock", specced: true }]);
   branch(`lock${n}`, "bun.lock");
@@ -347,7 +359,7 @@ test("a review-held grant does not land a run that changes bun.lock: the refused
   const [d] = await direct();
   expect(landed).toEqual([]);
   expect(directorRuns()).toHaveLength(0);
-  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("it changes bun.lock, a security path or bun.lock") });
+  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("it changes held path bun.lock") });
 });
 
 test("a no-commit grant for the issue's project clears the Ask with no director run", async () => {

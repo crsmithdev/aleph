@@ -6,7 +6,7 @@
 import { logEvent } from "../../../lib/layout.ts";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { git } from "../../../lib/git.ts";
+import { git, mainRef } from "../../../lib/git.ts";
 import { loadRegistry, type Entry, type Repo } from "./ledger.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -18,10 +18,10 @@ interface JobDiff { diff: string; stat: string }
 const branchOf = (runs: Entry[]) => runs.findLast((e) => e.run.branch)?.run.branch;
 
 /** The diff and stat of `branch` against its merge base with main, or null when the branch is not there. */
-function ofBranch(repo: Repo, branch: string): JobDiff | null {
+export function ofBranch(repo: Repo, branch: string): JobDiff | null {
   const ref = `refs/heads/${branch}`;
   if (!git(repo.path, "rev-parse", "--verify", "-q", ref).ok) return null;
-  const mb = git(repo.path, "merge-base", `origin/${repo.main}`, ref);
+  const mb = git(repo.path, "merge-base", mainRef(repo.path, repo.main), ref);
   if (!mb.ok || !mb.out) return null;
   const base = mb.out.trim();
   const d = git(repo.path, "diff", base, ref);

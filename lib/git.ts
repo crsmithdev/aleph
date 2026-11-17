@@ -58,6 +58,11 @@ export function probe(cwd: string, ...args: string[]): { ok: boolean; out: strin
   return existsSync(cwd) ? git(cwd, ...args) : { ok: false, out: "" };
 }
 
+/** The ref of a repo's main to read: `origin/<main>` when the repo has it, else the local `<main>`. */
+export function mainRef(cwd: string, main: string): string {
+  return git(cwd, "rev-parse", "--verify", "-q", `origin/${main}^{commit}`).ok ? `origin/${main}` : main;
+}
+
 /** The pause between two tries of a step that met a held git lock: `sleep` waits, Bun.sleepSync unless the caller passes Bun.sleep and awaits it. A test replaces it to free the lock. */
 export const lockRetry = { pause: (sleep: (ms: number) => unknown = Bun.sleepSync): unknown => sleep(100 + Math.random() * 200) };
 

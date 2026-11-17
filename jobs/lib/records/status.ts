@@ -190,3 +190,12 @@ export function recentRepos(repos: Pick<Repo, "key">[], docs: (issues.Doc | null
   repos.forEach((r, n) => { for (const i of docs[n]?.items ?? []) if (issues.updated(i)) seen(r.key, Date.parse(issues.updated(i)!)); });
   return repos.map((_, n) => n).filter((n) => last.has(repos[n].key)).sort((a, b) => last.get(repos[b].key)! - last.get(repos[a].key)!);
 }
+
+/** What the verdict of a branch needs from git: its merge base with `main`, the files it changes, and the base and tip it is checked at. Null when it adds no commit, or only `result.md`. */
+export function branchFacts(repo: Repo, main: string, tip: string): { base: string; changed: string[]; checked: { checkedBase: string; checkedTip: string } } | null {
+  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return null;
+  const base = git(repo.path, "merge-base", main, tip).out;
+  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return null;
+  return { base, changed, checked: { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out } };
+}
