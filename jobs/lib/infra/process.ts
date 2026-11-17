@@ -157,6 +157,12 @@ export function activeEnd(e: Entry): Run {
   return end === b ? r : { ...r, ended: new Date(end).toISOString() };
 }
 
+/** The seconds from a run's start to its `activeEnd`; null for a run with no end, or an end before its start. */
+export function duration(e: Entry): number | null {
+  const r = activeEnd(e), secs = (Date.parse(r.ended ?? "") - Date.parse(r.started)) / 1000;
+  return secs >= 0 ? secs : null;
+}
+
 /** How long after `ended` a run folder is taken to be done changing. */
 const SETTLED_MS = 10 * 60_000;
 /** The end `activeEnd` found for a settled run, by folder and `ended`. */

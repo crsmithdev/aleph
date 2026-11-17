@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { flakeHealth, flakeSection, measure, renderTable, stageRows, type Sources } from "./monitor-table.ts";
@@ -88,6 +88,16 @@ describe("stages", () => {
     const j = run({ role: "review", target: "issue.5", started: at(DAY, 9), ended: at(DAY, 9), state: "done", cost: 0.5 });
     const k = run({ role: "review", target: "issue.5", started: at(DAY, 10), ended: at(DAY, 10, 2), state: "done", cost: 0.5 });
     expect(reviewRow([j, k])).toMatchObject({ runs: 2, minutes: 2, p90: 120 });
+  });
+
+  test("a killed worker's time ends at its last output, not at the end the record was stamped with", () => {
+    const e = run({ role: "build", target: "issue.9", started: at(DAY, 9), ended: at(DAY, 12), state: "failed" });
+    e.folder = mkdtempSync(join(tmpdir(), "aleph-killed-"));
+    writeFileSync(join(e.folder, "log"), "x");
+    utimesSync(join(e.folder, "log"), Date.parse(at(DAY, 9, 24)) / 1000, Date.parse(at(DAY, 9, 24)) / 1000);
+    const row = stageRows({ runs: [e] }, Date.parse(at(DAY, 0)), Date.parse(at("2026-10-21", 0))).find((s) => s.stage === "build");
+    rmSync(e.folder, { recursive: true, force: true });
+    expect(row).toMatchObject({ minutes: 24, p90: 24 * 60 });
   });
 
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {

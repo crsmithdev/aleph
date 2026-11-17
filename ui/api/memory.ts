@@ -12,7 +12,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
-import { aleph, fail, post } from "../action.ts";
+import { aleph, cli, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir, vaultDir } from "../../lib/paths.ts";
 import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
@@ -23,8 +23,8 @@ import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writ
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
+import { DAILY_HOUR, DAILY_TEXT, EPISODES_MS, EPISODES_TEXT } from "../../lib/schedule.ts";
 
-const CLI = join(import.meta.dir, "..", "..", "jobs", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
@@ -58,7 +58,7 @@ const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], 
 const vaultNotes = async (root: string): Promise<Note[]> => (hasHome(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
 async function runMisses(): Promise<unknown | null> {
   try {
-    const p = Bun.spawn(["bun", CLI, "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
+    const p = Bun.spawn([...cli(), "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
     const text = await new Response(p.stdout).text();
     if ((await p.exited) !== 0) return null;
     return JSON.parse(text);
@@ -150,12 +150,11 @@ async function log(url: URL): Promise<Response> {
   return json({ project, rows: rows.sort((a, b) => b.at.localeCompare(a.at)) });
 }
 
-const MIN = 60_000;
 /** The local 03:00 after `at`: when the daily maintainer step is next due. */
 function nextDaily(at: string): string {
   const d = new Date(at);
   d.setDate(d.getDate() + 1);
-  d.setHours(3, 0, 0, 0);
+  d.setHours(DAILY_HOUR, 0, 0, 0);
   return d.toISOString();
 }
 
@@ -169,7 +168,7 @@ function maintain(root: string, ran: TickRow | undefined) {
   const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
   const resolved = /(\d+) resolved/.exec(dedupe?.detail ?? "")?.[1];
   const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`, resolved && `${resolved} resolved`].filter(Boolean).join(" · ");
-  return { name: "maintain", runs: "daily after 03:00", last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes, resolves overlaps" };
+  return { name: "maintain", runs: DAILY_TEXT, last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes, resolves overlaps" };
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. */
@@ -180,7 +179,7 @@ async function processes(): Promise<Response> {
   const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
     ({ name, runs, last: last ?? null, next, result: tick[name]?.result ?? null, detail: null, does });
   const steps = [
-    step("episodes", "every 30 min", tick.episodes?.last ?? undefined, tick.episodes?.last ? new Date(Date.parse(tick.episodes.last) + 30 * MIN).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
+    step("episodes", EPISODES_TEXT, tick.episodes?.last ?? undefined, tick.episodes?.last ? new Date(Date.parse(tick.episodes.last) + EPISODES_MS).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     maintain(root, tick.maintain),
     ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "daily with maintain", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);

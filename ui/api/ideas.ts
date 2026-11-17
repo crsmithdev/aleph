@@ -4,12 +4,11 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cliOverride } from "../../jobs/lib/infra/settings.ts";
 import { runsOfRole } from "../../jobs/lib/records/ledger.ts";
 import { LENSES, ideasDir, lenses, list, read } from "../../ideas/ideas.ts";
 import { projectName } from "../../issues/lib/projects.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
-import { post } from "../action.ts";
+import { cli, post } from "../action.ts";
 import type { Routes } from "../server.ts";
 
 const SLUG = /^[a-z0-9-]+$/;
@@ -45,8 +44,7 @@ export const routes: Routes = {
   "POST /api/ideas/:slug/lenses/:lens": post((_body, { slug, lens }) => {
     if (!LENSES.includes(lens)) refuse(`no lens named ${lens}: use ${LENSES.join(", ")}`);
     if (!find(slug)) refuse(`no idea named ${slug}`);
-    const argv = cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "..", "jobs", "cli.ts")];
-    Bun.spawn([...argv, "idea", "lens", slug, lens], { stdin: "ignore", stdout: "ignore", stderr: "ignore", env: process.env }).unref();
+    Bun.spawn([...cli(), "idea", "lens", slug, lens], { stdin: "ignore", stdout: "ignore", stderr: "ignore", env: process.env }).unref();
     return { started: `${slug}-${lens}` };
   }),
 };

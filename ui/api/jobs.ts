@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { git } from "../../lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { allRuns, isBuild, isOpen, issueKeyOf, jobOfRun, loadRegistry, onOf, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { duration } from "../../jobs/lib/infra/process.ts";
 import { checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf } from "../../jobs/lib/gates/factory-status.ts";
 import { readHolds, type HoldRecord } from "../../jobs/lib/gates/holds.ts";
@@ -166,11 +167,11 @@ function rowsOf(runs: Entry[]): Row[] {
   const lists = jobProjector().lists;
   return runs.map((e) => {
     const r = e.run, issue = issueKeyOf(r) ?? null;
-    const ended = r.ended ?? null, kind = KIND[r.role] ?? "worker";
+    const ended = r.ended ?? null, kind = KIND[r.role] ?? "worker", took = duration(e);
     return {
       id: e.id, subject: r.name, name: r.name, repo: r.repo ?? "", kind: r.role, actor: RUN_ACTOR[kind] ?? null, state: r.state,
       title: (issue && lists.item(r.repo!, onOf(r)!)?.title) || r.name, issue, started: r.started, ended,
-      seconds: ended ? Math.round((Date.parse(ended) - Date.parse(r.started)) / 1000) : null, cost: r.cost ?? null, model: r.model ?? null,
+      seconds: took === null ? null : Math.round(took), cost: r.cost ?? null, model: r.model ?? null,
     };
   });
 }

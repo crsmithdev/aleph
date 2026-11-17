@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Entry, type Run } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
-import { holdsWork, isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
+import { duration, holdsWork, isRunning, markEnded, markStarted, processState, runHealth, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00Z");
 let base: string, jobs: string | undefined, db: string | undefined;
@@ -109,4 +109,19 @@ test("a lost director run frees its work and a live one holds it", async () => {
   const live = entry("r-dir2", { role: "director", target: "x2" });
   await liveIn(live.folder);
   expect(holdsWork([live], "director", "x2")).toBe(true);
+});
+
+test("the duration of a run is read from its activeEnd, not from its record's ended", () => {
+  const t0 = Date.parse("2026-10-28T10:00:00Z"), min = 60_000, ended = new Date(t0 + 180 * min).toISOString();
+  const run = (name: string, files: Record<string, number>, over: Partial<Run> = {}): Entry => {
+    const folder = join(base, name);
+    mkdirSync(folder);
+    for (const [f, m] of Object.entries(files)) { writeFileSync(join(folder, f), "x"); utimesSync(join(folder, f), (t0 + m * min) / 1000, (t0 + m * min) / 1000); }
+    return { id: name, folder, run: { n: 1, role: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended, ...over } as Run };
+  };
+  // A killed worker: its last output at 24 min, the end noticed at 180 min.
+  expect(duration(run("killed", { log: 24, exit: 180 }))).toBe(24 * 60);
+  expect(duration(run("quiet", { exit: 180 }))).toBe(180 * 60);
+  expect(duration(run("open", { log: 24 }, { ended: undefined }))).toBeNull();
+  expect(duration(run("backwards", {}, { ended: new Date(t0 - min).toISOString() }))).toBeNull();
 });

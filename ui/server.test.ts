@@ -144,6 +144,18 @@ test("lib/status-words.ts reaches the page as JS", async () => {
   expect(js).toContain("export const labelOf = (tone, text) =>");
 });
 
+test("lib/money.ts reaches the page as JS", async () => {
+  const r = await at("/lib/money.ts");
+  expect(r.headers.get("content-type")).toContain("text/javascript");
+  expect(await r.text()).toContain("export const money = (n) =>");
+});
+
+test("lib/schedule.ts reaches the page as JS", async () => {
+  const r = await at("/lib/schedule.ts");
+  expect(r.headers.get("content-type")).toContain("text/javascript");
+  expect(await r.text()).toContain("export const DAILY_HOUR = 3;");
+});
+
 test("a request is served whatever its Host, with no login", async () => {
   for (const path of ["/", "/api/factory"]) {
     expect((await at(path, { headers: { host: "aleph.home" } })).status).toBe(200);

@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { daysAgo, today } from "../../../lib/day.ts";
+import { money } from "../../../lib/money.ts";
 import { commitPaths } from "../../../vault/lib/git.ts";
 import { appendDaily } from "../../../vault/lib/vault.ts";
 import { vaultDir } from "../../../lib/paths.ts";
@@ -21,6 +22,7 @@ import { touch } from "../../../lib/sources.ts";
 import { trimUse } from "../../../lib/episode-use.ts";
 import { fetchOrigin, git } from "../../../lib/git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "../records/ledger.ts";
+import { duration } from "../infra/process.ts";
 import { landedCommits, repoStages } from "../records/status.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -155,7 +157,7 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
   }
 }
 
-const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch(e.run.started)) / 60000)) || 0;
+const minutes = (e: Entry) => Math.round((duration(e) ?? 0) / 60);
 
 function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
   const id = `${repo.key}-${issues.refOf(item)}`;
@@ -185,7 +187,7 @@ function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Com
     "## Goal", aim, "",
     "## What landed", landed, "",
     "## How it went", went, "",
-    "## Cost", `$${cost.toFixed(2)} at the API price over ${runs.length} runs, ${total} min`, traces, "",
+    "## Cost", `${money(cost)} at the API price over ${runs.length} runs, ${total} min`, traces, "",
     "## What went wrong", wrong.length ? wrong.join("\n") : "nothing", "",
   ].join("\n");
 }

@@ -9,7 +9,7 @@ import { flakeNames, flakes } from "../../jobs/lib/gates/tables.ts";
 import { decisions, roundsByJob } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
 import { allRuns, isAgentRun, type Run } from "../../jobs/lib/records/ledger.ts";
-import { activeEnd } from "../../jobs/lib/infra/process.ts";
+import { activeEnd, duration } from "../../jobs/lib/infra/process.ts";
 import { type StageRow, stageRows } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
 import { everyFetched, filed, headOnMain, reader, sourceOf, type Filed } from "../../issues/lib/store.ts";
@@ -103,10 +103,9 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const entries = allRuns().filter((e) => repoIn(e.run.repo, project));
   const all = entries.map((x) => x.run);
   const landed: Run[] = [];
-  for (const r of all) {
-    const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
-    if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
-    const secs = (t1 - t0) / 1000;
+  for (const e of entries) {
+    const r = e.run, t0 = Date.parse(r.started), secs = duration(e);
+    if (!(t0 >= since.getTime()) || t0 > now.getTime() || secs === null || secs * 1000 > MAX_RUN) continue;
     const kind = isAgentRun(r.role) ? "agent" : r.role;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {

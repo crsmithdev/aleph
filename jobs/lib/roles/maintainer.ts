@@ -11,8 +11,6 @@ import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { compileDigest } from "../../../vault/lib/compile.ts";
 import { outcome, write } from "../../../vault/lib/ops.ts";
 import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.ts";
-import { today } from "../../../lib/day.ts";
-import { addDays } from "../learning/monitor-table.ts";
 import { lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -181,6 +179,3 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
   });
   return report;
 }
-
-/** The vault's date (local) before `now`. */
-export const yesterday = (now: number): string => addDays(today(new Date(now)), -1);

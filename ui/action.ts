@@ -38,7 +38,7 @@ export const post = (f: (body: any, params: Record<string, string>, url: URL) =>
 };
 
 /** The argv that runs the CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
-const cli = () => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);
+export const cli = () => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);
 
 /** Run `aleph <args>`: its JSON on exit 0 (`{ output }` for text), else a Fail(422) with what it said. */
 export async function aleph(args: string[], o: { stdin?: string } = {}): Promise<any> {

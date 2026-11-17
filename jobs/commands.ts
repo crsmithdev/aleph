@@ -19,7 +19,7 @@ import { settleOnMain } from "./lib/land/landing.ts";
 import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
-import { today } from "../lib/day.ts";
+import { yesterday } from "../lib/day.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
@@ -33,7 +33,7 @@ import { maintainAll, runTick } from "./lib/transitions/tick.ts";
 import { vaultDir } from "../lib/paths.ts";
 import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
-import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
+import { flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
 import { housekeep } from "./lib/roles/housekeeper.ts";
 import { cutTitle, fit } from "./lib/roles/title.ts";
@@ -644,7 +644,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "suite": ctx.out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
-      const day = ctx.flag("day") ?? addDays(today(), -1);
+      const day = ctx.flag("day") ?? yesterday(Date.now());
       if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse(usage("monitor"));
       if (ctx.rest.includes("--dry")) { ctx.write(renderTable(tableOf(day))); break; }
       const r = await runMonitor(day) ?? refuse("another monitor job holds the lock");

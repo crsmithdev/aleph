@@ -63,6 +63,11 @@ test("a routing event with no size is a system row with its note, and a hold is 
   expect(out.map((r) => [r.sys, r.id, plain(r.text)])).toEqual([[true, [], "small by classifier jev-1.13"]]);
 });
 
+test("a routing choice shows a cost under half a cent as money() does", () => {
+  const out = rows([row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", size: "medium", model: "sonnet", cost: 0.00003 })]);
+  expect(out[0].lines.map((l) => plain(l.text))).toEqual(["medium · sonnet · <$0.01"]);
+});
+
 test("a stalled event of a job folds into its issue's row, which the start heads", () => {
   const events = [{ ...row({ at: "2026-11-15T13:30:00Z", by: "rule", subject: "issue.2072", action: "stalled", on: ["job.9"] }), project: "aleph" }, { ...row({ at: "2026-11-15T13:10:00Z", by: "gate", subject: "issue.2072", action: "running", on: ["job.9"] }), project: "aleph" }];
   const [r, ...rest] = rows(events, { runs: { "job.9": "intake" } });

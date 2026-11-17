@@ -6,6 +6,8 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
+import { money } from "../../../lib/money.ts";
+import { DAILY_HOUR } from "../../../lib/schedule.ts";
 import { LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { afterOf, buildableIssue, buildableIssues, close, fetchingOnceSync, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
@@ -228,7 +230,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
 
 /** True from 03:00 local, when the store has not been mined on this local date. */
 export function correctionsDue(now = Date.now()): boolean {
-  if (new Date(now).getHours() < 3) return false;
+  if (new Date(now).getHours() < DAILY_HOUR) return false;
   const at = readStore().minedAt;
   const t = Date.parse(at);
   return !at || Number.isNaN(t) || today(new Date(t)) !== today(new Date(now));
@@ -428,8 +430,6 @@ export function hookLines(now = Date.now()): string[] {
   for (const repo of repos.filter((r) => r.sandbox)) lines.push(behind(repo, true) ?? "");
   return lines.filter(Boolean);
 }
-
-const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
 /** The heading a run's report entry goes under: the report lane of its state. */
 const laneOf = (e: Entry): string => lane(e.run.state);

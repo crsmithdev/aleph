@@ -6,7 +6,7 @@ import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/ledger.ts";
-import { compileDay, render, yesterday } from "./maintainer.ts";
+import { compileDay, render } from "./maintainer.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -128,8 +128,4 @@ test("render gives the frontmatter and the four body parts, and Home when no not
   expect(text).toContain("**Claim.** T was decided, as of 2026-11-03.");
   expect(text).toContain("## Related\n\n- [[Home]]");
   expect(text).not.toContain("core");
-});
-
-test("yesterday is the local date before now", () => {
-  expect(yesterday(Date.parse("2026-11-04T12:00:00Z"))).toBe("2026-11-03");
 });

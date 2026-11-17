@@ -4,7 +4,8 @@
 // a routine's run is one row that says "N changes", each change a line in its fold. A hold is an issue's state, not an event, so no row has it.
 import { EDITS, HOLDS, OLD_HOLDS, factsOf, issueHref, jobHref, parseId, parseKey, runWord, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
-import { dur, money } from "./views/lib/format.js";
+import { dur } from "./views/lib/format.js";
+import { money } from "../lib/money.ts";
 
 /** A piece of a line: text, an ID with the address of its page, or the mark of a run's result. */
 type Piece = string | { id: string; to: string } | { mark: string };
@@ -47,8 +48,8 @@ const stateWord = (e: EventRow) => (e.action === "done" ? (isIssue(targetOf(e)) 
 
 const issuePiece = (issue: string, project?: string | null): Piece => ({ id: shownId(issue, project), to: issueHref(issue, project) });
 
-/** What a routing event chose, "medium · sonnet · $0.00003", from its job's fields. */
-const routeText = (e: EventRow) => [e.size, e.model, e.cost != null && `$${Number(e.cost.toFixed(5))}`].filter(Boolean).join(" · ");
+/** What a routing event chose, "medium · sonnet · $0.50", from its job's fields. */
+const routeText = (e: EventRow) => [e.size, e.model, e.cost != null && money(e.cost)].filter(Boolean).join(" · ");
 
 /** Whether an event is a routing choice: it names a size, or is a start whose detail is `model: <model>`, "default" when routing picked no size. */
 const isRouting = (e: EventRow) => Boolean(e.size) || (e.action === "started" && wordOf(e) === "model");

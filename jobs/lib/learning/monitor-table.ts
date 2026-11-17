@@ -11,6 +11,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr } from "../../../lib/json.ts";
 import { allRuns, loadRegistry, onOf, type Entry } from "../records/ledger.ts";
+import { duration } from "../infra/process.ts";
 import { allHolds, stopsStart, type HoldRecord } from "../gates/holds.ts";
 import { flakeNames, flakes, type Flake } from "../gates/tables.ts";
 import { layout } from "../../../lib/layout.ts";
@@ -18,7 +19,8 @@ import { causeOf } from "../records/outcome.ts";
 import { snapshots } from "../../../lib/usage.ts";
 import { flakeTracker, reader, storeLog, type Reader, type StoreChange } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { today } from "../../../lib/day.ts";
+import { addDays } from "../../../lib/day.ts";
+import { money as dollars } from "../../../lib/money.ts";
 import { quantile } from "../../../lib/windows.ts";
 
 const DAY = 24 * 3600_000;
@@ -98,13 +100,6 @@ const STAGES = ["intake", "build", "review", "recheck", "land", "director", "mon
 /** Local midnight of `day` (YYYY-MM-DD), in ms. */
 const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
 
-/** The local date `n` days after `day`. */
-export function addDays(day: string, n: number): string {
-  const d = new Date(`${day}T12:00:00`);
-  d.setDate(d.getDate() + n);
-  return today(d);
-}
-
 
 const inside = (iso: string | undefined, from: number, to: number): boolean => {
   const t = Date.parse(iso ?? "");
@@ -131,12 +126,12 @@ function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun
     if (r.role === "plain" || r.state === "running" || !inside(r.started, from, to)) continue;
     if (r.role === "review" && r.prev && own.has(r.prev)) continue;
     // A run that records no time kept none: a review job from before is a run with no time, not 0 seconds.
-    const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
+    const took = duration(e);
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
     const review = reviewOf(r);
     // A run on no item (a firefighter sweep) is its own item. The reviewer's cost is its own, not the run's.
     const on = onOf(r);
-    yield { stage: r.role, item: on === undefined ? r.job : String(on), issue: on !== undefined, unusable: unusable(e), secs: took > 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
+    yield { stage: r.role, item: on === undefined ? r.job : String(on), issue: on !== undefined, unusable: unusable(e), secs: took || null, cost: typeof r.cost === "number" ? r.cost : null };
     if (review) yield { stage: "review", item: on === undefined ? r.name : String(on), issue: on !== undefined, unusable: review.call === "failed", secs: review.seconds ?? null, cost: review.cost ?? null };
   }
 }
@@ -310,7 +305,7 @@ export function measure(src: Sources, day: string, now = Date.now()): Table {
 
 const pct = (n: number, of: number): string => (of ? `${Math.round((100 * n) / of)}%` : "-");
 const num = (n: number | null, digits = 1): string => (n === null ? "-" : Number.isInteger(n) ? String(n) : n.toFixed(digits));
-const money = (n: number | null): string => (n === null ? "-" : `$${n.toFixed(2)}`);
+const money = (n: number | null): string => (n === null ? "-" : dollars(n));
 /** A cell: the day's value, then the trailing value in brackets. */
 const cell = (a: string, b: string) => `${a} (${b})`;
 

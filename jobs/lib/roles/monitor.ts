@@ -9,9 +9,9 @@ import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "../../../lib/locks.ts";
 import { writeJson } from "../../../lib/json.ts";
 import { recordRan } from "../gates/tables.ts";
-import { addDays, measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
+import { measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorHour, monitorOn } from "../infra/settings.ts";
-import { today } from "../../../lib/day.ts";
+import { addDays, today } from "../../../lib/day.ts";
 import { readModels } from "../routing/models.ts";
 import { errText } from "../../../lib/errtext.ts";
 

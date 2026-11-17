@@ -8,15 +8,14 @@
  */
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { today } from "../../../lib/day.ts";
+import { addDays, today, yesterday } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { maintain } from "../../../vault/lib/maintain.ts";
-import { compileDay, yesterday } from "../roles/maintainer.ts";
+import { compileDay } from "../roles/maintainer.ts";
 import { recheck } from "../roles/recheck.ts";
 import { dedupe } from "../roles/dedupe.ts";
 import { alias } from "../roles/alias.ts";
-import { addDays } from "../learning/monitor-table.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
 import { fetchingOnce, reader, type Reader } from "../../../issues/lib/store.ts";
@@ -47,9 +46,10 @@ import { CLOSED, issueKey, parseKey } from "../../../lib/naming.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 import { errText } from "../../../lib/errtext.ts";
+import { DAILY_HOUR, EPISODES_MS } from "../../../lib/schedule.ts";
 
 /** How often each step with a fixed period runs. */
-const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: 30 * 60_000 } as const;
+const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000, episodes: EPISODES_MS } as const;
 /** The period of the ci and firefight steps while a CI run on a factory main is in progress or a land on it ended within FRESH_MS. */
 const FRESH_EVERY_MS = 60_000, FRESH_MS = 15 * 60_000;
 type Periodic = keyof typeof EVERY_MS;
@@ -134,7 +134,7 @@ const summary = (r: Json): string => {
  */
 export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
-  if (new Date(now).getHours() < 3 || paused()) return null;
+  if (new Date(now).getHours() < DAILY_HOUR || paused()) return null;
   const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
   const corr = correctionsDue(now);
   if (!mech && !corr) return null;

@@ -334,7 +334,7 @@ test("the Herald's row of an attempt holds no size, model, cost or commit in its
 
 test("an attempt whose newest event is its routed start, with a size or without, keeps the size, model and cost out of the head and draws the start in its fold", () => {
   const routed = [
-    [{ note: "model: haiku", size: "small", cost: 0.001 }, ["small", "haiku", "0.001"], "model: haiku → small · $0.001"],
+    [{ note: "model: haiku", size: "small", cost: 0.5 }, ["small", "haiku", "0.50"], "model: haiku → small · $0.50"],
     [{ note: "model: default" }, ["model: default"], "model: default"],
   ] as const;
   for (const [start, facts, line] of routed) {

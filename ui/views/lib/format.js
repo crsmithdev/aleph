@@ -9,7 +9,7 @@ export const clock = (iso) => {
   if (iso == null || iso === "" || Number.isNaN(d.getTime())) return "";
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
+export { money } from "../../../lib/money.ts";
 export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Number(n).toLocaleString("en-US"));
 /** A mean or other average: one decimal; "–" for none. */
 export const mean = (v) => (v == null ? "–" : Number(v).toFixed(1));

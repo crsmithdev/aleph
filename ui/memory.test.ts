@@ -128,10 +128,10 @@ test("a note has its links and backlinks; a missing note is 404", async () => {
 test("one vault misses run serves the overview and every search until the usage poll", async () => {
   const bin = join(base, "bin-once"), log = join(base, "calls-once");
   mkdirSync(bin);
-  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\necho '{"days":7,"recalls":3}'\n`);
-  chmodSync(join(bin, "bun"), 0o755);
-  const saveEnv = { PATH: process.env.PATH };
-  process.env.PATH = `${bin}:${process.env.PATH}`;
+  writeFileSync(join(bin, "aleph"), `#!/bin/sh\necho x >> ${log}\necho '{"days":7,"recalls":3}'\n`);
+  chmodSync(join(bin, "aleph"), 0o755);
+  const saveEnv = { ALEPH_CLI: process.env.ALEPH_CLI };
+  process.env.ALEPH_CLI = join(bin, "aleph");
   updater.reset();
   const runs = () => readFileSync(log, "utf8").trim().split("\n").length;
   try {
@@ -151,22 +151,22 @@ test("one vault misses run serves the overview and every search until the usage 
     await fresh("usage");
     expect(runs()).toBe(2);
   } finally {
-    process.env.PATH = saveEnv.PATH;
+    if (saveEnv.ALEPH_CLI === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = saveEnv.ALEPH_CLI;
     updater.reset();
   }
 });
 
-/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
+/** A stub `aleph` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
 async function failing(name: string) {
   const bin = join(base, name), log = join(base, `${name}-calls`);
   mkdirSync(bin);
-  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
-  chmodSync(join(bin, "bun"), 0o755);
+  writeFileSync(join(bin, "aleph"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
+  chmodSync(join(bin, "aleph"), 0o755);
   let requests = 0;
   const lf = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { requests++; return new Response("boom", { status: 500 }); } });
-  const keys = ["PATH", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
+  const keys = ["ALEPH_CLI", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
   const saveEnv = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { PATH: `${bin}:${process.env.PATH}`, LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+  Object.assign(process.env, { ALEPH_CLI: join(bin, "aleph"), LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
   updater.reset();
   const calls = () => { try { return readFileSync(log, "utf8").trim().split("\n").length; } catch { return 0; } };
   const done = () => {
