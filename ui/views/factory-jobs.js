@@ -2,7 +2,7 @@
 import { get, moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
 import { dur, count, failMessage, shortModel } from "./lib/format.js";
-import { card, cell, pagedTable, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
+import { card, cell, dataTable, miss, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./lib/jobs-table.js";
@@ -38,9 +38,9 @@ export const trendFrame = (d, key, name) => ({
 
 /** One point per issue with a time for the stage and a filing time, in filing order, coloured by outcome; a point's `href` is its issue. */
 export const stripFrame = (d, key, name) => ({
-  measure: { name: `${name}: Time per Issue`, unit: "seconds", agg: "max" },
+  measure: { name, unit: "seconds", agg: "max" },
   over: { kind: "time", window: d.window },
-  by: { keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
+  by: { name: "Issue", keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
   rows: (d.times ?? []).filter((i) => ["landed", "unlanded"].includes(i.outcome) && i[key] > 0 && i.filed != null).sort((a, b) => a.filed.localeCompare(b.filed)).map((i) => ({ at: Date.parse(i.filed), name: i.id, href: i.href, [i.outcome]: i[key] })),
   form: "points",
 });
@@ -74,7 +74,7 @@ export const FRAMES = { trend: trendFrame, strip: stripFrame, slowest: slowestFr
 /** The key of a Jobs chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `factory/jobs/${k}`;
 
-const table = (labels, num, rows) => !rows.length ? empty() : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => row([cell(h, { wide: true }), ...cells.map((c) => cell(c, { num: true }))])));
+const table = (labels, num, rows) => !rows.length ? empty() : dataTable(heads(labels, num), rows.map(([h, ...cells]) => row([typeof h === "string" ? cell(h, { wide: true }) : h.td, ...cells.map((c) => cell(c, { num: true }))])).join(""), { fit: true });
 
 /** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
@@ -84,8 +84,8 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)])))}` +
-    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [shortModel(m.model), count(m.count), dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
-    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error(jobs.message) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
+    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? { td: `<td class="wide">${miss("no model")}</td>` } : shortModel(m.model), count(m.count), dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
+    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error("Could not load the jobs.", { detail: jobs.message }) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 
 /** The old address. */
@@ -103,8 +103,14 @@ export const view = {
   // `d.day` is /api/flow for the last 24h and `d.jobs` is /api/jobs for the window, which `more` adds; the page draws without them first.
   render: (d, _params, q) => renderFactoryJobs(d, usable(d.day), q?.get("stage") ?? "lead", d.jobs ?? null, Object.fromEntries(q ?? [])),
   more: async (d, q) => {
-    const url = listUrl(null, q);
-    const jobs = get(url).then(async (r) => (r.ok ? (await r.json()).jobs : new Error(failMessage(url, r.status, await r.text())))).catch((e) => e);
+    // The API holds 2000 jobs a page and gives `next`, the `before` of the following page, until the window ends.
+    const page = async (url) => {
+      const r = await get(url);
+      if (!r.ok) throw new Error(failMessage(url, r.status, await r.text()));
+      const { jobs, next } = await r.json();
+      return next ? [...jobs, ...await page(`${listUrl(null, q)}&before=${encodeURIComponent(next)}`)] : jobs;
+    };
+    const jobs = page(listUrl(null, q)).catch((e) => e);
     return { ...d, day: trendOn(d) ? await flowOf("day", q) : null, jobs: await jobs };
   },
   mount: (root, d, q) => {

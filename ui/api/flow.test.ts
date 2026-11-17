@@ -268,7 +268,7 @@ test("a build run counts as an agent run", () => {
   run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 20 }], ...secs(1, 11, 7000) });
   const d = speed("week", now);
   expect(d.slowest[0]).toMatchObject({ state: "passed", took: 7000, tests: 20 });
-  expect(d.models.find((m) => m.model === "claude-opus-5-5")!.count).toBe(before.models.find((m) => m.model === "claude-opus-5-5")!.count + 1);
+  expect(d.models.find((m) => m.model === "opus")!.count).toBe((before.models.find((m) => m.model === "opus")?.count ?? 0) + 1);
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (o: Record<string, unknown>) => ({ n: 1, job: "b", name: "b", repo: "fx", target: "issue.1", state: "passed", ...o }) as any;
   const out = classify([

@@ -50,15 +50,15 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect([...row.matchAll(/<aleph-chart key="([^"]*)"/g)].map((m) => m[1])).toEqual(["factory/jobs/trend", "factory/jobs/strip", "factory/jobs/slowest"]);
   expect([...row.matchAll(/class="chartbox"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
     "Lead Time by Day: p90 peak 50m 00s, p50 peak 16m 40s",
-    "Lead Time: Time per Issue: landed peak 18m 20s",
+    "Lead Time by Issue: landed peak 18m 20s",
     "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Implement peak 1h 06m, Land peak 3m 20s",
   ]);
   // The stage's own line sits under the trend's title; each panel keeps its own empty line.
   expect(row).not.toContain('class=\"notice\"');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
-  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
 });
 
 test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {
@@ -123,7 +123,7 @@ test("the Checks table groups a job count and the Models table names a model by 
   expect(h).toContain('<td class="num">1,234</td>');
   expect(h).toContain('<td class="wide" title="tests">tests</td>');
   expect(h).toContain('<td class="wide" title="opus">opus</td>');
-  expect(h).toContain('<td class="wide" title="unset">unset</td>');
+  expect(h).toContain('<td class="wide"><span title="no model">–</span></td>');
   expect(h).not.toContain("not recorded");
 });
 
@@ -179,10 +179,12 @@ test("#/jobs redirects to the merged page with its query; a Job page does not", 
   expect(redirect("#/jobs/aleph-1")).toBeNull();
 });
 
-test("the Checks and Models tables show empty() with no rows and page at 50", () => {
+test("the Checks and Models tables show empty() with no rows and never page", () => {
   expect(renderFactoryJobs({ ...D, checks: [], models: [] }, null, "lead").match(/class="empty"/g)!.length).toBe(2);
   const checks = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, count: 1, p50: 1, p90: 2 }));
-  expect(renderFactoryJobs({ ...D, checks }, null, "lead")).toContain("50 of 51");
+  const h = renderFactoryJobs({ ...D, checks }, null, "lead");
+  expect(h).toContain('<table class="tbl fit">');
+  expect(h).not.toContain("50 of 51");
 });
 
 test("Next under the Checks table turns the page in place and leaves the Jobs table's page alone", () => {

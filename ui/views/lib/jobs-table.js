@@ -1,7 +1,7 @@
 // The jobs table of the Jobs page: its data URL, scope bar, filters, rows and wiring. The Job view and the Jobs page share it.
 import { goQuery, hashQuery, scope } from "./address.js";
 import { money, shortModel, span, when } from "./format.js";
-import { badge, dataTable, empty, esc, filterBar, idLink, pageOf, pageRows, pager, sortHead, sortRows, wireTable } from "./html.js";
+import { badge, dataTable, empty, esc, filterBar, idLink, miss, pageOf, pageRows, pager, sortHead, sortRows, wireTable } from "./html.js";
 import { ACTORS, shortText, jobHref, STATES } from "../../../lib/naming.ts";
 
 /** The most rows the list asks for: one page of the API holds the whole window. */
@@ -52,7 +52,7 @@ export function renderJobsTable(jobs, f = {}) {
   // Columns: id, title, state, project, model, took, cost, then started: the Issues table's order.
   const rows = shown.map((j) => {
     const url = jobHref(j.id);
-    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
+    return `<tr class="rowlink" data-annotate="${esc(j.id)}"><td>${idLink(shortText(j.id), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.state)}</td><td>${j.repo ? esc(j.repo) : miss("no project")}</td><td>${esc(shortModel(j.model))}</td>` +
       `<td class="num">${esc(span(j.started, j.ended))}</td><td class="num">${esc(money(j.cost))}</td><td class="time">${esc(when(j.started))}</td></tr>`;
   }).join("");
   return dataTable(h("Id", "id") + h("Title", "title") + h("State", "state") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started", { num: true }), rows) + pager(pageOf(f), all.length, PAGE);

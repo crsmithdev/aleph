@@ -16,6 +16,8 @@ import { everyFetched, filed, headOnMain, reader, sourceOf, type Filed } from ".
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
+// @ts-ignore plain JS, shared with the page
+import { shortModel } from "../views/lib/format.js";
 import { issueHref, parseId, parseKey, type EventRow } from "../../lib/naming.ts";
 import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
 import { readEvents } from "../../lib/layout.ts";
@@ -111,8 +113,10 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (kind === "land" && r.state === "landed") landed.push(r);
     if (kind !== "agent") continue;
     const model = r.model || "unset";
-    if (!models.has(model)) models.set(model, []);
-    models.get(model)!.push(secs);
+    // One row per short name: "claude-opus-5-5" and "opus" share a p50.
+    const short = shortModel(model);
+    if (!models.has(short)) models.set(short, []);
+    models.get(short)!.push(secs);
     agents.push({ name: r.name, state: r.state, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
   // A fix round is the rule of roundsByJob: first pass and `fixRounds` both read it.
