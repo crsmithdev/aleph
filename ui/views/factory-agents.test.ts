@@ -241,7 +241,7 @@ const entries = (small: string, medium: string) => ({
 });
 
 test("the Roles table holds a select per size and role model in its Model cell, a checkbox on each size only, and no Models card", () => {
-  const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Lens: "lens", Housekeeper: "housekeeper", Title: "title", Judge: "judge" };
+  const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Lens: "lens", Housekeeper: "housekeeper", Rule: "title", Judge: "judge" };
   // The second offer of each key is configured, so a select that kept its first option fails.
   const want = Object.fromEntries(Object.values(keys).map((k) => [k, (OFFERS as any)[k][1]]));
   const models = Object.fromEntries(Object.entries(want).map(([k, model]) => [k, { enabled: true, model }]));
@@ -340,7 +340,12 @@ test("the Workers group holds Small, Medium and Large and no Unsized row, and th
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
   expect([...workers.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large"]);
   expect(h).not.toContain('title="Unsized"');
-  expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
+  expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Rule", "Judge"]);
+});
+
+test("the Rule row counts its succeeded title outcomes as rules", () => {
+  const h = page([full("title", "haiku", { succeeded: 2 })]);
+  expect(row(h, "Rule")).toMatch(/<td class="out">2 rules<\/td><\/tr>$/);
 });
 
 test("no Agent cell stretches; the Output column takes the spare width and holds its whole text", () => {

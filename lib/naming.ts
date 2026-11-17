@@ -32,7 +32,7 @@ export type AgentRole = Exclude<Role, "build" | "plain" | "land" | "review" | "r
 export const NAMES: Record<string, string> = {
   lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", build: "Implement",
   review: "Review", recheck: "Recheck", land: "Land", worker: "Worker", planner: "Planner", merge: "Merge", reviewer: "Reviewer",
-  director: "Director", monitor: "Monitor", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", title: "Title", judge: "Judge",
+  director: "Director", monitor: "Monitor", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", title: "Rule", judge: "Judge",
 };
 export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"] as const;
 export type StageName = (typeof STAGES)[number];
