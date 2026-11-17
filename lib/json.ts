@@ -13,10 +13,13 @@ export function readJsonOr<T>(file: string, fallback: T): T {
   return JSON.parse(text);
 }
 
+/** The temp file a writer fills beside `file` before it renames it over `file`: named by pid, so two processes do not collide. */
+export const tmpName = (file: string): string => `${file}.${process.pid}.tmp`;
+
 /** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. `mode` sets the new file's permissions. */
 export function writeJson(file: string, value: unknown, mode?: number): void {
   mkdirSync(dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = tmpName(file);
   writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { mode });
   renameSync(tmp, file);
 }

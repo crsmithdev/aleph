@@ -8,7 +8,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
-import { recall } from "../../../vault/lib/index.ts";
+import { recallAll } from "../../../vault/lib/index.ts";
 import { outcome, write } from "../../../vault/lib/ops.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
 import { loadWiki, type Note } from "../../../vault/lib/vault.ts";
@@ -91,12 +91,14 @@ export async function findMisses(root: string, notes: Note[], now: number): Prom
     }
   }
   const seen = new Set<string>();
-  return found.filter((m) => {
+  const fresh = found.filter((m) => {
     const key = `${m.query}\n${m.note.rel}`;
     if (seen.has(key)) return false;
     seen.add(key);
-    return !recall(root, notes, m.query).slice(0, DEPTH[m.source]).some((r) => r.note.rel === m.note.rel);
+    return true;
   });
+  const ranked = recallAll(root, notes, fresh.map((m) => m.query));
+  return fresh.filter((m, i) => !ranked[i].slice(0, DEPTH[m.source]).some((r) => r.note.rel === m.note.rel));
 }
 
 export function prompt(misses: Miss[], day: string): string {

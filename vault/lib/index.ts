@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { screenWords as words, type Note } from "./vault.ts";
 import { probe } from "../../lib/git.ts";
+import { tmpName } from "../../lib/json.ts";
 
 /** The reciprocal rank fusion constant. */
 const K = 60;
@@ -47,7 +48,7 @@ function openIndex(root: string, notes: Note[]): Database {
   }
   // Build beside the file and rename, so a hook that reads at the same time sees the old index or the new one.
   mkdirSync(dir, { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
+  const tmp = tmpName(file);
   rmSync(tmp, { force: true });
   const db = new Database(tmp);
   db.run("create table meta (key text primary key, value text)");
@@ -93,8 +94,13 @@ interface Ranked { note: Note; rank: number }
  * The ranking is `rankNotes`'s.
  */
 export function recall(root: string, notes: Note[], query: string, scope?: string, among: Note[] = notes): Ranked[] {
+  return recallAll(root, notes, [query], scope, among)[0];
+}
+
+/** `recall` for each of `queries`, in order, on one open of the index. */
+export function recallAll(root: string, notes: Note[], queries: string[], scope?: string, among: Note[] = notes): Ranked[][] {
   const db = openIndex(root, notes);
-  try { return rankNotes(db, among, query, scope); } finally { db.close(); }
+  try { return queries.map((q) => rankNotes(db, among, q, scope)); } finally { db.close(); }
 }
 
 /**
