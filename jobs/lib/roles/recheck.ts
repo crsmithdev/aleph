@@ -23,6 +23,9 @@ import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
+/** The leads of the issue notes written for Chris: the writers build a note from one and the Gates log (ui/api/gates.ts) reads his answers by them. */
+export const NOTE = { said: "Chris:", rerun: "Chris: run it again", retriage: "Chris: run intake again", checked: "Chris: checked", decided: "Chris decided:", approved: "Chris approved", declined: "Chris declined", dropped: "Chris dropped", denied: "Chris denied" };
+
 /** Notes re-checked per run, most recalled first. */
 export const BUDGET = 5;
 /** Read-only: the files, git history and the vault's recall. */
@@ -156,7 +159,7 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
   writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
     const item = find(doc, at.id);
     if (!item) return null;
-    note(item, r.refused ? `the vault refused: ${r.refused}` : approved ? `Chris approved: the ${held[title].verdict} is applied` : "Chris declined: the claim stays");
+    note(item, r.refused ? `the vault refused: ${r.refused}` : approved ? `${NOTE.approved}: the ${held[title].verdict} is applied` : `${NOTE.declined}: the claim stays`);
     if (!r.refused) setStatus(item, approved ? "done" : "dropped");
     return true;
   });

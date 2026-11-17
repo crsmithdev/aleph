@@ -23,6 +23,7 @@ import { parseKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 import { noteOf } from "../../issues/lib/todo.ts";
+import { NOTE } from "../../jobs/lib/roles/recheck.ts";
 import { intervalOf, setTimerInterval, TIMERS } from "../../jobs/lib/infra/systemd.ts";
 
 import { aleph, fail, post } from "../action.ts";
@@ -107,8 +108,8 @@ function noteEntries(): LogEntry[] {
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.id}`;
       for (const { at, text: t } of item.notes.map(noteOf)) {
-        if (!at || !/^Chris(?::| decided:| approved| denied| dropped)/.test(t)) continue;
-        const action = /^Chris: run (it|intake) again$/.test(t) ? "reran" : /^Chris: checked/.test(t) ? "done" : /^Chris (denied|dropped)/.test(t) ? "dropped" : "answered";
+        if (!at || !Object.values(NOTE).some((lead) => t.startsWith(lead))) continue;
+        const action = t === NOTE.rerun || t === NOTE.retriage ? "reran" : t.startsWith(NOTE.checked) ? "done" : [NOTE.denied, NOTE.dropped, NOTE.declined].some((lead) => t.startsWith(lead)) ? "dropped" : "answered";
         out.push({ time: at, subject: "human", action, object: ref, detail: t });
       }
     }

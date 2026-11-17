@@ -30,7 +30,7 @@ beforeAll(() => {
   mkdirSync(factory);
   writeRepos({ fac: { path: repo, sandbox: true } }, items);
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
-  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); return true; }, true);
+  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); note(add(doc, "d task"), "Chris declined: the claim stays", new Date("2026-11-03T12:00:00Z")); return true; }, true);
 });
 // The test's clock: the notes sit a day before it, inside the 7-day log.
 beforeAll(() => setSystemTime(Date.parse("2026-11-04T00:00:00Z")));
@@ -45,4 +45,9 @@ test("log() finds a Chris decision note with an ISO UTC stamp, and not one with 
   const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
   expect(d.log.entries.find((x: any) => x.object === "fac-2")).toMatchObject({ time: "2026-11-03T10:00:00.000Z", action: "answered", detail: "Chris decided: go on" });
   expect(d.log.entries.find((x: any) => x.object === "fac-3")).toBeUndefined();
+});
+
+test("log() shows a declined core change `Chris declined: <why>` as a human drop on the issue, the note its text", async () => {
+  const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
+  expect(d.log.entries.find((x: any) => x.subject === "human" && x.object === "fac-4")).toMatchObject({ action: "dropped", detail: "Chris declined: the claim stays" });
 });

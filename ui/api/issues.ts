@@ -26,7 +26,7 @@ import { card, row, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
-import { answerHeld } from "../../jobs/lib/roles/recheck.ts";
+import { answerHeld, NOTE } from "../../jobs/lib/roles/recheck.ts";
 import { issueJob } from "../../jobs/lib/gates/factory-status.ts";
 import { decider } from "../../jobs/lib/gates/decider.ts";
 import { readHolds } from "../../jobs/lib/gates/holds.ts";
@@ -230,7 +230,7 @@ const drop = post((b, params) => {
   const { repo, n } = target(params);
   const given = typeof b.reason === "string" ? b.reason.trim() : "";
   // The note starts with Chris, so the Gates log shows the drop as his: a Deny reason already does, any other gets "Chris dropped: ".
-  const reason = !given ? "Chris dropped it" : given.startsWith("Chris") ? given : `Chris dropped: ${given}`;
+  const reason = !given ? `${NOTE.dropped} it` : given.startsWith("Chris") ? given : `${NOTE.dropped}: ${given}`;
   return aleph(["issue", "drop", "--", repo.key, String(n), reason]);
 });
 
@@ -247,7 +247,7 @@ const decide = post((b, params) => {
   const o = (d.reason === "part-dropped" ? PART_DROPPED : d.options).find((x) => x.label === b.label);
   if (d.options.length && !o) fail(400, `no option named ${JSON.stringify(b.label ?? null)}`);
   const rec = b.recommendation === true ? proseDecision(todos.noteOf(item.notes.at(-1) ?? "").text).recommendation : null;
-  const note = o ? `Chris decided: ${o.label}: ${o.line}` : b.approve === true ? "Chris approved it" : rec ? `Chris decided: ${rec}` : fail(400, "this issue has no recommendation to approve");
+  const note = o ? `${NOTE.decided} ${o.label}: ${o.line}` : b.approve === true ? `${NOTE.approved} it` : rec ? `${NOTE.decided} ${rec}` : fail(400, "this issue has no recommendation to approve");
   return aleph(["issue", "decide", ...(o?.after ? ["--after", o.after] : []), "--", repo.key, String(n), note]);
 });
 
@@ -297,13 +297,13 @@ const core = (approved: boolean) => post(async (b, params) => {
   const why = await answerHeld(`${repo.key}-${item.id}`, approved);
   if (why) fail(422, why);
   const said = typeof b.reason === "string" ? b.reason.trim() : "";
-  if (said) await aleph(["issue", "note", "--", repo.key, String(item.id), `Chris: ${said}`]);
+  if (said) await aleph(["issue", "note", "--", repo.key, String(item.id), `${NOTE.said} ${said}`]);
   return { status: approved ? "done" : "dropped" };
 });
 
 export const routes: Routes = {
-  "POST /api/issues/:id/retriage": answer("note", "Chris: run intake again"),
-  "POST /api/issues/:id/rerun": answer("decide", "Chris: run it again"),
+  "POST /api/issues/:id/retriage": answer("note", NOTE.retriage),
+  "POST /api/issues/:id/rerun": answer("decide", NOTE.rerun),
   "POST /api/issues/:id/run": runNow,
   "POST /api/issues/:id/unblock": unblock,
   "POST /api/issues/:id/edit": edit,
