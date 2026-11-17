@@ -246,7 +246,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
     const ask = askOfItem(i);
     if (!ask || (issues.status(i) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
-    decideAsk(ask, i, text);
+    decideAsk(ask, doc, i, text, mainHead(repo));
     if (fields.after !== undefined) setKeys(i, "after", fields.after);
     return i;
   })!;
@@ -281,7 +281,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
 }
 
 /** The commit at origin/<main> of a registry repo, for `since`; null when it cannot be read. */
-function mainHead(repo: store.Place): string | null {
+export function mainHead(repo: store.Place): string | null {
   const r = loadRegistry()[repo.key];
   if (!r) return null;
   const head = git(r.path, "rev-parse", "--verify", "-q", `origin/${r.main}^{commit}`);

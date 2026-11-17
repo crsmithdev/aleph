@@ -248,7 +248,7 @@ test("may: Chris takes the actions the card offers, on a run and on an issue", (
 
 test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option sets plan and any other answer closes the issue", () => {
   const i = item({ status: "To Do" });
-  decideAsk(plain, i, "Chris: use b.ts");
+  decideAsk(plain, { repo: "fac", items: [i] }, i, "Chris: use b.ts", null);
   expect(issues.status(i)).toBe("open");
   for (const [said, plan, status] of [[`Chris chose ${PLAN_REST}`, "true", "open"], [`Chris chose ${CLOSE_DONE}`, undefined, "done"]] as const) {
     const p = { ...item({ status: "To Do" }), id: status === "done" ? 21 : 22 };
@@ -256,7 +256,7 @@ test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option
     const a = askOfItem(p);
     expect(a?.reason).toBe("part-dropped");
     expect(a?.options.map((o) => o.label)).toEqual(["Close as done", "Keep open"]);
-    decideAsk(a, p, said);
+    decideAsk(a, { repo: "fac", items: [p] }, p, said, null);
     expect(p.fm.plan as string | undefined).toBe(plan);
     expect(issues.status(p)).toBe(status);
   }
@@ -268,9 +268,19 @@ test("decideAsk reads a part-dropped Ask stored with the old labels by its lines
     { label: "Plan the missing part", line: "Plan a new sub-issue for what the dropped sub-issue was to do." }] };
   for (const [o, plan, status] of [[old.options[1], "true", "open"], [old.options[0], undefined, "done"]] as const) {
     const p = item({ status: "To Do" });
-    decideAsk(old, p, `director decided: ${o.label}: ${o.line}. why`);
+    decideAsk(old, { repo: "fac", items: [p] }, p, `director decided: ${o.label}: ${o.line}. why`, null);
     expect([p.fm.plan as string | undefined, issues.status(p)]).toEqual([plan, status]);
   }
+});
+
+test("decideAsk reopens a parked issue on the blocker-dropped Ask as reopen does: since is set and a closed parent opens", () => {
+  const doc: issues.Doc = { repo: "fac", items: [] };
+  const parent = issues.add(doc, "parent"), child = issues.add(doc, "child", { from: `issue.${parent.id}` });
+  issues.setStatus(parent, "done");
+  issues.setStatus(child, "parked");
+  const blocker: Ask = { reason: "blocker-dropped", question: "q?", options: [{ label: "Remove the link", line: "l" }, { label: "Drop the waiter", line: "d" }], why: [] };
+  decideAsk(blocker, doc, child, "Chris: remove the link", "abc123");
+  expect([issues.status(child), child.fm.since, issues.status(parent), parent.fm.since]).toEqual(["open", "abc123", "open", "abc123"]);
 });
 
 test("askIfPartDropped asks on the parent once its last open part is dropped", () => {

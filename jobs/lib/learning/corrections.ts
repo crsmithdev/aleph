@@ -18,10 +18,11 @@ import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
-import { fileIssue, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
+import { fileIssue, reopen, writeList, type Effects, type Place } from "../../../issues/lib/store.ts";
 import { PROPOSE_AT } from "../infra/settings.ts";
 import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
 import { specText } from "../roles/issue-spec.ts";
+import { mainHead } from "../../../issues/lib/issues.ts";
 import { edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
 
 const CORRECTION_AT = 0.7;
@@ -342,7 +343,7 @@ export function approve(id: string, repo: Place, effects: Effects): string {
     const w = writeList(repo, `memory: approved ${repo.key}-${n}`, (doc) => {
       const item = find(doc, n);
       if (!item) return null;
-      setStatus(item, "open");
+      reopen(doc, item, mainHead(repo));
       edit(item, { spec: body });
       return true;
     });

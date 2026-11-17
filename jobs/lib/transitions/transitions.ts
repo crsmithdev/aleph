@@ -12,7 +12,7 @@ import { allRuns, isWaiting, isAgentRun, isBuild, loadRegistry, onOf, repoOf, ty
 import { lock } from "../../../lib/locks.ts";
 import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
-import { addNote, issue as issueOf, lastRun, latestJob, openJob } from "../records/job.ts";
+import { addNote, issue as issueOf, lastRun, latestJob, openJob, stateOf } from "../records/job.ts";
 import { counting, getRun, makeJob, patchRun, setState, type NewJob } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
@@ -177,7 +177,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     on ??= (open && issueOf(open));
     // A fix round follows the build that came before it; a build of a name whose last work did not land redoes that work.
     const before = open ? counting(open).id : undefined, prior = open ? undefined : latestJob(name, repo.key);
-    const retry = prior && !["landed", "done"].includes(counting(prior).run.state) ? counting(prior).id : undefined;
+    const retry = prior && !["landed", "done"].includes(stateOf(prior)) ? counting(prior).id : undefined;
     return await dispatch({
       role: "build", by: o.by, ...(before ? { prev: before } : {}), ...(retry ? { retryOf: retry } : {}), name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
       state: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),

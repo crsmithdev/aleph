@@ -7,7 +7,7 @@
 import { areasOf, parentIn, reader, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
-import { openJob, type Job } from "../records/job.ts";
+import { openJob, stateOf, type Job } from "../records/job.ts";
 import { isOpen, allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
 import { issueKey, wordOf } from "../../../lib/naming.ts";
@@ -140,9 +140,6 @@ export function firefighterLines(now = Date.now(), n = 8): { at: string; line: s
 export const changedLinesOf = (stat: string): number =>
   [...stat.matchAll(/(\d+) (?:insertion|deletion)/g)].reduce((a, m) => a + Number(m[1]), 0);
 
-/** The work's name for an issue: its key, `issue.28`. */
-export const issueJob = (_repo: Repo, id: number | string) => issueKey(id);
-
 /** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
 const BUSY_CONFLICTS = 3;
 
@@ -197,12 +194,12 @@ export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null 
 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now(), lists: Reader = reader()) {
-  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
+  const name = issueKey(issues.idOf(item)), runs = jobs.flat();
   // A job whose last run ended with the API credit error is not open work: the credit hold keeps the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
     name, ref: `${repo.key}-${issues.idOf(item)}`, item, parent: parentIn(repo.key, item, lists),
-    open: open ? record.counting(open).run.state : null,
+    open: open ? stateOf(open) : null,
     job: open ? record.counting(open).id : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),

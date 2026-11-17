@@ -11,7 +11,7 @@ import { decider } from "../jobs/lib/gates/decider.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { pendingWaits, waitsOf, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
-import { view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { stateOf, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, isStuck } from "../jobs/lib/records/record.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOfItem, asking, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
@@ -297,8 +297,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       job.limit = run.limit;
     }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
-    const stored = isWaiting(counting(runs).run.state) ? counting(runs).run.ask : undefined;
-    const asked = isWaiting(counting(runs).run.state) ? (stored ?? plainAsk("question", "")) : undefined;
+    const stored = isWaiting(stateOf(runs)) ? counting(runs).run.ask : undefined;
+    const asked = isWaiting(stateOf(runs)) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     const due = asked ? dueAt(counting(runs)) : null;
     if (due) { job.due = new Date(due.at).toISOString(); job.dueAction = due.action; }
@@ -352,7 +352,7 @@ export function state(now = new Date(), withChats = true): State {
     }
     // An intake run sorts an issue and never lands; it shows only when it awaits you.
     if (last.role === "intake") {
-      if (isOpen(runs) && isWaiting(counting(runs).run.state)) needs.push(toJob(runs));
+      if (isOpen(runs) && isWaiting(stateOf(runs))) needs.push(toJob(runs));
       continue;
     }
     if (isOpen(runs)) {

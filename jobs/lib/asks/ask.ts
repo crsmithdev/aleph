@@ -16,7 +16,7 @@ import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/setting
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, isDropped, parentOf, partsOf, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
+import { afterOf, isDropped, parentOf, partsOf, reopen, setAfter, setPlan, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -352,13 +352,13 @@ export const DROP_WAITER = "Drop the waiter";
 /**
  * What a decision on `ask` does to the item, in the write that notes the decision `said`: on the part-dropped Ask, the
  * Keep open option sets `plan`, and any other answer closes the issue. On the blocker-dropped Ask, the drop option drops the
- * issue, and any other answer opens it without its links to dropped issues. The caller clears the Ask after that write.
+ * issue, and any other answer reopens it (`since` as `reopen` sets it) without its links to dropped issues. The caller clears the Ask after that write.
  */
-export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): void {
+export function decideAsk(ask: Ask | null, doc: issues.Doc, item: issues.Issue, said: string, since: string | null): void {
   if (ask?.reason === "blocker-dropped") {
     const drop = ask.options.find((o) => o.label === DROP_WAITER);
     if (drop && (said.includes(drop.label) || said.includes(drop.line))) issues.setStatus(item, "dropped", undefined, said);
-    else { setAfter(item, afterOf(item).filter((r) => !isDropped(r))); issues.setStatus(item, "open"); }
+    else { setAfter(item, afterOf(item).filter((r) => !isDropped(r))); reopen(doc, item, since); }
     return;
   }
   if (ask?.reason !== "part-dropped") return;

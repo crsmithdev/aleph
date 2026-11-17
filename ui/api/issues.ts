@@ -27,7 +27,6 @@ import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/namin
 import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { answerHeld, NOTE } from "../../jobs/lib/roles/recheck.ts";
-import { issueJob } from "../../jobs/lib/gates/factory-status.ts";
 import { decider } from "../../jobs/lib/gates/decider.ts";
 import { readHolds } from "../../jobs/lib/gates/holds.ts";
 import { projectOf, repoIn } from "./scope.ts";
@@ -86,7 +85,7 @@ function jobRow(runs: ReturnType<typeof allJobs>[number]) {
  */
 export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
   if (todos.status(item) !== "open") return {};
-  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueJob(repo, item.id)} is not a queued issue` };
+  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueKey(item.id)} is not a queued issue` };
   const d = decider({ fresh: false, jobs }).decide(repo, item, { jobs });
   return { runNow: d.kind === "ready" ? null : d.text };
 }

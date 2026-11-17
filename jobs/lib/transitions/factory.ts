@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { money } from "../../../lib/money.ts";
 import { DAILY_HOUR } from "../../../lib/schedule.ts";
-import { LANES, lane, shownId } from "../../../lib/naming.ts";
+import { issueKey, LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { afterOf, buildableIssue, buildableIssues, close, fetchingOnceSync, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../../../lib/git.ts";
@@ -23,7 +23,7 @@ import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { issueBrief } from "./continuation.ts";
 import { filing } from "./filing.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
-import { checkedBy, lookMinutes, openJob } from "../records/job.ts";
+import { checkedBy, lookMinutes, openJob, stateOf } from "../records/job.ts";
 import { counting, patchRun } from "../records/record.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
@@ -34,7 +34,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "./kept.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Size } from "../routing/route.ts";
-import { issueJob, changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
+import { changedLinesOf, gates, stallLines } from "../gates/factory-status.ts";
 import { holdGoal, recordHold } from "../gates/holds.ts";
 import { paused } from "../gates/pause.ts";
 import { sandboxRepos, liveRuns, logCap, runsToday, spentToday } from "../gates/gpu.ts";
@@ -93,7 +93,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
   const lists = reader();
   for (const repo of now ? [] : sandboxRepos()) { sweepMain(repo, lists); for (const l of await closeIssues(repo, at.done)) skipped.push(l); }
-  const ready = openIssues().filter(({ repo, item }) => !now || issueJob(repo, issues.idOf(item)) === now);
+  const ready = openIssues().filter(({ item }) => !now || issueKey(issues.idOf(item)) === now);
   /** The text that stopped a Run now. */
   let refused: string | undefined;
   /** The full bound's `N / M jobs`, when a decision skipped an issue for the cap. */
@@ -121,7 +121,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   };
   for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
-    const name = issueJob(repo, ref);
+    const name = issueKey(ref);
     if (at.done(`${repo.key}-${ref}`)) continue;
     // The cheap facts first: the pause was asked above.
     const first = at.decide(repo, listed, { cheap: true });
@@ -189,7 +189,7 @@ function sweepMain(repo: Repo, lists: Reader): void {
     let bad: string | null = null;
     if (status === "open" && hit && !askOfItem(item)) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
     else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the goal runs again`, git(repo.path, "rev-parse", main).out);
-    if (bad) logEvent({ subject: "rule", action: "failed", object: issueJob(repo, item.id), detail: `not swept: ${bad}` });
+    if (bad) logEvent({ subject: "rule", action: "failed", object: issueKey(item.id), detail: `not swept: ${bad}` });
   }
 }
 
@@ -210,7 +210,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
   const doc = reader({ fetch: false }).list(repo.key);
   for (const listed of doc?.items ?? []) {
     if (!doc || !finished(doc, listed, repo, done)) continue;
-    const name = issueJob(repo, listed.id);
+    const name = issueKey(listed.id);
     const release = await lock(`issue-${name}`, 0);
     if (!release) { lines.push(`${name}: another dispatch holds it`); logEvent({ subject: "rule", action: "skipped", object: name, detail: "another dispatch holds it" }); continue; }
     try {
@@ -269,7 +269,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
   queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
-    const name = issueJob(repo, item.id);
+    const name = issueKey(item.id);
     if (holdsWork(runs, "intake", name)) continue;
     start(repo, item.id);
     started.push(name);
@@ -394,13 +394,13 @@ export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = 
   if (!liveRuns(runs)) {
     for (const { repo, item } of openIssues(lists)) {
       // No model call: the stall check agrees with the dispatch on all but the router's size.
-      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`goal:${issueJob(repo, item.id)}`);
+      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`goal:${issueKey(item.id)}`);
     }
   }
   if (!live("intake") && !gates({ only: ["full"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
+      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueKey(issues.idOf(item))}`);
     }
   }
   return out;
@@ -418,7 +418,7 @@ export function behind(repo: Repo, short = false): string | null {
 export function hookLines(now = Date.now()): string[] {
   const lines = paused() ? ["factory paused"] : [];
   const jobs = allJobs(), repos = Object.values(loadRegistry()), lists = reader({ fetch: false });
-  const refs = jobs.filter((j) => isOpen(j) && isWaiting(counting(j).run.state) && counting(j).run.ask).map((j) => j[0].run.name);
+  const refs = jobs.filter((j) => isOpen(j) && isWaiting(stateOf(j)) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${issues.idOf(item)}`);
@@ -568,7 +568,7 @@ function runLines(now: number, peek: boolean): string[] {
  */
 export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Promise<{ counts: Counts; skipped: string[] }> {
   if (paused()) return { counts: {}, skipped: [] };
-  const name = issueJob(repo, id);
+  const name = issueKey(id);
   const mine = () => allRuns().filter((e) => e.run.role === "intake" && e.run.target === name);
   const before = new Set(mine().map((e) => e.id));
   const at = decider({ fresh: true });

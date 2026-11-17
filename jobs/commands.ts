@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
-import { findJob, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
+import { findJob, issue as issueOf, issueTitle, openJobOfIssue, readFile, stateOf, view, type Job } from "./lib/records/job.ts";
 import { counting, patchRun, setState } from "./lib/records/record.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
@@ -218,7 +218,7 @@ function jobs(ctx: Ctx): void {
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
-    const listed = (j: Entry[]) => isOpen(j) || (counting(j).run.state === "landed" && counting(j).run.check === "open");
+    const listed = (j: Entry[]) => isOpen(j) || (stateOf(j) === "landed" && counting(j).run.check === "open");
     const ended = (j: Entry[]) => Date.parse(counting(j).run.ended ?? "");
     const recent = all.filter((j) => !listed(j) && Date.now() - ended(j) < DAY_MS).sort((a, b) => ended(b) - ended(a));
     return ctx.out([...all.filter((j) => listed(j)), ...recent].map((j) => summary(j, fates)));

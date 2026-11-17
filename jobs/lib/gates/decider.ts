@@ -9,12 +9,12 @@ import { projectOfIssue, readList, reader, type Reader } from "../../../issues/l
 import * as issues from "../../../issues/lib/todo.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { parseKey } from "../../../lib/naming.ts";
+import { issueKey, parseKey } from "../../../lib/naming.ts";
 import type { Job } from "../records/job.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { repoStages } from "../records/status.ts";
 import type { Stage } from "../records/stage.ts";
-import { issueFacts, issueJob } from "./factory-status.ts";
+import { issueFacts } from "./factory-status.ts";
 import { decideIntake } from "./intake-decision.ts";
 import { issueDecision, refDone, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
 import { decideStart, type Route, type StartDecision } from "./start-decision.ts";
@@ -71,7 +71,7 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   function decide(repo: Repo, item: issues.Issue, mode: Exclude<Mode, { route: Route }>): IssueDecision;
   function decide(repo: Repo, item: issues.Issue, mode: Extract<Mode, { route: Route }>): Promise<StartDecision>;
   function decide(repo: Repo, item: issues.Issue, mode: Mode): IssueDecision | Promise<StartDecision> {
-    if ("cheap" in mode) return issueDecision({ name: issueJob(repo, issues.idOf(item)), ref: `${repo.key}-${issues.idOf(item)}`, item, done, red: redOf(repo) });
+    if ("cheap" in mode) return issueDecision({ name: issueKey(issues.idOf(item)), ref: `${repo.key}-${issues.idOf(item)}`, item, done, red: redOf(repo) });
     const f = { ...issueFacts(repo, item, mode.jobs, mode.now, mode.lists ?? lists), done, red: redOf(repo) };
     return "route" in mode ? decideStart(repo, f, mode.jobs, mode.route) : issueDecision({ ...f, ...mode.gates });
   }

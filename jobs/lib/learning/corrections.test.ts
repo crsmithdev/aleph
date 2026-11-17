@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
-import { add, parseIssueRef, section, status, titleProblem } from "../../../issues/lib/todo.ts";
+import { add, parseIssueRef, section, setStatus, status, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { askOf } from "../asks/ask.ts";
 import { missingSections } from "../roles/issue-spec.ts";
@@ -195,6 +195,18 @@ test("an approved claude-md proposal reopens its issue with a spec with Goal, Ed
   expect(section(item.spec, "Edit surface")).toBe("- CLAUDE.md");
   expect(section(item.spec, "Oracle")).toContain(`grep -F '${l.sentence}' CLAUDE.md`);
   expect(section(item.spec, "Oracle")).not.toContain("Signals:");
+});
+
+test("approve reopens the issue as reopen does: since is main's head and a closed parent opens", async () => {
+  pickFirst = true;
+  await mine(NOW, quiet);
+  const dir = join(base, "fac-repo"), sh = (...a: string[]) => Bun.spawnSync(a, { cwd: dir });
+  sh("git", "init", "-q", "-b", "main"); sh("git", "commit", "-q", "--allow-empty", "-m", "init"); sh("git", "update-ref", "refs/remotes/origin/main", "HEAD");
+  const head = sh("git", "rev-parse", "HEAD").stdout.toString().trim();
+  writeList(repo, "test: parent", (doc) => { const parent = add(doc, "parent"); setStatus(parent, "done"); doc.items[0].fm.from = `issue.${parent.id}`; return true; });
+  expect(approve(proposals()[0].id, repo, quiet)).toBe("fac-1");
+  const [item, parent] = readList(repo)!.items;
+  expect([status(item), item.fm.since, status(parent), parent.fm.since]).toEqual(["open", head, "open", head]);
 });
 
 describe("standing proposals", () => {
