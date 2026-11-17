@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentCause, callAgent, resultOf } from "./agent-call.ts";
 import { backendHold } from "../gates/holds.ts";
+import { stallSeconds } from "../infra/settings.ts";
 
 let base: string;
 const saved = { ...process.env };
@@ -66,7 +67,13 @@ test("a call the API refused for credit states the credit cause and holds its mo
   expect(r.cause).toEqual({ kind: "credit", reason: line });
   expect(r.text).toBe(line);
   expect(backendHold()).toMatchObject({ via: "claude", why: line });
-  expect(agentCause({ code: 1, timedOut: false, stalled: false }, { found: true, ok: false, line, result: "" })).toEqual({ kind: "credit", reason: line });
+  expect(agentCause({ code: 1, timedOut: false, stalled: false }, { found: true, ok: false, line, result: "" }, 60)).toEqual({ kind: "credit", reason: line });
+});
+
+test("a timed-out or stalled call states the time box or stall window that stopped it, in seconds", () => {
+  const none = { found: false, ok: false, line: "", result: "" };
+  expect(agentCause({ code: 124, timedOut: true, stalled: false }, none, 2400)).toEqual({ kind: "timeout", reason: "timed out", limit: 2400 });
+  expect(agentCause({ code: 143, timedOut: false, stalled: true }, none, 2400)?.limit).toBe(stallSeconds());
 });
 
 test("resultOf takes the model the CLI ran on from its init event", () => {

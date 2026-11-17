@@ -304,7 +304,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const wt = run.worktree!;
   const branch = run.branch!;
   const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
-  const fail = (cause: Cause, reason: string) => ({ outcome: { state: "failed" as const, cause, reason }, code: 1 });
+  const fail = (cause: Cause, reason: string, limit?: number) => ({ outcome: { state: "failed" as const, cause, reason, limit }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
   // A later run whose worktree is gone gets it back on the job's branch.
@@ -371,11 +371,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   writeFileSync(runFile(folder, "result.md"), result);
 
   // The state rule: the first match wins.
-  if (w.cause?.kind === "stalled") return fail("stalled", w.cause.reason);
+  if (w.cause?.kind === "stalled") return fail("stalled", w.cause.reason, w.cause.limit);
   if (w.cause?.kind === "timeout") {
     const s = workSeconds(run);
     const last = result.trim() && ` Last message: ${result.trim().slice(0, 500)}`;
-    return fail("timeout", `The worker ${w.cause.reason} at its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`);
+    return fail("timeout", `The worker ${w.cause.reason} at its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`, s);
   }
   if (w.cause?.kind === "credit") return fail("credit", w.cause.reason);
   if (w.step.code !== 0) return { outcome: { state: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
@@ -428,7 +428,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
     await fileFollowups(repo, run, reply.followups);
     noteFlakes(repo, run, reply.flakes);
   }
-  if (w.cause) return stop(w.cause.kind, w.cause.reason, facts);
+  if (w.cause) return stop(w.cause.kind, w.cause.reason, { ...facts, limit: w.cause.limit });
   if (typeof reply === "string") return stop("other", `worker: ${reply}`, facts);
   { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`, facts); }
   const bf = branchFacts(repo, main, tip);

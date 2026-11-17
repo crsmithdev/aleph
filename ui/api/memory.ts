@@ -52,9 +52,9 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
  * Langfuse for about 45 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
  * and the 30 s Langfuse poll does not hold the build Worker with it. */
 const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], runMisses, null);
-/** The vault's notes, read once until a file in the vault changes or the UI writes: a page that wrote reads its write
- * even when the watcher's event comes after its request. */
-const vaultNotes = (root: string): Promise<Note[]> => once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root));
+/** The vault's notes, or none when it has no Home.md, read once until a file in the vault changes or the UI writes: a page
+ * that wrote reads its write even when the watcher's event comes after its request. */
+const vaultNotes = async (root: string): Promise<Note[]> => (hasHome(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
 async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn(["bun", CLI, "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
@@ -95,7 +95,7 @@ async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = projectOf(url);
   const root = vaultDir();
-  const all = hasHome(root) ? await vaultNotes(root) : [];
+  const all = await vaultNotes(root);
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
@@ -132,7 +132,7 @@ function recallEvents(root: string, since: string) {
 async function log(url: URL): Promise<Response> {
   const slow = misses();
   const project = projectOf(url), root = vaultDir(), keep = inScope(project);
-  const all = await allNotes(root), targets = linkTargets(all);
+  const all = await vaultNotes(root), targets = linkTargets(all);
   const since = daysAgo(RECALL_DAYS);
   const mine = (title: string) => { const hit = targets.get(title.toLowerCase()); return !project || (!!hit && keep(hit)); };
   const rows: { at: string; kind: string; op: string; note: string; why: string; titles: string[] }[] = [];
@@ -189,7 +189,7 @@ async function processes(): Promise<Response> {
   const mtimes = listEpisodes().map((e) => e.mtimeMs);
   const days = Array.from({ length: KEEP_DAYS }, (_, i) => daysAgo(KEEP_DAYS - 1 - i, new Date(now)));
   const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
-  const all = await allNotes(root);
+  const all = await vaultNotes(root);
   const stale = lintVault(all).warn.filter((f) => f.rule === "stale");
   return json({
     steps,
@@ -199,14 +199,11 @@ async function processes(): Promise<Response> {
   });
 }
 
-/** The vault's notes, or none when it has no Home.md. */
-const allNotes = async (root: string) => (hasHome(root) ? await vaultNotes(root) : []);
-
 /** Every memory item of every type, built once until one of its sources changes. */
 const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
 async function memoryItems(root: string) {
   return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
-    const wiki = wikiNotes(await allNotes(root));
+    const wiki = wikiNotes(await vaultNotes(root));
     return { wiki, items: await items(root, wiki, recallSeen(root)) };
   });
 }
@@ -223,7 +220,7 @@ async function search(url: URL): Promise<Response> {
 async function note(raw: string, url: URL): Promise<Response> {
   const title = raw.trim();
   const project = projectOf(url);
-  const all = await allNotes(vaultDir());
+  const all = await vaultNotes(vaultDir());
   const targets = linkTargets(all);
   const hit = title ? targets.get(title.toLowerCase()) : undefined;
   // Under a project filter, a note outside the project does not exist.

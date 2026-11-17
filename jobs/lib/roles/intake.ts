@@ -275,12 +275,12 @@ export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.
   const parts = doc ? partsOf(doc, item) : [];
   const split = planSet(item)
     ? parts.length
-      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- issue.${p.id} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nChris asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
+      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- ${issueKey(p.id)} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nChris asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
       : `\n# Split it\n\nA run of this issue reached its time box: return "build" with 2 to 6 "parts".\n`
     : "";
   return `You take in one open issue of the repo ${repo.key}, before any work starts on it. Your working directory is a clone of main: read the code to decide, with your read-only tools. Change nothing. Code checks your reply.
 
-# issue.${item.id}: ${item.title}
+# ${issueKey(item.id)}: ${item.title}
 
 Source: ${sourceOf(item)}. Kind: ${issues.kindOf(item)}.
 
@@ -444,7 +444,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
     const noted = noteFlake(repo, `${ref}: ${item.title}${item.request.trim() ? `: ${item.request.trim().replace(/\s+/g, " ")}` : ""}`);
     if (typeof noted === "string") return { applied: null, line: `${ref}: flake not noted: ${noted}` };
     const ok = sort(repo, item.id, `intake ${ref}: flake`, (i) => {
-      issues.setStatus(i, "done", undefined, `a flake, noted on issue.${noted.id}`);
+      issues.setStatus(i, "done", undefined, `a flake, noted on ${issueKey(noted.id)}`);
     });
     return { applied: ok ? "close" : null, line: `${ref}: a flake` };
   }

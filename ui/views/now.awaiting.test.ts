@@ -67,9 +67,9 @@ const outsideDetails = (card: string): [string, string] => {
 };
 
 test("a failed job's situation line is a sentence of its cause, and its reason sentence moves into Details", () => {
-  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "timeout", reason: "The worker ran past its 40-minute time box and was stopped. Last message: hi" });
+  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "timeout", limit: 2400, reason: "The worker timed out. Last message: hi" });
   expect(problem(card)).toBe("The worker ran past its 40-minute time box and was stopped.");
-  expect(problem(stuckCard({ name: "aleph-31", state: "failed", cause: "stalled", reason: "stalled: no output for 10 minutes" }))).toBe("The worker gave no output for 10 minutes and was stopped.");
+  expect(problem(stuckCard({ name: "aleph-31", state: "failed", cause: "stalled", limit: 600, reason: "stalled" }))).toBe("The worker gave no output for 10 minutes and was stopped.");
   expect(card).not.toContain("Failed with");
   const [, inside] = outsideDetails(card);
   expect(inside).toContain("Last message: hi");

@@ -2,7 +2,7 @@
 // again when an event is added, and the terminal panel (herdr/status.ts) reads them. The page only draws them and applies the Work and Factory filter.
 // An issue's rows are one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
 // a routine's run is one row that says "N changes", each change a line in its fold. A hold is an issue's state, not an event, so no row has it.
-import { EDITS, factsOf, issueHref, jobHref, parseId, parseKey, say, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
+import { EDITS, factsOf, issueHref, jobHref, parseId, parseKey, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { dur, money } from "./views/lib/format.js";
 
@@ -33,8 +33,6 @@ const WAITS = new Set(["held", "waiting", "paused", "red", "after", "full", "gpu
 /** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
 const FAILED = ["failed", "returned", "dropped"];
 const MARK: Record<string, string> = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
-/** The leading verb of a sentence after its ID, with the words that only join it to the rest. */
-const VERB = /^ ?(?:(?:is|has|asks|proposes|hit) |\S+(?: up| its checks)?(?: by| for| to)?(?::|$| ))\s*/;
 
 const isJobId = (id: string) => id.includes("#") || /^job\.\d+$/.test(id);
 const isIssue = (t: string) => Boolean(parseId(t) || parseKey(t)?.kind === "issue");
@@ -64,10 +62,9 @@ function parts(e: EventRow): { lead: Piece[]; rest: Piece[] } {
     const repo = p.id === e.object ? e.project : undefined;
     return { id: shownId(p.id, repo), to: isJobId(p.id) ? jobHref(shownId(p.id)) : issueHref(p.id, repo) };
   };
-  // Adjacent text pieces as one, so the verb's colon and the reason after it ("failed", ": past its time box") read as one.
-  const said = say(e).reduce<(string | { id: string })[]>((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
-  const lead = typeof said[0] === "string" ? [] : [bit(said.shift()!)];
-  if (typeof said[0] === "string") said[0] = said[0].replace(VERB, "");
+  // Adjacent text pieces as one, so a reason's colon and its words ("main is red", ": ", "x") read as one.
+  const said = sayRest(e).reduce<(string | { id: string })[]>((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
+  const lead = [bit({ id: e.object })];
   const rest = said.map(bit).filter((p) => p !== "");
   if (typeof rest[0] === "string") rest[0] = rest[0].trimStart();
   if (typeof rest.at(-1) === "string") rest[rest.length - 1] = (rest.at(-1) as string).trimEnd();

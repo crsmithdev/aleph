@@ -127,6 +127,8 @@ export interface Job {
   cause?: Cause;
   /** Stuck or failed: the check that stopped its last run, when a check did; the card's line names it after the cause. */
   checkName?: string;
+  /** Stuck or failed by a time box or a stall: its length in seconds. */
+  limit?: number;
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
@@ -140,7 +142,9 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   /** The Ask's reason. */
   reason?: string;
   /** The stage from stage(). */
-  stage?: string }
+  stage?: string;
+  /** When the work on it was first picked up (ISO, "" for never), and the part it is of its parent. */
+  since?: string; part?: Part }
 
 /** An issue in Running: its parts, each with its stage and the job that works on it. */
 interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
@@ -290,6 +294,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       const run = counting(runs).run;
       job.cause = causeOf(run);
       job.checkName = failedCheckOf(run);
+      job.limit = run.limit;
     }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
     const stored = isWaiting(counting(runs).run.state) ? counting(runs).run.ask : undefined;
@@ -435,9 +440,9 @@ export function state(now = new Date()): State {
       }
       const ask = askOfItem(item);
       // A core-change Ask sits on a parked issue, so no work starts on it.
-      if (status(item) === "parked" && asking(item, ask)) { awaitingItems.push(card(repo.key, item, "waiting", ask)); continue; }
+      if (status(item) === "parked" && asking(item, ask)) { awaitingItems.push({ ...card(repo.key, item, "waiting", ask), since: pickedUp(id), part: partOf.get(id) }); continue; }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
-      if (st === "waiting" && ask) awaitingItems.push(card(repo.key, item, st, ask));
+      if (st === "waiting" && ask) awaitingItems.push({ ...card(repo.key, item, st, ask), since: pickedUp(id), part: partOf.get(id) });
       else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: updated(item) ?? created(item) ?? "" });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {
@@ -450,7 +455,7 @@ export function state(now = new Date()): State {
     const k = `${j.repo}-${j.item.id}`;
     j.part = partOf.get(k);
   }
-  for (const j of stuck) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
+  for (const j of [...stuck, ...needs]) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
 
   doneItems.sort((a, b) => b.at - a.at);
   const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs, since }) => ({
@@ -461,13 +466,6 @@ export function state(now = new Date()): State {
 
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingItems });
-  // A run's own fields come from `attend`; the part, and an issue's dates, come from here.
-  for (const a of att.items) {
-    const j = a.key.startsWith("run:") ? needs.find((x) => `run:${x.name}` === a.key) : undefined;
-    const key = j?.item ? `${j.repo}-${j.item.id}` : a.id;
-    a.part = partOf.get(key);
-    if (!j) { a.at = awaitingItems.find((c) => c.id === key)?.updated ?? ""; a.since = pickedUp(key); }
-  }
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
   recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });

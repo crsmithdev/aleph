@@ -318,13 +318,13 @@ const jobDetails = (s, j) => details(s, j,
 /** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
 const alertCard = (kind, key, meta, title, problem, body = "") =>
   askShell(kind, `data-annotate="${esc(shortId(key))}" data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
-/** One plain sentence of what went wrong for a stuck job, from its cause; a time box or a stall takes its length from the reason. */
+/** One plain sentence of what went wrong for a stuck job, from its cause; a time box or a stall takes its length from `limit`, in seconds. */
 const stuckSentence = (j) => {
-  const span = /(\d+)[- ](minute|second)/.exec(j.reason ?? "");
+  const span = j.limit ? (j.limit % 60 === 0 ? [j.limit / 60, "minute"] : [j.limit, "second"]) : null;
   const check = j.checkName ? `The check ${j.checkName}` : "A check";
   return {
-    timeout: `The worker ran past its ${span ? `${span[1]}-${span[2]} ` : ""}time box and was stopped.`,
-    stalled: `The worker gave no output${span ? ` for ${span[1]} ${span[2]}s` : ""} and was stopped.`,
+    timeout: `The worker ran past its ${span ? `${span[0]}-${span[1]} ` : ""}time box and was stopped.`,
+    stalled: `The worker gave no output${span ? ` for ${span[0]} ${span[1]}s` : ""} and was stopped.`,
     check: `${check} failed.`,
     infra: j.checkName ? `${check} gave no verdict.` : "A factory step failed outside the work.",
     "no-commit": "The worker made no commit.",

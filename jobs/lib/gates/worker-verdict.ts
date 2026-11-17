@@ -11,7 +11,7 @@ import { stopFields, type ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
 
 /** The fields of the run that a verdict sets. */
-export type Outcome = Pick<Run, "state" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
+export type Outcome = Pick<Run, "state" | "ask" | "reason" | "cause" | "checkName" | "limit" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "review" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
 /** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it, `model` the reviewer model, `session` the session of this call. */

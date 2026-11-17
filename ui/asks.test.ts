@@ -227,3 +227,11 @@ test("run-cap and intake-failed texts read the settings", () => {
     expect(reasonText("intake-failed").line).not.toContain("twice");
   } finally { off(); }
 });
+
+test("an Ask carries its date, its start and its part from the run or issue it is built from", () => {
+  const part = { n: 2, m: 3, parent: "aleph-386", href: "#/issues/aleph/386" };
+  const [i] = ofIssues(issue({ reason: "question", question: "q", updated: "2026-10-29T00:00:00Z", since: "2026-10-28T00:00:00Z", part }));
+  expect([i!.at, i!.since, i!.part]).toEqual(["2026-10-29T00:00:00Z", "2026-10-28T00:00:00Z", part]);
+  const [r] = ofRuns(run("question", { question: "Which port?", part }));
+  expect([r!.at, r!.since, r!.part]).toEqual(["2026-10-28T00:00:00Z", "2026-10-28T00:00:00Z", part]);
+});

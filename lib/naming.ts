@@ -171,19 +171,20 @@ export const contentText = (e: Partial<Event>): string => shortText(e.detail ?? 
 
 /**
  * The sentence of each event, by `action`. `{object}` is the thing acted on, `{by}` the subject in words and `{detail}`
- * the detail in place; a sentence with no `{detail}` takes the detail after a colon.
+ * the detail in place; a sentence with no `{detail}` takes the detail after a colon. `|` ends the verb: the Herald
+ * shows what follows it.
  */
 const SAY: Record<string, string> = {
-  running: "{object} started", waiting: "{object} waits for you", passed: "{object} passed its checks", returned: "{object} returned", failed: "{object} failed",
-  landed: "{object} landed", dropped: "{object} dropped", done: "{object} done",
-  held: "{object} held: {detail}", paused: "{object} waits: the factory is paused", red: "{object} waits: main is red", after: "{object} waits for {detail}",
-  full: "{object} waits: run slots are full", gpu: "{object} waits for the GPU", busy: "{object} waits: {detail}",
-  looping: "{object} stopped: it restarts in a loop", starting: "{object} is starting", parent: "{object} waits for its parts",
-  parked: "{object} parked", credit: "{object} waits: out of credit",
-  protected: "{object} asks to change a protected file", question: "{object} asks a question", incomplete: "{object} has a dropped part",
-  capped: "{object} hit its run cap", proposal: "{object} proposes a change",
-  reran: "{object} reran", started: "{object} picked up", missed: "{object} missed", skipped: "{object} skipped", filed: "{object} filed by {by}",
-  escalated: "{object} escalated to you", changed: "{object} changed", answered: "{object} answered by {by}", routed: "{object} routed", stalled: "{object} stalled", reopened: "{object} reopened",
+  running: "{object} started|", waiting: "{object} waits for| you", passed: "{object} passed its checks|", returned: "{object} returned|", failed: "{object} failed|",
+  landed: "{object} landed|", dropped: "{object} dropped|", done: "{object} done|",
+  held: "{object} held:| {detail}", paused: "{object} waits:| the factory is paused", red: "{object} waits:| main is red", after: "{object} waits for| {detail}",
+  full: "{object} waits:| run slots are full", gpu: "{object} waits for| the GPU", busy: "{object} waits:| {detail}",
+  looping: "{object} stopped:| it restarts in a loop", starting: "{object} is| starting", parent: "{object} waits for| its parts",
+  parked: "{object} parked|", credit: "{object} waits:| out of credit",
+  protected: "{object} asks| to change a protected file", question: "{object} asks| a question", incomplete: "{object} has| a dropped part",
+  capped: "{object} hit| its run cap", proposal: "{object} proposes| a change",
+  reran: "{object} reran|", started: "{object} picked up|", missed: "{object} missed|", skipped: "{object} skipped|", filed: "{object} filed by| {by}",
+  escalated: "{object} escalated to| you", changed: "{object} changed|", answered: "{object} answered by| {by}", routed: "{object} routed|", stalled: "{object} stalled|", reopened: "{object} reopened|",
 };
 /** What a cause adds as an event's detail: its phrase; "" adds nothing. */
 export const BECAUSE: Record<string, string> = {
@@ -215,15 +216,25 @@ export function linked(text: string): Said[] {
 /** What an event is about: its job's target, else the object. */
 export const targetOf = (e: Partial<EventRow>): string => e.object_target ?? e.object ?? "";
 
-/** The sentence of an event in pieces, as `[{id: "job.6802"}, " landed"]`. */
-export function say(e: Partial<EventRow>): Said[] {
-  const tpl = SAY[String(e.action)] ?? `{object} ${e.action}`, inline = tpl.includes("{detail}");
+/** An event's sentence in three parts: its ID and verb, the template's words after the verb, and a detail the template does not place. */
+function sentence(e: Partial<EventRow>): { verb: Said[]; rest: Said[]; after: Said[] } {
+  const review = e.action === "returned" && (e.subject_role === "review" || e.subject === "reviewer");
+  const tpl = review ? "{object} returned by| review" : SAY[String(e.action)] ?? `{object} ${e.action}|`, inline = tpl.includes("{detail}");
   // A held event's detail is the hold word, a colon and its facts: the sentence reads `held: after issue.2985`.
   const detail = e.action === "held" ? [wordOf(e), factsOf(e)].filter(Boolean).join(" ") : e.detail ?? "";
   const fill: Record<string, Said[]> = { object: [{ id: e.object ?? "" }], by: [whoOf(e.subject ?? "", e.subject_role)], detail: linked(detail) };
-  const out = tpl.split(/(\{\w+\})/).filter(Boolean).flatMap((p) => fill[p.slice(1, -1)] ?? [p]);
-  if (e.action === "returned" && (e.subject_role === "review" || e.subject === "reviewer")) out.push(" by review");
-  return !inline && e.detail ? [...out, ": ", ...fill.detail] : out;
+  const [verb, rest] = tpl.split("|").map((t) => t.split(/(\{\w+\})/).filter(Boolean).flatMap((p) => fill[p.slice(1, -1)] ?? [p]));
+  return { verb: verb!, rest: rest!, after: !inline && e.detail ? fill.detail : [] };
+}
+/** The sentence of an event in pieces, as `[{id: "job.6802"}, " landed"]`. */
+export function say(e: Partial<EventRow>): Said[] {
+  const { verb, rest, after } = sentence(e);
+  return [...verb, ...rest, ...(after.length ? [": ", ...after] : [])].reduce<Said[]>((out, p) => (typeof p === "string" && typeof out.at(-1) === "string" ? [...out.slice(0, -1), out.at(-1) + p] : [...out, p]), []);
+}
+/** What an event's sentence says after its verb, as `["past its time box"]` for `failed: past its time box`. */
+export function sayRest(e: Partial<EventRow>): Said[] {
+  const { rest, after } = sentence(e);
+  return [...rest, ...(rest.length && after.length ? [": "] : []), ...after];
 }
 /** The sentence of an event as plain text, each ID in its short form. */
 export const sayText = (e: Partial<EventRow>): string => say(e).map((p) => (typeof p === "string" ? p : shownId(p.id, p.id === e.object ? e.project : undefined))).join("");

@@ -196,3 +196,13 @@ describe("keys", () => {
     for (const c of ["p", "d", "j"]) expect(() => n.setCodes({ jam: c })).toThrow(/another kind/);
   });
 });
+
+test("sayRest is the sentence after its verb", () => {
+  const rest = (e: Partial<n.EventRow>) => n.sayRest(e).map((p) => (typeof p === "string" ? p : p.id)).join("").trim();
+  expect(rest({ subject: "gate", action: "red", object: "issue.3" })).toBe("main is red");
+  expect(rest({ subject: "gate", action: "failed", object: "job.6", detail: "past its time box" })).toBe("past its time box");
+  expect(rest({ subject: "gate", action: "passed", object: "job.6" })).toBe("");
+  expect(rest({ subject: "human", action: "filed", object: "issue.3" })).toBe("you");
+  expect(rest({ subject: "reviewer", action: "returned", object: "job.6", detail: "no tests" })).toBe("review: no tests");
+  expect(rest({ subject: "gate", action: "after", object: "issue.3", detail: "issue.4" })).toBe("issue.4");
+});

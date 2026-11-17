@@ -56,6 +56,8 @@ export interface Run {
   cause?: Cause;
   /** The cause `check`: the check's name. */
   checkName?: string;
+  /** The causes `timeout` and `stalled`: the time box or stall window that stopped the run, in seconds. */
+  limit?: number;
   /** What a drop means; `cause` says why the run stopped. Only a drop writes it. */
   fate?: Fate;
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
