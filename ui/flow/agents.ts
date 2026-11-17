@@ -12,7 +12,7 @@ import { HOUR, MAX_RUN, passedState, round } from "./phases.ts";
 export interface AgentRole { key: AgentKey; name: string; live: number; runs: number; hours: number; p50: number | null; p95: number | null; models: string[] }
 /**
  * One role and model of the window with how its runs ended. `ended` is succeeded + failed + stuck (a running run counts in `runs` only). `rate` is succeeded over `ended` (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs; `p50` and `p95` are their times in seconds; `from` and `to` are the first and last start of its runs in the window (ISO, null with no runs).
- * Worker rows are one per size and model: they add `size` (small, medium or large, null for a build with no size), `built` (succeeded runs of a landed job), `perBuilt` (`cost` over `built`, null with none built), `firstPass` (those whose job, and the jobs it retries, had no run sent back) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`, and their `rate` is the verdicts (`pass` + `fail`) over `ended`.
+ * Worker rows are one per size and model: they add `size` (small, medium or large; a build with no size, or another size, is in no worker row and counts only toward the reviewer's verdicts), `built` (succeeded runs of a landed job), `perBuilt` (`cost` over `built`, null with none built), `firstPass` (those whose job, and the jobs it retries, had no run sent back) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`, and their `rate` is the verdicts (`pass` + `fail`) over `ended`.
  */
 interface OutcomeRow {
   role: AgentKey; model: string; runs: number; succeeded: number; failed: number; stuck: number; ended: number;
@@ -77,7 +77,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.role)?.[0];
     const model = bare(r.model) || (build ? sizeModel(r.size) : undefined) || "unset";
     const size = build ? (["small", "medium", "large"].includes(r.size ?? "") ? r.size! : null) : undefined;
-    if (role) {
+    if (role && size !== null) {
       const w = row(role, model, size);
       w.runs++; w.cost += r.cost ?? 0; w.starts.push(a);
       if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++;
@@ -93,8 +93,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
       if (back || land) {
         const v = row("reviewer", bare(r.review?.model) || bare(reviews.get(e.id)) || "unset");
         if (back) v.fail = (v.fail ?? 0) + 1; else v.pass = (v.pass ?? 0) + 1;
-        const w = row("worker", model, size);
-        w.verdicts++; w.landed += back ? 0 : 1;
+        if (size) { const w = row("worker", model, size); w.verdicts++; w.landed += back ? 0 : 1; }
       }
     }
   }

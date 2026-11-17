@@ -334,14 +334,12 @@ test("a click on ▸ keeps the size open, and a second click closes it", async (
   }
 });
 
-test("the Workers group holds Small, Medium, Large and an Unsized row with no controls, and the Other group a row per role model", () => {
+test("the Workers group holds Small, Medium and Large and no Unsized row, and the Other group a row per role model", () => {
   const h = page([full("worker", "sonnet", { size: null, runs: 17 })]);
   const [workers, rolesPart] = h.split('<tr class="grp"><th colspan="10">Other</th></tr>');
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
-  expect([...workers.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large", "Unsized"]);
-  const un = row(h, "Unsized");
-  expect(un).toContain('<td><span class="fold" aria-hidden="true"></span> sonnet</td><td class="num">17</td>');
-  expect(un).not.toMatch(/<select|checkbox/);
+  expect([...workers.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large"]);
+  expect(h).not.toContain('title="Unsized"');
   expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Lens", "Housekeeper", "Title", "Judge"]);
 });
 

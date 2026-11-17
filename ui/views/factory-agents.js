@@ -85,7 +85,7 @@ function roles(a, m) {
   };
   const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));
   const grp = (t) => `<tr class="grp"><th colspan="${num.length + 3}">${t}</th></tr>`;
-  const rows = grp("Workers") + Object.entries(SIZES).map(([k, l]) => line(k, l, of("worker", k))).join("") + line("unsized", "Unsized", of("worker", null)) +
+  const rows = grp("Workers") + Object.entries(SIZES).map(([k, l]) => line(k, l, of("worker", k))).join("") +
     grp("Other") + Object.entries(ROLE_MODELS).map(([k, r]) => line(k, NAMES[r], of(r))).join("");
   return m || outs.length ? dataTable(heads(["Agent", "Model", ...num, "Output"], num), rows) : empty();
 }

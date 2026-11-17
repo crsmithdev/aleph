@@ -406,7 +406,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
 test("agents: outcome rows per role and model, with first pass, reviewer verdicts and a baseline rate", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", size: "small", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: haiku has one pass that landed first time, one run sent back by the reviewer, one timed out; gpt-oss has one failed check.
     e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", state: "landed" }),
@@ -429,7 +429,7 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
 
 test("agents: a build the reviewer returned is no first pass, with no failed field", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const e = (id: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job: "a", state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
+  const e = (id: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job: "a", state: "passed", size: "small", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
   const runs = [
     e("f1", 10, { state: "returned", review: { call: "returned" } }), e("f2", 12, {}), e("f3", 14, { role: "land", state: "landed" }),
   ];
@@ -439,7 +439,7 @@ test("agents: a build the reviewer returned is no first pass, with no failed fie
 
 test("agents: a landed build whose job retries one sent back is no first pass", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const e = (id: string, job: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job, target: "issue.1", state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
+  const e = (id: string, job: string, a: number, extra: object) => ({ folder: id, id, run: { n: 1, role: "build", job, target: "issue.1", state: "passed", size: "small", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
   const runs = [
     e("b1", "a", 10, { state: "returned", failed: "review" }), e("b2", "b", 12, { retryOf: "b1" }), e("b3", "b", 14, { role: "land", state: "landed" }),
   ];
@@ -473,13 +473,15 @@ test("agents: the reviewer's rate is its verdicts over its ended runs, and a wor
   expect(a.outcomes.find((x) => x.role === "worker")).toMatchObject({ reviewPass: 0.6667 });
 });
 
-test("agents: worker rows are one per size and model, a build with no size has size null, and each row runs from its first to its last start", () => {
+test("agents: worker rows are one per size and model, a build with no size has no row but its verdict still counts for the reviewer, and each row runs from its first to its last start", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
   const e = (a: number, extra: object = {}) => ({ folder: `s${n}`, id: `s${n++}`, run: { n: 1, role: "build", job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
-  const runs = [e(14, { size: "small" }), e(11, { size: "small" }), e(12, { size: "medium" }), e(13), e(9, { size: "small" })];
+  const runs = [e(14, { size: "small" }), e(11, { size: "small" }), e(12, { size: "medium" }), e(13, { review: { call: "passed", model: "claude-opus-5-5" } }), e(9, { size: "small" })];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], ["medium", "claude-haiku", 1, iso(12), iso(12)], [null, "claude-haiku", 1, iso(13), iso(13)]]);
+  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], ["medium", "claude-haiku", 1, iso(12), iso(12)]]);
+  expect(a.outcomes.some((x) => x.role === "worker" && x.size === null)).toBe(false);
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", pass: 1 });
 });
 
 test("agents: a model's provider prefix falls away, so its runs share one reviewer row", () => {
@@ -538,7 +540,7 @@ test("agents: title and judge runs are roles with their own outcome rows and cos
 test("agents: each outcome row has ended, p95 and, for a worker, the cost per built job", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, len: number, extra: object = {}) => ({ folder: `p${n}`, id: `p${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + len), ...extra } }) as any;
+  const e = (kind: string, a: number, len: number, extra: object = {}) => ({ folder: `p${n}`, id: `p${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", size: "small", started: iso(a), ended: iso(a + len), ...extra } }) as any;
   const runs = [
     e("intake", 10, 1, { model: "m" }), e("intake", 12, 3, { model: "m", state: "failed", failed: "x" }), e("intake", 14, 2, { model: "m", state: "failed" }),
     { folder: "pr", id: "pr", run: { n: 1, role: "intake", job: "jr", state: "running", started: iso(16), model: "m" } } as any,
@@ -559,7 +561,7 @@ test("agents: each outcome row has ended, p95 and, for a worker, the cost per bu
 test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
-  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "passed", size: "small", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [
     // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
     e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", state: "landed" }),
