@@ -56,11 +56,13 @@ export interface Reason {
   problem: string;
   /** What the `continue` action is called and does for this reason. */
   continue?: { label: string; hint: string };
+  /** Only Chris decides this reason: it goes on the director's escalation list, with this as the why. */
+  chrisOnly?: string;
 }
 interface Granted { action: string; at: string }
 
 const proposal = (name: string, line: string): Reason =>
-  ({ actions: ["approve", "disapprove"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
+  ({ actions: ["approve", "disapprove"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change.", chrisOnly: "a memory proposal is Chris's" });
 
 /**
  * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
@@ -94,10 +96,10 @@ const REASONS = {
     continue: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
   "core-change": { actions: ["approve", "disapprove"], always: "approve", card: "approve", name: "Core note changes",
-    line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}." },
+    line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}.", chrisOnly: "a change to a core note is Chris's" },
   // The issue is parked; its option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
   "blocker-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped blockers",
-    line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked." },
+    line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked.", chrisOnly: "an after link to a dropped issue is Chris's" },
   "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
   "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
   "proposal-skill": proposal("Proposed skill changes", "The correction memory proposes a change to a skill."),

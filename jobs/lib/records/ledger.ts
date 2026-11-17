@@ -14,6 +14,7 @@ import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit } from "../infra/settings.ts";
 import { readProjects } from "../../../issues/lib/projects.ts";
 import { touch } from "../../../lib/sources.ts";
+import { refuse } from "../../../lib/refusal.ts";
 import { expand } from "../../../lib/paths.ts";
 import { parseKey, setCodes, type Role, type State } from "../../../lib/naming.ts";
 
@@ -170,6 +171,12 @@ export function loadRegistry(): Record<string, Repo> {
   if (twice) throw new Error(`projects: the code "${twice[1]}" is on more than one project`);
   setCodes(Object.fromEntries(codes));
   return repos;
+}
+
+/** The registry's repo for a key as typed: case and spaces do not count. */
+export function repoOf(key: string | undefined): Repo {
+  const registry = loadRegistry();
+  return registry[(key ?? "").toLowerCase().replace(/\s+/g, "")] ?? refuse(`unknown repo "${key ?? ""}"; known: ${Object.keys(registry).join(", ")}`);
 }
 
 /** `KEY=VALUE` lines, as systemd reads an EnvironmentFile. */

@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { allRuns, loadRegistry, newsLine, type Entry, type Repo, allJobs, isOpen } from "./lib/records/ledger.ts";
+import { allRuns, loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
 import { findJob, issue as issueOf, issueTitle, openJobOfIssue, readFile, view, type Job } from "./lib/records/job.ts";
 import { counting, patchRun, setState } from "./lib/records/record.ts";
@@ -37,7 +37,7 @@ import { flakeLines, renderTable, reportLine } from "./lib/learning/monitor-tabl
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
 import { housekeep } from "./lib/roles/housekeeper.ts";
 import { cutTitle, fit } from "./lib/roles/title.ts";
-import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
+import { checkName, checked, drop, land, recheck, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
 import * as doctor from "./lib/infra/doctor.ts";

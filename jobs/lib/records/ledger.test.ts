@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, issueKeyOf, loadRegistry, runsByIssue, type Entry, type Run } from "./ledger.ts";
+import { admit, issueKeyOf, loadRegistry, repoOf, runsByIssue, type Entry, type Run } from "./ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 import { writeRepos, type Repos } from "../../../tests/projects.testkit.ts";
@@ -46,6 +46,19 @@ describe("admit", () => {
     expect(reads).toEqual(["first", "first", "second"]);
     // The second start did not wait for the load, so it keeps no gap: the queue is free.
     (await lock("admit", 0))!();
+  });
+});
+
+describe("repoOf", () => {
+  const items = () => join(base, "items");
+  test("finds a repo by a key with other case and spaces, and refuses an unknown key", () => {
+    writeRepos({ myrepo: { path: "/x" }, other: { path: "/y" } }, items());
+    const old = process.env.ALEPH_ITEMS;
+    process.env.ALEPH_ITEMS = items();
+    try {
+      expect(repoOf(" My Repo ").key).toBe("myrepo");
+      expect(() => repoOf("nope")).toThrow('unknown repo "nope"; known: myrepo, other');
+    } finally { if (old === undefined) delete process.env.ALEPH_ITEMS; else process.env.ALEPH_ITEMS = old; }
   });
 });
 

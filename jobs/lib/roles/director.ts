@@ -189,9 +189,9 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
 function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
-  if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return { why: "a memory proposal is Chris's" };
-  if (c.ask.reason === "core-change") return { why: "a change to a core note is Chris's" };
-  if (c.ask.reason === "blocker-dropped") return { why: "an after link to a dropped issue is Chris's" };
+  const why = ASK_REASONS[reasonName(c)]?.chrisOnly;
+  if (why) return { why };
+  if (c.at === "lesson") return null;
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
   const b = actionsOf(c).includes("approve") ? branchOf(c) : null;

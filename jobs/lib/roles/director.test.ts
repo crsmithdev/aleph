@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { writeList } from "../../../issues/lib/store.ts";
-import { grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
+import { ASK_REASONS, grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
@@ -161,6 +161,19 @@ test("a memory proposal is on the escalation list: the director's case text goes
   // The case text says approve reopens the parked issue; it does not say approve files a goal.
   expect(prompt()).toContain("reopens");
   expect(prompt()).not.toContain("files a goal");
+});
+
+test("an Ask of each reason with chrisOnly set goes on the escalation list with that why, whatever actions the director replies", async () => {
+  const chris = Object.entries(ASK_REASONS).filter(([, r]) => r.chrisOnly);
+  expect(chris.map(([name]) => name)).toEqual(["core-change", "blocker-dropped", "proposal-check", "proposal-claude-md", "proposal-skill"]);
+  for (const [reason, { chrisOnly }] of chris) {
+    fresh([{ title: reason, ask: { reason, question: "Q?", options: [], why: ["w"] } }]);
+    if (reason === "core-change" || reason === "blocker-dropped") writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+    replyWith({ case: { situation: "S.", effects: [], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
+    const [d] = await direct();
+    expect(d).toMatchObject({ reason, outcome: "escalated", why: chrisOnly, applied: [] });
+    expect(issues.status(item(1))).not.toBe("dropped");
+  }
 });
 
 test("a core-change Ask on a parked issue is escalated to Chris with case text, whatever actions the director replies, and decides nothing", async () => {

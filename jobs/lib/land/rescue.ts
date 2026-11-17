@@ -21,7 +21,7 @@ import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
-import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, repoOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -105,7 +105,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       if (!runs) continue;
       const last = counting(runs);
       const r = last.run;
-      const repo = loadRegistry()[r.repo!];
+      const repo = repoOf(r.repo);
       const minutes = Math.floor((now - Date.parse(r.started)) / 60_000);
       const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
       const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { reason: "rescue" })!;
@@ -163,7 +163,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
   for (const runs of editedWaits(allJobs())) {
     const r = counting(runs).run;
     const { question } = waitsForSpecEdit(counting(runs))!;
-    const repo = loadRegistry()[r.repo!];
+    const repo = repoOf(r.repo);
     const issue = issueOf(runs)!;
     const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
     if (!release) continue;
@@ -314,7 +314,7 @@ function sendToIntake(repo: Repo, issue: number): string | null {
 async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   const last = counting(runs);
   const r = last.run;
-  const repo = loadRegistry()[r.repo!];
+  const repo = repoOf(r.repo);
   const name = r.name;
   const p = parseId(name);
   const issue = issueOf(runs) ?? (p === null ? undefined : p.sub === undefined ? p.n : `${p.n}.${p.sub}`);
