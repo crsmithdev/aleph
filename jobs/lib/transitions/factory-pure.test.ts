@@ -312,6 +312,17 @@ test("the report gives the unshown runs of one issue as one block under its newe
   expect(out.split("failed:\n").length - 1).toBe(1);
 });
 
+test("one report fetches the items repo once, however many landed runs it shows", () => {
+  const items = join(ctx.base, "items");
+  const log = join(ctx.base, "fetches");
+  const hook = join(ctx.base, "count-upload-pack");
+  writeFileSync(hook, `#!/bin/sh\necho x >> '${log}'\nexec git-upload-pack "$@"\n`, { mode: 0o755 });
+  for (let i = 0; i < 3; i++) mk(`fac-${newIssue()}`, "build", "landed", { shown: false });
+  sh(items, "git", "config", "remote.origin.uploadpack", hook);
+  expect(report(NOW, true)).toContain("landed:");
+  expect(readFileSync(log, "utf8").split("\n").filter(Boolean).length).toBe(1);
+});
+
 test("the report lists each open issue that has an Ask under asks:, and leaves out a done issue's Ask", () => {
   const open = newIssue();
   const done = newIssue();

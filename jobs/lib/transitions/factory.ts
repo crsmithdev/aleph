@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { today } from "../../../lib/day.ts";
 import { LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { afterOf, buildableIssue, buildableIssues, close, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
+import { afterOf, buildableIssue, buildableIssues, close, fetchingOnceSync, partsOf, planSet, priorityOf, readLists, reader, reopenReverted, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../../../lib/git.ts";
 import { askChris, askOfItem, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { factoryDir, logEvent } from "../../../lib/layout.ts";
@@ -465,6 +465,10 @@ function entry(e: Entry, current?: boolean): string {
  * shown, unless `peek`. `told` is Sidetone's flag and the report leaves it alone.
  */
 export function report(now = Date.now(), peek = false): string {
+  return fetchingOnceSync(() => reportOnce(now, peek));
+}
+
+function reportOnce(now: number, peek: boolean): string {
   loadRegistry();
   const lines = runLines(now, peek);
   const due = cameDue();

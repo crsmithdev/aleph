@@ -174,6 +174,12 @@ function logClosed(item: Issue, by: string): void {
   logEvent({ subject: by, action: status(item), object: keyOf("issue", item.id), ...(why ? { detail: why } : {}) });
 }
 
+/** `fn()`, a sync call, in a `fetchingOnce` scope. */
+export function fetchingOnceSync<T>(fn: () => T): T {
+  fetchedOnce = new Set();
+  try { return fn(); } finally { fetchedOnce = null; }
+}
+
 /** The `created` time of each issue at `rev` that has a parsable one, in ms by issue number, with no fetch. */
 export const createdAt = (dir: string, rev: string): Map<number, number> => new Map(loadAll(dir, rev).flatMap((i) => { const at = Date.parse(String(i.fm.created)); return Number.isNaN(at) ? [] : [[i.id, at] as [number, number]]; }));
 
