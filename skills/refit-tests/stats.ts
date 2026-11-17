@@ -8,7 +8,7 @@
  *   bun stats.ts flakes [--repo <key>]   aleph's flake rows per test: count, first and last seen
  *   bun stats.ts lcov <before> <after>   per source file, the lines covered before and not after
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isTestFile } from "../../lib/test-files.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
