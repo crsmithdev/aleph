@@ -2,7 +2,7 @@
 // again when an event is added, and the terminal panel (herdr/status.ts) reads them. The page only draws them and applies the Work and Factory filter.
 // An issue's rows are one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
 // a routine's run is one row that says "N changes", each change a line in its fold. A hold is an issue's state, not an event, so no row has it.
-import { EDITS, factsOf, issueHref, jobHref, parseId, parseKey, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
+import { EDITS, HOLDS, OLD_HOLDS, factsOf, issueHref, jobHref, parseId, parseKey, runWord, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { dur, money } from "./views/lib/format.js";
 
@@ -29,16 +29,14 @@ export interface Row {
 /** What the rows name besides the events: each issue's title by its target, each run's kind by its job, each job's attempt, each housekeeper run's reviewed count. */
 export interface Context { titles: Record<string, string>; runs: Record<string, string>; attempts: Record<string, string>; reviewed: Record<string, number> }
 
-const WAITS = new Set(["held", "waiting", "paused", "red", "after", "full", "gpu", "busy", "parent", "credit"]);
+const WAITS = new Set<string>(["waiting", ...HOLDS, ...OLD_HOLDS]);
 /** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
 const FAILED = ["failed", "returned", "dropped"];
 const MARK: Record<string, string> = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
 
-const isJobId = (id: string) => id.includes("#") || /^job\.\d+$/.test(id);
+const isJobId = (id: string) => parseKey(id)?.kind === "job";
 const isIssue = (t: string) => Boolean(parseId(t) || parseKey(t)?.kind === "issue");
 const jobOf = (e: EventRow) => (isJobId(e.object) ? e.object : undefined);
-/** The word for a run kind in a line: a build run implements the issue. */
-const role = (kind: string) => (kind === "build" ? "implement" : kind);
 /** A line's pieces as text. */
 export const plain = (ps: Piece[]) => ps.map((p) => (typeof p === "string" ? p : "id" in p ? p.id : p.mark)).join("");
 /** A short hash of a text, to key a row by its text. */
@@ -84,11 +82,11 @@ function jobFacts(e: EventRow, job: string, run: string, all: EventRow[]): strin
 function brief(e: EventRow, runs: Record<string, string>, all: EventRow[]): Line {
   const job = jobOf(e), kind = job && runs[job], tgt = targetOf(e), line = (label: string, text: Piece[]): Line => ({ at: e.time, action: e.action, label, text });
   if (e.action === "routed") return line("routed", [routeText(e)]);
-  if (e.action === "stalled") return line("", [`stalled ${shownId(tgt, e.project)}${kind ? ` · ${role(kind)}` : ""}`]);
+  if (e.action === "stalled") return line("", [`stalled ${shownId(tgt, e.project)}${kind ? ` · ${runWord(kind)}` : ""}`]);
   const { lead, rest } = parts(e), more = e.size ? [` → ${routeText(e)}`] : [];
   if (job && kind) {
     const fx = jobFacts(e, job, kind, all);
-    return line(role(kind), [{ id: shownId(job), to: jobHref(job) }, " ", MARK[e.action] ? { mark: MARK[e.action] } : e.action, ...(rest.length ? [" ", ...rest] : []), ...(fx ? [` ${fx}`] : []), ...more]);
+    return line(runWord(kind), [{ id: shownId(job), to: jobHref(job) }, " ", MARK[e.action] ? { mark: MARK[e.action] } : e.action, ...(rest.length ? [" ", ...rest] : []), ...(fx ? [` ${fx}`] : []), ...more]);
   }
   // The group already names its issue, so a line whose sentence adds only the actor says who did it.
   const by = whoOf(e.subject, e.subject_role);

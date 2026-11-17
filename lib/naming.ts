@@ -5,7 +5,7 @@
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"] as const;
-const HOLDS = ["held", "gpu", "starting", "parent", "parked"] as const;
+export const HOLDS = ["held", "gpu", "starting", "parent", "parked"] as const;
 /** The hold actions of events written before an issue hold was one `held` event: old events carry them and the readers still read them, and no code writes them. */
 export const OLD_HOLDS = ["paused", "red", "after", "full", "busy", "looping", "credit"] as const;
 const ASKS = ["protected", "question", "incomplete", "capped", "proposal"] as const;
@@ -260,3 +260,5 @@ export const CLOSED = ["done", "dropped"];
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 /** Who can raise an issue. */
 export const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
+/** A run kind as a line says it: a build run, once called `worker`, is "implement". */
+export const runWord = (kind: string): string => (kind === "build" || kind === "worker" ? NAMES.build.toLowerCase() : kind);

@@ -3,7 +3,7 @@
 // Plain JS with no DOM, so the pages and the tests both import it.
 import { dur, money, shortModel, when } from "./format.js";
 import { clamp, codeText, legendHtml, esc, sectionHead, tag, tone } from "./html.js";
-import { contentText, wordOf } from "../../../lib/naming.ts";
+import { contentText, runWord, wordOf } from "../../../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -108,7 +108,7 @@ export function waitEvent(w, holds = []) {
 
 /** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
 export function barLabel(r, nth, { cost = false, model = true } = {}) {
-  const kind = r.kind === "worker" || r.kind === "build" ? "implement" : r.kind;
+  const kind = runWord(r.kind);
   return [nth ? `${kind} ${nth}` : kind, model ? shortModel(r.model) : "", cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
 }
 

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ciRunning, ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
+import { ciOf, ciRunning, ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
 import { health } from "./factory-status.ts";
 import { reds } from "./firefighter.ts";
 import type { Repo } from "../records/ledger.ts";
@@ -82,4 +82,10 @@ test("the CI read keeps whether a run on main is not completed, and a later read
   expect(ciRunning("fac")).toBe(true);
   await ciStep([repo], listing([run("success", "c2", "2026-10-29T02:00:00Z"), run("success", "c1", "2026-10-29T01:00:00Z")]));
   expect(ciRunning("fac")).toBe(false);
+});
+
+test("the CI read with the real runner keeps the last state of a repo whose gh cannot start, as the sync runner reports it", async () => {
+  const before = ciOf("fac");
+  await ciStep([repo]);
+  expect(ciOf("fac")).toEqual(before);
 });

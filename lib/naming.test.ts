@@ -208,3 +208,7 @@ test("sayRest is the sentence after its verb", () => {
   expect(rest({ subject: "reviewer", action: "returned", object: "job.6", detail: "no tests" })).toBe("review: no tests");
   expect(rest({ subject: "gate", action: "after", object: "issue.3", detail: "issue.4" })).toBe("issue.4");
 });
+
+test("a build run and an old worker run are both said as the build step's name, and another kind as it is", () => {
+  expect(["build", "worker", "intake"].map(n.runWord)).toEqual(["implement", "implement", "intake"]);
+});

@@ -5,7 +5,7 @@ import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { dur, count, hours, mean, pct, plural, shortModel, when } from "./lib/format.js";
 import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
-import { shortText, NAMES, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
+import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { feedRow, heraldRow } from "./lib/feed.js";
 import { share, flowOf, statusCards, usable } from "./lib/flow-parts.js";
@@ -137,9 +137,6 @@ const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).t
 /** The key of the Herald's Work and Factory toggles in keep(): whether each shows its events. */
 const SHOW = "herald.show", ALL = { work: true, factory: true };
 
-/** The word for a run kind in a row's line: a build run implements the issue. */
-const role = (kind) => (kind === "build" ? "implement" : kind);
-
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
@@ -151,7 +148,7 @@ function runNow(s) {
   const rows = s.runningIssues.map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat(s.running.map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
     const size = run.kind === "build" ? j.size : "";
-    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), role(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
+    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), runWord(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }

@@ -7,7 +7,7 @@ import { figures } from "../ui/flow/baseline.ts";
 import { stateBody } from "../ui/api/now.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
-import { clip, NAMES, shortText, shownId } from "../lib/naming.ts";
+import { clip, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
 import { plain, type Row } from "../ui/herald.ts";
 // @ts-ignore plain JS, shared with the page
 import { clock, count, dur, hours, mean, pct, when } from "../ui/views/lib/format.js";
@@ -84,7 +84,7 @@ export function data(s: State, d: Flow) {
       ...(s.runningIssues ?? []).map((i) => ({ at: clock(i.at ?? i.since) || when(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
       ...(s.running ?? []).map((j) => {
         const run = j.run ?? { kind: "build", started: j.started };
-        return { at: clock(run.started ?? j.started) || when(run.started ?? j.started), word: run.kind === "build" ? "implement" : run.kind, id: shownId(j.id ?? j.name), title: j.item?.title || j.name, size: run.kind === "build" ? j.size ?? "" : "" };
+        return { at: clock(run.started ?? j.started) || when(run.started ?? j.started), word: runWord(run.kind), id: shownId(j.id ?? j.name), title: j.item?.title || j.name, size: run.kind === "build" ? j.size ?? "" : "" };
       }),
     ],
     herald: heraldRows(s),
@@ -118,7 +118,7 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
   for (const i of s.runningIssues ?? []) line(`${clock(i.at ?? i.since) || when(i.at ?? i.since)} ${i.stage} ${shownId(i.id)} ${i.title}`);
   for (const j of s.running ?? []) {
     const run = j.run ?? { kind: "build", started: j.started };
-    line(`${clock(run.started ?? j.started) || when(run.started ?? j.started)} ${run.kind === "build" ? "implement" : run.kind} ${shownId(j.id ?? j.name)} ${j.item?.title || j.name}`);
+    line(`${clock(run.started ?? j.started) || when(run.started ?? j.started)} ${runWord(run.kind)} ${shownId(j.id ?? j.name)} ${j.item?.title || j.name}`);
   }
   for (const r of heraldRows(s)) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
   // The newest events come first, so the cut at the pane's height drops the oldest.

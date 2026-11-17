@@ -18,16 +18,26 @@ export type Gh = (repo: Repo, args: string[]) => { ok: boolean; out: string };
 /** `Gh` that does not block, so the repos are read at once. */
 type GhAsync = (repo: Repo, args: string[]) => Promise<{ ok: boolean; out: string }>;
 
+const LIMITS = { timeout: 60_000, maxBuffer: 64 * 1024 * 1024 }; // 60 s and 64 MiB of output one `gh` call may take
+
+/** A `gh` call's result: its stdout on exit 0, else its stderr, the spawn error or the exit code. */
+const result = (code: number | null, out: string, err: string, spawnError?: Error): { ok: boolean; out: string } =>
+  code === 0 ? { ok: true, out } : { ok: false, out: (err || spawnError?.message || `exit ${code}`).trim() };
+
 export const gh: Gh = (repo, args) => {
-  const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
-  return r.status === 0 ? { ok: true, out: r.stdout } : { ok: false, out: (r.stderr || r.error?.message || `exit ${r.status}`).trim() };
+  const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", ...LIMITS });
+  return result(r.status, r.stdout, r.stderr, r.error);
 };
 
-/** The CI watch's `gh` call: `gh` in an async spawn, with the same 60 s limit. */
+/** The CI watch's `gh` call: `gh` in an async spawn, with the same limits. */
 const ghAsync: GhAsync = async (repo, args) => {
-  const p = Bun.spawn(["gh", ...args], { cwd: repo.path, stdin: "ignore", stdout: "pipe", stderr: "pipe", timeout: 60_000 });
-  const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  return code === 0 ? { ok: true, out } : { ok: false, out: (err || `exit ${code}`).trim() };
+  try {
+    const p = Bun.spawn(["gh", ...args], { cwd: repo.path, stdin: "ignore", stdout: "pipe", stderr: "pipe", ...LIMITS });
+    const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
+    return result(code, out, err);
+  } catch (e) {
+    return result(null, "", "", e as Error);
+  }
 };
 
 /** The runs of `repo`'s main, the latest first, or null when `gh` cannot read them. */

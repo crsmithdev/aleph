@@ -222,26 +222,26 @@ test("the Herald draws a routing event as a system row: its choice, with no titl
 test("the Herald folds an issue across its runs, and draws no row for a routine run that ended with no change", () => {
   const e = (at: string, subject: string, action: string, job: string) => (row({ at, by: "gate", subject, action, on: [job] }));
   const events = [
-    e("2026-11-09T09:00:00Z", "housekeeper", "running", "housekeeper#1"), e("2026-11-09T09:10:00Z", "housekeeper", "done", "housekeeper#1"),
-    e("2026-11-09T10:00:00Z", "housekeeper", "running", "housekeeper#2"), e("2026-11-09T10:10:00Z", "housekeeper", "done", "housekeeper#2"),
-    e("2026-11-09T11:00:00Z", "aleph-9", "done", "aleph-9#1"), e("2026-11-09T12:00:00Z", "aleph-9", "done", "aleph-9#2"),
+    e("2026-11-09T09:00:00Z", "housekeeper", "running", "job.91"), e("2026-11-09T09:10:00Z", "housekeeper", "done", "job.91"),
+    e("2026-11-09T10:00:00Z", "housekeeper", "running", "job.92"), e("2026-11-09T10:10:00Z", "housekeeper", "done", "job.92"),
+    e("2026-11-09T11:00:00Z", "aleph-9", "done", "job.93"), e("2026-11-09T12:00:00Z", "aleph-9", "done", "job.94"),
   ];
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf(events) });
   expect(h).toContain('data-fold="issue:aleph-9"');
   expect(h).not.toContain('data-fold="issue:housekeeper"');
   // A routine's run that ended with no change draws no row.
-  expect(h).not.toContain("housekeeper#");
+  expect(h).not.toMatch(/j9[12]/);
 });
 
 test("the Herald hides an older start of a run with a newer event, leaves out the holds, and draws a routing event as its note", () => {
   const events = [
-    row({ at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["aleph-9#2"] }),
-    row({ at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "running", on: ["aleph-9#2"] }),
+    row({ at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["job.94"] }),
+    row({ at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "running", on: ["job.94"] }),
     row({ at: "2026-11-09T11:30:00Z", by: "gate", subject: "aleph-9", action: "busy", on: ["aleph-8"], file: "ui/views/now.js" }),
     row({ at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "after", on: ["aleph-7"] }),
     row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "route", action: "routed", note: "worker-medium by classifier jev-1.13" }),
   ];
-  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf(events, { runs: { "aleph-9#2": "build" } }) });
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf(events, { runs: { "job.94": "build" } }) });
   expect(h).toMatch(/<span class="badge done">passed<\/span><a[^>]*>aleph-9<\/a>/);
   // The fold has the build's line only: its start is hidden by its result, and the routing is drawn as the build's facts.
   expect(h.match(/<div class="event-brief/g)).toHaveLength(1);
@@ -252,18 +252,18 @@ test("the Herald hides an older start of a run with a newer event, leaves out th
 
 // aleph-2136's events on 2026-11-13, newest first: filed, intake, routed, started, implement, closed, land.
 const a2136 = [
-  row({ at: "2026-11-13T19:55:05.677Z", by: "gate", subject: "aleph-2136", action: "landed", on: ["a2136#3"], commit: "08127b81a8a6a9780253d799d82b1c38bd4b5f58" }),
-  row({ at: "2026-11-13T19:54:46.016Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#3"] }),
-  row({ at: "2026-11-13T19:54:42.483Z", by: "gate", subject: "aleph-2136", action: "passed", on: ["a2136#2"], cost: 0.16095063369608836 }),
+  row({ at: "2026-11-13T19:55:05.677Z", by: "gate", subject: "aleph-2136", action: "landed", on: ["job.3"], commit: "08127b81a8a6a9780253d799d82b1c38bd4b5f58" }),
+  row({ at: "2026-11-13T19:54:46.016Z", by: "gate", subject: "aleph-2136", action: "running", on: ["job.3"] }),
+  row({ at: "2026-11-13T19:54:42.483Z", by: "gate", subject: "aleph-2136", action: "passed", on: ["job.2"], cost: 0.16095063369608836 }),
   row({ at: "2026-11-13T19:53:20.008Z", by: "claude", subject: "aleph-2136", action: "done" }),
-  row({ at: "2026-11-13T19:51:00.787Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }),
+  row({ at: "2026-11-13T19:51:00.787Z", by: "gate", subject: "aleph-2136", action: "running", on: ["job.2"] }),
   row({ at: "2026-11-13T19:50:59.573Z", by: "rule", subject: "aleph-2136", action: "started", note: "model: haiku", size: "small" }),
   row({ at: "2026-11-13T19:50:59.497Z", by: "rule", subject: "aleph-2136", action: "routed", note: "small by classifier jev-1.13-20260917" }),
-  row({ at: "2026-11-13T19:50:53.298Z", by: "gate", subject: "aleph-2136", action: "done", on: ["a2136#1"], cost: 0.2916336 }),
-  row({ at: "2026-11-13T19:50:19.563Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#1"] }),
+  row({ at: "2026-11-13T19:50:53.298Z", by: "gate", subject: "aleph-2136", action: "done", on: ["job.1"], cost: 0.2916336 }),
+  row({ at: "2026-11-13T19:50:19.563Z", by: "gate", subject: "aleph-2136", action: "running", on: ["job.1"] }),
   row({ at: "2026-11-13T19:50:13.738Z", by: "claude", subject: "aleph-2136", action: "filed" }),
 ];
-const a2136Runs = { "a2136#1": "intake", "a2136#2": "build", "a2136#3": "land" };
+const a2136Runs = { "job.1": "intake", "job.2": "build", "job.3": "land" };
 const olderText = (events: object[]) => {
   const h = view.renderHerald({ ...calm, now: "2026-11-13T20:00:00Z", herald: heraldOf(events, { runs: a2136Runs }) });
   return h.split('<div class="herald-older">')[1].split("</details>")[0].split('<div class="event-brief').slice(1)
@@ -273,10 +273,10 @@ const olderText = (events: object[]) => {
 
 test("the Herald's older rows give each job its facts and fold the routing and the start into the implement row", () => {
   expect(olderText(a2136)).toEqual([
-    "land | a2136#3 ✓ 08127b8 · 20s",
-    "implement | a2136#2 ✓ small · haiku · 3m 42s · $0.16",
+    "land | j3 ✓ 08127b8 · 20s",
+    "implement | j2 ✓ small · haiku · 3m 42s · $0.16",
     "closed | by Claude Code",
-    "intake | a2136#1 ✓ 34s · $0.29",
+    "intake | j1 ✓ 34s · $0.29",
     "filed | by Claude Code",
   ]);
 });
@@ -285,12 +285,12 @@ test("the Herald's older rows give each job its facts and fold the routing and t
 const twoBuilds = (sizes: (string | undefined)[]) => sizes.flatMap((size, i) => {
   const at = (m: number) => `2026-11-13T${10 + i}:${m < 10 ? "0" : ""}${m}:00Z`;
   return [
-    row({ at: at(10), by: "gate", subject: "aleph-7", action: "passed", on: [`a7#${i + 1}`], cost: 0.5 }),
-    row({ at: at(5), by: "gate", subject: "aleph-7", action: "running", on: [`a7#${i + 1}`] }),
+    row({ at: at(10), by: "gate", subject: "aleph-7", action: "passed", on: [`job.7${i + 1}`], cost: 0.5 }),
+    row({ at: at(5), by: "gate", subject: "aleph-7", action: "running", on: [`job.7${i + 1}`] }),
     row({ at: at(1), by: "rule", subject: "aleph-7", action: "started", note: `model: ${i ? "opus" : "haiku"}`, size }),
   ];
 }).reverse();
-const seven = (sizes: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: heraldOf(twoBuilds(sizes), { runs: { "a7#1": "build", "a7#2": "build" } }) });
+const seven = (sizes: (string | undefined)[]) => view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: heraldOf(twoBuilds(sizes), { runs: { "job.71": "build", "job.72": "build" } }) });
 
 test("the Herald gives each build of an issue the size of its own start", () => {
   const h = seven(["small", "large"]);
@@ -302,14 +302,14 @@ test("the Herald gives each build of an issue the size of its own start", () => 
 
 test("the Herald's build facts have no size when its start routed none, not the size of the issue's earlier build, and keep the model, commit, time and cost", () => {
   const events = twoBuilds(["small", undefined]).map((e: any) => e.action === "passed" && e.time.startsWith("2026-11-13T11") ? { ...e, commit_sha: "0123456789abcdef" } : e);
-  const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: heraldOf(events, { runs: { "a7#1": "build", "a7#2": "build" } }) });
-  expect(h).toContain("a7#1 ✓ small · haiku · 5m 00s · $0.50");
-  expect(h).toContain("a7#2 ✓ opus · 0123456 · 5m 00s · $0.50");
+  const h = view.renderHerald({ ...calm, now: "2026-11-13T14:00:00Z", herald: heraldOf(events, { runs: { "job.71": "build", "job.72": "build" } }) });
+  expect(h).toContain("j71 ✓ small · haiku · 5m 00s · $0.50");
+  expect(h).toContain("j72 ✓ opus · 0123456 · 5m 00s · $0.50");
 });
 
 test("the Herald's job row takes its time from the job's first start, not one the gate logs after its result", () => {
-  const again = [row({ at: "2026-11-13T19:54:50.000Z", by: "gate", subject: "aleph-2136", action: "running", on: ["a2136#2"] }), ...a2136];
-  expect(olderText(again)[1]).toBe("implement | a2136#2 ✓ small · haiku · 3m 42s · $0.16");
+  const again = [row({ at: "2026-11-13T19:54:50.000Z", by: "gate", subject: "aleph-2136", action: "running", on: ["job.2"] }), ...a2136];
+  expect(olderText(again)[1]).toBe("implement | j2 ✓ small · haiku · 3m 42s · $0.16");
 });
 
 test("the Herald's row of an attempt holds no size, model, cost or commit in its head, and its fold holds them", () => {

@@ -7,7 +7,7 @@ import { count, days, plural, dur, money, pct, when } from "./lib/format.js";
 import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref } from "../../lib/naming.ts";
+import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
 import { askCard } from "./lib/ask-cards.js";
 import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
 
@@ -535,7 +535,7 @@ function filedAt(d, runs) {
 }
 
 const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN);
-const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "implement" : x.r.kind)))].join(", ");
+const kinds = (runs) => [...new Set(runs.map((x) => runWord(x.r.kind)))].join(", ");
 
 /**
  * The Timeline's segments for an issue. With sub-issues: Before the split (the issue's own jobs before its sub-issues start),

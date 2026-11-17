@@ -70,3 +70,13 @@ test("a stalled event of a job folds into its issue's row, which the start heads
   expect([r.word, plain(r.id)]).toEqual(["started", "a2072"]);
   expect(r.lines.map((l) => plain(l.text))).toEqual(["stalled a2072 · intake"]);
 });
+
+test("a hold word of lib/naming.ts that the Herald once lacked is a wait and has no row", () => {
+  const [r] = rows([e("2026-11-13T10:00:00Z", "aleph-7", "done", ["job.1"]), e("2026-11-13T11:00:00Z", "aleph-7", "parked", [])], { attempts: { "job.1": "job.1" } });
+  expect([r.key, r.word]).toEqual(["issue:aleph-7:job.1", "closed"]);
+});
+
+test("an ID with a # that parseKey does not read as a job is not a job ID", () => {
+  const [r] = rows([e("2026-11-13T10:00:00Z", "aleph-7", "done", ["job.1#2"])], { attempts: { "job.1#2": "job.1#2" } });
+  expect(r.key).toBe("issue:aleph-7");
+});
