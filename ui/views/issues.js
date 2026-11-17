@@ -7,7 +7,7 @@ import { count, days, plural, dur, money, when } from "./lib/format.js";
 import { actButton, editable, fold, runNowButton, say, barList, barRow, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, jobHref } from "../../lib/naming.ts";
+import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref } from "../../lib/naming.ts";
 import { askCard } from "./lib/ask-cards.js";
 import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
 
@@ -602,7 +602,7 @@ const refChip = (key, id, title) =>
 /** The Refs field of edit mode: the chosen refs, a search over every issue by id and title, and the keys the form sends. */
 function refsPicker(d) {
   const refs = d.refs ?? [];
-  return `<div class="field ref-field"><span>Refs</span><div class="ref-picker" data-self="issue.${esc(d.id)}">` +
+  return `<div class="field ref-field"><span>Refs</span><div class="ref-picker" data-self="${esc(issueKey(d.id))}">` +
     `<input type="hidden" name="refs" ${FORM} value="${esc(refs.map((r) => r.key).join(","))}">` +
     `<span class="ref-chosen">${refs.map((r) => refChip(r.key, r.id, r.title)).join("")}</span>` +
     `<input type="search" class="ref-search" placeholder="id or title" autocomplete="off" role="combobox" aria-label="Find an issue to reference" aria-expanded="false" aria-controls="ref-hits">` +
@@ -611,9 +611,9 @@ function refsPicker(d) {
 
 /** The issues that fit `q` best, at most `max`, leaving out the keys in `skip`: each `{ key, id, title, status, hits }`. */
 export function refHits(rows, q, skip, max = 8) {
-  return rows.filter((r) => !skip.has(`issue.${r.n}`)).flatMap((r) => { const m = fuzzyMatch(q, r); return m ? [{ r, m }] : []; })
+  return rows.filter((r) => !skip.has(issueKey(r.n))).flatMap((r) => { const m = fuzzyMatch(q, r); return m ? [{ r, m }] : []; })
     .sort((a, b) => b.m.score - a.m.score).slice(0, max)
-    .map(({ r, m }) => ({ key: `issue.${r.n}`, id: r.id, title: r.title, status: r.status, hits: m.hits }));
+    .map(({ r, m }) => ({ key: issueKey(r.n), id: r.id, title: r.title, status: r.status, hits: m.hits }));
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */

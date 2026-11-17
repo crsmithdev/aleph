@@ -135,6 +135,7 @@ describe("the Issue page", () => {
   test("the edit mode's Refs picker holds the chosen refs, and refHits ranks by id and title and skips the chosen", async () => {
     const pageBase = await getJson("/api/issues/fac-1");
     const html = renderIssue({ ...pageBase, refs: [{ id: "fac-2", key: "issue.2", title: "second", status: "open", href: "#/issues/fac/2" }] });
+    expect(html).toContain('data-self="issue.1"');
     expect(html).toContain('class="chip ref-chip" data-key="issue.2"');
     expect(html).toContain('name="refs" form="issue-edit" value="issue.2"');
     const rows = [
