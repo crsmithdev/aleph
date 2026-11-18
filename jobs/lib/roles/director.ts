@@ -161,15 +161,15 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
   return last?.outcome === "escalated" && last.question === questionOf(c);
 };
 
-/** The held rule the branch breaks (a security path, one of the repo's held globs or bun.lock), or null; "unknown" when there is no branch to read. */
-function heldChange(repo: Repo, branch: string | undefined): string | null | "unknown" {
+/** The held rule the branch breaks (a security path, one of the `held` globs or bun.lock), or null; "unknown" when there is no branch to read. */
+function heldChange(repo: Repo, branch: string | undefined, held: string[] = repo.held): string | null | "unknown" {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
   const main = mainRef(repo.path, repo.main);
   const fork = git(repo.path, "merge-base", main, `refs/heads/${branch}`);
   if (!fork.ok) return "unknown";
   const sec = securityChange(repo.path, fork.out.trim(), `refs/heads/${branch}`);
   if (sec) return `held path ${sec}`;
-  return heldRule(repo.path, [...repo.held, ...HELD_FILES], fork.out.trim(), `refs/heads/${branch}`);
+  return heldRule(repo.path, [...held, ...HELD_FILES], fork.out.trim(), `refs/heads/${branch}`);
 }
 
 /** The branch of the run a case is about: the case's own run, or the open job of its item. */
@@ -181,6 +181,13 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
     return { repo: c.repo, branch: agent?.run.branch ?? c.entry.run.branch };
   }
   return null;
+}
+
+/** Why the case's run cannot land: the security path, held path or bun.lock its branch changes, or a branch that cannot be read; null when it may land. `held` are the repo's held globs to count besides bun.lock. */
+function landRefusal(c: Case, held: string[]): string | null {
+  const b = branchOf(c);
+  const rule = b ? heldChange(b.repo, b.branch, held) : "unknown";
+  return rule ? (rule === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${rule}, so the land is Chris's`) : null;
 }
 
 /**
@@ -539,9 +546,8 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   const item = n !== undefined ? store.reader().item(repo.key, n) ?? undefined : undefined;
   if (a.do === "land") {
     if (c.at !== "run") return no(a, "the Ask is not on a run");
-    const b = branchOf(c);
-    const held = b ? heldChange(b.repo, b.branch) : "unknown";
-    if (held) return no(a, held === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${held}, so the land is Chris's`);
+    const held = landRefusal(c, repo.held);
+    if (held) return no(a, held);
     // A run held for a path the repo holds lands once the reviewer gave a verdict; a review Ask is the director's call over the reviewer's hold.
     if (c.ask.reason === "held-path") {
       const runs = openJob(c.entry.run.name);
@@ -673,8 +679,10 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     if (c.at !== "lesson" && FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
       const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
       let why: string | null;
-      // A review-held run lands through the land action, so a run that changes a security path, a path the repo holds or bun.lock stays Chris's.
-      if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
+      // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays Chris's. A review-held run lands through the land action, which refuses the repo's held paths too.
+      const held = granted === "approve" && base.reason === "held-path" ? landRefusal(c, []) : null;
+      if (held) why = held;
+      else if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
       else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports); why = "refused" in o ? o.refused : null; }
       if (why) return escalate(c, base, undefined, `a rule's ${granted} was refused: ${why}`);
       logAlways(base.reason, base.ref, granted === "continue" ? "reran" : granted === "approve" && c.at === "run" ? "landed" : "answered");
