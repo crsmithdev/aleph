@@ -32,7 +32,7 @@ for (const red of [false, true]) {
     if (red) {
       expect(f.calls).toEqual([]);
       expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", why: [`Run: issue.${id}, failed`, "Reason: no commit", "Claim: main has it"] });
-      expect(ask(id)!.question).toStartWith(`issue.${id} says the goal is already met again, but main is red at `);
+      expect(ask(id)!.question).toStartWith(`issue.${id} says the issue is already met again, but main is red at `);
       expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
     } else {
       expect(f.calls).toEqual([`drop issue.${id}`]);

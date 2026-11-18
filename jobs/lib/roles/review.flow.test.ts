@@ -118,7 +118,7 @@ describe("a factory run", () => {
     test("the reviewer's prompt lists the changed files outside the Edit surface", async () => {
       await job("fac", "rsurf", "## Goal\nrsurf REVIEW:pass\nACTION: commit-all in/a.txt out/b.txt\n\n## Edit surface\n- in/ (the change)\n\n## Oracle\nIt ships.\n");
       const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");
-      const section = p.slice(p.indexOf("## Changes outside the Edit surface"), p.indexOf("## Goal issue"));
+      const section = p.slice(p.indexOf("## Changes outside the Edit surface"), p.indexOf("## Issue"));
       expect(section).toContain("- out/b.txt");
       expect(section).not.toContain("in/a.txt");
       await drop("rsurf");

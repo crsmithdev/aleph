@@ -109,7 +109,7 @@ test("a lost run is marked failed and the issue reruns once; a second lost run o
   expect(getRun(jobOfFolder(r.folder))).toMatchObject({ state: "dropped", reason: expect.stringContaining("was lost") });
   expect(existsSync(join(r.folder, "exit"))).toBe(true);
   expect(rescuedOf(r)).toBe("lost");
-  expect(notes(id)).toContain("was lost: its process ended with no end written: dropped, and the goal reruns once");
+  expect(notes(id)).toContain("was lost: its process ended with no end written: dropped, and the issue reruns once");
   expect(ask(id)).toBeNull();
 
   const again = lostRun(`fac-${id}`);

@@ -1,5 +1,5 @@
 /**
- * The reviewer: a fresh `claude -p` that reads a passing run's diff against its goal, in a detached worktree at the
+ * The reviewer: a fresh `claude -p` that reads a passing run's diff against its issue, in a detached worktree at the
  * branch's tip, as a `review` job of its own that follows the build.
  */
 import { writeFileSync } from "node:fs";

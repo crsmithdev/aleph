@@ -14,7 +14,7 @@ The `aleph` CLI (cli/cli.ts) is the entry point for issues and the factory. `ale
 - [Hooks](https://github.com/crsmithdev/aleph/blob/main/docs/hooks.md): Each hook, what it reads and what it decides
 - [Routing](https://github.com/crsmithdev/aleph/blob/main/docs/routing.md): The model, tools and time box of each agent role
 - [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Set-up, commands, the tick, load and settings
-- [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues and goals, the `aleph issue` commands and fields
+- [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues, the `aleph issue` commands and fields
 - [Vault](https://github.com/crsmithdev/aleph/blob/main/docs/vault.md): The memory vault, its commands and its note format
 - [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, log in, and add a page
 - [UI design reference](https://github.com/crsmithdev/aleph/blob/main/docs/design.md): Tokens, formats, tables, charts and components of the UI

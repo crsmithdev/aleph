@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./worker-verdict.ts";
-import { heldRule, securityChange, testFindings, parseReview, parseWorker } from "./gate.ts";
+import { heldRule, securityChange, testFindings, parseReview, parseWorker, WORKER_SCHEMA } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -69,7 +69,9 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/write-tests\/SKILL\.md\)/);
   expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/refit-tests\/SKILL\.md\)/);
   expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("](../");
-  const p = reviewPrompt("n", "goal", "diff", []);
+  // With the test and outside sections and the skill text, the prompt says issue; only the spec's Goal section is named Goal.
+  const p = reviewPrompt("n", "the spec", "diff", f, { outside: ["a.ts"] });
+  expect(p).not.toMatch(/\bgoal\b/);
   expect(p).toContain("ran the checks that this change reaches");
   expect(p).toContain("they passed");
   // The reviewer judges by the code-review skill, given as text: no frontmatter, and no Skill tool.
@@ -77,6 +79,8 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   expect(p).not.toContain("name: code-review");
   expect(p).toContain("Do not change tracked files.");
   expect(p).toContain("Do not run the full test suite");
+  expect(WORKER_SCHEMA.properties.flakes.description).toContain("not the issue's own");
+  expect(WORKER_SCHEMA.properties.already_met.description).toContain("the issue already holds");
 });
 
 test("new code and a new test pass the gate", () => {

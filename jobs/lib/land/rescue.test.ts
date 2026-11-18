@@ -11,7 +11,7 @@ import { askOf } from "../asks/ask.ts";
 import type { MainState } from "../gates/tables.ts";
 import type { Fate } from "../records/outcome.ts";
 import { rescueStuck } from "./rescue.ts";
-import { ctx, newIssue, mk, ask, fakes, setup, sh, teardown } from "../transitions/factory.testkit.ts";
+import { ctx, newIssue, mk, ask, fakes, notes, setup, sh, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -73,7 +73,7 @@ test("a spec edit tells Chris through the rescue's Tell, not the network", async
   const asked = lines.length;
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, rescue);
-  expect(lines.slice(asked)).toEqual([`fac/issue.${id}: the spec was edited; the goal starts again`]);
+  expect(lines.slice(asked)).toEqual([`fac/issue.${id}: the spec was edited; the issue starts again`]);
 });
 
 test("a rescue that throws gives a failed event whose note holds the failure", async () => {
@@ -150,6 +150,8 @@ test("rescue: already met: on main or done is a duplicate; a worker's claim is c
   const no = await rescue({ state: "red", line: "tests fail" });
   expect(no.drops[`issue.${red}`].fate).toBeUndefined();
   expect(rerun(red)).toContain("but the checks do not pass on origin/main (tests fail)");
+  expect(rerun(red)).toContain("Make the change the issue asks for.");
+  expect(notes(red)).toContain("dropped, and the issue reruns once");
   expect(statusOf(red)).toBe("open");
 });
 
@@ -192,6 +194,9 @@ test("rescue: each step: a killed run, an infra failure, a land conflict, and a 
   expect(r.calls).toContain(`recheck issue.${infraBranch}`);
   expect(rerun(infraNone)).toBe("The last run failed before it made a branch: fetch failed.");
   expect(rerun(conflict)).toContain(`merge conflict in a.ts, last changed on main by ${sha} fix a`);
+  expect(rerun(conflict)).toContain("Another issue landed on the same lines first");
+  expect(notes(conflict)).toContain("the issue reruns once from current main");
+  expect(r.drops[`issue.${killedBuild}`].reason).toContain("Run the issue again from the start.");
   expect(rerun(noCommit)).toBe("The last run made no commit. The last 20 lines of its result.md:\n\n```\nline 1\nline 2\n```");
   expect(rerun(landChecks)).toContain("its checks log:\n\n```\n(empty)\n```");
 });

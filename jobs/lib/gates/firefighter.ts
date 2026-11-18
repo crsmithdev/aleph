@@ -188,7 +188,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
         const item = issues.find(doc, i.id);
         if (!item) return null;
         store.reopen(doc, item, ci.landed!);
-        return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the goal runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
+        return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the issue runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
       });
       record.editIssueState(issueKey(i.id), (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
       out.push(`${ref} sent back: CI red at ${c.sha.slice(0, 7)} after its land`);

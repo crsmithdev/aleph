@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,8 @@ import {
 import type { Entry, Repo, Run } from "../records/ledger.ts";
 import { logTo } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";
+import { issueKey } from "../../../lib/naming.ts";
+import { ctx, newIssue, setup, teardown } from "./factory.testkit.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "continuation-"));
 const saved = { jobs: process.env.ALEPH_JOBS_DIR, factory: process.env.ALEPH_FACTORY_DIR, db: process.env.ALEPH_DB };
@@ -172,6 +174,8 @@ describe("the worker brief", () => {
     const r = run({ job: first.id, worktree: "/w", branch: "factory/fac-1" });
     const sandboxed = brief(first.id, r, { ...repo, sandbox: true } as Repo);
     expect(sandboxed).toContain("follow the write-code method at the end of this brief");
+    // Only the spec's Goal section is named Goal: the brief and the skill text say issue.
+    expect(sandboxed).not.toMatch(/\bgoal\b/);
     expect(sandboxed).toContain("link it from the repo's main checkout path");
     expect(sandboxed).toContain("do not run the full\nsuite again to get a clean run");
     expect(sandboxed).toContain("do not add a test for a helper that the\nexisting tests already reach");
@@ -199,6 +203,16 @@ describe("the worker brief", () => {
     expect(b).toContain("Where a commit from origin/main that you merge moves or renames what this job's change cites or depends on, update this job's change to match.");
     expect(b).toContain("Your final message names each such update.");
     expect(b).toContain("Do not start other work.");
+  });
+
+  describe("with an issue in the store", () => {
+    beforeEach(setup);
+    afterEach(teardown);
+    test("a merge run's brief names the issue's title on an Issue line", () => {
+      const id = newIssue();
+      const m = seed({ role: "build", name: issueKey(id), repo: "fac", target: issueKey(id), state: "running", merge: true, conflicts: ["a.ts"] });
+      expect(brief(m.id, m.run, { ...repo, path: ctx.base })).toContain("# Merge origin/main into this branch\n\nIssue title: ship it\n\n");
+    });
   });
 
   test("a merge run's brief lists a conflicted path with no last commit when git log fails", () => {

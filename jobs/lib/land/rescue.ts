@@ -52,8 +52,8 @@ type Land = (name: string) => Promise<string | null>;
 type CheckMain = (repo: Repo) => Promise<MainState>;
 
 const RERUN_OPTIONS = [
-  { label: "Rerun", line: "Drop the stuck run and start the goal again as it is" },
-  { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
+  { label: "Rerun", line: "Drop the stuck run and start the issue again as it is" },
+  { label: "Another way", line: "Start the issue again, taking a different route than the run that failed" },
 ];
 
 /** The open jobs of factory repos whose last real run passes `test`, given that run, its runHealth and the job. */
@@ -172,10 +172,10 @@ async function releaseEdited(act: Rescue): Promise<void> {
     const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
     if (!release) continue;
     try {
-      const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
+      const why = await act.drop(r.name, "the issue's spec was edited after the run asked about it; the issue starts again on the new spec");
       if (why) { logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed (${why})` }); continue; }
       if (askOf(issueKey(issue))?.question === question) clearAsk(issueKey(issue));
-      await tell.send(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
+      await tell.send(`${repo.key}/${r.name}: the spec was edited; the issue starts again`);
     } catch (e) {
       logEvent({ subject: "gate", action: "failed", object: r.name, detail: `release after a spec edit failed: ${errText(e)}` });
     } finally {
@@ -210,7 +210,7 @@ function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   if (r.role === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
   // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
   if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
-  return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
+  return { action: "drop", dropReason: `${text}. The issue did not cause this. Run the issue again from the start.`, noted: `${text}: dropped, and the issue starts again`, told: `${text}: the issue starts again` };
 }
 
 /** The step for a lost run: a host restart's step, as the issue did not cause it either. The rescue counts it once per issue. */
@@ -218,17 +218,17 @@ function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   const text = `${r.role} run ${last.id} was lost: its process ended with no end written`;
   if (r.role === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
   if (isAgentRun(r.role) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
-  return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
+  return { action: "drop", dropReason: `${text}. Run the issue again from the start.`, noted: `${text}: dropped, and the issue reruns once`, told: `${text}: the issue reruns` };
 }
 
 /** The step for a worker's claim that the issue is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
 function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
-  const said = `${r.role} run ${last.id} says the goal is already met (${claim})`;
+  const said = `${r.role} run ${last.id} says the issue is already met (${claim})`;
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };
   return {
     action: "drop",
-    rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.${failure ? ` The failure happens on GitHub CI: a pass on this host does not show the goal met. The CI failure:\n\n\`\`\`\n${failure}\n\`\`\`` : ""}`,
-    noted: `${said}, but ${red}; dropped, and the goal reruns once`,
+    rerun: `The last run said the issue is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the issue asks for.${failure ? ` The failure happens on GitHub CI: a pass on this host does not show the issue met. The CI failure:\n\n\`\`\`\n${failure}\n\`\`\`` : ""}`,
+    noted: `${said}, but ${red}; dropped, and the issue reruns once`,
   };
 }
 
@@ -242,7 +242,7 @@ function infraStep({ last, r, reason }: Stuck, hasBranch: boolean): Step {
   const text = `${r.role} run ${last.id} failed for infrastructure (${reason}): `;
   if (r.role === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
   if (hasBranch) return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
-  return { action: "drop", rerun: `The last run failed before it made a branch: ${reason}.`, dropReason: `${text}dropped for one rerun`, noted: `${text}dropped; the goal reruns once`, told: `${text}the goal reruns` };
+  return { action: "drop", rerun: `The last run failed before it made a branch: ${reason}.`, dropReason: `${text}dropped for one rerun`, noted: `${text}dropped; the issue reruns once`, told: `${text}the issue reruns` };
 }
 
 /** The step for a land that hit a merge conflict. `touched` is the last commit on main that changed the files. */
@@ -251,8 +251,8 @@ function conflictStep({ last, r, repo }: Stuck, touched: string): Step {
   const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
   return {
     action: "drop",
-    rerun: `The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`,
-    noted: `${r.role} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`,
+    rerun: `The last land failed with a merge conflict in ${what}. Another issue landed on the same lines first; this run starts from the current ${repo.main}.`,
+    noted: `${r.role} run ${last.id}: merge conflict in ${what}; dropped, and the issue reruns once from current ${repo.main}`,
   };
 }
 
@@ -263,7 +263,7 @@ function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks")
   return {
     action: "drop",
     rerun: `${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${file === "checks" ? "checks log" : file}:\n\n\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``,
-    noted: `${r.role} run ${last.id}: ${why}; dropped, and the goal reruns once`,
+    noted: `${r.role} run ${last.id}: ${why}; dropped, and the issue reruns once`,
   };
 }
 
@@ -347,7 +347,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
       if (!why) {
         logAlways("rescue", name, "reran", { detail: `dropped ${runs[0].id}` });
         record("always: Rerun");
-        await tell.send(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
+        await tell.send(`${repo.key}/${name}: always: Rerun; dropped, and the issue reruns`);
         return;
       }
       logEvent({ subject: "gate", action: "failed", object: name, detail: `always Rerun failed (${why})` });
@@ -379,7 +379,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     }
     if (isKilled) return take(step);
     const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
-    if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
+    if (again) return chris(`${name}: a second run of this issue was lost (its process ended with no end written). Drop it, or change the issue?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this issue was lost too, and its rerun did not clear it"]));
     markRescued(last, "lost");
     return take(step);
   }
@@ -388,13 +388,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (specQuestion) {
     const q = asked || reason;
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-    const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
+    const text = `${name} ended with no commit and asked: ${q} The issue waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
     return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.state}`]), item);
   }
   const found = noCommit ? foundDone(stuck) : null;
   const claim = noCommit ? r.alreadyMet ?? null : null;
   const key = rescueCase(r, !!found, claim);
-  if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
+  if (!key) return chris(`${name} is ${r.state} (${reason}); drop it, recheck it, or edit the issue?`, choice(`${name} is ${r.state} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
   if (key === "claimed") {
@@ -407,7 +407,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     const ciRed = ci ? redCi().find((c) => c.repo === repo.key) : undefined;
     const red = main.state === "red" ? main.line : ciRed ? ciLine(ciRed) : null;
     markRescued(last, key);
-    if (red && earlier) return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
+    if (red && earlier) return chris(`${name} says the issue is already met again (${claim}), but ${red}. Drop it, or change the issue?`, choice(`${name} says the issue is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
     return take(claimStep(stuck, claim, red, ciRed && ci?.failure));
   }
   if (key === "duplicate") {
@@ -416,7 +416,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   }
   if (key === "timeout") {
     // No rerun of the same issue: a plain issue goes to intake to be split; a part, or an issue split already, asks.
-    if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
+    if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the issue?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
     markRescued(last, key);
     const why = await act.drop(name, `time box ran out in ${r.role} run ${last.id}; the issue goes to intake to split`);
     const bad = why ?? sendToIntake(repo, issue as number);
@@ -425,7 +425,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     record(text);
     return void await say(text);
   }
-  if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
+  if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the issue?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   markRescued(last, key);
   return take(key === "infra" ? infraStep(stuck, r.role !== "land" && hasBranch(stuck)) : key === "land-conflict" ? conflictStep(stuck, touched(stuck)) : rerunStep(stuck, key as "no-commit" | "land-checks"));
 }

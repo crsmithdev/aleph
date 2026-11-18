@@ -176,7 +176,7 @@ export function recorder(folder: string): (c: CheckResult) => void {
 }
 
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
-branch the worker made for the goal issue below; read the code there as needed.
+branch the worker made for the issue below; read the code there as needed.
 Judge whether the diff does what the issue asks, whether the tests cover it, and
 whether it breaks anything. Do not change tracked files. The factory ran the checks that this change reaches
 on this branch, and they passed. Do not run the full test suite or repeat-run loops: you have a time
@@ -185,7 +185,7 @@ of your own, each ending in well under a minute. ${FOREGROUND}
 
 Check the whole branch before you give a verdict; do not stop at the first defect.
 Check each Oracle clause of the spec and each requirement in the Goal section.
-The Oracle is a check stored on the issue, so the goal does not need a new committed test. A committed test
+The Oracle is a check stored on the issue, so the issue does not need a new committed test. A committed test
 needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
 behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
 command wiring. A case named \`guard: ...\` is a ratchet or a lint row over a clean codebase: it passes on the base by design, so the
@@ -195,12 +195,12 @@ Each failure goes in "failures": its clause, named by a few words without its re
 list a pass. Say each thing once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
 failed, else "hold".`;
 
-const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
-when the goal does not call for the change, or the change weakens a check the
-goal keeps. A change the goal calls for passes.`;
+const TESTS = `The diff changes tests. Judge each finding below against the issue: hold only
+when the issue does not call for the change, or the change weakens a check the
+issue keeps. A change the issue calls for passes.`;
 
-const OUTSIDE = `The branch changes these files, and the Edit surface of the goal names none of them. Judge each one
-against the goal: hold only when the goal does not need the change. A change the goal needs passes.`;
+const OUTSIDE = `The branch changes these files, and the Edit surface of the issue names none of them. Judge each one
+against the issue: hold only when the issue does not need the change. A change the issue needs passes.`;
 
 const MERGE = `This run only merged origin/main into the branch, after a land conflicted. The diff below is the merge
 commit against its first parent, the branch before the merge. Judge only the merge: each conflict must keep both the
@@ -214,7 +214,7 @@ export function reviewPrompt(name: string, spec: string, diff: string, findings:
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
   const outside = o.outside?.length ? `\n\n## Changes outside the Edit surface\n\n${OUTSIDE}\n\n${o.outside.map((f) => `- ${f}`).join("\n")}` : "";
   const head = o.merge ? `## The merge commit's conflict resolution\n\n${MERGE}` : "## Diff from the merge base";
-  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}\n\n## Goal issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
+  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}\n\n## Issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
 }
 
 /** One reviewer call on the branch: `review` of roles/unit.ts. */

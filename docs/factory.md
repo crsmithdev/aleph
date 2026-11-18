@@ -1,6 +1,6 @@
 # Factory
 
-The factory builds issues without you. It takes in each open issue as goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
+The factory builds issues without you. It takes in each open issue, starts a worker for each ready issue, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
 A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps.
 
@@ -20,7 +20,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 
 | Command | Does |
 |---|---|
-| `aleph dispatch` | Starts a run for each ready goal, up to the caps |
+| `aleph dispatch` | Starts a run for each ready issue, up to the caps |
 | `aleph tick` | Does the periodic work that is due, and the sweep; the timer runs it |
 | `aleph suite` | Runs the full checks on `origin/main` of each factory repo whose main moved since the last run, and records the baseline; its timer runs it |
 | `aleph intake <repo>-<n>` | Takes in one issue now |
@@ -60,7 +60,7 @@ A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so
 
 ## The tick
 
-The tick starts only periodic work, each step on its own due rule: the maintainer (mechanical vault pass, corrections and the compile of yesterday) and the monitor once a day (from a local hour set on the Automation page, 0 by default), the housekeeper once a day and after a move of a main (at most once an hour), the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, or every minute while a GitHub CI run on a factory repo's main is in progress (by the last CI read) or a land on that main ended in the last 15 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
+The tick starts only periodic work, each step on its own due rule: the maintainer (mechanical vault pass, corrections and the compile of yesterday) and the monitor once a day (from a local hour set on the Automation page, 0 by default), the housekeeper once a day and after a move of a main (at most once an hour), the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, or every minute while a GitHub CI run on a factory repo's main is in progress (by the last CI read) or a land on that main ended in the last 15 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready issue with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
 
 ## Flakes and health
 
@@ -72,7 +72,7 @@ A check, a worker and a land start only while the 1-minute load average is under
 
 ## Settings
 
-The live cap, the run cap, the intake tries, the job time limit, the fix rounds, the land batch and the load limit are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`, `ALEPH_INTAKE_TRIES`, `ALEPH_JOB_TIMEOUT`, `ALEPH_FIX_ROUNDS`, `ALEPH_LAND_BATCH`, `ALEPH_LOAD_LIMIT`) first, then from the `caps` setting in `aleph.db` (`{ "live": 5, "run": 3, "intakeTries": 2, "jobSeconds": 1800, "fixRounds": 2, "landBatch": 8, "loadLimit": 24 }`), then the default. The Controls panel of the Automation page edits the `caps` setting. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; `ALEPH_RUN_CAP` (3) is the default. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
+The live cap, the run cap, the intake tries, the job time limit, the fix rounds, the land batch and the load limit are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`, `ALEPH_INTAKE_TRIES`, `ALEPH_JOB_TIMEOUT`, `ALEPH_FIX_ROUNDS`, `ALEPH_LAND_BATCH`, `ALEPH_LOAD_LIMIT`) first, then from the `caps` setting in `aleph.db` (`{ "live": 5, "run": 3, "intakeTries": 2, "jobSeconds": 1800, "fixRounds": 2, "landBatch": 8, "loadLimit": 24 }`), then the default. The Controls panel of the Automation page edits the `caps` setting. The run cap is the number of starts of one issue in 60 minutes before a `run-cap` Ask; `ALEPH_RUN_CAP` (3) is the default. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
 
 | Variable | Default | Does |
 |---|---|---|

@@ -148,7 +148,7 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
     try {
       const { p } = await nouls(
         { reason: run.reason },
-        { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, the run made no commit, found nothing to commit or found the goal already met, a duplicate, needs a rebase, or has a stale base?" } },
+        { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, the run made no commit, found nothing to commit or found the issue already met, a duplicate, needs a rebase, or has a stale base?" } },
       );
       if (!(p.fault >= CORRECTION_AT)) continue;
     } catch (e2) {

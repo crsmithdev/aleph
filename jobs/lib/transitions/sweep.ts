@@ -34,7 +34,7 @@ function sweepMain(repo: Repo, lists: Reader): void {
     const n = String(item.id), status = issues.status(item), hit = index.get(n)?.[0];
     let bad: string | null = null;
     if (status === "open" && hit && !askOfItem(item)) bad = close(repo, item.id, `its work is on origin/${repo.main}: ${hit.slice(0, 7)}`);
-    else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the goal runs again`, git(repo.path, "rev-parse", main).out);
+    else if (status === "done" && reverted.has(n)) bad = reopenReverted(repo, item.id, `its commits on origin/${repo.main} are all reverted: the issue runs again`, git(repo.path, "rev-parse", main).out);
     if (bad) logEvent({ subject: "rule", action: "failed", object: issueKey(item.id), detail: `not swept: ${bad}` });
   }
 }

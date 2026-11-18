@@ -36,14 +36,14 @@ export const WORKER_SCHEMA = {
       },
     },
     flakes: {
-      type: "array", description: "Tests that are not the goal's own, failed or timed out, and passed alone or on a rerun.",
+      type: "array", description: "Tests that are not the issue's own, failed or timed out, and passed alone or on a rerun.",
       items: { type: "object", additionalProperties: false, required: ["file", "name", "what"], properties: { file: text, name: text, what: { ...text, description: "What you saw." } } },
     },
     already_met: {
-      description: "Null, unless the goal already holds and you made no commit.",
+      description: "Null, unless the issue already holds and you made no commit.",
       anyOf: [
         { type: "null" },
-        { type: "object", additionalProperties: false, required: ["evidence"], properties: { evidence: { ...text, description: "The files, lines and commit on main that show the goal holds." } } },
+        { type: "object", additionalProperties: false, required: ["evidence"], properties: { evidence: { ...text, description: "The files, lines and commit on main that show the issue holds." } } },
       ],
     },
     question: {

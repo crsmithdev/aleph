@@ -10,7 +10,7 @@ Adapted from karpathy-guidelines (github.com/multica-ai/andrej-karpathy-skills @
 
 # Code change
 
-Make a **surgical** change: the fewest lines that meet the goal, and every changed line traces to it.
+Make a **surgical** change: the fewest lines that meet the issue, and every changed line traces to it.
 
 Before the first edit, call the Read tool on [write/PROCESS.md](../write/PROCESS.md) and on [RULES.md](./RULES.md).
 Follow the five steps of PROCESS.md in order. The rules of RULES.md apply during step 3, and its step 5 checks the

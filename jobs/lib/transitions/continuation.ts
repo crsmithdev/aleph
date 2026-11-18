@@ -49,7 +49,7 @@ function checksSentence(checks: Check[]): string {
 }
 
 const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`.
-Work only there. Do the goal below. Commit every change on this branch: only its commits count.
+Work only there. Do the issue below. Commit every change on this branch: only its commits count.
 Never merge, never push, never touch another branch.
 
 Nobody answers questions during the run. Your reply ends with structured output; each
@@ -60,7 +60,7 @@ null. Never defer that clause with \`defaults\` or \`followups\`. For work you f
 cover anything the Oracle names. Add at most 3 per run, and only a bug, a doc that misleads, or a check that misses: never taste or a cosmetic item.
 Hold each to the evidence bar of skills/code-review: it is real, and you proved it by a run or by the code you read. Give its title, its \`path:line\`,
 what you saw, why it matters, and its impact, risk and effort, each an integer from 1 to 5.
-A test that is not the goal's own, fails or times out, and passes alone or on a rerun is
+A test that is not the issue's own, fails or times out, and passes alone or on a rerun is
 a flake: add it to \`flakes\` and not to \`followups\`.
 Check such a failure once, by running its file alone, then go on: do not run the full
 suite again to get a clean run, because the factory's checks rerun a failed check.
@@ -69,9 +69,9 @@ file do not: a changed line they do not cover, or a result they do not assert. T
 factory's checks reject any other new test. So do not add a test for a helper that the
 existing tests already reach through its callers.
 
-If the goal already holds and no edit is needed, make no commit, run the test files the goal names or reaches,
+If the issue already holds and no edit is needed, make no commit, run the test files the issue names or reaches,
 and set \`already_met.evidence\` to the files, lines and commit on \`${main}\` that show it;
-else \`already_met\` is null. If you cannot do the goal, make no commit and give the reason
+else \`already_met\` is null. If you cannot do the issue, make no commit and give the reason
 in \`summary\`.
 
 ${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`. The tests that start Chrome run only with \`ALEPH_BROWSER_TESTS=1\` (\`bun run test:all\` sets it); a plain \`bun test\` skips them, and the factory's checks set it. For a screenshot of a page that
@@ -85,7 +85,7 @@ at most 120 words of prose, plus a list only for separate items.`;
 
 /** The text that has an agent search past factory work for `title` before it plans: the worker brief and the intake prompt. */
 export const pastWork = (title: string): string =>
-  `Before you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\` as it stands, with no pipe. It lists the pages of earlier factory work that match. Read each page about the same goal or files, and do not repeat an approach that failed there.`;
+  `Before you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\` as it stands, with no pipe. It lists the pages of earlier factory work that match. Read each page about the same issue or files, and do not repeat an approach that failed there.`;
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, run: Run, repo: Repo): string {
   if (run.merge) {
@@ -210,7 +210,7 @@ function mergeBrief(land: Run, repo: Repo, title?: string): string {
   });
   return [
     `# Merge ${main} into this branch`,
-    ...(title ? [`Goal: ${title}`] : []),
+    ...(title ? [`Issue title: ${title}`] : []),
     `A land of this branch conflicted with ${main}. Merge ${main} into the branch, resolve the conflicts so that the change on main and this job's change both survive, and commit. Where a commit from ${main} that you merge moves or renames what this job's change cites or depends on, update this job's change to match. Your final message names each such update. Do not start other work.`,
     `Conflicted paths:\n${paths.join("\n")}`,
   ].join("\n\n") + "\n";

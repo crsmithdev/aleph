@@ -9,7 +9,7 @@ const CUT = 0.6;
 
 const SIZE_QUESTION = {
   type: "choice" as const,
-  instructions: "Which size fits the change that `goal` asks for?",
+  instructions: "Which size fits the change that `issue` asks for?",
   criteria: {
     small: "A small, mechanical change in one or two files whose done state is stated exactly.",
     medium: "A typical change across several files, with a clear oracle.",
@@ -21,7 +21,7 @@ const SIZE_QUESTION = {
 export async function route(spec: string, subject = "route"): Promise<Size | null> {
   if (judgeChoice() === "haiku") return null;
   try {
-    const d = await decide({ goal: spec }, { size: SIZE_QUESTION });
+    const d = await decide({ issue: spec }, { size: SIZE_QUESTION });
     const a = d.answers.size;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;

@@ -14,7 +14,7 @@ A review is **sceptical**: the worker's summary, commit messages and its own tes
 
 ## Steps
 
-1. **Read the goal.** List each requirement of the goal and each Oracle clause. Done when you have the list.
+1. **Read the issue.** List each requirement of the issue and each Oracle clause. Done when you have the list.
 2. **Read the diff.** Read the whole diff once. Read code outside it only to test a risk you can name, and name the risk. Done when you have read every hunk.
 3. **Judge each requirement** against the code. Give each one a verdict:
    - **met**: you read the code that does it, on every path.
@@ -36,12 +36,12 @@ A review is **sceptical**: the worker's summary, commit messages and its own tes
 
 ## Test-cheating catalog
 
-Judge these with [write-tests](../write-tests/SKILL.md) and the [HOLLOW.md](../refit-tests/HOLLOW.md) lens of [refit-tests](../refit-tests/SKILL.md). Each item is a finding unless the goal asks for the change:
+Judge these with [write-tests](../write-tests/SKILL.md) and the [HOLLOW.md](../refit-tests/HOLLOW.md) lens of [refit-tests](../refit-tests/SKILL.md). Each item is a finding unless the issue asks for the change:
 
 - A test removed, skipped (`.skip`, `xit`) or focused (`.only`).
 - An assertion removed or loosened: `toBe` to `toBeTruthy`, an exact value to `toBeGreaterThan(0)`, a larger timeout, tolerance or retry count.
 - A tautological test: it asserts its own setup, mirrors the implementation, or has no input it rejects.
-- A test that checks a mock, a log call, the source text or only "does not throw" where the goal needs a behaviour.
+- A test that checks a mock, a log call, the source text or only "does not throw" where the issue needs a behaviour.
 - A snapshot or golden file regenerated with no change to the test that owns it.
 - A suppression added in product code: `@ts-ignore`, `@ts-expect-error`, `eslint-disable`, an empty `catch {}`.
 - Product code that branches on the test environment (`NODE_ENV === "test"`, `process.env.CI`).
@@ -54,7 +54,7 @@ A finding goes in the review only when all of these hold:
 
 - The branch introduced it. A pre-existing defect is not this branch's finding.
 - It is one discrete defect with a concrete fix.
-- It changes correctness, security, the goal's requirements, or a test's power to fail. Style, naming and wording pass unless they hide meaning or break a rule the repo states.
+- It changes correctness, security, the issue's requirements, or a test's power to fail. Style, naming and wording pass unless they hide meaning or break a rule the repo states.
 - A claim that the branch breaks other code names that code and shows how.
 - The worker would fix it if told.
 
