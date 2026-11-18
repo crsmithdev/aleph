@@ -10,6 +10,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
+import { workerCmd } from "../jobs/lib/infra/settings.ts";
+import { runFile } from "../jobs/lib/records/run-files.ts";
 import { isLive } from "../jobs/lib/infra/process.ts";
 import { findJob, issue as issueOf, issueTitle, readFile, stateOf, view, type Job } from "../jobs/lib/records/job.ts";
 import { counting, patchRun, setState } from "../jobs/lib/records/record.ts";
@@ -62,7 +64,7 @@ const FATES: Fate[] = ["duplicate", "met", "manual"];
 const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   job: { usage: "aleph job <repo> <name> --spec <file|-> [--on <ref>] [--model <m>] [--land]", purpose: "start a worker job on a branch of the repo" },
   run: { usage: "aleph run <name> [-- <command...>]", purpose: "run a command as a tracked plain job" },
-  jobs: { usage: "aleph jobs [<name>]", purpose: "list the open and recent jobs, or show one" },
+  jobs: { usage: "aleph jobs [<name> [--resume]]", purpose: "list the open and recent jobs, show one, or open its latest session in claude" },
   recheck: { usage: "aleph recheck <name>", purpose: "run the checks of a job again" },
   drop: { usage: "aleph drop <name> [<reason>] [--quiet] [--fate duplicate|met|manual]", purpose: "drop a job and its worktree" },
   unit: { usage: "aleph unit <run-dir>", purpose: "run a started job's unit in the foreground" },
@@ -203,7 +205,16 @@ function summary(runs: Job, fates = new Map<string, string>()) {
   };
 }
 
-function jobs(ctx: Ctx): void {
+/** `aleph jobs <name> --resume`: the latest run with a session, opened in `claude` from its worktree, where Claude Code finds the session. */
+async function resume(runs: Job): Promise<number> {
+  const last = runs.findLast((e) => e.run.session);
+  if (!last) refuse("no run of this job has a session");
+  const { session, worktree } = last.run;
+  if (!worktree || !existsSync(worktree)) refuse(`the worktree is gone; the transcript is ${runFile(last.folder, "transcript.jsonl")}`);
+  return Bun.spawn([workerCmd(), "--resume", session!], { cwd: worktree, stdio: ["inherit", "inherit", "inherit"] }).exited;
+}
+
+async function jobs(ctx: Ctx): Promise<void> {
   if (ctx.rest.includes("--news")) {
     const news: { run: string; line: string }[] = [], registry = loadRegistry();
     for (const e of allRuns()) {
@@ -216,6 +227,7 @@ function jobs(ctx: Ctx): void {
   const fates = reconcile(ctx, allJobs());
   const all = allJobs();
   const name = ctx.positional[0];
+  if (ctx.rest.includes("--resume") && !name) refuse(usage("jobs"));
   // A job that landed with its check open stays in the list until `aleph checked`.
   // A job that ended in the last 24 hours follows the open ones, the latest first.
   if (!name) {
@@ -226,6 +238,7 @@ function jobs(ctx: Ctx): void {
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
+  if (ctx.rest.includes("--resume")) { ctx.code = await resume(runs); return; }
   const last = counting(runs);
   const checks = readFile(last, "checks");
   ctx.out({
@@ -399,7 +412,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     }
     case "job": await job(ctx); break;
     case "run": await plain(ctx); break;
-    case "jobs": jobs(ctx); break;
+    case "jobs": await jobs(ctx); break;
     case "recheck": await started(ctx, await recheck(ctx.positional[0], { command: ctx.command, by: "human" })); break;
     case "drop": {
       const quiet = ctx.rest.includes("--quiet");

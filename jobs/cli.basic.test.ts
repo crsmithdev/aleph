@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, section, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.testkit";
 import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
@@ -220,5 +220,43 @@ describe("help", () => {
     const a = await aleph(["always", "grant"]);
     expect(a.code).toBe(1);
     expect(a.stderr).toContain("usage: aleph always <list|grant <reason> <action>|revoke <reason>|timeout");
+  });
+});
+
+describe("jobs --resume", () => {
+  // A stand-in for `claude` that prints where it ran and with which arguments, and exits 7.
+  const claude = () => {
+    const f = join(base, "fake-resume");
+    writeFileSync(f, '#!/bin/sh\necho "$PWD|$*"\nexit 7\n');
+    chmodSync(f, 0o755);
+    return { ALEPH_WORKER_CMD: f };
+  };
+
+  test("runs claude --resume with the latest session in its worktree and exits with its code", async () => {
+    const wt = join(base, "resume-wt");
+    mkdirSync(wt);
+    const a = seedRun("demo", { role: "build", state: "failed", name: "rs-ok", session: "sess-old", worktree: wt });
+    const b = seedRun("demo", { role: "build", state: "failed", name: "rs-ok", session: "sess-new", worktree: wt, prev: a });
+    seedRun("demo", { role: "build", state: "failed", name: "rs-ok", prev: b });
+    const r = await aleph(["jobs", "rs-ok", "--resume"], claude());
+    expect(r.code).toBe(7);
+    expect(r.stdout.trim()).toBe(`${realpathSync(wt)}|--resume sess-new`);
+  });
+
+  test("refuses when the worktree is gone, with the transcript path", async () => {
+    const id = seedRun("demo", { role: "build", state: "failed", name: "rs-gone", session: "s", worktree: join(base, "no-such") });
+    const r = await aleph(["jobs", "rs-gone", "--resume"], claude());
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain(`the worktree is gone; the transcript is ${join(jobsDir, id.replace("job.", ""), "transcript.jsonl")}`);
+  });
+
+  test("refuses when no run has a session, and when no name is given", async () => {
+    seedRun("demo", { role: "build", state: "failed", name: "rs-none" });
+    const r = await aleph(["jobs", "rs-none", "--resume"], claude());
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("no run of this job has a session");
+    const n = await aleph(["jobs", "--resume"], claude());
+    expect(n.code).toBe(1);
+    expect(n.stderr).toContain("usage: aleph jobs");
   });
 });
