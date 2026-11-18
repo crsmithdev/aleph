@@ -129,9 +129,9 @@ const LINKED = ["write", "supersede", "archive", "adopt"];
 
 const opText = ({ op, title, why }: Op): string => `${op} ${LINKED.includes(op) ? `[[${title}]]` : title} — ${why}`;
 
-/** The note op that `text` (an op line without its time) records, or null for any other line. */
+/** The note op that `text` (an op line without its time) records, or null for any other line. A write line from before the `[[title]]` form reads `write Title — why`. */
 export function parseOp(text: string): Op | null {
-  const linked = /^(write|supersede|archive|adopt) \[\[([^\]]+)\]\]\s*(.*)$/.exec(text) ?? /^(delete) (.+?) — (.*)$/.exec(text);
+  const linked = /^(write|supersede|archive|adopt) \[\[(.+?)\]\]\s*(.*)$/.exec(text) ?? /^(delete|write) (.+?) — (.*)$/.exec(text);
   return linked && { op: linked[1], title: linked[2], why: linked[3].replace(/\[\[|\]\]/g, "").replace(/^[—–-]\s*/, "") };
 }
 

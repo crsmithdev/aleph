@@ -63,6 +63,8 @@ test("appendDaily writes an op line that parseOp reads back, a delete without a 
   expect(lines.map((l) => l.slice(8))).toEqual(["write [[A Note]] — because", "delete Gone Note — wrong"]);
   expect(lines.map((l) => parseOp(l.slice(8)))).toEqual(ops);
   expect(parseOp("build abc — not a note")).toBeNull();
+  expect(parseOp("write Old Note — a line from before the link form")).toEqual({ op: "write", title: "Old Note", why: "a line from before the link form" });
+  expect(parseOp("write [[aleph-1 [Tag] Title]] — episode of aleph-1")).toEqual({ op: "write", title: "aleph-1 [Tag] Title", why: "episode of aleph-1" });
   rmSync(r, { recursive: true, force: true });
 });
 
