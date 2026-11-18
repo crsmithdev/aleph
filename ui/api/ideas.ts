@@ -4,7 +4,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runsOfRole } from "../../jobs/lib/records/ledger.ts";
+import { runsOfRole } from "../../jobs/lib/records/record.ts";
 import { LENSES, ideasDir, lenses, list, read } from "../../ideas/ideas.ts";
 import { projectName } from "../../lib/projects.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";

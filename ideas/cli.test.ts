@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../cli/commands.ts";
-import { allRuns } from "../jobs/lib/records/ledger.ts";
+import { allRuns } from "../jobs/lib/records/record.ts";
 import { setModel } from "../jobs/lib/routing/models.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 

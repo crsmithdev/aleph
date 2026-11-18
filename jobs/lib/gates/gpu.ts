@@ -1,7 +1,8 @@
 /** The factory's capacity: the runs live now and today, the live caps and the GPU slot. */
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { allRuns, isBuild, loadRegistry, type Entry, type Run } from "../records/ledger.ts";
+import { isBuild, loadRegistry, type Entry, type Run } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { detailOf } from "../../../lib/naming.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isRunning } from "../infra/process.ts";

@@ -14,11 +14,12 @@ import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { branchFacts, jobGrep, trailerLine } from "../records/status.ts";
 import { parseWorker, WORKER_SCHEMA } from "../gates/gate.ts";
 import { branchPorts, recorder, waiting, workerVerdict, type Outcome } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, allRuns, loadRegistry, newsLine, readEnvFile, realTell, type Entry, type Repo, type Run, type Tell, allJobs } from "../records/ledger.ts";
+import { admit, isAgentRun, loadRegistry, newsLine, readEnvFile, realTell, type Entry, type Repo, type Run, type Tell, allJobs } from "../records/ledger.ts";
+import { allRuns, jobOfRun } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
-import { jobById, openJob } from "../records/job.ts";
+import { openJob } from "../records/job.ts";
 import { checkEnv as checksEnv, checksAt, shell, runChecks, stopFields, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { paused } from "../gates/pause.ts";
 import { keepDiff } from "../records/jobdiff.ts";
@@ -310,7 +311,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   // The fix rounds so far are those of jobs of this target; the runs sent back say what they failed.
   const done = jobRecord.roundsOf(run.target ?? id);
   if (done) facts.round = done;
-  const earlier = earlierRounds(jobById(id) ?? [], id);
+  const earlier = earlierRounds(jobOfRun(id), id);
   return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, docClaims: () => docClaims(folder, reply.summary), env, ...ports }));
 }
 

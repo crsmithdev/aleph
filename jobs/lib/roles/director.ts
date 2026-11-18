@@ -20,12 +20,13 @@ import * as issues from "../../../lib/todo.ts";
 import * as store from "../../../lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn, askOfItem } from "../asks/ask.ts";
-import { allRuns, isAgentRun, onOf, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
+import { isAgentRun, onOf, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
+import { allRuns, jobOfRun } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { jobById, issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
+import { issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";
 import { git, mainRef } from "../../../lib/git.ts";
 import { ofBranch } from "../records/jobdiff.ts";
@@ -555,7 +556,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       reason = a.reason;
       // The reply may leave the fate off: an issue whose own commit is on origin/main is met; a reason naming another issue already on main is work that issue did.
       const other = idsIn(a.reason).filter((r) => r.startsWith(`${repo.key}-`)).map((r) => r.slice(repo.key.length + 1)).find((x) => x !== String(issue) && itemOnMain(repo, x));
-      fate = a.fate ?? (onMain(repo, { jobs: (jobById(last.id) ?? [last]).map((e) => e.id), item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
+      fate = a.fate ?? (onMain(repo, { jobs: jobOfRun(last.id).map((e) => e.id), item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
     }
     const why = await ports.drop(name, reason, fate);
     if (why) return no(a, why);

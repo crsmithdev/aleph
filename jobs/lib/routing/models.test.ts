@@ -7,7 +7,7 @@ import { judge } from "../roles/judge.ts";
 import { writeLine } from "../roles/title.ts";
 import { MODELS } from "../../../lib/models.ts";
 import { putJson } from "../../../lib/db.ts";
-import { allRuns } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { gpuSlot } from "../gates/gpu.ts";
 import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 

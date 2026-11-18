@@ -11,7 +11,8 @@ import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../../../lib/git.ts";
 import { needsOf } from "../asks/ask.ts";
 import { key, parseKey } from "../../../lib/naming.ts";
-import { allRuns, isWaiting, isAgentRun, onOf, type Check, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
+import { isWaiting, isAgentRun, onOf, type Check, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
+import { allRuns, jobOfRun } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive } from "../infra/process.ts";
@@ -19,7 +20,7 @@ import { removeWorktree } from "../infra/git.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
 import { LOCK_BUSY, type Cause } from "../records/outcome.ts";
-import { hasFile, jobById } from "../records/job.ts";
+import { hasFile } from "../records/job.ts";
 import { onMain } from "../records/status.ts";
 import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
 import { landBatch } from "../infra/settings.ts";
@@ -155,9 +156,9 @@ function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
     .sort((a, b) => (a.run.made ?? 0) - (b.run.made ?? 0) || num(a.id) - num(b.id));
   for (const e of queued) {
     if (out.length >= cap || seen.has(e.run.job)) continue;
-    const runs = jobById(e.run.job);
-    const agent = runs && agentOf(runs);
-    if (!runs || !isOpen(runs) || !agent || !landTerms(agent.run)) continue;
+    const runs = jobOfRun(e.run.job);
+    const agent = agentOf(runs);
+    if (!isOpen(runs) || !agent || !landTerms(agent.run)) continue;
     seen.add(e.run.job);
     out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => logTo(e.folder, "land", `## ${step}\n${o ? o + "\n" : ""}\n`) });
   }
@@ -363,7 +364,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
       const open: Member[] = [];
       for (const m of members) {
         // A land that pushed and then died finds its own commit here and does not merge again.
-        const hit = onMain(repo, { jobs: (jobById(m.id) ?? [m]).map((e) => e.id), item: onOf(m.run), fetch: false });
+        const hit = onMain(repo, { jobs: jobOfRun(m.id).map((e) => e.id), item: onOf(m.run), fetch: false });
         const pushed = hit?.how === "Job trailer" ? hit.commit : "";
         if (pushed) {
           m.log(`already on main as ${pushed}`);

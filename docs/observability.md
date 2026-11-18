@@ -79,7 +79,7 @@ Tracing is off without keys. Every post is best effort: a failure is logged to s
 | `verify-gate` span on the turn | A `guardrail` span with the verdict, the kind and the judge time. It is posted unless the kind is `unchanged` | `hooks/lib/gate.ts:94` |
 | Score `verified` | 1 pass, 0 deny, 0.5 forced pass | `hooks/lib/gate.ts:107` |
 | Score `rating` | `N` of an `N/10` in a prompt, on the previous turn | `hooks/obs.ts:227`, `hooks/lib/rating.ts` |
-| Factory run, named `factory <name>` | A worker tree and, when there was a review, a reviewer tree | `postTrace` in `jobs/lib/learning/trace.ts:118`, called from `jobs/lib/roles/unit.ts` |
+| Factory run, named `factory <name>` | A worker tree and, when there was a review, a reviewer tree | `postTrace` in `jobs/lib/learning/trace.ts:119`, called from `jobs/lib/roles/unit.ts` |
 
 A failed factory post appends one line to the `dispatch` section of `log.txt` in the job folder (`jobs/lib/learning/trace.ts:131`). The `event` spans of a turn also cover `PreCompact`, `PostCompact`, `PermissionDenied` and `SessionEnd`.
 

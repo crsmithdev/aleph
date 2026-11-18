@@ -8,8 +8,8 @@ import { buildableIssues, isBuildable, isSorted, itemsDir, mediaPath, partsOf, r
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts } from "./intake.ts";
 import type { Spec } from "./issue-spec.ts";
-import { allRuns, type Repo } from "../records/ledger.ts";
-import { getRun } from "../records/record.ts";
+import { type Repo } from "../records/ledger.ts";
+import { getRun, allRuns } from "../records/record.ts";
 import { seed } from "../../job.testkit.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { newItems } from "../../../tests/projects.testkit.ts";

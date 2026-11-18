@@ -9,7 +9,7 @@ import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
 import { projectsOnMain } from "../../lib/store.ts";
 import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { allRunRecords } from "../../jobs/lib/records/record.ts";
+import { allRuns } from "../../jobs/lib/records/record.ts";
 
 type Project = string | null | undefined;
 
@@ -41,7 +41,7 @@ export const repoIn = (repo: string | undefined, project: Project) => !project |
 /** The repo of each job key and of each issue key that a job targets (the newest job's). */
 const ownerOf = (): Map<string, string> => once("owners", ["records"], () => {
   const out = new Map<string, string>();
-  for (const r of allRunRecords()) if (r.repo) { out.set(r.id, r.repo); if (r.target) out.set(r.target, r.repo); }
+  for (const { id, run } of allRuns()) if (run.repo) { out.set(id, run.repo); if (run.target) out.set(run.target, run.repo); }
   return out;
 });
 

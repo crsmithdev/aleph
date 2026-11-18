@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "../../../lib/git.ts";
-import { allRuns, type Repo, type Run } from "../records/ledger.ts";
+import { type Repo, type Run } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { runFile } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";
 import { reviewer } from "./review.ts";

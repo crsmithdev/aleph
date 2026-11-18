@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, other, repo, seedItem, sh, setup, teardown } from "./cli.testkit";
 import { clearAsk, setAsk } from "./lib/asks/ask.ts";
-import { allRuns } from "./lib/records/ledger.ts";
+import { allRuns } from "./lib/records/record.ts";
 import { actionJob, cli, drop } from "./flow.testkit.ts";
 
 // The wiring of `aleph report`; the reviewer and the land run in-process in jobs/lib/land/review.land.test.ts.

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { factoryDir } from "../../../lib/layout.ts";
 import { today } from "../../../lib/day.ts";
 import { jobsDir } from "../records/ledger.ts";
-import { allRunRecords } from "../records/record.ts";
+import { allRuns } from "../records/record.ts";
 import { pruneSnapshots } from "../../../lib/usage.ts";
 import { parseKey } from "../../../lib/naming.ts";
 
@@ -30,10 +30,10 @@ export function retain(now = Date.now()): number {
   // The rows stay; a job folder goes 90 days after its job ended. A folder that no row holds goes when it has not changed for that long.
   const dir = jobsDir();
   const held = new Set<string>();
-  for (const r of allRunRecords()) {
-    const folder = String(parseKey(r.id)!.n);
+  for (const { id, run } of allRuns()) {
+    const folder = String(parseKey(id)!.n);
     held.add(folder);
-    if (r.ended && Date.parse(r.ended) < cut && existsSync(join(dir, folder))) drop(join(dir, folder));
+    if (run.ended && Date.parse(run.ended) < cut && existsSync(join(dir, folder))) drop(join(dir, folder));
   }
   if (existsSync(dir)) for (const f of readdirSync(dir)) if (!f.startsWith(".") && !held.has(f) && changed(join(dir, f)) < cut) drop(join(dir, f));
 

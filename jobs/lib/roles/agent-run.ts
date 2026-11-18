@@ -5,8 +5,8 @@
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
  */
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
-import { allRuns, type Run } from "../records/ledger.ts";
-import { getRun, makeJob, patchRun, setState } from "../records/record.ts";
+import { type Run } from "../records/ledger.ts";
+import { getRun, makeJob, patchRun, setState, allRuns } from "../records/record.ts";
 import { lock, lockSync } from "../../../lib/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
 import { logStream, logTo, runFile } from "../records/run-files.ts";

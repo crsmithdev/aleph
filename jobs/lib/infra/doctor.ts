@@ -5,7 +5,8 @@
 import { existsSync, lstatSync, readdirSync, readlinkSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "../../../lib/git.ts";
-import { allRuns, loadRegistry } from "../records/ledger.ts";
+import { loadRegistry } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
 import { doctorClockMs, homeUrl, unitDir } from "./settings.ts";

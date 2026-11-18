@@ -74,7 +74,7 @@ export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.
       const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
       const by = entries.find((e) => e.object === a.issue && Date.parse(e.time) >= lo && Date.parse(e.time) <= hi && (automatic(e) || answer(e)));
       if (by) decided[by.subject === "rule" ? "rule" : by.subject === "human" ? "chris" : "director"]++;
-      outcome[record.allRunRecords().some((x) => x.target === a.issue && x.role === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
+      outcome[record.allRuns().some(({ run: x }) => x.target === a.issue && x.role === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
       reason, ...reasonText(reason), mode: r.always, fired: mine.length, decided, outcome,

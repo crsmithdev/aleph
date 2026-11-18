@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, fakeLog, jobRuns, other, state, setup, teardown } from "../../cli.testkit";
-import { allRuns } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { jobFolder } from "../records/run-files.ts";
 import { drop, job } from "../../flow.testkit.ts";
 import { readModels } from "../routing/models.ts";

@@ -10,7 +10,7 @@ import * as issues from "../../../lib/todo.ts";
 import { readList } from "../../../lib/store.ts";
 import { takeOnTimeout } from "../transitions/tick.ts";
 import { mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
-import { allRuns } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { setAsk, type Ask } from "./ask.ts";
 import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
 

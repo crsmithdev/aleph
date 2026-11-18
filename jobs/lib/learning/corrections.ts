@@ -14,7 +14,8 @@ import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 
 const fail = (object: string, detail: string) => logEvent({ subject: "rule", action: "failed", object, detail });
-import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
+import { loadRegistry, type Repo } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";

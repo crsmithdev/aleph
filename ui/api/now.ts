@@ -5,7 +5,7 @@ import { eventIn, factoryWide, inProject, known, repoIn, scopeOf } from "./scope
 import { heraldContext, heraldEvents, state, type State } from "../state.ts";
 import { heraldRows } from "../herald.ts";
 import { reader } from "../../lib/store.ts";
-import { allRuns } from "../../jobs/lib/records/ledger.ts";
+import { allRuns } from "../../jobs/lib/records/record.ts";
 import type { EventRow } from "../../lib/naming.ts";
 import { once } from "../../lib/sources.ts";
 import { verdict } from "../../lib/status-words.ts";

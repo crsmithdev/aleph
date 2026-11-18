@@ -31,9 +31,6 @@ export const jobsNamed = (name: string, repo?: string | null, jobs = allJobs()):
 /** The open job called `name`, else the newest. */
 export const findJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => openJob(name, repo, jobs) ?? latestJob(name, repo, jobs);
 
-/** The work that holds the job with key `id`. */
-export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.find((j) => j.some((e) => e.id === id));
-
 /** The last job of the work that is not a reviewer's: the job its state and its folder are about. */
 export const lastRun = (j: Job): Entry => j.findLast((e) => e.run.role !== "review")!;
 

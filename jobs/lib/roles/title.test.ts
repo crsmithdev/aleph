@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
 import { gpuSlot } from "../gates/gpu.ts";
 import { setModel } from "../routing/models.ts";
-import { allRuns } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { cutTitle, fit, writeLine, writeTitle } from "./title.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "aleph-title-"));

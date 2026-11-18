@@ -8,7 +8,8 @@ import { areasOf, parentIn, reader, type Reader } from "../../../lib/store.ts";
 import * as issues from "../../../lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { openJob, stateOf, type Job } from "../records/job.ts";
-import { isOpen, allRuns, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
+import { isOpen, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
 import { issueKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, readEvents } from "../../../lib/layout.ts";
@@ -180,7 +181,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
   return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
 }
 
-/** Orders entries by run ID, the order of `allRunRecords`: a clock step back leaves `started` out of order. */
+/** Orders entries by run ID, the order of `allRuns`: a clock step back leaves `started` out of order. */
 const byId = (a: Entry, b: Entry): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /**

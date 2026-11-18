@@ -2,7 +2,8 @@
 import { clip } from "../../lib/naming.ts";
 import { LangfuseError, need, type Langfuse, type Observation, type Trace } from "../../lib/langfuse.ts";
 import { list } from "../langfuse.ts";
-import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns } from "../../jobs/lib/records/record.ts";
 import { projectOf as projectOfUrl, parseScope, traceIn, traceProject } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";

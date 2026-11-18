@@ -11,7 +11,8 @@ import { skillSection } from "../roles/role-skill.ts";
 import { reader, runMedia } from "../../../lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../../../lib/git.ts";
-import { jobById, jobsNamed, notes, readFile, type Job } from "../records/job.ts";
+import { jobsNamed, notes, readFile, type Job } from "../records/job.ts";
+import { jobOfRun } from "../records/record.ts";
 import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
@@ -84,7 +85,7 @@ export const pastWork = (title: string): string =>
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, run: Run, repo: Repo): string {
   if (run.merge) {
-    const land = (jobById(run.job) ?? []).filter((e) => e.run.role === "land" && e.id !== id).at(-1)?.run;
+    const land = jobOfRun(run.job).filter((e) => e.run.role === "land" && e.id !== id).at(-1)?.run;
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
@@ -96,7 +97,7 @@ export function brief(id: string, run: Run, repo: Repo): string {
   const n = onOf(run);
   const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
   if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);
-  const runs = jobById(run.job) ?? [];
+  const runs = jobOfRun(run.job);
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
   if (prev) {
@@ -173,7 +174,7 @@ export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"
  */
 export function afterLand(run: Run, lands?: Run[]): Run["next"] {
   if (run.state !== "failed") return undefined;
-  const all = lands ?? (jobById(run.job) ?? []).filter((e) => e.run.role === "land").map((e) => e.run);
+  const all = lands ?? jobOfRun(run.job).filter((e) => e.run.role === "land").map((e) => e.run);
   if (run.conflicts?.length) return all.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
   if (causeOf(run) === "moved") return all.filter((r) => causeOf(r) === "moved").length <= RELANDS ? "land" : undefined;
   return undefined;

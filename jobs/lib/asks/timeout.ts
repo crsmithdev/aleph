@@ -11,7 +11,8 @@
  */
 import { eventsOf } from "../../../lib/layout.ts";
 import { setTimeoutsRow, timeoutsRow } from "../infra/settings.ts";
-import { allRuns, type Entry } from "../records/ledger.ts";
+import { type Entry } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import * as record from "../records/record.ts";
 import { actionsOn, ASK_REASONS, logAlways, type Ask } from "./ask.ts";
 

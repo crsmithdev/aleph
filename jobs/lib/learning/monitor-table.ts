@@ -10,7 +10,8 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr } from "../../../lib/json.ts";
-import { allRuns, loadRegistry, onOf, type Entry } from "../records/ledger.ts";
+import { loadRegistry, onOf, type Entry } from "../records/ledger.ts";
+import { allRuns } from "../records/record.ts";
 import { duration } from "../infra/process.ts";
 import { allHolds, stopsStart, type HoldRecord } from "../gates/holds.ts";
 import { flakeNames, flakes, type Flake } from "../gates/tables.ts";

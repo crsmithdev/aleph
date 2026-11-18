@@ -7,7 +7,8 @@
  */
 import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
-import { allJobs, allRuns, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allJobs, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { allRuns } from "../../jobs/lib/records/record.ts";
 import { view } from "../../jobs/lib/records/job.ts";
 import { git } from "../../lib/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";

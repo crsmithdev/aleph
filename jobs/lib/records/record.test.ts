@@ -92,8 +92,20 @@ test("a work is the prev chain: its runs share the root as `job`, in job order, 
   for (let i = 0; i < 10; i++) ids.push(seed({ role: "plain", name: `p${i}` }).id);
   const a = seed({ role: "build", name: "w" }), b = seed({ role: "land", name: "w", prev: a.id }), c = seed({ role: "build", name: "w", prev: b.id });
   expect(record.getRun(c.id)!.job).toBe(a.id);
-  expect(record.allRunRecords().map((r) => r.id).slice(8, 11)).toEqual(["job.9", "job.10", "job.11"]);
+  expect(record.allRuns().map((e) => e.id).slice(8, 11)).toEqual(["job.9", "job.10", "job.11"]);
   expect(record.getRun(ids[9])!.job).toBe(ids[9]);
+});
+
+test.each([
+  ["allRuns", () => record.allRuns(), [[1, 1], [2, 1], [3, 3], [4, 1]]],
+  ["runsOfRole", () => record.runsOfRole("build"), [[1, 1], [3, 3], [4, 1]]],
+  ["jobOfRun", () => record.jobOfRun("job.2"), [[1, 1], [2, 1], [4, 1]]],
+  ["jobOfRun of no job", () => record.jobOfRun("job.99"), []],
+] as const)("%s gives each job with its folder and its work, oldest first", (_name, read, want) => {
+  const a = seed({ role: "build", name: "w" }), b = seed({ role: "land", name: "w", prev: a.id });
+  seed({ role: "build", name: "x" });
+  seed({ role: "build", name: "w", prev: b.id });
+  expect(read().map((e) => [e.id, e.folder, e.run.job])).toEqual(want.map(([n, root]) => [`job.${n}`, join(dir, "jobs", `${n}`), `job.${root}`]));
 });
 
 test("rounds are the failed builds of the newest work of a target, and cost is the sum over its jobs", () => {
@@ -239,10 +251,10 @@ test("endRun writes the end and its next in one write: no reader sees the ended 
   const { id } = record.makeJob({ role: "build", name: "issue.7", target: "issue.7" });
   const seen: string[] = [];
   const ended = record.endRun(id, { state: "returned", failed: "tests", ended: AT }, (r) => {
-    seen.push(record.next(record.allRunRecords()).step);
+    seen.push(record.stepOf(record.allRuns()).step);
     return r.state === "returned" ? "worker" : undefined;
   });
-  seen.push(record.next(record.allRunRecords()).step);
+  seen.push(record.stepOf(record.allRuns()).step);
   expect(seen).toEqual(["run", "worker"]);
   expect(ended).toMatchObject({ id, state: "returned", next: "worker", ended: AT });
 });

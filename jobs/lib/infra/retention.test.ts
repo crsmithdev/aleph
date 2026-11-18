@@ -3,7 +3,7 @@ import { conn } from "../../../lib/db.ts";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { allRunRecords, patchRun } from "../records/record.ts";
+import { allRuns, patchRun } from "../records/record.ts";
 import { seed } from "../../job.testkit.ts";
 import { today } from "../../../lib/day.ts";
 import { birthDay, retain } from "./retention.ts";
@@ -55,7 +55,7 @@ test("retain deletes the folder of a job 90 days after it ended, and keeps its r
   expect(existsSync(orphan)).toBe(false);
   expect(existsSync(fresh)).toBe(true);
   expect(existsSync(events)).toBe(true);
-  expect(allRunRecords().map((r) => r.id)).toContain(old.id);
+  expect(allRuns().map((e) => e.id)).toContain(old.id);
 });
 
 test("retain trims usage rows", () => {

@@ -9,7 +9,6 @@ import { layout } from "../../../lib/layout.ts";
 import * as record from "./record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive } from "../infra/process.ts";
-import { jobFolder } from "./run-files.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit } from "../infra/settings.ts";
 import { readProjects } from "../../../lib/projects.ts";
@@ -194,13 +193,8 @@ export function readEnvFile(file: string | undefined): Record<string, string> {
 /** A job and its folder: `id` is the job key (`job.6802`), `folder` is `<jobsDir>/<n>`. */
 export interface Entry { id: string; folder: string; run: Run }
 
-/** Every job, oldest first by number. */
-export function allRuns(): Entry[] {
-  return record.allRunRecords().map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
-}
-
 /** Runs grouped by work (the `prev` chain of each), each group oldest first, in the order the work started. `runs` is `allRuns()` when the caller has read it already. */
-export function allJobs(runs: Entry[] = allRuns()): Entry[][] {
+export function allJobs(runs: Entry[] = record.allRuns()): Entry[][] {
   const jobs = new Map<string, Entry[]>();
   for (const e of runs) {
     const list = jobs.get(e.run.job) ?? [];
@@ -210,18 +204,8 @@ export function allJobs(runs: Entry[] = allRuns()): Entry[][] {
   return [...jobs.values()];
 }
 
-/** The runs with role `role`, oldest first. */
-export function runsOfRole(role: Run["role"]): Entry[] {
-  return record.runsOfRole(role).map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
-}
-
-/** The runs grouped with run `id`, oldest first, as `allJobs` groups them; empty when `id` names no run. */
-export function jobOfRun(id: string): Entry[] {
-  return record.workOfRun(id).map(({ id, ...run }) => ({ id, folder: jobFolder(id), run }));
-}
-
 /** The job with key `id`, or undefined. */
-export function runOfJob(id: string, runs = allRuns()): Entry | undefined {
+export function runOfJob(id: string, runs = record.allRuns()): Entry | undefined {
   return runs.find((e) => e.id === id);
 }
 

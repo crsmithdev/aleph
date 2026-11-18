@@ -8,7 +8,7 @@ import { reader } from "../../../lib/store.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { allJobs, isOpen, issueKeyOf, loadRegistry, onOf, type Run } from "../records/ledger.ts";
 import * as jobRecord from "../records/record.ts";
-import { jobById } from "../records/job.ts";
+import { jobOfRun } from "../records/record.ts";
 import { onMain } from "../records/status.ts";
 import { jobOfFolder, logStream, logTo, runFile } from "../records/run-files.ts";
 import { paused } from "../gates/pause.ts";
@@ -48,7 +48,7 @@ export async function start(folder: string, run: Run, next: NonNullable<Run["nex
     writeFileSync(runFile(folder, PAUSED_NEXT), `${next}\n`);
     return;
   }
-  const dropped = (jobById(jobOfFolder(folder)) ?? []).some((e) => e.run.state === "dropped");
+  const dropped = jobOfRun(jobOfFolder(folder)).some((e) => e.run.state === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
@@ -69,7 +69,7 @@ export async function start(folder: string, run: Run, next: NonNullable<Run["nex
   const back = nextBrief(folder, run);
   const merge = next === "worker" && back.merge;
   // A merge round runs on MERGE_MODEL, so the round after it takes the size of the build before it.
-  const size = jobById(jobOfFolder(folder))?.findLast((e) => e.run.role === "build" && !e.run.merge)?.run.size;
+  const size = jobOfRun(jobOfFolder(folder)).findLast((e) => e.run.role === "build" && !e.run.merge)?.run.size;
   const log = logStream(folder, "dispatch");
   try {
     const s = next === "land"

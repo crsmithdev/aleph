@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { heraldReviewed, heraldRuns } from "../state.ts";
 import { withEnv } from "../server.testkit.ts";
-import { allRuns } from "../../jobs/lib/records/ledger.ts";
+import { allRuns } from "../../jobs/lib/records/record.ts";
 import { seed } from "../../jobs/job.testkit.ts";
 import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore lib.js is plain JS, shared with the page

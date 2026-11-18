@@ -20,8 +20,8 @@ import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk,
 import { LAND_STUCK_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
-import { jobById, issue as issueOf, tailOf, type Job } from "../records/job.ts";
-import { allJobs, isOpen, allRuns, isAgentRun, loadRegistry, repoOf, realTell, type Entry, type Repo, type Run, type Tell } from "../records/ledger.ts";
+import { issue as issueOf, tailOf, type Job } from "../records/job.ts";
+import { allJobs, isOpen, isAgentRun, loadRegistry, repoOf, realTell, type Entry, type Repo, type Run, type Tell } from "../records/ledger.ts";
 import { askedQuestion, clearRerun, markRescued, rescued, writeRerun } from "../transitions/continuation.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -31,7 +31,7 @@ import type { MainState } from "../gates/tables.ts";
 import { branchFacts, onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
-import { counting, read as readRecord, setState, stepOf } from "../records/record.ts";
+import { counting, read as readRecord, setState, stepOf, allRuns, jobOfRun } from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
@@ -268,7 +268,7 @@ function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks")
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
 function foundDone({ last, repo, issue }: Pick<Stuck, "last" | "repo" | "issue">): { onMain: string | null } | null {
-  const found = onMain(repo, { jobs: (jobById(last.id) ?? [last]).map((e) => e.id), item: issue, fetch: true });
+  const found = onMain(repo, { jobs: jobOfRun(last.id).map((e) => e.id), item: issue, fetch: true });
   if (found) return { onMain: found.commit.slice(0, 7) };
   const item = issue === undefined ? undefined : reader().item(repo.key, issue);
   return item && (issues.status(item) === "done" || issues.status(item) === "dropped") ? { onMain: null } : null;

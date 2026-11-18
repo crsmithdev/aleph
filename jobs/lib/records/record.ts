@@ -83,23 +83,26 @@ let writes = 0;
 let loaded: { d: Database; version: string; runs: RunRecord[] } | undefined;
 let keeping = false;
 
-/** `fn()`, with `allRunRecords` keeping its last load until a write to `jobs` or `issue_state`. The tick reads every job in several steps. */
+/** `fn()`, with `allRuns` keeping its last load until a write to `jobs` or `issue_state`. The tick reads every job in several steps. */
 export async function keepingRuns<T>(fn: () => Promise<T>): Promise<T> {
   keeping = true;
   try { return await fn(); } finally { keeping = false; loaded = undefined; }
 }
-/** How many times `allRunRecords` read the table: a test holds a ceiling on a tick's reads. */
+/** How many times `allRuns` read the table: a test holds a ceiling on a tick's reads. */
 export let runLoads = 0;
 
-/** Every job, oldest first. A UI build pass reads them once (sources.ts); `keepingRuns` keeps a read. */
-export const allRunRecords = (): RunRecord[] => once("jobs", ["events", "records"], () => {
+/** A job and its folder. */
+const entryOf = ({ id, ...run }: RunRecord): Entry => ({ id, folder: jobFolder(id), run });
+
+/** Every job and its folder, oldest first by number. A UI build pass reads them once (sources.ts); `keepingRuns` keeps a read. */
+export const allRuns = (): Entry[] => once("jobs", ["events", "records"], () => {
   const d = conn(), version = `${(d.query("PRAGMA data_version").get() as { data_version: number }).data_version}:${writes}`;
   if (keeping && loaded?.d === d && loaded.version === version) return loaded.runs;
   runLoads++;
   const runs = loadRuns(d);
   if (keeping) loaded = { d, version, runs };
   return runs;
-});
+}).map(entryOf);
 
 const loadRuns = (d: Database): RunRecord[] => {
   const rows = d.query(`SELECT * FROM jobs ${ORDER}`).all() as Row[], roots = rootsOf(rows), asks = runAsks(d);
@@ -122,9 +125,9 @@ export function getRun(id: string): RunRecord | null {
 }
 
 /** The jobs with role `role`, oldest first. */
-export const runsOfRole = (role: string): RunRecord[] => {
+export const runsOfRole = (role: Run["role"]): Entry[] => {
   const d = conn(), asks = runAsks(d);
-  return (d.query(`SELECT * FROM jobs WHERE role = ? ${ORDER}`).all(role) as Row[]).map((r) => fromRow(r, rootOf(d, r.id), asks.get(r.id)));
+  return (d.query(`SELECT * FROM jobs WHERE role = ? ${ORDER}`).all(role) as Row[]).map((r) => entryOf(fromRow(r, rootOf(d, r.id), asks.get(r.id))));
 };
 
 /** The jobs of the work that starts at `root`, oldest first: `root` and every job that follows it by `prev`. */
@@ -133,8 +136,8 @@ const workOf = (d: Database, root: string): RunRecord[] => {
   return rows.map((r) => fromRow(r, root, asks.get(r.id)));
 };
 
-/** The jobs of the work that holds `id`, oldest first; empty when no row holds `id`. */
-export const workOfRun = (id: string): RunRecord[] => (rowOf(conn(), id) ? workOf(conn(), rootOf(conn(), id)) : []);
+/** The jobs of the work that holds `id`, oldest first, as `allJobs` groups them; empty when no row holds `id`. */
+export const jobOfRun = (id: string): Entry[] => (rowOf(conn(), id) ? workOf(conn(), rootOf(conn(), id)).map(entryOf) : []);
 
 /** A fix round: a build run that a failed check or a returned review sent back. */
 export const sentBack = (r: Pick<Run, "role" | "failed" | "review">): boolean => r.role === "build" && !!(r.failed || r.review?.call === "returned");
