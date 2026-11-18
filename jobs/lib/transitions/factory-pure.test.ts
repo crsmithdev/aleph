@@ -173,7 +173,7 @@ test("an issue that shares only a quiet file with an open job starts", async () 
 test("stalled lists what could move: a ready issue, a new issue and a passed run, each until a gate or a live run explains it", async () => {
   const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
-  expect(await stalled()).toEqual([`goal:issue.${id}`, `ingest:issue.${fresh}`]);
+  expect(await stalled()).toEqual([`issue:issue.${id}`, `ingest:issue.${fresh}`]);
   writeRepos({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } });
   const { job } = mk(`fac-${id}`, "build", "passed", { next: "land" });
   expect(await stalled()).toEqual([`land:issue.${id}`, `ingest:issue.${fresh}`]);
@@ -195,7 +195,7 @@ test("stalled counts a red baseline until a later suite run is green, also after
   sh(repo, "git", "push", "-q", "origin", "main");
   expect(await stalled()).toEqual([]);
   writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: true }));
-  expect(await stalled()).toEqual([`goal:issue.${id}`, `ingest:issue.${fresh}`]);
+  expect(await stalled()).toEqual([`issue:issue.${id}`, `ingest:issue.${fresh}`]);
 });
 
 test("writeBaseline from 2 processes at once keeps both entries", async () => {
@@ -211,7 +211,7 @@ test("a blocked issue does not stall; a live agent run leaves a ready issue out"
   const blocker = newIssue();
   const after = newIssue();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
-  expect(await stalled()).toEqual([`goal:issue.${blocker}`]);
+  expect(await stalled()).toEqual([`issue:issue.${blocker}`]);
   setSystemTime(NOW);
   mk("fac-99", "build", "running", { made: NOW });
   expect(await stalled()).toEqual([]);
@@ -226,7 +226,7 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   await stallStep(t0);
   await stallStep(t0 + 5 * min);
   expect(said(t0 + 14 * min)).toEqual([]);
-  expect(said(t0 + 15 * min)).toEqual([{ text: "health: 1 goal can start, but no run started in 15 minutes", kind: "alert", key: "queue-stuck" }]);
+  expect(said(t0 + 15 * min)).toEqual([{ text: "health: 1 issue can start, but no run started in 15 minutes", kind: "alert", key: "queue-stuck" }]);
   await change(id, (item) => { issues.setStatus(item, "done"); });
   await stallStep(t0 + 16 * min);
   expect(said(t0 + 16 * min)).toEqual([]);

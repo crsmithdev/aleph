@@ -99,6 +99,6 @@ test("stalled and the dispatch agree: a hold on Claude holds an issue with no ru
 
 test("stalled and the dispatch agree on a ready issue: stalled lists it and the dispatch starts it", async () => {
   const id = newIssue();
-  expect(await stalled()).toEqual([`goal:issue.${id}`]);
+  expect(await stalled()).toEqual([`issue:issue.${id}`]);
   expect((await dispatchIssues(async () => null)).started).toEqual([`issue.${id}`]);
 });

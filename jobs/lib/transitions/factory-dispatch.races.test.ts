@@ -54,5 +54,5 @@ test("an issue turned back into a plain issue while an earlier issue starts is n
   }, undefined, undefined);
   expect(calls).toEqual([`issue.${first}`]);
   expect(out.started).toEqual([`issue.${first}`]);
-  expect(out.skipped).toEqual([`issue.${second}: not a goal`]);
+  expect(out.skipped).toEqual([`issue.${second}: not an issue`]);
 });

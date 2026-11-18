@@ -110,9 +110,9 @@ Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factor
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
 | Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or the `caps` setting sets | A `no-commit` or `run-cap` Ask in place of a start; its `question` event is the only event |
 
-Between Busy file and Loop guard a goal whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit` hold.
+Between Busy file and Loop guard an issue whose last build run ended with the API credit error (`API Error: 402`) less than 10 minutes ago (`waitMs` of `POLICY` in `jobs/lib/records/outcome.ts`) is skipped with a `credit` hold.
 
-An issue that no gate holds starts. Each start holds the lock `goal-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
+An issue that no gate holds starts. Each start holds the lock `issue-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
 
 **Load admission** (`ledger.ts` `admit`) is not a gate. A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue. The wait fails nothing and counts against no time limit.
 

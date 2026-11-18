@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { putJson } from "../../../lib/db.ts";
 import { readList } from "../../../lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.testkit.ts";
 import { logTo } from "../records/run-files.ts";
 import { firefighterLines, issueFacts, nextRun, gates } from "./factory-status.ts";
-import { backendHold, heldGoal, holdBackend, holdGoal, probeHold, recordHold } from "./holds.ts";
+import { backendHold, heldIssue, holdBackend, holdIssue, probeHold, recordHold } from "./holds.ts";
 import { issueDecision } from "./issue-decision.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { logEvent, readEvents } from "../../../lib/layout.ts";
@@ -91,11 +92,19 @@ test("the hold lifts when the probe answers, and stays when the probe fails", as
 
 test("an issue with no run that the hold held stays held with no new routing, until the hold lifts", async () => {
   await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
-  holdGoal("fac-1");
-  expect(heldGoal("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
-  expect(heldGoal("fac-2")).toBeNull();
+  holdIssue("fac-1");
+  expect(heldIssue("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
+  expect(heldIssue("fac-2")).toBeNull();
   await probeHold(async () => true);
-  expect(heldGoal("fac-1")).toBeNull();
+  expect(heldIssue("fac-1")).toBeNull();
+});
+
+test("a backend-hold row stored with the old goals field still holds its issues", () => {
+  putJson("state", "backend-hold", { via: "openrouter", why: "API Error: 402", since: "2026-11-01T00:00:00Z", goals: ["fac-1"] });
+  expect(heldIssue("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402");
+  holdIssue("fac-2");
+  expect(backendHold()?.issues).toEqual(["fac-1", "fac-2"]);
+  expect(backendHold()).not.toHaveProperty("goals");
 });
 
 test("recordHold logs its hold event once, and not again for the same kind and text", () => {

@@ -37,7 +37,7 @@ test("each error line says its alert, in red", () => {
     [{ health: [mainRed] }, "the build is failing on main"],
     [{ health: [alert("health: 2 passed runs did not land in 15 minutes", "lands-stuck")] }, "lands are stuck"],
     [{ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stuck")] }, "lands are stuck"],
-    [{ health: [alert("health: 2 goals can start, but no run started in 15 minutes", "queue-stuck")] }, "queued jobs are not starting"],
+    [{ health: [alert("health: 2 issues can start, but no run started in 15 minutes", "queue-stuck")] }, "queued jobs are not starting"],
     [{ health: [alert("health: 1 new issue did not move to jobs in 15 minutes", "issues-stuck")] }, "new issues are not becoming jobs"],
     [{ health: [alert("health: something new broke.")] }, "something new broke"],
   ];

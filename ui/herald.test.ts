@@ -77,7 +77,8 @@ test("a stalled event of a job folds into its issue's row, which the start heads
 });
 
 test("a missed event on an issue is a row with its short ID, a link and the stalled step, and shows no raw key", () => {
-  const { object, detail } = missedOf("goal:issue.3203");
+  for (const key of ["issue:issue.3203", "goal:issue.3203"]) expect(missedOf(key)).toEqual({ object: "issue.3203", detail: "start" });
+  const { object, detail } = missedOf("issue:issue.3203");
   const [r, ...rest] = rows([{ ...row({ at: "2026-11-18T10:00:00Z", by: "rule", subject: object, action: "missed", note: detail }), project: "aleph" }]);
   expect(rest).toEqual([]);
   expect(r.id).toEqual([{ id: "a3203", to: "#/issues/aleph/3203" }]);

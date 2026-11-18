@@ -6,7 +6,7 @@
  */
 import { issueDecision, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
 import { factoryGates, nextRun } from "./factory-status.ts";
-import { backendHold, heldGoal } from "./holds.ts";
+import { backendHold, heldIssue } from "./holds.ts";
 import { SIZES, type Size } from "../routing/route.ts";
 import { isRedMain } from "../../../lib/todo.ts";
 import type { Job } from "../records/job.ts";
@@ -27,7 +27,7 @@ export async function decideStart(repo: Repo, f: IssueFacts, jobs: Job[], route:
   if (fixed) route = async () => "medium";
   const run = nextRun(repo.key, f.name, jobs);
   const on = (size: Size | null) => issueDecision({ ...f, ...factoryGates(jobs, size ? { model: size } : {}) });
-  let d = issueDecision({ ...f, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { waiting: heldGoal(f.name) }) });
+  let d = issueDecision({ ...f, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { waiting: heldIssue(f.name) }) });
   let size: Size | null | undefined;
   // An issue with no run yet starts on its size's backend: while a backend is held, rate the issue, and check that backend.
   if (!run && d.kind === "ready" && backendHold()) {

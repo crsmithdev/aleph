@@ -54,13 +54,15 @@ export function recordHold(name: string, kind: Gate | "started", ev?: Hold): voi
   });
 }
 
-/** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line, `goals` the issues with no run that it held. */
-interface BackendHold { via: Via; why: string; since: string; goals?: string[] }
+/** The backend the factory holds after a call on it ended with the API credit error: `via` is the backend, `why` the call's line, `issues` the issues with no run that it held; a row stored before the rename has them in `goals`. */
+interface BackendHold { via: Via; why: string; since: string; issues?: string[]; goals?: string[] }
 
 /** The backend the factory holds now, or null. */
 export function backendHold(): BackendHold | null {
   const h = getJson<BackendHold | null>("state", "backend-hold", null);
-  return h && typeof h.via === "string" ? h : null;
+  if (!h || typeof h.via !== "string") return null;
+  const { goals, ...hold } = h;
+  return { ...hold, issues: hold.issues ?? goals };
 }
 
 /** The line the hold gives a run on its backend. */
@@ -69,17 +71,17 @@ export const holdBound = (h: BackendHold): Bound =>
 
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
- * the issue (`holdGoal`), so the dispatch does not route the issue again while the hold lasts.
+ * the issue (`holdIssue`), so the dispatch does not route the issue again while the hold lasts.
  */
-export function heldGoal(name: string): Bound | null {
+export function heldIssue(name: string): Bound | null {
   const h = backendHold();
-  return h?.goals?.includes(name) ? holdBound(h) : null;
+  return h?.issues?.includes(name) ? holdBound(h) : null;
 }
 
 /** Remembers in the backend hold that it held the issue. The hold lifts with its issues. */
-export function holdGoal(name: string): void {
+export function holdIssue(name: string): void {
   const h = backendHold();
-  if (h && !h.goals?.includes(name)) putJson("state", "backend-hold", { ...h, goals: [...(h.goals ?? []), name] });
+  if (h && !h.issues?.includes(name)) putJson("state", "backend-hold", { ...h, issues: [...(h.issues ?? []), name] });
 }
 
 /**

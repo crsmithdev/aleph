@@ -17,7 +17,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "./kept.ts";
 import { route, type Size } from "../routing/route.ts";
 import { gates } from "../gates/factory-status.ts";
-import { holdGoal, recordHold } from "../gates/holds.ts";
+import { holdIssue, recordHold } from "../gates/holds.ts";
 import { paused } from "../gates/pause.ts";
 import { sandboxRepos, logCap } from "../gates/gpu.ts";
 import { baselines } from "../gates/tables.ts";
@@ -78,7 +78,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   let capText: string | undefined;
   /** Records the hold and the skip line of an issue no start reached. The pause, the backend and the live cap each log their own change, so a skip for one records no hold. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => {
-    if (kind === "waiting") holdGoal(name);
+    if (kind === "waiting") holdIssue(name);
     if (kind !== "paused" && kind !== "waiting" && kind !== "full" && kind !== "done") recordHold(name, kind, ev);
     skipped.push(`${name}: ${why}`);
     refused = why;
@@ -106,7 +106,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     if (first.kind !== "ready") { held(name, repo, first); continue; }
     // Wait for a dispatch that holds the issue: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the issue until the next tick. Under the lock all is read again.
-    const release = await lock(`goal-${name}`, issueLockWaitMs());
+    const release = await lock(`issue-${name}`, issueLockWaitMs());
     if (!release) { skip(name, "starting", "another dispatch is starting it", { action: "starting" }); continue; }
     try {
       const jobs = allJobs();
@@ -114,7 +114,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : buildableIssue(repo, ref);
       // An item closed, dropped or parked since the pass listed it is skipped with that status; one still open is a plain issue.
-      if (!item) { if (closed(name, repo, ref)) continue; skip(name, "parent", "not a goal", { action: "parent" }); continue; }
+      if (!item) { if (closed(name, repo, ref)) continue; skip(name, "parent", "not an issue", { action: "parent" }); continue; }
       // A pass that began before a pause must not start a run after it.
       // Run now asks the issue's gates only; the start holds the backend and the GPU slot of a local model.
       const parents = reader();
@@ -127,11 +127,11 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         skipped.push(`${name}: ${d.why}`);
         if (now) refused = d.text;
         if (d.ask === "no-commit") {
-          const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
+          const text = `the last ${NO_COMMIT_LIMIT} runs of this issue ended with no commit, so the factory stopped starting it; rewrite the issue or close the item.`;
           const bad = askChris(repo, ref, { ...plainAsk("no-commit", text), facts: d.facts }, text);
           if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         } else {
-          const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
+          const text = `the factory started this issue ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
           const bad = askChris(repo, ref, { ...plainAsk("run-cap", text), facts: d.facts }, text);
           if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         }

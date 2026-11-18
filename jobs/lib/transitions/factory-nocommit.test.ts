@@ -78,7 +78,7 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
 });
 
 // The run cap: a fourth agent run of an issue in 60 minutes is not started; one Ask note says so.
-const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
+const RUN_CAP_NOTE = "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it";
 test("a fourth start in an hour is skipped with one Ask note, and the issue is not started", async () => {
   const id = newIssue();
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: ago((i + 1) * 60_000) });

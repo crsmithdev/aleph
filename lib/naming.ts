@@ -164,7 +164,7 @@ export function detailOf(action: string, word: string, facts?: string | number, 
   return facts ? `${word}: ${facts}` : word;
 }
 /** The word of what did not move, by the prefix of a stall key. */
-const STEP: Record<string, string> = { goal: "start", land: "land", ingest: "intake", ask: "Ask", rescue: "rescue", edited: "rerun" };
+const STEP: Record<string, string> = { issue: "start", goal: "start", land: "land", ingest: "intake", ask: "Ask", rescue: "rescue", edited: "rerun" };
 /** The object and detail of the `missed` event of a stall key: the issue or job itself, and the step that did not move. */
 export function missedOf(k: string): { object: string; detail: string } {
   const at = k.indexOf(":");

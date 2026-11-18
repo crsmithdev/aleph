@@ -95,7 +95,7 @@ export function stallLines(now: number, jobs?: Job[]): Health[] {
   const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.role === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
   if (n("land")) lines.push(alert("lands-stuck", `health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`));
   for (const e of slow) lines.push(alert("lands-stuck", `health: the land run of ${e.run.name} is live for over 30 minutes`));
-  if (n("goal")) lines.push(alert("queue-stuck", `health: ${n("goal")} goal${n("goal") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
+  if (n("issue")) lines.push(alert("queue-stuck", `health: ${n("issue")} issue${n("issue") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
   if (n("ingest")) lines.push(alert("issues-stuck", `health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`));
   return lines;
 }

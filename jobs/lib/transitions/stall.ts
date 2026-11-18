@@ -11,7 +11,7 @@ import { unrouted } from "../gates/start-decision.ts";
 import { decider, type Decider } from "../gates/decider.ts";
 
 /**
- * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
+ * What the factory could move now and does not, as `land:<job>`, `issue:<id>` and `ingest:<id>`: a passed run with no
  * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
 export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = decider({ fresh: true, jobs, lists })): Promise<string[]> {
@@ -22,7 +22,7 @@ export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = 
   if (!liveRuns(runs)) {
     for (const { repo, item } of buildableIssues(sandboxRepos(), lists)) {
       // No model call: the stall check agrees with the dispatch on all but the router's size.
-      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`goal:${issueKey(item.id)}`);
+      if ((await at.decide(repo, item, { jobs, route: unrouted })).kind === "ready") out.push(`issue:${issueKey(item.id)}`);
     }
   }
   if (!live("intake") && !gates({ only: ["full"], jobs })) {
