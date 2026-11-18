@@ -31,9 +31,9 @@ export function parse(text: string): { items: Issue[] } {
   const items: Issue[] = [];
   for (let i = 1; i < parts.length; i += 3) {
     const { frontmatter, body } = splitFrontmatter(parts[i + 2].replace(/^\n/, ""));
-    const { status, kind, labels, id: _id, ...fm } = parseFrontmatter(frontmatter ?? "") as Record<string, any>;
+    const { status, kind: _kind, spec, labels, id: _id, ...fm } = parseFrontmatter(frontmatter ?? "") as Record<string, any>;
     const text = body.trim();
-    items.push({ id: Number(parts[i]), title: parts[i + 1].trim(), fm: { project: "project.1", ...fm, ...(status && status !== "open" ? { closed_as: status } : {}) }, request: kind === "goal" ? "" : text, spec: kind === "goal" ? text : "", notes: [] });
+    items.push({ id: Number(parts[i]), title: parts[i + 1].trim(), fm: { project: "project.1", ...fm, ...(status && status !== "open" ? { closed_as: status } : {}) }, request: spec === "true" ? "" : text, spec: spec === "true" ? text : "", notes: [] });
   }
   return { items };
 }

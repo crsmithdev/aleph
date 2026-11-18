@@ -66,7 +66,7 @@ beforeAll(async () => {
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
   writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nChris prefers short answers.\n");
   mkdirSync(join(base, "factory", "episodes"), { recursive: true });
-  writeFileSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), `---\nkind: episode\nscope: aleph\nupdated: ${today}\n---\n## Goal\nShip it.\n`);
+  writeFileSync(join(base, "factory", "episodes", "aleph-1 Ship.md"), `---\nkind: episode\nscope: aleph\nupdated: ${today}\n---\n## Goal\nShip it.\n`);
   const hand = join(base, "handoffs");
   mkdirSync(hand);
   writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");
@@ -95,7 +95,7 @@ afterAll(() => {
 
 test("the search lists the pages in the factory's episodes folder", async () => {
   const r: any = await (await at("/api/memory/search?q=")).json();
-  expect(r.results.filter((x: any) => x.source === "episode").map((x: any) => [x.title, x.scope, x.at, x.text])).toEqual([["aleph-1 Goal", "aleph", today, "Ship it."]]);
+  expect(r.results.filter((x: any) => x.source === "episode").map((x: any) => [x.title, x.scope, x.at, x.text])).toEqual([["aleph-1 Ship", "aleph", today, "Ship it."]]);
 });
 
 test("?project= keeps only that project's data", async () => {
@@ -490,7 +490,7 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
 });
 
 test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
-  utimesSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), NOW / 1000, NOW / 1000);
+  utimesSync(join(base, "factory", "episodes", "aleph-1 Ship.md"), NOW / 1000, NOW / 1000);
   setTick("episodes", { last: "2026-11-04T11:30:00.000Z", result: "failed: no page" });
   setTick("maintain", { last: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 0 lessons · 2 notes" });
   const runs0 = join(base, "vault", ".index", "runs");
@@ -543,7 +543,7 @@ test("the tabs link Notes, Health and Log; the log row opens a recall to its not
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
   expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
   expect(v.renderLog({ project: "", rows: [] })).toContain(empty());
-  const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Goal", why: "episode of aleph-1", titles: [] };
+  const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Ship", why: "episode of aleph-1", titles: [] };
   const w = { ...ep, note: "Use Bun", why: "a fix" };
   const kept = (kind: string) => v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))).match(/<tr><td class="time lead">/g)?.length;
   expect([kept("episode"), kept("write")]).toEqual([1, 1]);

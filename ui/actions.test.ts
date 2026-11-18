@@ -56,7 +56,7 @@ beforeAll(async () => {
     J[name] = seed({ role: "build", state: "waiting", started: new Date(NOW).toISOString(), name, repo: "r", ...extra } as any).id;
   }
   ({ server, stop, at } = await withServer({ warm: false }));
-  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
+  writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n)!, { title: `sub-issue ${n}`, spec: "x" }); return true; }, true);
 });
 afterAll(() => {
   stop();

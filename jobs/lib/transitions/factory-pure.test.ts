@@ -127,7 +127,7 @@ test("a director run has no repo; its cost counts in the day's spend, not in run
 
 test("an issue that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {
   const surface = "## Edit surface\n- jobs/busy.ts (the change)\n- jobs/other.ts\n";
-  const withSurface = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec: surface }); return item.id; }, true)!.value;
+  const withSurface = () => writeList({ key: "fac" }, "add an issue", (doc) => { const item = issues.add(doc, "ship it", { spec: surface }); return item.id; }, true)!.value;
   for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
   const first = withSurface();
   const second = withSurface();
@@ -143,7 +143,7 @@ test("an issue that names a busy file an open job also names waits; a job waitin
 });
 
 test("an issue that uses the gpt-oss server waits for an open job that uses it; an issue that does not is not held", async () => {
-  const add = (spec: string) => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec }); return item.id; }, true)!.value;
+  const add = (spec: string) => writeList({ key: "fac" }, "add an issue", (doc) => { const item = issues.add(doc, "ship it", { spec }); return item.id; }, true)!.value;
   const first = add("Call the model on 127.0.0.1:8012.\n");
   const second = add("Start aleph-gpt-oss first.\n");
   const third = add("Change a label.\n");
@@ -160,7 +160,7 @@ test("an issue that uses the gpt-oss server waits for an open job that uses it; 
 
 test("an issue that shares only a quiet file with an open job starts", async () => {
   const body = "## Edit surface\n- jobs/quiet.ts\n";
-  const add = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec: body }); return item.id; }, true)!.value;
+  const add = () => writeList({ key: "fac" }, "add an issue", (doc) => { const item = issues.add(doc, "ship it", { spec: body }); return item.id; }, true)!.value;
   mk("fac-901", "land", "dropped", { conflicts: ["jobs/quiet.ts"] });
   const first = add();
   const second = add();

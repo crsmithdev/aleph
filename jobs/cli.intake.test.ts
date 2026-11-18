@@ -20,7 +20,7 @@ const fakeIntake = (name: string, verdict: object) => {
 const calls = (name: string) => existsSync(join(base, `intake-${name}.in`)) ? readFileSync(join(base, `intake-${name}.in`), "utf8").split("=====CALL").length - 1 : 0;
 
 test("aleph intake: an issue filed with a spec in a repo with author is taken in once, and its spec rewritten", async () => {
-  const id = seedItem("fac", "filed goal", { kind: "goal", issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
+  const id = seedItem("fac", "filed issue", { spec: true, issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
   const verdict = { route: "build", reason: "one run", spec: { goal: "End state one.", edit_surface: [{ path: "one.ts", new: true }], oracle: ["`bun run test` passes"] } };
   author();
   const env = { ALEPH_INTAKE_CMD: fakeIntake("c", verdict) };

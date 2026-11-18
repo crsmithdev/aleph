@@ -37,9 +37,9 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
     "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
-    "run-cap": { reason: "run-cap", question: "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
+    "run-cap": { reason: "run-cap", question: "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it." },
     "intake-failed": { reason: "intake-failed", question: "Intake failed: the spec: the Oracle is empty" },
-    "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
+    "part-dropped": { reason: "part-dropped", question: "A sub-issue was dropped." },
     rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", reason: "question", why: [] } },
   };
   return iss(q[reason]);

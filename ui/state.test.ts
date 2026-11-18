@@ -72,8 +72,8 @@ beforeAll(() => {
   // The fixture has one live run; the default cap (cores / 6) is 1 on a 4-core runner, which would read a queued issue as live-capped.
   restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ALEPH_LIVE_CAP: "5", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
-    add(doc, "urgent goal", { spec: "Do it first.", priority: "critical" });
+    for (const t of ["needs item", "waiting issue", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting issue" ? { spec: "Do it." } : {});
+    add(doc, "urgent issue", { spec: "Do it first.", priority: "critical" });
     return true;
   }, true);
 
@@ -172,7 +172,7 @@ describe("an intake run", () => {
     run(ids[0], { role: "intake", job: "intake-fac-2", name: "intake-fac-2", state: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), kind: "ready" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting issue", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), kind: "ready" }]);
   });
 });
 
@@ -228,7 +228,7 @@ describe("an issue that acceptance failed twice", () => {
     const restore = keepMain(join(base, "repo"));
     const repo = join(base, "repo");
     let partId = 0;
-    writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
+    writeList({ key: "fac" }, "issue that failed acceptance twice", (doc) => {
       const it = add(doc, "acceptance it");
 
       it.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
@@ -238,7 +238,7 @@ describe("an issue that acceptance failed twice", () => {
     setAsk(`issue.${partId}`, { reason: "run-cap", question: "", options: [], why: [] });
     try {
       // The trailer commit on main names the issue; origin/main points at it, as a land would leave it.
-      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${partId}`);
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the issue\n\nIssue: fac-${partId}`);
       sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
       const s = state(now);
       expect(s.asks.some((a) => a.id === `fac-${partId}` && a.reason === "run-cap")).toBe(true);
@@ -293,7 +293,7 @@ describe("the Herald's attempts and chats", () => {
     logEvent({ subject: "gate", action: "done", object: "fac-2" });
     const h = state(now).herald!;
     expect(h.events.find((e) => e.object === "issue.1")?.project).toBe("fac");
-    expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting goal" });
+    expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting issue" });
   });
 
   test("two turns on one chat session are one conversation: its session, start, last turn and latest prompt", () => {

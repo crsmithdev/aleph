@@ -442,15 +442,15 @@ function pushItems(): void {
 }
 
 /**
- * Files an item in the test store as one commit, with the given frontmatter fields (`kind`, `goals`, `after`, `ask`,
+ * Files an item in the test store as one commit, with the given frontmatter fields (`kind`, `after`, `ask`,
  * `labels` ...) beside the ones every item has, and returns its number. This is how a test seeds a new-shape item,
  * which no verb of `aleph issue` writes yet, or an old-shape one with a field the verbs do not set.
  */
-/** A seed's fields and text in the stored shape: `status` becomes `closed_as`, and `kind: "goal"` puts the text in the spec. */
+/** A seed's fields and text in the stored shape: `status` becomes `closed_as`, and `spec: true` puts the text in the spec. */
 function seedShape(repoKey: string, fm: Record<string, unknown>, body: string, spec: boolean) {
-  const { status, kind, issue: _issue, goals: _parts, ...rest } = fm as Record<string, any>;
+  const { status, kind: _kind, spec: specced, issue: _issue, ...rest } = fm as Record<string, any>;
   const closed = status && status !== "open" ? { closed_as: status, closed_at: "2026-10-30T00:00:00.000Z" } : {};
-  const isSpec = spec || kind === "goal";
+  const isSpec = spec || specced === true;
   return { fm: { project: projectOf(repoKey, items), created: "2026-10-30T00:00:00.000Z", priority: "medium", ...closed, ...rest }, request: isSpec ? "" : body, spec: isSpec ? body : "", notes: [] as string[] };
 }
 
@@ -472,7 +472,7 @@ function seedFile(repoKey: string, title: string, fm: Record<string, unknown>, b
 export const seedItem = (repoKey: string, title: string, fm: Record<string, unknown> = {}, body = "Body."): number => seedFile(repoKey, title, fm, body, false);
 
 /** Files a child of issue `n` in one commit on the test store's origin/main: an issue with `from: issue.<n>`. Returns its number. */
-export const seedPart = (repoKey: string, n: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): number => seedFile(repoKey, title, { from: issueKey(n), ...fm }, body, true);
+export const seedPart = (repoKey: string, n: number, fm: Record<string, unknown> = {}, title = "Sub-issue", body = "Body."): number => seedFile(repoKey, title, { from: issueKey(n), ...fm }, body, true);
 
 /** Puts a job into the test ledger: `run` holds the fields the test cares about. Returns the job key. */
 export function seedRun(repoKey: string, run: Seed): string {
@@ -481,15 +481,14 @@ export function seedRun(repoKey: string, run: Seed): string {
 
 /**
  * Files an old-shape item the way `aleph issue add <repo> <title> <flags> --body -` did before the store wrote only the new
- * shape: `--labels` with `goal` becomes `kind: "goal"`, the other labels `areas`, `--after a,b` becomes `after: ["a", "b"]`, `--due` its field, `action` the body. No verb of `aleph issue`
+ * shape: `--spec -` puts `action` in the spec, `--labels` becomes `areas`, `--after a,b` becomes `after: ["a", "b"]`, `--due` its field, `action` the body. No verb of `aleph issue`
  * writes that shape now, so the item is seeded; an open issue then gets the dispatch that `add` ran, with `env` (which may turn it off).
  */
 export async function addOld(title: string, action: string, extra: string[] = [], env: Record<string, string> = {}): Promise<number> {
   const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };
-  const labels = (flag("labels") ?? "").split(",").filter(Boolean);
-  const isPart = labels.includes("goal"), areas = labels.filter((l) => l !== "goal");
-  const id = seedItem("fac", title, { ...(isPart ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
-  if (isPart && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
+  const isSpec = flag("spec") !== undefined, areas = (flag("labels") ?? "").split(",").filter(Boolean);
+  const id = seedItem("fac", title, { ...(isSpec ? { spec: true } : {}), ...(areas.length ? { areas } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
+  if (isSpec && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
   return id;
 }
 

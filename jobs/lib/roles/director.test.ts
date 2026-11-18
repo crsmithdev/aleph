@@ -25,7 +25,7 @@ const repo = () => loadRegistry()[key];
 const direct = () => directAll([repo()], ports());
 const directorRuns = () => allRuns().filter((e) => e.run.role === "director");
 const prompt = () => readFileSync(join(base, "prompt.md"), "utf8");
-const TEXT = { situation: "The goal asks for page A or B.", effects: [{ action: "resolve:A", text: "Builds page A." }, { action: "resolve:B", text: "Builds page B." }, { action: "dismiss", text: "Closes the question." }], recommend: { action: "resolve:A", why: "Chris chose A before." } };
+const TEXT = { situation: "The issue asks for page A or B.", effects: [{ action: "resolve:A", text: "Builds page A." }, { action: "resolve:B", text: "Builds page B." }, { action: "dismiss", text: "Closes the question." }], recommend: { action: "resolve:A", why: "Chris chose A before." } };
 
 test("a decided Ask: code applies the answer, clears the Ask, and logs a Director decision and its record", async () => {
   fresh([{ title: "product", ask: choice() }]);
@@ -150,7 +150,7 @@ test("a memory proposal is on the escalation list: the director's case text goes
   const issue = `issue.1`;
   const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", issue, signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
   putJson("state", "corrections", { minedAt: "", lessons: [lesson] });
-  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "disapprove", text: "Drops it." }], recommend: { action: "disapprove", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
+  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files an issue." }, { action: "disapprove", text: "Drops it." }], recommend: { action: "disapprove", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
   const [d] = await direct();
   expect(d).toMatchObject({ ref: issue, on: issue, reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
   expect(directorRuns()[0].run.target).toBe(issue);
@@ -239,7 +239,7 @@ test("a run-cap Ask: the director reruns the issue once; the second run-cap Ask 
 });
 
 test("a worker's question on a run: the director's answer drops the job with the answer as the next run's note", async () => {
-  fresh([{ title: "goal", specced: true }]);
+  fresh([{ title: "specced", specced: true }]);
   run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "answer", note: "use ask.ts" }]);
   const [d] = await direct();
@@ -264,12 +264,12 @@ test("a director job on a run's Ask is a job on the run's issue and keeps its de
 });
 
 test("the prompt of a run's Ask holds the review of the run: the newest review job's result.md, and no section with no review job", async () => {
-  fresh([{ title: "goal", specced: true }]);
+  fresh([{ title: "specced", specced: true }]);
   run({ name: "issue.1", target: "issue.1", ask: plain() });
   replyWith({ case: TEXT });
   await direct();
   expect(prompt()).not.toContain("The review of the run");
-  fresh([{ title: "goal", specced: true }]);
+  fresh([{ title: "specced", specced: true }]);
   const folder = run({ name: "issue.1", target: "issue.1", ask: plain() });
   run({ role: "review", name: "issue.1", target: "issue.1", prev: jobOfFolder(folder), state: "done" }, { "result.md": "no test\n" });
   await direct();
@@ -285,7 +285,7 @@ test("a paused factory starts no director run", async () => {
 });
 
 test("a drop reason that names another issue of this repo on main gets the fate duplicate; another repo's issue does not", async () => {
-  fresh([{ title: "goal", specced: true }]);
+  fresh([{ title: "specced", specced: true }]);
   // origin/main names another issue of this repo: the work the drop is a duplicate of.
   writeFileSync(join(repoPath(), "z.ts"), "1\n");
   sh(repoPath(), "git", "add", "-A");
@@ -296,7 +296,7 @@ test("a drop reason that names another issue of this repo on main gets the fate 
   await direct();
   expect(dropped.map((d) => d.fate)).toEqual(["duplicate"]);
 
-  fresh([{ title: "goal", specced: true }]);
+  fresh([{ title: "specced", specced: true }]);
   run({ name: "issue.1", target: "issue.1", ask: { reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "drop", reason: "the work is already in gpu-faults-2" }]);
   await direct();
@@ -436,7 +436,7 @@ test("a part-dropped grant with no recommended option leaves the Ask to the dire
 });
 
 test("an edit-issue with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
-  fresh([{ title: "goal", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
+  fresh([{ title: "specced", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
   const folder = run({ name: "issue.1", target: "issue.1", state: "failed" });
   markAsked({ id: jobOfFolder(folder), folder, run: getRun(jobOfFolder(folder))! }, "which wins?", specVersion(item(1)));
   reply([{ do: "edit-issue", body: "A clearer spec." }]);
@@ -454,8 +454,8 @@ test("the director prompt says issue, not goal, outside the ## Goal section name
   expect(prompt().replaceAll("## Goal", "")).not.toMatch(/\bgoal/);
 });
 
-test("an edit-issue whose after names a parked issue is refused: the goal waits for nothing and the Ask goes to Chris", async () => {
-  fresh([{ title: "goal", specced: true, ask: plain("which wins?") }, { title: "parked one" }]);
+test("an edit-issue whose after names a parked issue is refused: the issue waits for nothing and the Ask goes to Chris", async () => {
+  fresh([{ title: "specced", specced: true, ask: plain("which wins?") }, { title: "parked one" }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
   reply([{ do: "edit-issue", body: "A clearer spec.", after: ["issue.2"] }]);
   const [d] = await direct();
@@ -468,8 +468,8 @@ test("an edit-issue whose after names a parked issue is refused: the goal waits 
   expect(prompt()).toContain("an `after` on a parked issue is refused");
 });
 
-test("a drop whose after names a parked issue is refused: the job stays open and the goal waits for nothing", async () => {
-  fresh([{ title: "goal", specced: true }, { title: "parked one" }]);
+test("a drop whose after names a parked issue is refused: the job stays open and the issue waits for nothing", async () => {
+  fresh([{ title: "specced", specced: true }, { title: "parked one" }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
   const folder = run({ name: "issue.1", target: "issue.1", ask: plain() });
   reply([{ do: "drop", reason: "not needed", after: ["issue.2"] }]);
@@ -482,7 +482,7 @@ test("a drop whose after names a parked issue is refused: the job stays open and
   expect(issues.afterOf(item(1))).toEqual([]);
 });
 
-test("an answer whose after names a parked issue is refused: the Ask stays open and the goal waits for nothing", async () => {
+test("an answer whose after names a parked issue is refused: the Ask stays open and the issue waits for nothing", async () => {
   fresh([{ title: "product", ask: choice() }, { title: "parked one" }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
   reply([{ do: "answer", option: "A", note: "page A", after: ["issue.2"] }]);

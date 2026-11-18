@@ -18,7 +18,7 @@ const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", t
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/write-tests/SKILL.md" } as const;
 const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], ...(STORE && { situation: STORE.situation, effects: STORE.effects, recommend: STORE.recommend }) });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", reason: "question", why: ["w"] };
-const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
+const RUN_CAP = "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it.";
 
 const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
 const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
@@ -27,7 +27,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
   "review-held": () => ofRuns(run("review-held", { reviewCall: { call: "returned", reason: "tests are missing" } })),
   question: () => ofRuns(run("question", { question: "Which port?" })),
-  "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
+  "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this issue ended with no commit, so the factory stopped starting it; rewrite the issue." })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
   "intake-failed": () => ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs: failed: its process ended before a verdict" })),
   "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close as done", line: "close" }, { label: "Keep open", line: "plan" }], recommended: "Close as done" }, question: "A goal was dropped." })),
@@ -216,7 +216,7 @@ describe("stuck rows", () => {
     expect(stuckBlocker(stuck, "aleph-99", open)).toBeNull();
     expect(stuckBlocker({ ...stuck, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
   });
-  test("a reason that names an open goal's part is the blocker; one that holds only a sha is not", () => {
+  test("a reason that names an open issue's sub-issue is the blocker; one that holds only a sha is not", () => {
     const part = new Map([["aleph-12.3", { title: "Land the base", href: "#/issues/aleph/12.3" }]]);
     expect(stuckBlocker({ ...stuck, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
     expect(stuckBlocker({ ...stuck, reason: "the fix is in a143077" }, undefined, part)).toBeNull();

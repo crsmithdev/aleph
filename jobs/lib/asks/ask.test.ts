@@ -231,7 +231,7 @@ test("may: the director answers a plain question and a product choice alike", ()
 
 test("may: the director does not answer an Ask whose run waits for a spec edit", () => {
   expect(may("director", "answer", plain, { waiting: "fac-3" })).toBe("the run fac-3 asked about the spec and waits for a spec edit; use edit, or drop it");
-  expect(may("director", "edit-goal", plain, { waiting: "fac-3" })).toBeNull();
+  expect(may("director", "edit-issue", plain, { waiting: "fac-3" })).toBeNull();
   expect(may("director", "close", choice)).toBeNull();
 });
 

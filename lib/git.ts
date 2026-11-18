@@ -91,7 +91,10 @@ export async function fetchOriginAsync(cwd: string, ...refs: string[]): Promise<
   for (let t = tries.next(); ; ) {
     if (t.done) return t.value;
     if (t.value) await lockRetry.pause(Bun.sleep);
-    const p = Bun.spawn(["git", "fetch", "-q", "origin", ...refs], { cwd, env: baseEnv(), stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+    let p;
+    // A spawn throws when cwd is gone: the UI's timer then fetches a store a test removed.
+    try { p = Bun.spawn(["git", "fetch", "-q", "origin", ...refs], { cwd, env: baseEnv(), stdin: "ignore", stdout: "ignore", stderr: "pipe" }); }
+    catch (e) { return { ok: false, out: (e as Error).message }; }
     const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited]);
     t = tries.next({ ok: code === 0, out: code === 0 ? "" : err.trimEnd() || `git fetch exited ${code}` });
   }

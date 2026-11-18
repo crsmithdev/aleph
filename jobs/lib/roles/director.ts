@@ -521,7 +521,7 @@ type Outcome = { applied: string; decides: boolean; ev: Ev } | { refused: string
 const done = (a: Action, ev: Ev, decides = true): Outcome => ({ applied: describe(a), decides, ev });
 const no = (a: Action, why: string): Outcome => ({ refused: `${describe(a)}: ${why}` });
 
-/** The first ref of an `after` list that names a parked issue, or null: a goal that waits for one never starts. */
+/** The first ref of an `after` list that names a parked issue, or null: an issue that waits for one never starts. */
 function parkedIn(after: string[]): string | null {
   const parked = new Set(store.everyFetched().filter((x) => issues.status(x.item) === "parked").map((x) => key("issue", x.item.id)));
   return after.find((r) => parked.has(r)) ?? null;

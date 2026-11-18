@@ -43,7 +43,7 @@ const iso = (t: string) => new Date(t.length === 10 ? `${t}T00:00` : t).toISOStr
 beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
-/** An item stored as an issue: `kind: goal` on a plain number. */
+/** An issue with a spec, on a plain number. */
 const seedPart = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
 let items = "", seeded = "";
@@ -100,10 +100,10 @@ beforeAll(async () => {
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    seedPart(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
+    seedPart(doc, "first issue", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { kind: "bug", labels: ["bug"] });
-    seedPart(doc, "second goal").fm.after = ["fac-4"];
-    seedPart(doc, "third goal");
+    seedPart(doc, "second issue").fm.after = ["fac-4"];
+    seedPart(doc, "third issue");
     setStatus(doc.items[1], "done");
     return true;
   }, true);
@@ -139,7 +139,7 @@ describe("GET /api/issues", () => {
     expect((await rowsOf("fac")).map((r: any) => r.id)).toEqual([1, 2, 3, 4]);
     expect((await rowsOf("fac")).filter((r: any) => r.status === "done").map((r: any) => r.id)).toEqual([2]);
     const [r] = await rowsOf("fac");
-    expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
+    expect(r).toMatchObject({ repo: "fac", title: "first issue", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
   });
 
@@ -183,7 +183,7 @@ describe("GET /api/issues", () => {
 
   test("a row carries its stage", async () => {
     const rows = await rowsOf("fac");
-    // The first goal has a trailer commit on main, and a trailer does not make it done.
+    // The first issue has a trailer commit on main, and a trailer does not make it done.
     expect(rows[0].stage).toBe("queued");
     expect(rows[2].stage).toBe("held");
   });
@@ -852,10 +852,9 @@ describe("POST /api/issues/:id/decide and deny", () => {
     });
   });
 
-  test("the card routes take a goal's id", async () => {
+  test("the card routes take an issue's id", async () => {
     const dotted = () => writeList({ key: "fac" }, "seed", (doc) => {
-      const i = add(doc, "a capped goal", { request: "x" });
-      Object.assign(i.fm, { kind: "goal" });
+      const i = add(doc, "a capped issue", { request: "x" });
       return String(i.id);
     })!.value;
     const capped = () => { const r = dotted(); setAsk(`issue.${r}`, { reason: "run-cap", question: "stopped", options: [], why: [] }); return r; };

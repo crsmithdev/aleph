@@ -170,7 +170,7 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
 });
 
 test("the sweep logs a job that waits for a spec edit as missed once the spec moves, and starts one dispatch", async () => {
-  writeList({ key }, "seed", (doc) => { issues.add(doc, "goal", { spec: "Old spec." }); return true; }, true);
+  writeList({ key }, "seed", (doc) => { issues.add(doc, "specced", { spec: "Old spec." }); return true; }, true);
   const w = seedJob({ role: "build", name: "issue.1", repo: key, target: "issue.1", state: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   markAsked({ id: w.id, folder: w.folder, run: w.run }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
   const p = sweepPorts();

@@ -14,7 +14,7 @@ afterEach(teardown);
 // An "already met" drop closes a factory item with no commit that names it; the issues that wait on it still start.
 test("an issue waiting on a factory item the store says done, with no commit naming it, starts", async () => {
   const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => issues.add(doc, "met elsewhere").id, true)!.value;
-  mk(`fac-${blocker}`, "build", "dropped", { reason: "the goal is already met" });
+  mk(`fac-${blocker}`, "build", "dropped", { reason: "the issue is already met" });
   await change(blocker, (item) => issues.setStatus(item, "done"));
   const waiter = newIssue();
   await change(waiter, (item) => { item.fm.after = [`fac-${blocker}`]; });

@@ -96,6 +96,8 @@ test("fetchStore fetches without blocking and says why it failed", async () => {
   const bad = join(base, "not-a-repo");
   mkdirSync(bad);
   expect(await fetchStore(bad)).toMatch(/not a git repository/);
+  // A UI server a test left running fetches after the test removed its store.
+  expect(await fetchStore(join(base, "gone"))).toMatch(/ENOENT/);
 });
 
 test("a fetch that brings an older remote state cannot move origin/main back", async () => {

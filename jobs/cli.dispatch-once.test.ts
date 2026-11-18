@@ -15,7 +15,7 @@ describe("a factory run", () => {
     const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
     const gate = (n: string) => join(base, `gate-${n}`);
     const issue = async (n: string) =>
-      seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
+      seedItem("fac", `dispatch ${n}`, { spec: true }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
     const settled = (id: number) => issueRuns(id).every((r) => stateNow(r).state === "passed");
     const ids: number[] = [];
     beforeAll(() => {

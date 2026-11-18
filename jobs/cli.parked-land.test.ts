@@ -6,7 +6,7 @@ beforeAll(setup);
 afterAll(teardown);
 
 test("a passed run on a parked issue starts no land, and the dispatch lands it once the issue is open", async () => {
-  const id = seedItem("fac", "parked goal", { kind: "goal" }, "ACTION: commit parked.txt");
+  const id = seedItem("fac", "parked issue", { spec: true }, "ACTION: commit parked.txt");
   expect((await issueEdit("fac", id, { status: "parked" })).code).toBe(0);
   const r = await job("fac", "parkedland", "Goal: parkedland\nACTION: commit parked.txt\n", { on: `fac-${id}`, land: true });
   expect(state(r.json.run)).toMatchObject({ state: "passed", next: "land", reason: `issue.${id} is parked` });

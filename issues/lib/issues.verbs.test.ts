@@ -144,7 +144,7 @@ test("aleph issue lint reads an issue file and names it by its number", () => {
 });
 
 test("lint refuses an after ref that is not issue.<n>", () => {
-  seed(`# To do\n\n${sec(20, "kind: goal\nafter: [issue.1]\nlabels: []")}\n${sec(21, "kind: goal\nafter: [proj-x]\nlabels: []")}`);
+  seed(`# To do\n\n${sec(20, "spec: true\nafter: [issue.1]\nlabels: []")}\n${sec(21, "spec: true\nafter: [proj-x]\nlabels: []")}`);
   const r = lint();
   expect(r.code).toBe(1);
   expect(r.err).toContain("after: proj-x");

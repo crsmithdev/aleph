@@ -16,7 +16,7 @@ describe("a factory run", () => {
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     expect((await cli(["pause"])).json).toEqual({ paused: true });
-    const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
+    const id = seedItem("fac", "while paused", { spec: true }, "ACTION: commit paused.txt\n".trim());
     expect((await dispatch()).json).toMatchObject({ started: [], paused: true });
     expect(readEvents().filter((e) => e.object === "factory" || e.detail === "pause: on").map((e) => e.object)).toEqual(["settings"]);
     const r = await fjob("fpaused", "commit fpaused.txt", {}, { land: true });

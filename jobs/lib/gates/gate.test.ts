@@ -63,12 +63,12 @@ test("additions to an existing test give no finding, also under a held path", ()
 
 test("the reviewer prompt names a deleted test; without findings it has no test section", () => {
   const f = findings(() => git("rm", "-q", "a.test.ts"));
-  expect(reviewPrompt("n", "goal", "diff", f)).toContain("The diff deletes the test a.test.ts");
-  expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("Test changes");
+  expect(reviewPrompt("n", "the spec", "diff", f)).toContain("The diff deletes the test a.test.ts");
+  expect(reviewPrompt("n", "the spec", "diff", [])).not.toContain("Test changes");
   // The skill's relative links reach the reviewer as absolute paths, so it can Read the test skills.
-  expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/write-tests\/SKILL\.md\)/);
-  expect(reviewPrompt("n", "goal", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/refit-tests\/SKILL\.md\)/);
-  expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("](../");
+  expect(reviewPrompt("n", "the spec", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/write-tests\/SKILL\.md\)/);
+  expect(reviewPrompt("n", "the spec", "diff", [])).toMatch(/\]\(\/[^)]*\/skills\/refit-tests\/SKILL\.md\)/);
+  expect(reviewPrompt("n", "the spec", "diff", [])).not.toContain("](../");
   // With the test and outside sections and the skill text, the prompt says issue; only the spec's Goal section is named Goal.
   const p = reviewPrompt("n", "the spec", "diff", f, { outside: ["a.ts"] });
   expect(p).not.toMatch(/\bgoal\b/);

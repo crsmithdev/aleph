@@ -10,7 +10,7 @@ afterAll(() => { rmSync(dir, { recursive: true, force: true }); if (jobsDir === 
 
 test("the fixed brief ends with the summary, then the tag lines, then QUESTION last; the factory brief asks for the `question` field, no tag line, and a failing run of each new test; neither tells the worker to merge main", () => {
   mkdirSync(join(dir, "7"), { recursive: true });
-  writeFileSync(join(dir, "7", "spec.md"), "# a goal\n");
+  writeFileSync(join(dir, "7", "spec.md"), "# a spec\n");
   process.env.ALEPH_JOBS_DIR = dir;
   const run = { name: "job-y", job: "job.7", branch: "factory/job-y", role: "build", state: "running" } as any;
   for (const sandbox of [true, false]) {

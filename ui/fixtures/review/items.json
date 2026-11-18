@@ -187,10 +187,7 @@
     {
       "title": "Rework the thumbnail pipeline",
       "kind": "issue",
-      "source": "chris",
-      "goals": [
-        "demo-19"
-      ]
+      "source": "chris"
     },
     {
       "title": "Plan the metrics page",

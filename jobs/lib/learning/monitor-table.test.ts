@@ -170,7 +170,7 @@ describe("flakes: the counts aleph report prints", () => {
   ];
   const trackers = [{ ref: "p-7", notes: [
     note(DAY, 9, "acceptance p-1: c.test.ts > twice: failed under load, passed on the quiet rerun at abc1234"),
-    note(DAY, 9, "acceptance p-2: c.test.ts > twice: failed twice, in a test the goal did not touch, at abc1234"),
+    note(DAY, 9, "acceptance p-2: c.test.ts > twice: failed twice, in a test the issue did not touch, at abc1234"),
     note(DAY, 9, "job x: d.test.ts > once: flaked"),
     note("2026-10-01", 9, "old: e.test.ts > old"),
   ] }];

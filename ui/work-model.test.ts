@@ -14,7 +14,7 @@ import { refHits, renderIssue } from "./views/issues.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 
-// /api/factory on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
+// /api/factory on a store and a ledger in the new shape (kind, issue, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
 let base: string, runsDir: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const getJson = async (p: string) => (await fetch(`http://127.0.0.1:${server.port}${p}`)).json() as Promise<any>;
@@ -43,7 +43,7 @@ beforeAll(async () => {
   sh(base, "git", "init", "-q", "--bare", "-b", "main", prod);
   sh(base, "git", "clone", "-q", prod, repo);
   writeFileSync(join(repo, "a"), "1");
-  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first goal\n\nIssue: issue.2\nJob: job.4");
+  sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-q", "-m", "first issue\n\nIssue: issue.2\nJob: job.4");
   sh(repo, "git", "push", "-q", "origin", "main");
   sh(repo, "git", "fetch", "-q", "origin");
   const remote = join(base, "store.git"), store = join(base, "store");
@@ -55,7 +55,7 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: runsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: store, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     // issue 1 has three children: 2 is done, 3 builds, 4 runs after 3.
-    const one = add(doc, "Three goals", { request: "Do three things.\n" });
+    const one = add(doc, "Three things", { request: "Do three things.\n" });
     const g1 = addPart(doc, one, { title: "first", spec: "Do it." });
     addPart(doc, one, { title: "second", spec: "Do it.", after: ["issue.2"] });
     addPart(doc, one, { title: "third", spec: "Do it.", after: ["issue.3"] });
@@ -65,7 +65,7 @@ beforeAll(async () => {
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     setAsk(refIn(g), { reason: "question", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
-    setAsk(refIn(three), { reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close as done", line: "close" }, { label: "Keep open", line: "plan" }], recommended: "Close as done", why: [] });
+    setAsk(refIn(three), { reason: "part-dropped", question: "A sub-issue was dropped.", options: [{ label: "Close as done", line: "close" }, { label: "Keep open", line: "plan" }], recommended: "Close as done", why: [] });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);

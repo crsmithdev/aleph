@@ -57,7 +57,7 @@ export function teardown(): void {
 
 /** A new open issue in the store's factory list `key` (default `fac`), with the given areas; returns its id. */
 export const newIssue = (areas: string[] = [], key = "fac"): number =>
-  writeList({ key }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { labels: areas, spec: "Do the thing." }); return item.id; }, true)!.value;
+  writeList({ key }, "add an issue", (doc) => { const item = issues.add(doc, "ship it", { labels: areas, spec: "Do the thing." }); return item.id; }, true)!.value;
 
 /** Change item `id` in the store, as Chris would while the baseline runs. */
 export const change = (id: number, f: (item: issues.Issue) => void) =>

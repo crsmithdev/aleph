@@ -34,9 +34,9 @@ test("landedIndex reads Issue: issue.<n> only: a part's ID, an old k-<n> form an
 test("two issues are separate entries; a reverted issue is in revertedIn and its sibling is not", () => {
   const seed = git("rev-parse", "HEAD");
   try {
-    commit("goal two\n\nIssue: issue.4\nJob: job.4");
+    commit("issue two\n\nIssue: issue.4\nJob: job.4");
     const first = git("rev-parse", "HEAD");
-    commit("goal two b\n\nIssue: issue.5\nJob: job.5");
+    commit("issue two b\n\nIssue: issue.5\nJob: job.5");
     commit(`Revert\n\nThis reverts commit ${first}.`);
     const index = landedIndex(dir, "main", "k");
     expect(index.get("5")?.length).toBe(1);

@@ -7,7 +7,7 @@
   "model": "claude-sonnet-5-5",
   "branch": "factory/demo-1b",
   "condition": "dropped",
-  "reason": "the goal had landed",
+  "reason": "the issue had landed",
   "started": "2026-10-28T09:40:00.000Z",
   "ended": "2026-10-28T10:00:00.000Z",
   "cost": 0.05,

@@ -25,7 +25,7 @@ describe("every transition dispatches at once", () => {
     return id;
   };
   // An old-shape issue, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it.
-  const seed = async (title: string, action: string, fm: Record<string, unknown> = { kind: "goal" }, env: Record<string, string> = {}) => {
+  const seed = async (title: string, action: string, fm: Record<string, unknown> = { spec: true }, env: Record<string, string> = {}) => {
     const id = seedItem("fac", title, fm, `ACTION: ${action}`);
     await dispatch(on(env));
     return id;
@@ -63,7 +63,7 @@ describe("every transition dispatches at once", () => {
   test("an edit that sets the status back to open starts the issue", async () => {
     // A dispatch left by an earlier test's run may still be alive. It starts any open issue it sees, so the
     // issue is seeded already dropped.
-    const x = track(await seed("dropped, then reopened", open("reopen"), { kind: "goal", status: "dropped" }, { ALEPH_DISPATCH: "off" }));
+    const x = track(await seed("dropped, then reopened", open("reopen"), { spec: true, status: "dropped" }, { ALEPH_DISPATCH: "off" }));
     await idle(startLog);
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
@@ -75,10 +75,10 @@ describe("every transition dispatches at once", () => {
     const rescue = process.env.ALEPH_RESCUE;
     process.env.ALEPH_RESCUE = "off";
     try {
-      const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
+      const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--spec", "-"], { ALEPH_FIX_ROUNDS: "0" }));
       await idle(startLog);
       expect(runs(s).some((r) => ["stuck", "failed"].includes(state(r).state))).toBe(true);
-      const b = track(await add("starts beside it", open("hold-b"), ["--labels", "goal"]));
+      const b = track(await add("starts beside it", open("hold-b"), ["--spec", "-"]));
       await when(() => started().includes(`issue.${b}`));
       expect(started()).toEqual([`issue.${s}`, `issue.${b}`]);
     } finally {
@@ -88,7 +88,7 @@ describe("every transition dispatches at once", () => {
   }, 90_000);
 
   test("dropping an issue drops its open job, so its Ask stops waiting for Chris", async () => {
-    const x = track(await seed("dropped with its job", open("drop-with"), { kind: "goal" }));
+    const x = track(await seed("dropped with its job", open("drop-with"), { spec: true }));
     await when(() => started().includes(`issue.${x}`));
     // The held run waits on an Ask, as a job that needs Chris does.
     const [run] = runs(x);

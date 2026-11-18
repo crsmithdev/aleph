@@ -15,7 +15,7 @@
   "ask": {
     "kind": "approval",
     "reason": "review-held",
-    "question": "The goal says dates, the code parses only ISO dates. Is ISO enough?",
+    "question": "The spec says dates, the code parses only ISO dates. Is ISO enough?",
     "options": [],
     "why": []
   }

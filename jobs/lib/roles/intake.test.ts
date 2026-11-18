@@ -39,7 +39,7 @@ const spec = (o: Partial<{ goal: string; edit_surface: { path: string; new: bool
   ({ goal: "Do it.", edit_surface: [{ path: "x.ts", new: false }], oracle: ["`bun test x.test.ts` passes"], ...o });
 const GOOD = { route: "build", reason: "one run", spec: spec() };
 const VERDICTS: Record<string, object> = {
-  goal: GOOD,
+  build: GOOD,
   parts: { route: "build", reason: "two runs", after: ["issue.2"], parts: [{ title: "[Big] Do the first half", spec: spec({ goal: "Half one." }), after: [] }, { title: "[Big] Do the second half", spec: spec({ goal: "Half two.", edit_surface: [{ path: "y.ts", new: true }] }), after: [1] }] },
   waits: { ...GOOD, after: ["issue.1", "issue.2"] },
   close: { route: "close", reason: "duplicate of issue.1" },
@@ -138,7 +138,7 @@ const runOf = (id: number) => runs().find((r) => r.name === `intake-${repo.key}-
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 
 test("an intake run records its route, the issue it is on and its cost", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }, { title: "d", body: "VERDICT:done" }]);
+  reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }, { title: "d", body: "VERDICT:done" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1, ask: 1, close: 1, done: 1 });
   expect(runOf(1)).toMatchObject({ role: "intake", route: "build", target: "issue.1", reason: "one run", cost: 0.25 });
@@ -153,7 +153,7 @@ test("an intake run records its route, the issue it is on and its cost", async (
 });
 
 test("a reply that fails the code check goes back once in the same session; a fixed reply is applied and the cost is the sum", async () => {
-  reset([{ title: "a", body: "VERDICT:missing AGAIN:goal" }]);
+  reset([{ title: "a", body: "VERDICT:missing AGAIN:build" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1 });
   const c = calls();
@@ -184,7 +184,7 @@ test("a malformed verdict is sent back once, then asks Chris", async () => {
 });
 
 test("an issue an Issue trailer on main names is done with no run", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }]);
+  reset([{ title: "a", body: "VERDICT:build" }]);
   writeFileSync(join(repo.path, "z.ts"), "1\n");
   sh(repo.path, "git", "add", "-A");
   sh(repo.path, "git", "commit", "-q", "-m", `z\n\nIssue: issue.1`);
@@ -202,7 +202,7 @@ test("an issue an Issue trailer on main names is done with no run", async () => 
 });
 
 test("an issue of kind flake is a note on the flake tracker with no run", async () => {
-  reset([{ title: "a.test.ts times out under load", kind: "flake", body: "VERDICT:goal" }]);
+  reset([{ title: "a.test.ts times out under load", kind: "flake", body: "VERDICT:build" }]);
   const t = await run();
   expect(t.counts).toEqual({ close: 1 });
   expect(calls()).toHaveLength(0);
@@ -263,7 +263,7 @@ test("a build drops an after-link to an item that waits for Chris and keeps one 
 });
 
 test("a build that names what it leaves out of the request notes it on the issue; one that leaves nothing out adds no note", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:leftout" }]);
+  reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:leftout" }]);
   await run();
   expect(item(1).notes).toEqual([]);
   expect(item(2).notes.at(-1)).toContain("the page head and the audit");
@@ -280,7 +280,7 @@ test("parseRoute keeps the left-out text of a build verdict, and the schema take
 });
 
 test("a build that reports the commit that removed what the issue asks back writes no spec and asks Chris; one that reports none is unchanged", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:removal" }]);
+  reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:removal" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1, ask: 1 });
   expect(item(1).spec).toContain("Do it.");
@@ -302,7 +302,7 @@ test("the build route's schema takes the removal commit with its sha, subject an
 
 describe("a repo with author", () => {
   test("an issue filed with a spec is taken in before it builds; in a repo without author it builds as filed", async () => {
-    reset([{ title: "a", body: "VERDICT:goal", spec: "## Goal\nOld.\n## Edit surface\nx.ts\n## Oracle\n`bun test x.test.ts`" }], { author: true });
+    reset([{ title: "a", body: "VERDICT:build", spec: "## Goal\nOld.\n## Edit surface\nx.ts\n## Oracle\n`bun test x.test.ts`" }], { author: true });
     const doc = readList(repo)!;
     expect(isBuildable(doc, item(1), repo)).toBe(false);
     expect(isSorted(doc, item(1), repo)).toBe(false);
@@ -396,7 +396,7 @@ test("the prompt has intake search past work for the issue's title, quoted for t
 });
 
 test("the intake run may run git log, and the prompt has it search history before a spec that adds something back", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }]);
+  reset([{ title: "a", body: "VERDICT:build" }]);
   await run();
   expect(calls()[0]).toContain("--allowedTools Bash(aleph memory recall:*),Bash(git log:*)");
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
@@ -489,7 +489,7 @@ test("an intake run whose process ended before a verdict is ended as failed by t
 });
 
 test("intake reads a clone at origin/main, and the clone is gone after", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }]);
+  reset([{ title: "a", body: "VERDICT:build" }]);
   await run();
   const pwd = calls()[0].split(" ")[0];
   expect(pwd).not.toBe(repo.path);
@@ -535,7 +535,7 @@ test("intake does not close an issue with no request: it asks Chris with the clo
 });
 
 test("intake reads the media attached to the issue", async () => {
-  reset([{ title: "a", body: "VERDICT:goal" }]);
+  reset([{ title: "a", body: "VERDICT:build" }]);
   writeList(repo, "media", (doc) => {
     const i = issues.find(doc, 1)!;
     i.fm.media = ["shot.png"];

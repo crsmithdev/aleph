@@ -16,7 +16,7 @@ describe("fate from git", () => {
 });
 
 describe("prospective memory", () => {
-  // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
+  // Old-shape items, seeded: no verb of `aleph issue` sets `after` on an old-shape item now. The tick below does the dispatching.
   const addIssue = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
   test("an issue waiting on several items comes due once every one is done", async () => {

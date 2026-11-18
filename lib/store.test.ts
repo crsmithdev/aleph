@@ -28,10 +28,10 @@ const commits = () => Number(sh(base, "git", "--git-dir", join(base, "items.git"
 let n = 0;
 /** A project and the numbers of the issues it starts with, `ids`: a number is taken from one counter across projects, so a test reads its numbers here. */
 type Repo = store.Place & { ids: number[] };
-function repo(items: { title: string; labels?: string[] }[] = []): Repo {
+function repo(items: { title: string; spec?: boolean }[] = []): Repo {
   const r: Repo = { key: `st${++n}`, ids: [] };
   store.writeList(r, "start", (doc) => {
-    r.ids = items.map((i) => issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }).id);
+    r.ids = items.map((i) => issues.add(doc, i.title, i.spec ? { spec: "Do it." } : {}).id);
     return true;
   }, true);
   return r;
@@ -94,7 +94,7 @@ describe("labels", () => {
 
   test("a list, a lone label, and none", () => {
     expect(issues.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
-    expect(issues.labels(it({ labels: "goal" }))).toEqual(["goal"]);
+    expect(issues.labels(it({ labels: "ui" }))).toEqual(["ui"]);
     expect(issues.labels(it({}))).toEqual([]);
   });
 
@@ -106,8 +106,8 @@ describe("labels", () => {
 describe("the read", () => {
 
   test("issues come critical first, then by repo and number; an unknown priority ranks as medium", () => {
-    const a = repo([{ title: "a1", labels: ["goal"] }, { title: "a2", labels: ["goal"] }, { title: "a3", labels: ["goal"] }]);
-    const b = repo([{ title: "b1", labels: ["goal"] }, { title: "b2", labels: ["goal"] }]);
+    const a = repo([{ title: "a1", spec: true }, { title: "a2", spec: true }, { title: "a3", spec: true }]);
+    const b = repo([{ title: "b1", spec: true }, { title: "b2", spec: true }]);
     store.writeList(a, "prio", (doc) => { issues.find(doc, a.ids[0])!.fm.priority = "low"; issues.find(doc, a.ids[1])!.fm.priority = "critical"; issues.find(doc, a.ids[2])!.fm.priority = "weird"; return true; });
     store.writeList(b, "prio", (doc) => { issues.find(doc, b.ids[0])!.fm.priority = "medium"; issues.find(doc, b.ids[1])!.fm.priority = "critical"; return true; });
     expect(store.buildableIssues([a, b]).map((g) => `${g.repo.key}:${g.item.id}`)).toEqual([`${a.key}:${a.ids[1]}`, `${b.key}:${b.ids[1]}`, `${a.key}:${a.ids[2]}`, `${b.key}:${b.ids[0]}`, `${a.key}:${a.ids[0]}`]);
@@ -149,7 +149,7 @@ describe("the writes", () => {
   });
 
   test("note leaves labels unset, after askChris set an ask", () => {
-    const r = repo([{ title: "one", labels: ["goal"] }]);
+    const r = repo([{ title: "one", spec: true }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
     const [id] = r.ids;
     expect(askChris(r, id, ask, "asked")).toBeNull();

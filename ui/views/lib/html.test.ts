@@ -140,7 +140,7 @@ test("a fold keeps its open state through keep() and kept(), and a fold with no 
 });
 
 test("chips gives labels as chips, nothing for none", () => {
-  expect(chips(["ui", "goal"])).toBe('<span class="chips"><span class="chip" title="ui">ui</span><span class="chip" title="goal">goal</span></span>');
+  expect(chips(["ui", "deps"])).toBe('<span class="chips"><span class="chip" title="ui">ui</span><span class="chip" title="deps">deps</span></span>');
   expect(chips([])).toBe("");
   expect(chips(undefined)).toBe("");
   expect(chips(["<b>"])).toContain("&lt;b&gt;");

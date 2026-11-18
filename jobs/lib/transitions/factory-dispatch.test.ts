@@ -12,7 +12,7 @@ describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   test("a dispatch starts one run per open issue, lands it, and then has nothing to start", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    const id = seedItem("fac", "ship the goal", { kind: "goal" }, "ACTION: commit goal.txt\n".trim());
+    const id = seedItem("fac", "ship the issue", { spec: true }, "ACTION: commit issue.txt\n".trim());
     const d = (await dispatch()).json;
     expect(d.skipped).toEqual([]);
     expect(d.started).toEqual([`issue.${id}`]);

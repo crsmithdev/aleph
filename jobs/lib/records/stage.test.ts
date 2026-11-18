@@ -24,7 +24,7 @@ const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
 /** A run on its item, as ref(). */
 const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { target: `issue.${id}`, ...run }); return id; };
-const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
+const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `specced ${++jobs}`, { spec: true, ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 /** A `held` event on issue `n` that waits for another new issue, then the number. */

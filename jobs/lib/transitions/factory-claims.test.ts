@@ -72,7 +72,7 @@ test("no commit, the item open, first time: dropped with no fate and the issue r
   expect(allRuns().find((r) => r.run.state === "dropped")!.run.fate).toBeUndefined();
 });
 
-const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => String(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." }).id), true)!.value;
+const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted issue", (doc) => String(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." }).id), true)!.value;
 
 test("a dotted issue's rescue note reaches the issue, and a second no-commit run asks Chris on it", async () => {
   const ref = dottedPart();

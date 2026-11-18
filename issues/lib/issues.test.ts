@@ -16,10 +16,10 @@ let base: string;
 let n = 0;
 /** A project and the numbers of the issues it starts with, `ids`: one counter runs across projects, so a test reads its numbers here. */
 type Repo = store.Place & { ids: number[] };
-function repo(items: { title: string; labels?: string[] }[] = []): Repo {
+function repo(items: { title: string; spec?: boolean }[] = []): Repo {
   const r: Repo = { key: `is${++n}`, ids: [] };
   store.writeList(r, "start", (doc) => {
-    r.ids = items.map((i) => issues.add(doc, i.title, { labels: i.labels, ...(i.labels?.includes("goal") ? { spec: "Do it." } : {}) }).id);
+    r.ids = items.map((i) => issues.add(doc, i.title, i.spec ? { spec: "Do it." } : {}).id);
     return true;
   }, true);
   return r;
