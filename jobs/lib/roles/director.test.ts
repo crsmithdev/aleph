@@ -410,3 +410,43 @@ test("an edit-goal with a body on the Ask of a run that waits for a spec edit st
   expect(item(1).spec).toBe("A clearer spec.");
   expect(dispatches).toBe(1);
 });
+
+test("an edit-goal whose after names a parked issue is refused: the goal waits for nothing and the Ask goes to Chris", async () => {
+  fresh([{ title: "goal", specced: true, ask: plain("which wins?") }, { title: "parked one" }]);
+  writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
+  reply([{ do: "edit-goal", body: "A clearer spec.", after: ["issue.2"] }]);
+  const [d] = await direct();
+  expect(d.refused).toEqual([`edit-goal (spec) (after issue.2): issue.2 is parked, so an after on it is refused`]);
+  expect(d.applied).toEqual([]);
+  expect(d.outcome).toBe("escalated");
+  expect(item(1).spec).toBe("Ship the thing.");
+  expect(issues.afterOf(item(1))).toEqual([]);
+  expect(asked(1)!.situation).toContain("issue.2 is parked");
+  expect(prompt()).toContain("an `after` on a parked issue is refused");
+});
+
+test("a drop whose after names a parked issue is refused: the job stays open and the goal waits for nothing", async () => {
+  fresh([{ title: "goal", specced: true }, { title: "parked one" }]);
+  writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
+  const folder = run({ name: "issue.1", target: "issue.1", ask: plain() });
+  reply([{ do: "drop", reason: "not needed", after: ["issue.2"] }]);
+  const [d] = await direct();
+  expect(d.refused).toEqual([`drop: not needed (after issue.2): issue.2 is parked, so an after on it is refused`]);
+  expect(d.applied).toEqual([]);
+  expect(d.outcome).toBe("escalated");
+  expect(dropped).toEqual([]);
+  expect(getRun(jobOfFolder(folder))!.state).toBe("waiting");
+  expect(issues.afterOf(item(1))).toEqual([]);
+});
+
+test("an answer whose after names a parked issue is refused: the Ask stays open and the goal waits for nothing", async () => {
+  fresh([{ title: "product", ask: choice() }, { title: "parked one" }]);
+  writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
+  reply([{ do: "answer", option: "A", note: "page A", after: ["issue.2"] }]);
+  const [d] = await direct();
+  expect(d.refused).toEqual([`answer: A: page A (after issue.2): issue.2 is parked, so an after on it is refused`]);
+  expect(d.applied).toEqual([]);
+  expect(d.outcome).toBe("escalated");
+  expect(issues.afterOf(item(1))).toEqual([]);
+  expect(asked(1)!.situation).toContain("issue.2 is parked");
+});

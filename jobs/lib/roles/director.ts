@@ -302,7 +302,7 @@ Reply with the case text only. ${CASE_TEXT(acts)}
 
 - Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
 - Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
-- When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
+- When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun. An \`after\` must name open issues: an \`after\` on a parked issue is refused.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec: a clause that counts text the Goal leaves out, or a clause that needs a name the code does not have.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this goal with edit-goal when it must wait for the fix.
@@ -514,6 +514,12 @@ type Outcome = { applied: string; decides: boolean; ev: Ev } | { refused: string
 const done = (a: Action, ev: Ev, decides = true): Outcome => ({ applied: describe(a), decides, ev });
 const no = (a: Action, why: string): Outcome => ({ refused: `${describe(a)}: ${why}` });
 
+/** The first ref of an `after` list that names a parked issue, or null: a goal that waits for one never starts. */
+function parkedIn(after: string[]): string | null {
+  const parked = new Set(store.everyFetched().filter((x) => issues.status(x.item) === "parked").map((x) => key("issue", x.item.id)));
+  return after.find((r) => parked.has(r)) ?? null;
+}
+
 /** The open job of the case: its own run's job, else the open job of its item. */
 function jobOf(c: Exclude<Case, { at: "lesson" }>, n: number | string | undefined): string | undefined {
   if (c.at === "run") return c.entry.run.name;
@@ -525,6 +531,9 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   const repo = c.repo;
   const sub = askSub(c.ask.reason);
   if (!repo) return no(a, "the Ask is not in a factory repo");
+  const after = a.do === "drop" || a.do === "answer" || a.do === "edit-goal" ? a.after : undefined;
+  const parked = after ? parkedIn(after) : null;
+  if (parked) return no(a, `${parked} is parked, so an after on it is refused`);
   const item0 = c.item;
   const n = item0 ? idOf(item0) : undefined;
   const item = n !== undefined ? store.reader().item(repo.key, n) ?? undefined : undefined;
