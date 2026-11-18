@@ -11,6 +11,7 @@ import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, type Starts } from "./factory.ts";
 import { runDispatch } from "./dispatch.ts";
 import { readEvents } from "../../../lib/layout.ts";
+import { sayText } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/pause.ts";
 import { setTick, tickRows, writeBaseline, writeStalls } from "../gates/tables.ts";
 import { conn, getJson } from "../../../lib/db.ts";
@@ -90,6 +91,7 @@ function recorder(): Starts & { taken: string[]; directors: number } {
 }
 
 const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.object);
+const missedText = () => readEvents().filter((e) => e.action === "missed").map((e) => sayText(e));
 
 test("an intake that sets an Ask starts the director at once, with no tick", async () => {
   seed([{ body: "VERDICT:ask" }]);
@@ -157,7 +159,9 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
   expect(await sweep(NOW, s, p)).toEqual([]);
   expect(p.dispatches).toBe(0);
   expect(await sweep(NOW + MIN, s, p)).toEqual([`ask:issue.1`]);
-  expect(missedKeys()).toEqual([`ask:issue.1`]);
+  expect(missedKeys()).toEqual([`issue.1`]);
+  expect(missedText()[0]).toContain("Ask");
+  expect(missedText()[0]).not.toContain("ask:");
   expect(p.dispatches).toBe(1);
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(p.dispatches).toBe(1);
@@ -177,7 +181,9 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   writeList({ key }, "edit", (doc) => { issues.find(doc, 1)!.spec = "New spec."; return true; });
   expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
   expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:issue.1`]);
-  expect(missedKeys()).toEqual([`edited:issue.1`]);
+  expect(missedKeys()).toEqual([`issue.1`]);
+  expect(missedText()[0]).not.toContain("edited:");
+  expect(missedText()[0]).toContain("rerun");
   expect(p.dispatches).toBe(1);
 });
 

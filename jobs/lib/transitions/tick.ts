@@ -3,7 +3,7 @@
  * maintainer (dry vault maintenance, corrections, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the episodes every 30 minutes, the CI read and
  * the firefighter every 5 minutes (every minute while a CI run on a factory main is in progress or a land on it is under 15 minutes old), the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
- * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
+ * not is logged as a `missed` event on its issue or job, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
 import { resolve } from "node:path";
@@ -43,7 +43,7 @@ import { timeoutStep, type Waiting } from "../asks/timeout.ts";
 import { actionsOn } from "../asks/ask.ts";
 import { drop, land, refusal } from "./transitions.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { CLOSED, issueKey, parseKey } from "../../../lib/naming.ts";
+import { CLOSED, issueKey, missedOf, parseKey } from "../../../lib/naming.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -160,7 +160,7 @@ function clearDeadAsks(lists: Reader): void {
 /**
  * The safety net. It records what could move now and does not, each key with the time a tick first saw it: `stalled`
  * (land, issue, ingest), an Ask with no case text and no director run (`ask:`), and a job to rescue (`rescue:`). A key
- * that a tick saw before is missed. Each missed key is logged once as `missed: <key>` and one dispatch starts them all:
+ * that a tick saw before is missed. Each missed key is logged once as a `missed` event on its issue or job, its detail the step that did not move, and one dispatch starts them all:
  * its lands, rescues and issues, then the intake queue and the director. A red main that moved since its record (a fix
  * by hand) starts the suite once per commit. It reads the store and the repos as last fetched. Returns the missed keys.
  */
@@ -177,7 +177,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && holdsWork(runs, "intake", k.slice("ingest:".length))));
   const missed = over.filter((k) => !s.missed.includes(k));
   s.missed = over;
-  for (const k of missed) logEvent({ subject: "rule", action: "missed", object: k });
+  for (const k of missed) logEvent({ subject: "rule", action: "missed", ...missedOf(k) });
   if (missed.length) await p.dispatch();
   const reg = loadRegistry();
   for (const b of Object.values(baselines())) {

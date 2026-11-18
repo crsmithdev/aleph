@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { heraldRows, plain, type Context } from "./herald.ts";
 import { row } from "./now.testkit.ts";
-import { setCodes } from "../lib/naming.ts";
+import { missedOf, setCodes } from "../lib/naming.ts";
 
 beforeEach(() => setCodes({ aleph: "a" }));
 afterAll(() => setCodes({}));
@@ -74,6 +74,15 @@ test("a stalled event of a job folds into its issue's row, which the start heads
   expect(rest).toEqual([]);
   expect([r.word, plain(r.id)]).toEqual(["started", "a2072"]);
   expect(r.lines.map((l) => plain(l.text))).toEqual(["stalled a2072 · intake"]);
+});
+
+test("a missed event on an issue is a row with its short ID, a link and the stalled step, and shows no raw key", () => {
+  const { object, detail } = missedOf("goal:issue.3203");
+  const [r, ...rest] = rows([{ ...row({ at: "2026-11-18T10:00:00Z", by: "rule", subject: object, action: "missed", note: detail }), project: "aleph" }]);
+  expect(rest).toEqual([]);
+  expect(r.id).toEqual([{ id: "a3203", to: "#/issues/aleph/3203" }]);
+  expect(plain([...r.id, ...r.text, ...r.lines.flatMap((l) => l.text)])).toContain("start");
+  expect(JSON.stringify(r)).not.toContain("goal:");
 });
 
 test("a hold word of lib/naming.ts that the Herald once lacked is a wait and has no row", () => {
