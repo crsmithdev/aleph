@@ -13,6 +13,11 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 | `lessons-3.html` | Round 1, option 3: a fold on the Automation Lessons card |
 | `memory-1.html` | Round 2, option 1: a Lessons tab on Memory |
 | `memory-2.html` | Round 2, option 2: a Review tab with Needs you, Changed without you and one item chain |
+| `split-status.html` | Round 3: Status holds every decision, waiting and made without Chris |
+| `split-memory.html` | Round 3: Memory Notes, with the chain of `identity/CLAUDE.md § Verification` open |
+| `split-loop.html` | Round 3: Memory › Loop, with signals by source, monitor findings and every lesson |
+| `split-log.html` | Round 3: Memory › Log, one log for writes, decisions and rule acts |
+| `split-automation.html` | Round 3: Automation as knobs only: schedules, Always rules, controls, held paths |
 | [lessons-proposal.md](lessons-proposal.md), [memory-proposal.md](memory-proposal.md) | The decisions, the data changes and what was not verified |
 
 ## Decisions
