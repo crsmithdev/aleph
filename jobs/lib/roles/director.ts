@@ -300,12 +300,12 @@ Reply with the case text only. ${CASE_TEXT(acts)}
   return `${head}
 # The rules
 
-- Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
+- Decide when you can: answer the question, rerun the issue, drop the run, edit the spec or the issue, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
 - Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
-- When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun. An \`after\` must name open issues: an \`after\` on a parked issue is refused.
+- When a run cannot pass until another open issue lands, drop it or edit the issue with \`after\` set to that issue. A note alone does not stop a rerun. An \`after\` must name open issues: an \`after\` on a parked issue is refused.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec: a clause that counts text the Goal leaves out, or a clause that needs a name the code does not have.
-- A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this goal with edit-goal when it must wait for the fix.
+- A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this issue with edit-issue when it must wait for the fix.
 - Every reply has the case text. Add actions to decide; with no actions the Ask goes to Chris. An Ask that your actions leave open goes to Chris with your case text.
 
 ${caseText(c)}
@@ -325,9 +325,9 @@ ${onRun ? `- land: land the run's branch
 ` : `- answer: a "note" with the decision, an optional "option" (an option's label) and an optional "after"
 - rerun: an optional "note" that says why
 - drop: drop the item's open job, with a "reason", an optional "after" and an optional "fate"
-`}- close: mark the item done, with a "note" that says why the goal is already met on main
+`}- close: mark the item done, with a "note" that says why the issue is already met on main
 - drop-issue: a "reason" that says why nothing more runs for it
-- edit-goal: an optional "body" with the new spec, and an optional "after" of the open goals it waits for
+- edit-issue: an optional "body" with the new spec, and an optional "after" of the open issues it waits for
 - add: the fix job's "title" and its spec as "body"
 - note: a "text" to note on the item
 `;
@@ -340,7 +340,7 @@ export type Action =
   | { do: "rerun"; note?: string }
   | { do: "close"; note: string }
   | { do: "drop-issue"; reason: string }
-  | { do: "edit-goal"; body?: string; after?: string[] }
+  | { do: "edit-issue"; body?: string; after?: string[] }
   | { do: "add"; title: string; body: string }
   | { do: "note"; text: string };
 
@@ -364,7 +364,7 @@ export const DIRECTOR_SCHEMA = {
           shape("rerun", { note: nonEmpty }),
           shape("close", { note: nonEmpty }, ["note"]),
           shape("drop-issue", { reason: nonEmpty }, ["reason"]),
-          shape("edit-goal", { body: nonEmpty, after: refList }),
+          shape("edit-issue", { body: nonEmpty, after: refList }),
           shape("add", { title: nonEmpty, body: nonEmpty }, ["title", "body"]),
           shape("note", { text: nonEmpty }, ["text"]),
         ],
@@ -403,7 +403,7 @@ function parseAction(raw: any): Action | string {
     case "rerun": return { do: "rerun", ...(f("note") ? { note: f("note")! } : {}) };
     case "close": return f("note") ? { do: "close", note: f("note")! } : "close without a note";
     case "drop-issue": return f("reason") ? { do: "drop-issue", reason: f("reason")! } : "drop-issue without a reason";
-    case "edit-goal": return f("body") || after ? { do: "edit-goal", ...(f("body") ? { body: f("body")! } : {}), ...w } : "edit-goal without a body or after";
+    case "edit-issue": return f("body") || after ? { do: "edit-issue", ...(f("body") ? { body: f("body")! } : {}), ...w } : "edit-issue without a body or after";
     case "add": return f("title") && f("body") ? { do: "add", title: f("title")!, body: f("body")! } : "add without a title and a body";
     case "note": return f("text") ? { do: "note", text: f("text")! } : "note without text";
     default: return `unknown action ${JSON.stringify(raw.do)}`;
@@ -414,7 +414,7 @@ const describe = (a: Action): string =>
   a.do === "land" ? "land" : a.do === "drop" ? `drop: ${a.reason}${a.after ? ` (after ${a.after.join(", ")})` : ""}`
   : a.do === "answer" ? `answer: ${a.option ? `${a.option}: ` : ""}${a.note}${a.after ? ` (after ${a.after.join(", ")})` : ""}`
   : a.do === "rerun" ? `rerun${a.note ? `: ${a.note}` : ""}` : a.do === "close" ? `close: ${a.note}` : a.do === "drop-issue" ? `drop-issue: ${a.reason}`
-  : a.do === "edit-goal" ? `edit-goal${a.body !== undefined ? " (spec)" : ""}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : a.do === "add" ? `add: ${a.title}` : `note: ${a.text}`;
+  : a.do === "edit-issue" ? `edit-issue${a.body !== undefined ? " (spec)" : ""}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : a.do === "add" ? `add: ${a.title}` : `note: ${a.text}`;
 
 /** The case text in a raw object, or why it does not do. Text over a limit moves to `details` by whole sentences. */
 function parseCaseText(raw: any, actions: string[]): Text | string {
@@ -531,7 +531,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   const repo = c.repo;
   const sub = askSub(c.ask.reason);
   if (!repo) return no(a, "the Ask is not in a factory repo");
-  const after = a.do === "drop" || a.do === "answer" || a.do === "edit-goal" ? a.after : undefined;
+  const after = a.do === "drop" || a.do === "answer" || a.do === "edit-issue" ? a.after : undefined;
   const parked = after ? parkedIn(after) : null;
   if (parked) return no(a, `${parked} is parked, so an after on it is refused`);
   const item0 = c.item;
@@ -620,7 +620,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}));
     return why ? no(a, why) : done(a, { action: a.do === "rerun" ? "reran" : "answered", sub, note: a.do === "rerun" ? a.note : option ? `${option.label}: ${a.note}` : a.note });
   }
-  // edit-goal
+  // edit-issue
   const list = store.reader().list(repo.key);
   if (list && issues.partsOf(list, item).length) return no(a, "it has parts");
   const why = await refusal(async () => verbs.edit(repo, n!, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));

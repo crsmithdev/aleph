@@ -48,7 +48,7 @@ export const OLD: Record<string, Record<string, string>> = {
   actor: { You: "human", Rule: "rule", Gate: "gate", Director: "director", Firefighter: "firefighter", triage: "intake", planner: "intake" },
   act: {
     land: "landed", drop: "dropped", "drop-issue": "dropped", decline: "dropped", rerun: "reran", retry: "reran", add: "filed",
-    approve: "filed", answer: "answered", recommended: "answered", close: "done", "edit-goal": "changed",
+    approve: "filed", answer: "answered", recommended: "answered", close: "done", "edit-issue": "changed", "edit-goal": "changed",
   },
 };
 

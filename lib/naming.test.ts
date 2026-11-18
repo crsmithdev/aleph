@@ -48,6 +48,8 @@ describe("words", () => {
     expect(n.word("actor", "You")).toBe("human");
     expect(n.word("act", "land")).toBe("landed");
     expect(n.word("act", "landed")).toBe("landed");
+    expect(n.word("act", "edit-issue")).toBe("changed");
+    expect(n.word("act", "edit-goal")).toBe("changed");
   });
   test("OLD keeps only the sets that live code still writes", () => {
     expect(Object.keys(n.OLD).sort()).toEqual(["act", "actor", "ask"]);

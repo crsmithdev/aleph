@@ -242,7 +242,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 The first verb of a pair goes ahead and the second drops the issue; the second takes an optional typed reason. `approve` lands the job, applies the core-note change or reopens the proposal issue. `resolve` takes an option, the recommendation or a typed answer; a `part-dropped` Ask offers the options "Close as done" and "Keep open". `continue` starts the job or intake again. `disapprove` on a proposal also stops the memory proposing it again, and on `core-change` it keeps the note. The six words are `ASK_ACTIONS` in `lib/naming.ts`.
 
-**The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-goal`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
+**The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-issue`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 
 - closing or dropping an issue Chris filed;
 - landing a branch that changes a security path or `bun.lock`;

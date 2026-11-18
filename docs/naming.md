@@ -161,4 +161,4 @@ A writer writes only the new words, and a reader reads the stored words as they 
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
 | Gate | pause (`paused`), backend (`waiting`), live-cap (`full`, `gpu`) → a `changed` event on `settings`, and no hold; baseline (`red`) → `held: red`; not-ready (`done`, `after`, or the open job's state) → `held: after` or `held: job`, and a done issue gets no hold; busy-file (`busy`) → `held: file`; credit-wait (`credit`) → `held: credit`; loop-guard (`looping`) → the Ask's `question` event, and no hold |
 | Kind | agent → build; triage, plan → intake; explain → director; firefighter → director; facts stays, since readers tell it from the job's real runs |
-| Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-goal → changed |
+| Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-issue, edit-goal → changed |

@@ -399,24 +399,31 @@ test("a part-dropped grant with no recommended option leaves the Ask to the dire
   expect(item(1).notes.at(-1)).toContain("Keep open");
 });
 
-test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
+test("an edit-issue with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
   fresh([{ title: "goal", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
   const folder = run({ name: "issue.1", target: "issue.1", state: "failed" });
   markAsked({ id: jobOfFolder(folder), folder, run: getRun(jobOfFolder(folder))! }, "which wins?", specVersion(item(1)));
-  reply([{ do: "edit-goal", body: "A clearer spec." }]);
+  reply([{ do: "edit-issue", body: "A clearer spec." }]);
   let dispatches = 0;
   const [d] = await directAll([repo()], { ...ports(), dispatch: () => { dispatches++; } });
-  expect(d.applied).toEqual(["edit-goal (spec)"]);
+  expect(d.applied).toEqual(["edit-issue (spec)"]);
   expect(item(1).spec).toBe("A clearer spec.");
   expect(dispatches).toBe(1);
 });
 
-test("an edit-goal whose after names a parked issue is refused: the goal waits for nothing and the Ask goes to Chris", async () => {
+test("the director prompt says issue, not goal, outside the ## Goal section name", async () => {
+  fresh([{ title: "product", ask: plain("which wins?") }]);
+  reply([{ do: "edit-issue", body: "A clearer spec." }]);
+  await direct();
+  expect(prompt().replaceAll("## Goal", "")).not.toMatch(/\bgoal/);
+});
+
+test("an edit-issue whose after names a parked issue is refused: the goal waits for nothing and the Ask goes to Chris", async () => {
   fresh([{ title: "goal", specced: true, ask: plain("which wins?") }, { title: "parked one" }]);
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 2)!, "parked"); return true; });
-  reply([{ do: "edit-goal", body: "A clearer spec.", after: ["issue.2"] }]);
+  reply([{ do: "edit-issue", body: "A clearer spec.", after: ["issue.2"] }]);
   const [d] = await direct();
-  expect(d.refused).toEqual([`edit-goal (spec) (after issue.2): issue.2 is parked, so an after on it is refused`]);
+  expect(d.refused).toEqual([`edit-issue (spec) (after issue.2): issue.2 is parked, so an after on it is refused`]);
   expect(d.applied).toEqual([]);
   expect(d.outcome).toBe("escalated");
   expect(item(1).spec).toBe("Ship the thing.");
