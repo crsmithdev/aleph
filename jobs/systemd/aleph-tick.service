@@ -3,6 +3,7 @@
 #   systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
 #   journalctl --user -u aleph-tick -n 20
 [Unit]
+OnFailure=aleph-alert@%n.service
 Description=aleph factory tick
 
 [Service]

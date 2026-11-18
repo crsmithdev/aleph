@@ -73,6 +73,14 @@ describe("units", () => {
     expect(unitChecks().find((c) => c.name === "aleph-tick.timer next run")).toMatchObject({ ok: true, detail: "aleph-tick.service is running" });
   });
 
+  test("a service that systemd reports as failed fails its check; activating, active and inactive pass", () => {
+    const state = (word: string) => {
+      fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo ${word}; exit 3; }; echo active;; list-timers) echo '[]';; esac`);
+      return unitChecks().find((c) => c.name === "unit aleph-tick.service")?.ok;
+    };
+    expect(["failed", "activating", "active", "inactive"].map(state)).toEqual([false, true, true, true]);
+  });
+
   test("the next run is the wall-clock time from list-timers less now, for the tick and the suite, not the monotonic time from boot", () => {
     const now = Date.parse("2026-11-04T20:00:00Z");
     const at = (ms: number) => (now + ms) * 1000;

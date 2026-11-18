@@ -1,0 +1,9 @@
+# Tells Chris that a unit failed: aleph-tick.service and aleph-suite.service name it in OnFailure=. See docs/factory.md.
+#   systemctl --user link ~/aleph/jobs/systemd/aleph-alert@.service
+[Unit]
+Description=aleph alert that %i failed
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.bun/bin/bun %h/aleph/jobs/lib/infra/unit-alert.ts %i

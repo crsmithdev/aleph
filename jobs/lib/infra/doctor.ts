@@ -102,6 +102,7 @@ export function gitChecks(): Check[] {
 
 /** The timers whose next run doctor checks: the tick and the suite. */
 const TIMERS = ["aleph-tick.timer", "aleph-suite.timer"];
+const SERVICES = TIMERS.map((t) => t.replace(/\.timer$/, ".service"));
 
 /** The time to each timer's next run, or that its service runs now. */
 function timerChecks(now = Date.now()): Check[] {
@@ -125,6 +126,11 @@ export function unitChecks(now = Date.now()): Check[] {
   for (const unit of ["aleph-ui", "home-proxy", ...TIMERS]) {
     const r = systemctl("is-active", unit);
     checks.push(r.ok && r.out === "active" ? ok(`unit ${unit}`, "active") : bad(`unit ${unit}`, r.out.split("\n")[0] || "not active"));
+  }
+  // A oneshot service is inactive between runs, so only `failed` is a fault.
+  for (const unit of SERVICES) {
+    const state = systemctl("is-active", unit).out.split("\n")[0];
+    checks.push(state === "failed" ? bad(`unit ${unit}`, "failed") : ok(`unit ${unit}`, state || "not failed"));
   }
   return [...checks, ...timerChecks(now)];
 }

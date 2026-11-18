@@ -7,13 +7,14 @@ A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` i
 ## Set it up
 
 ```bash
+systemctl --user link ~/aleph/jobs/systemd/aleph-alert@.service
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
 systemctl --user link ~/aleph/jobs/systemd/aleph-suite.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-suite.timer
 ```
 
-The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer runs `aleph suite` every hour. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
+The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer runs `aleph suite` every hour. When either service fails, `aleph-alert@.service` posts one Sidetone tell that names it, and no second tell for that unit within 30 minutes; `aleph doctor` fails a service that systemd reports as `failed`. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
 
 ## Commands
 
