@@ -2,9 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { addedLines, CHECK_SLOTS, failedTests, failureLine, keepGate, mutants, newCases, newTests, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, failedTests, failureLine, keepGate, mutants, newCases, newTests, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { git } from "../../../lib/git.ts";
-import { lock } from "../../../lib/locks.ts";
 import { flakes } from "./tables.ts";
 import { readSection } from "../records/run-files.ts";
 import type { CheckResult, Repo } from "../records/ledger.ts";
@@ -104,20 +103,6 @@ test("a check waits while the load is at or over the limit, its time limit start
   expect(phases).toEqual(["check a", "check a: waiting: load 12.0 is at or over 8", "check a: waiting: load 8.0 is at or over 8", "check a"]);
 });
 
-test("a check waits while CHECK_SLOTS other checks run, and starts when one ends", async () => {
-  delete process.env.ALEPH_LOAD_LIMIT;
-  const held = await Promise.all(Array.from({ length: CHECK_SLOTS }, (_, i) => lock(`check-${i}`, 0)));
-  const calls: string[] = [], phases: string[] = [];
-  let pauses = 0;
-  const exec: CheckExec = async (check, out) => { calls.push(check.name); writeFileSync(out, ""); return { code: 0, timedOut: false }; };
-  // The second pause frees a slot, as a check that ends does.
-  const admission = { load: () => 0, pause: async () => { if (++pauses === 2) held[0]!(); } };
-  expect(await runChecks({ folder: base, repo: repo("a"), changed: [], phase: (p) => phases.push(p), admission }, exec)).toBeNull();
-  expect([calls, pauses]).toEqual([["a"], 2]);
-  expect(phases).toContain(`check a: waiting: ${CHECK_SLOTS} other checks run`);
-  for (const r of held.slice(1)) r!();
-});
-
 test("exit code 124 without the clock is an ordinary failure", async () => {
   const r = await run(repo("a"), [{ code: 124 }, { code: 124 }]);
   expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "a failed" }, calls: ["a", "a"] });
@@ -186,8 +171,7 @@ test("flake rows from parallel processes all survive", async () => {
 import { runChecks } from ${JSON.stringify(join(import.meta.dir, "checks.ts"))};
 let n = 0;
 const repo = { key: "r", checks: Array.from({ length: 25 }, (_, i) => ({ name: process.argv[2] + "-" + i, run: "x" })) };
-// The checks are instant, so the wait for a slot needs no pause.
-await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () => {}, admission: { load: () => 0, pause: async () => {} } }, async () => ({ code: n++ % 2 ? 0 : 1, timedOut: false }));
+await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () => {} }, async () => ({ code: n++ % 2 ? 0 : 1, timedOut: false }));
 `);
   const names = Array.from({ length: 8 }, (_, i) => `c${i}`);
   const procs = names.map((n) => Bun.spawn([process.execPath, script, n], { env: process.env, stdout: "ignore", stderr: "pipe" }));

@@ -7,10 +7,9 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { recordFlake } from "./tables.ts";
-import { admit, realAdmission, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
+import { admit, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
-import { lock } from "../../../lib/locks.ts";
 import { git } from "../../../lib/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
@@ -70,21 +69,6 @@ export const testRecord = (file: string): TestRecord =>
   existsSync(file) ? junitRecord(readFileSync(file, "utf8")) : { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] };
 
 /**
- * Checks that run at once, on the whole host. A repo's suite runs `bun test --parallel` on half the cores, and the
- * 1-minute load average lags the starts: on 2026-11-15, five suites at once put the 5-minute load at 43 on 24 cores,
- * and CLI tests hit their 30 s limit, which failed three builds. A check past the slots waits; it fails nothing.
- */
-export const CHECK_SLOTS = 2;
-
-/** Hold one of the CHECK_SLOTS slots, waiting with `a.pause` while all are taken. Returns its release. */
-async function checkSlot(say: (line: string) => void, a: Admission): Promise<() => void> {
-  for (let said = false; ; await a.pause(2000)) {
-    for (let i = 0; i < CHECK_SLOTS; i++) { const r = await lock(`check-${i}`, 0); if (r) return r; }
-    if (!said) { say(`waiting: ${CHECK_SLOTS} other checks run`); said = true; }
-  }
-}
-
-/**
  * The one loop. Each check waits for the admission first. A check that fails runs once more on the same tree; a pass
  * then is a flake. A check that a clock or a signal ends gives no verdict and does not run again here: the rescue
  * runs it again. The first failure or no verdict ends the loop. Returns why.
@@ -103,11 +87,8 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
       rmSync(report, { force: true });
       return exec(run, out, limit);
     };
-    // The waits for a slot and the admission are outside the time limit and outside the check's seconds.
-    const say = (line: string) => t.phase(`check ${check.name}: ${line}`);
-    const release = await checkSlot(say, t.admission ?? realAdmission);
-    try {
-    await admit(say, t.admission);
+    // The wait for the admission is outside the time limit and outside the check's seconds.
+    await admit((line) => t.phase(`check ${check.name}: ${line}`), t.admission);
     t.phase(`check ${check.name}`);
     const limit = checkSeconds();
     const t0 = Date.now();
@@ -139,7 +120,6 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
       return { cause: "check", checkName: check.name, reason: why ? `${check.name} failed: ${why}` : `${check.name} failed` };
     }
     if (none) return { cause: "check", checkName: check.name, reason: `ran 0 tests: check ${check.name}` };
-    } finally { release(); }
   }
   return null;
 }

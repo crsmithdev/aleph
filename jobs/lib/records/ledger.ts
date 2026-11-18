@@ -296,7 +296,7 @@ export const realTell: Tell = {
 
 /** How the admission reads the load and waits: `load` gives the 1-minute load average. Tests give both. */
 export interface Admission { load: () => number; pause: (ms: number) => Promise<void> }
-export const realAdmission: Admission = { load: () => loadavg()[0], pause: (ms) => Bun.sleep(ms) };
+const realAdmission: Admission = { load: () => loadavg()[0], pause: (ms) => Bun.sleep(ms) };
 
 /** How long a start that had to wait keeps the queue, so the load average shows it before the next start reads the load. */
 const ADMIT_GAP_MS = 15_000;
