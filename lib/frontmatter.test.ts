@@ -29,8 +29,12 @@ test.each([
   expect(roundTrip({ key: value as string[] })).toEqual({ key: value as string[] });
 });
 
-test("a note written by hand still parses: comments, single quotes and block lists", () => {
-  expect(parseFrontmatter("a: b # note\nc: [x, 'y z'] # note\nd:\n  - e\n  - \"f\"")).toEqual({ a: "b", c: ["x", "y z"], d: ["e", "f"] });
+test("a note written by hand still parses: single quotes and block lists", () => {
+  expect(parseFrontmatter("a: b\nc: [x, 'y z']\nd:\n  - e\n  - \"f\"")).toEqual({ a: "b", c: ["x", "y z"], d: ["e", "f"] });
+});
+
+test("a scalar keeps its # text", () => {
+  expect(parseFrontmatter("core: Review runs on #/kit (ui/kit.js), see #12")).toEqual({ core: "Review runs on #/kit (ui/kit.js), see #12" });
 });
 
 test("a block scalar folds with > and keeps its lines with |", () => {
