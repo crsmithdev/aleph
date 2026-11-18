@@ -13,7 +13,7 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 | `lessons-3.html` | Round 1, option 3: a fold on the Automation Lessons card |
 | `memory-1.html` | Round 2, option 1: a Lessons tab on Memory |
 | `memory-2.html` | Round 2, option 2: a Review tab with Needs you, Changed without you and one item chain |
-| `lessons-proposal.md`, `memory-proposal.md` | The decisions, the data changes and what was not verified |
+| [lessons-proposal.md](lessons-proposal.md), [memory-proposal.md](memory-proposal.md) | The decisions, the data changes and what was not verified |
 
 ## Decisions
 
