@@ -13,7 +13,7 @@ export class LangfuseError extends Error {
 export interface Span { from?: Date; to?: Date }
 /** `core` leaves out each trace's input and output. */
 export interface TraceQuery extends Span { session?: string; core?: boolean }
-export interface ObservationQuery extends Span { trace?: string; type?: string }
+export interface ObservationQuery extends Span { trace?: string; type?: string; name?: string }
 /** One model's cost in one UTC hour: `at` is the hour's start in ms, `cost` is USD. */
 export interface Hourly { at: number; model: string; cost: number }
 /** The fields of a Langfuse trace that the code reads. */
@@ -83,7 +83,7 @@ export function http(cfg: LangfuseConfig): Langfuse {
   return {
     base: cfg.baseUrl,
     traces: (q, source) => allPages(cfg, "/api/public/traces", params({ fromTimestamp: iso(q.from), toTimestamp: iso(q.to), sessionId: q.session, fields: q.core ? "core" : undefined }), source),
-    observations: (q, source) => allPages(cfg, "/api/public/observations", params({ fromStartTime: iso(q.from), toStartTime: iso(q.to), traceId: q.trace, type: q.type }), source),
+    observations: (q, source) => allPages(cfg, "/api/public/observations", params({ fromStartTime: iso(q.from), toStartTime: iso(q.to), traceId: q.trace, type: q.type, name: q.name }), source),
     trace: async (id) => {
       const path = `/api/public/traces/${encodeURIComponent(id)}`;
       const res = await fetch(`${cfg.baseUrl}${path}`, { headers, signal: AbortSignal.timeout(TIMEOUT) });
@@ -119,7 +119,7 @@ export function memory(rows: { [K in keyof Lists]: Lists[K][] }) {
   const lf = {
     base: "http://langfuse.test", asked, down: null as Error | null,
     traces: (q: TraceQuery) => read("traces", q, (t) => within(t.timestamp, q) && (!q.session || t.sessionId === q.session)),
-    observations: (q: ObservationQuery) => read("observations", q, (o) => within(o.startTime, q) && (!q.trace || o.traceId === q.trace) && (!q.type || o.type === q.type)),
+    observations: (q: ObservationQuery) => read("observations", q, (o) => within(o.startTime, q) && (!q.trace || o.traceId === q.trace) && (!q.type || o.type === q.type) && (!q.name || o.name === q.name)),
     trace: async (id: string) => {
       const t = rows.traces.find((t) => t.id === id);
       return t ? { ...t, observations: rows.observations.filter((o) => o.traceId === id) } : null;

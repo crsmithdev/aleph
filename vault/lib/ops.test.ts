@@ -862,7 +862,7 @@ describe("misses", () => {
       if (u.pathname !== "/api/public/observations") return new Response("nope", { status: 404 });
       seen.push(u.searchParams);
       const from = new Date(u.searchParams.get("fromStartTime")!).getTime();
-      const all = data.filter((o) => new Date(o.startTime).getTime() >= from);
+      const all = data.filter((o) => new Date(o.startTime).getTime() >= from && o.name === (u.searchParams.get("name") ?? o.name));
       const page = Number(u.searchParams.get("page"));
       return Response.json({ data: all.slice((page - 1) * 5, page * 5), meta: { page, totalPages: Math.ceil(all.length / 5) } });
     } });

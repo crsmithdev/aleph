@@ -310,7 +310,10 @@ export const misses = (days = 7) => op(async () => {
   const to = new Date();
   const from = new Date(to.getTime() - days * 86400_000);
   let obs: Observation[];
-  try { obs = (await lf.observations({ from, to: new Date(to.getTime() + 60_000) })).rows; }
+  // Only these three names are read below: asking for them alone skips more than half of a week's pages.
+  // One name at a time keeps the in-flight pages at allPages' own limit.
+  const span = { from, to: new Date(to.getTime() + 60_000) };
+  try { obs = []; for (const name of ["Bash", "Read", "vault-recall"]) obs.push(...(await lf.observations({ ...span, name })).rows); }
   catch (e) { fail(`Langfuse failed: ${errText(e)}`); }
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
