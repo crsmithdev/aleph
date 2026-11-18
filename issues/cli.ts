@@ -77,16 +77,16 @@ export async function todoCmd(ctx: Ctx, use: string): Promise<void> {
     }
     case "show": {
       const i = verbs.show(repo, id);
-      if (json) { ctx.out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
+      if (json) { ctx.out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, media: issues.mediaOf(i) }); return; }
       ctx.log(`## ${shown(repo.key, i)}. ${i.title}`);
       const ask = askOfItem(i);
-      ctx.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${store.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
-      ctx.log(`after ${store.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${store.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
+      ctx.log(`${issues.status(i)}   source ${issues.sourceOf(i)}   priority ${issues.priorityOf(i)}   updated ${issues.updated(i) ?? "-"}`);
+      ctx.log(`after ${issues.afterOf(i).map(shownRef).join(", ") || "-"}   refs ${issues.refsOf(i).map(shownRef).join(", ") || "-"}   areas ${issues.areasOf(i).join(", ") || "-"}`);
       ctx.log(`ask ${ask ? `${ask.reason}: ${ask.question}` : "-"}`);
       if (i.request.trim()) ctx.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) ctx.log(`\n${i.spec}`);
       if (i.notes.length) ctx.log(`\n### Notes\n${i.notes.join("\n")}`);
-      const media = store.mediaOf(i);
+      const media = issues.mediaOf(i);
       if (media.length) ctx.log(`\n### Media\n${media.map((m) => `- ${m}`).join("\n")}`);
       return;
     }
@@ -178,12 +178,12 @@ const shownRef = (r: string): string => {
   const name = store.projectsOnMain().get(parseKey(r)?.n ?? 0);
   return shownKey(r, name && loadRegistry()[name]?.code);
 };
-const ready = (i: issues.Issue) => (store.afterOf(i).length ? `after ${store.afterOf(i).map(shownRef).join(",")}` : "");
+const ready = (i: issues.Issue) => (issues.afterOf(i).length ? `after ${issues.afterOf(i).map(shownRef).join(",")}` : "");
 /** The issue's key as the terminal shows it: `a1234`, with its project's code. */
 const shown = (key: string, i: issues.Issue): string => shownKey(issueKey(i.id), loadRegistry()[key]?.code);
 
 function printRows(ctx: Ctx, rows: issues.Issue[], key: string, indent = ""): void {
   const refs = rows.map((i) => shown(key, i));
   const w = refs.reduce((m, r) => Math.max(m, r.length), 0);
-  for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${store.priorityOf(i).padEnd(8)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
+  for (const [n, i] of rows.entries()) ctx.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${issues.priorityOf(i).padEnd(8)} ${i.title}${ready(i) ? `  (${ready(i)})` : ""}`);
 }

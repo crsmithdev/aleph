@@ -71,7 +71,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   // A parent whose parts all landed closes without a green main, after the sweep closes the parts.
   const lists = reader();
   for (const repo of now ? [] : sandboxRepos()) skipped.push(...await sweepRepo(repo, lists, at.done));
-  const ready = buildableIssues(sandboxRepos()).filter(({ item }) => !now || issueKey(issues.idOf(item)) === now);
+  const ready = buildableIssues(sandboxRepos()).filter(({ item }) => !now || issueKey(item.id) === now);
   /** The text that stopped a Run now. */
   let refused: string | undefined;
   /** The full bound's `N / M jobs`, when a decision skipped an issue for the cap. */
@@ -98,7 +98,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     skip(name, d.kind as Gate, now ? d.text : d.why, b ? heldEvent("red", `at ${b.commit.slice(0, 7)}: ${b.failed}`) : d.ev!);
   };
   for (const { repo, item: listed } of ready) {
-    const ref = issues.idOf(listed);
+    const ref = listed.id;
     const name = issueKey(ref);
     if (at.done(`${repo.key}-${ref}`)) continue;
     // The cheap facts first: the pause was asked above.

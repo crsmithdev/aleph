@@ -205,7 +205,7 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
 }
 
 /** Whether closing or dropping this issue is Chris's: he filed it. */
-const chrisOwns = (item: issues.Issue): boolean => store.sourceOf(item) === "chris";
+const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "chris";
 
 const lastLines = (s: string | undefined): string | null => { const t = s?.trimEnd(); return t ? t.split("\n").slice(-TAIL).join("\n") : null; };
 const tail = (folder: string, file: string): string | null => {
@@ -259,7 +259,7 @@ On: ${c.at === "run" ? `a run of the job ${run!.run.name}` : "an issue"}${c.ask.
 Actions on Chris's card: ${actionsOf(c).join(", ")}
 Question: ${c.ask.question || "(none)"}
 ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${o.line}${o.after ? ` (waits for ${o.after})` : ""}`).join("\n")}\n` : ""}${c.ask.recommended ? `Recommended option: ${c.ask.recommended}\n` : ""}${c.ask.why.length ? `Why:\n${c.ask.why.map((w) => `- ${w}`).join("\n")}\n` : ""}${item ? `
-# Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${store.sourceOf(item)})
+# Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${issues.sourceOf(item)})
 ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes", item.notes.join("\n"))}` : ""}${run ? `
 # The run ${c.on}
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("The review of the run", reviewOf(run))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of the checks log", lastLines(readSection(run.folder, "checks")))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
@@ -476,7 +476,7 @@ function stillOpen(c: Case): boolean {
 /** Write the text on the Ask, when the Ask is still the same one. Whether it was written. */
 function writeCaseText(c: Case, t: Text): boolean {
   if (c.at === "item") {
-    const item = store.reader().item(c.repo.key, issues.refOf(c.item));
+    const item = store.reader().item(c.repo.key, c.item.id);
     const now = askOf(c.on);
     if (!item || !asking(item, now) || !sameAsk(now, c.ask)) return false;
     setAsk(c.on, { ...now, ...t });
@@ -613,7 +613,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   }
   // edit-goal
   const list = store.reader().list(repo.key);
-  if (list && store.partsOf(list, item).length) return no(a, "it has parts");
+  if (list && issues.partsOf(list, item).length) return no(a, "it has parts");
   const why = await refusal(async () => verbs.edit(repo, n!, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   if (!why && a.body !== undefined) ports.dispatch?.();
   return why ? no(a, why) : done(a, { action: "changed", sub, on: a.after, note: a.body !== undefined ? "the spec" : undefined }, false);

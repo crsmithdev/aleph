@@ -11,7 +11,6 @@ import { isWaiting, type Run, type State, isOpen } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { counting } from "./record.ts";
 import { eventsOf } from "../../../lib/layout.ts";
-import * as store from "../../../lib/store.ts";
 import * as issues from "../../../lib/todo.ts";
 import { issueKey, parseKey, say, sayText, type StageName } from "../../../lib/naming.ts";
 
@@ -60,13 +59,13 @@ export interface Ctx {
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
   const a = askOfItem(item);
-  const hold = issues.status(item) === "open" ? eventsOf(issueKey(issues.refOf(item)), "held", "started").at(-1) : undefined;
+  const hold = issues.status(item) === "open" ? eventsOf(issueKey(item.id), "held", "started").at(-1) : undefined;
   return {
-    id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
+    id: `${key}-${item.id}`, status: issues.status(item),
     ...(hold?.action === "held" ? { held: say(hold).map((p) => (typeof p === "string" ? p : p.id)).join("") } : {}),
-    parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),
+    parts: issues.partsOf(doc, item).map((p) => `${key}-${p.id}`),
     ...(a ? { ask: { reason: a.reason } } : {}),
-    spec: !!item.spec.trim(), plan: store.planSet(item), tracker: store.isTracker(item),
+    spec: !!item.spec.trim(), plan: issues.planSet(item), tracker: issues.isTracker(item),
   };
 }
 

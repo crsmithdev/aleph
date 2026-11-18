@@ -12,7 +12,7 @@ import { errText } from "../../../lib/errtext.ts";
 
 /** After a write that leaves an open issue of a factory repo buildable: a dispatch, so the issue starts at once. */
 export function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
-  if (!repo.sandbox || !buildableIssue(repo, issues.idOf(item))) return;
+  if (!repo.sandbox || !buildableIssue(repo, item.id)) return;
   dispatchDetached();
 }
 

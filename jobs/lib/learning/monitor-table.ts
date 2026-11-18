@@ -280,7 +280,7 @@ export const flakeLines = (now = Date.now(), lists: Reader = reader()): string[]
 export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
   const lists = reader({ fetch: false });
-  const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${issues.refOf(item)}`, item })));
+  const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${item.id}`, item })));
   return {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),

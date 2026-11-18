@@ -122,7 +122,7 @@ const failsOf = (text: string): string[] => failedTests(text).sort();
 /** Whether two failures failed the same tests. A failure with no `(fail)` lines matches only another with none. */
 const sameFails = (a: string, b: string): boolean => { const x = failsOf(a), y = failsOf(b); return x.length === y.length && x.every((t, i) => t === y[i]); };
 /** The issue that holds this commit already: in its request, as filed, or in a note, as a later commit during an open fix. */
-const holds = (i: issues.Issue, commit: string) => store.isRedMain(i) && (i.request.includes(mark(commit)) || i.notes.some((n) => n.includes(mark(commit))));
+const holds = (i: issues.Issue, commit: string) => issues.isRedMain(i) && (i.request.includes(mark(commit)) || i.notes.some((n) => n.includes(mark(commit))));
 
 const TITLES: Record<Source, string> = { baseline: "Fix the red main at", ci: "Fix the red CI on main at" };
 const titleOf = (r: Red) => (/^[0-9a-f]{7,}$/.test(r.commit) ? `${TITLES[r.source]} ${r.commit.slice(0, 7)}` : TITLES[r.source].replace(/ at$/, ""));
@@ -143,7 +143,7 @@ function fileRed(r: Red, effects: store.Effects = defaultPorts): Filed | null {
   const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\n${what}:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
   const w = store.writeFiling(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, "gate", effects, (doc, file): Filed | null => {
     if (doc.items.some((i) => holds(i, r.commit))) return null;
-    const open = doc.items.filter((i) => issues.status(i) === "open" && store.isRedMain(i) && sameFails(i.request, log)).at(-1);
+    const open = doc.items.filter((i) => issues.status(i) === "open" && issues.isRedMain(i) && sameFails(i.request, log)).at(-1);
     const at = { repo: r.repo, commit: r.commit, source: r.source };
     if (open) {
       issues.note(open, `firefighter: ${mark(r.commit)}; ${SOURCE_NAME[r.source]} failed again while this fix is open: ${r.line}${log ? `; log: ${oneLine(log)}` : ""}`);
@@ -170,14 +170,14 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
     const c = ciOf(key), repo = reg[key];
     if (!c || !repo) continue;
     for (const i of store.reader().list(key)?.items ?? []) {
-      const ref = `${key}-${issues.refOf(i)}`;
-      const ci = issues.status(i) === "open" && store.isRedMain(i) ? record.read(issueKey(issues.refOf(i)))?.ci : undefined;
+      const ref = `${key}-${i.id}`;
+      const ci = issues.status(i) === "open" && issues.isRedMain(i) ? record.read(issueKey(i.id))?.ci : undefined;
       if (!ci) continue;
       // A landed issue waits for a run at or after the land; one that never landed, for a run past its failing commit.
       const at = ci.landed ?? ci.commit;
       if (!git(repo.path, "merge-base", "--is-ancestor", at, c.sha).ok) continue;
       if (c.ok) {
-        const why = store.close(repo, issues.refOf(i), `firefighter: GitHub CI on main is green at ${c.sha.slice(0, 7)} (${c.url}), ${ci.landed ? `at or after the land ${ci.landed.slice(0, 7)}` : `past the failing commit ${ci.commit.slice(0, 7)}`}: done`);
+        const why = store.close(repo, i.id, `firefighter: GitHub CI on main is green at ${c.sha.slice(0, 7)} (${c.url}), ${ci.landed ? `at or after the land ${ci.landed.slice(0, 7)}` : `past the failing commit ${ci.commit.slice(0, 7)}`}: done`);
         out.push(why ? `${ref} not closed: ${why}` : `${ref} done: CI green at ${c.sha.slice(0, 7)}`);
         continue;
       }
@@ -185,12 +185,12 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
       if (!ci.landed) continue;
       const failure = ciFailure(ciLog(ports, repo, c.url));
       store.writeList(repo, `firefighter: ${ref} red on CI after its land`, (doc) => {
-        const item = issues.find(doc, issues.refOf(i));
+        const item = issues.find(doc, i.id);
         if (!item) return null;
         store.reopen(doc, item, ci.landed!);
         return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the goal runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
       });
-      record.editIssueState(issueKey(issues.refOf(i)), (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
+      record.editIssueState(issueKey(i.id), (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
       out.push(`${ref} sent back: CI red at ${c.sha.slice(0, 7)} after its land`);
     }
   }

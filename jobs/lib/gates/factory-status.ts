@@ -4,7 +4,8 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { areasOf, parentIn, reader, type Reader } from "../../../lib/store.ts";
+import { parentIn, reader, type Reader } from "../../../lib/store.ts";
+import { areasOf } from "../../../lib/todo.ts";
 import * as issues from "../../../lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { openJob, stateOf, type Job } from "../records/job.ts";
@@ -195,11 +196,11 @@ export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null 
 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now(), lists: Reader = reader()) {
-  const name = issueKey(issues.idOf(item)), runs = jobs.flat();
+  const name = issueKey(item.id), runs = jobs.flat();
   // A job whose last run ended with the API credit error is not open work: the credit hold keeps the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
-    name, ref: `${repo.key}-${issues.idOf(item)}`, item, parent: parentIn(repo.key, item, lists),
+    name, ref: `${repo.key}-${item.id}`, item, parent: parentIn(repo.key, item, lists),
     open: open ? stateOf(open) : null,
     job: open ? record.counting(open).id : null,
     busy: busyWait(repo, item, jobs, now),

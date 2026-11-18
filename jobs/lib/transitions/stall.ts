@@ -1,6 +1,5 @@
 /** The stall check: the work the factory could move now and does not, which the tick's sweep starts. See docs/factory.md. */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
 import { buildableIssues, reader } from "../../../lib/store.ts";
 import { allJobs } from "../records/ledger.ts";
 import { isLive } from "../infra/process.ts";
@@ -29,7 +28,7 @@ export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = 
   if (!live("intake") && !gates({ only: ["full"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueKey(issues.idOf(item))}`);
+      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueKey(item.id)}`);
     }
   }
   return out;

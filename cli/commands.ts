@@ -48,7 +48,7 @@ import * as doctor from "../jobs/lib/infra/doctor.ts";
 import { facts, repoStages, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import { readModels, setModel } from "../jobs/lib/routing/models.ts";
-import { shortText } from "../lib/naming.ts";
+import { parseId, shortText } from "../lib/naming.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
 
@@ -255,9 +255,9 @@ function listRecent(): { repo: Repo; doc: issues.Doc | null }[] {
 /** `aleph intake <repo>-<n>`: take in one issue now, under the dispatch's gates. */
 async function intakeCmd(ctx: Ctx): Promise<void> {
   const registry = loadRegistry();
-  const ref = issues.parseRef(ctx.rest[0] ?? "") ?? refuse(usage("intake"));
+  const ref = parseId(ctx.rest[0] ?? "") ?? refuse(usage("intake"));
   const repo = registry[ref.repo] ?? refuse(`no repo ${ref.repo}`);
-  ctx.out(await intakeNow(repo, ref.id));
+  ctx.out(await intakeNow(repo, ref.n));
 }
 
 /** `aleph dispatch`: start every ready issue up to the live cap. A run's end and `aleph issue` call it. With an issue key it starts that one issue now (Run now), or refuses with the text of the gate. */
@@ -324,7 +324,7 @@ function statusRecent(ctx: Ctx): void {
     if (!open.length) continue;
     try {
       fetchOrigin(repo.path);
-      const refs = open.map((i) => issues.refOf(i));
+      const refs = open.map((i) => String(i.id));
       const rows = stages(facts(repo, doc, jobs, refs), refs);
       states.push(...rows);
       if (rows.length) ofRepo.push({ key: repo.key, code: repo.code, rows });

@@ -12,8 +12,8 @@ import { isAgentRun, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, duration } from "../../jobs/lib/infra/process.ts";
 import { type StageRow, stageRows } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
-import { everyFetched, filed, headOnMain, reader, sourceOf, type Filed } from "../../lib/store.ts";
-import { status } from "../../lib/todo.ts";
+import { everyFetched, filed, headOnMain, reader, type Filed } from "../../lib/store.ts";
+import { status, sourceOf } from "../../lib/todo.ts";
 import { currentFit, runShare, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 // @ts-ignore plain JS, shared with the page

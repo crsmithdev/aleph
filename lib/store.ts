@@ -13,9 +13,9 @@ import * as record from "../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "./git.ts";
 import { layout, logEvent } from "./layout.ts";
 import { next } from "./db.ts";
-import { CLOSED, issueKey, key as keyOf, PRIORITIES, SOURCES } from "./naming.ts";
+import { CLOSED, issueKey, key as keyOf } from "./naming.ts";
 import * as issues from "./todo.ts";
-import { parseItem, renderItem, status, type Doc, type Issue } from "./todo.ts";
+import { byPriority, closedWhy, isTracker, mediaOf, parentOf, parseItem, partsOf, planSet, renderItem, status, type Doc, type Issue } from "./todo.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -292,7 +292,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
       for (const item of doc.items) {
         if (!CLOSED.includes(status(item)) || !(open.has(item.id) || !before.has(item.id))) continue;
         logClosed(item, by);
-        record.clearIssueState(issueKey(issues.refOf(item)));
+        record.clearIssueState(issueKey(item.id));
         if (status(item) === "dropped") dropped.push(item);
       }
       return { value, commit: commit.out, follow: followMain(dir, MAIN), doc, dropped };
@@ -327,8 +327,6 @@ export const MEDIA_BYTES = 20 * 1024 * 1024;
 
 /** The items-repo path of an item's media file. */
 export const mediaPath = (item: Issue, name: string): string => `${issueDir(item.id)}/${name}`;
-/** The names of an item's media files. */
-export const mediaOf = (item: Issue): string[] => list(item.fm.media);
 
 /** The item's media files in the items checkout, which follows origin/main after each write. A write by another process leaves the checkout behind, so a missing file brings it up to date once. Throws when one is not there. */
 export function mediaFiles(item: Issue): string[] {
@@ -349,32 +347,10 @@ export function runMedia(key: string, id: number | string, lists: Reader = reade
 }
 
 /** An item with an Ask in its issue state: it waits for Chris, so it is never dispatched and never triaged. */
-const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(issueKey(issues.refOf(item)))) !== null;
+const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(issueKey(item.id))) !== null;
 
-const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
-const text = (v: unknown): string => (typeof v === "string" ? v : "");
-
-/** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
-export function sourceOf(item: Issue): issues.Source {
-  const s = text(item.fm.source);
-  return s !== "chris" && (SOURCES as readonly string[]).includes(s) ? (s as issues.Source) : issues.parentRef(item) === undefined ? "chris" : "agent";
-}
-/** The children of an issue, in number order: the issues with a `from` that names it. */
-export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));
-/** The parent of a child; undefined for an issue with none. */
-export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : issues.find(doc, up); };
 /** The parent of a child, read from `lists`; undefined for an issue with none. */
 export const parentIn = (key: string, item: Issue, lists: Reader = reader()): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : lists.item(key, up); };
-/** Whether the issue needs a plan run, or "plan the rest" on a parent. */
-export const planSet = (item: Issue): boolean => item.fm.plan === "true";
-/** Set or clear `plan`, so the next dispatch starts (or stops) intake splitting the issue. */
-export function setPlan(item: Issue, on: boolean): void { if (on) item.fm.plan = "true"; else delete item.fm.plan; }
-/** Record that intake took the issue in as buildable. */
-export const setIntake = (item: Issue): void => { item.fm.intake = "build"; };
-/** The reason an issue was closed with, if it has one. */
-export const closedWhy = (item: Issue): string | undefined => (item.fm.closed_why ? String(item.fm.closed_why) : undefined);
-/** The flake tracker: a note log, never built. */
-export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
 /** Whether intake took the item in: its `intake` field, or a triage `build` or `plan` note from before intake. */
 const takenIn = (item: Issue): boolean => item.fm.intake !== undefined || item.notes.some((n) => /: triage: (build|plan)\b/.test(n));
 /**
@@ -384,20 +360,8 @@ const takenIn = (item: Issue): boolean => item.fm.intake !== undefined || item.n
 export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
   status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !asks(doc, item, repo) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0
   && (issues.parentRef(item) !== undefined || !repo.author || takenIn(item));
-/** The refs an issue waits for: its `after`. */
-export const afterOf = (item: Issue): string[] => list(item.fm.after);
-/** Replace the issue's `after` links. */
-export const setAfter = (item: Issue, refs: string[]): void => { item.fm.after = refs; };
 /** Whether issue `ref` (`issue.<n>`) is dropped on the store's origin/main as last fetched. */
 export const isDropped = (ref: string): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => keyOf("issue", i.id) === ref && status(i) === "dropped");
-/** The issues an issue names as plain references: its `refs`. They hold nothing. */
-export const refsOf = (item: Issue): string[] => list(item.fm.refs);
-/** The issues of `all` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */
-export const referrersOf = (all: Issue[], item: Issue): Issue[] => all.filter((i) => refsOf(i).includes(issueKey(item.id)));
-/** The item's areas: its `areas`. */
-export const areasOf = (item: Issue): string[] => list(item.fm.areas);
-/** The red-main fix issue: `add` writes the label into `areas`; an older issue carries it in `labels`. */
-export const isRedMain = (item: Issue): boolean => areasOf(item).includes("red-main") || issues.labels(item).includes("red-main");
 
 /**
  * An item intake leaves alone: asking, a part, the tracker, or, unless it is to plan, with parts, taken in, or with a spec.
@@ -433,19 +397,6 @@ export function reader(o: { fetch?: boolean; rev?: string } = {}): Reader {
     return lists.get(key)!;
   };
   return { list, item: (key, id) => { const doc = list(key); return doc ? issues.find(doc, id) : undefined; } };
-}
-
-/** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
-function rank(item: Issue): number {
-  const i = (PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
-  return i < 0 ? (PRIORITIES as readonly string[]).indexOf("medium") : i;
-}
-/** An item's priority; none, or an unknown one, reads medium. */
-export const priorityOf = (item: Issue): string => PRIORITIES[rank(item)];
-
-/** Sort entries by priority, highest first; stable, so equal priorities keep their order. */
-export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {
-  return entries.map((e, n) => ({ e, n })).sort((a, b) => rank(b.e.item) - rank(a.e.item) || a.n - b.n).map((x) => x.e);
 }
 
 /** The buildable issues of all repos, critical first, then repo then number order within a priority. A repo whose list cannot be read has none. */

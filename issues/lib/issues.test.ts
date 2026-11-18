@@ -131,11 +131,11 @@ describe("issue verbs without argv", () => {
     const [a, b, c] = r.ids;
     const added = await issueOps.add(r, "with refs", { refs: [`issue.${a}`, `issue.${b}`] }, quiet);
     const n = added.result.added;
-    expect(store.refsOf(item(r, n))).toEqual([`issue.${a}`, `issue.${b}`]);
+    expect(issues.refsOf(item(r, n))).toEqual([`issue.${a}`, `issue.${b}`]);
     issueOps.edit(r, n, { refs: [`issue.${c}`] });
-    expect(store.refsOf(item(r, n))).toEqual([`issue.${c}`]);
+    expect(issues.refsOf(item(r, n))).toEqual([`issue.${c}`]);
     issueOps.edit(r, n, { refs: ["none"] });
-    expect(store.refsOf(item(r, n))).toEqual([]);
+    expect(issues.refsOf(item(r, n))).toEqual([]);
   });
 
   // Breaks if a bad ref is written: the form, a missing issue, or the issue itself.
@@ -154,8 +154,8 @@ describe("issue verbs without argv", () => {
     const n = store.writeList(o, "ref", (doc) => { const i = issues.add(doc, "refers", { spec: "Do it." }); i.fm.refs = [`issue.${target}`]; return i.id; }, true)!.value;
     const doc = store.readList(o)!;
     expect(store.isBuildable(doc, issues.find(doc, n)!)).toBe(true);
-    expect(store.afterOf(issues.find(doc, n)!)).toEqual([]);
-    expect(store.referrersOf([...store.readList(r)!.items, ...doc.items], item(r, target)).map((i) => i.id)).toEqual([n]);
+    expect(issues.afterOf(issues.find(doc, n)!)).toEqual([]);
+    expect(issues.referrersOf([...store.readList(r)!.items, ...doc.items], item(r, target)).map((i) => i.id)).toEqual([n]);
   });
 
   test("edit reads the issue for the group prefix: a child with a from link takes it, a top-level issue refuses it", () => {

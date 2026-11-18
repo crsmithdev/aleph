@@ -15,7 +15,8 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, filed, isBuildable, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, priorityOf, everyFetched, readList, readLists, referrersOf, refsOf } from "../../lib/store.ts";
+import { filed, isBuildable, MEDIA_TYPES, mediaFiles, everyFetched, readList, readLists } from "../../lib/store.ts";
+import { afterOf, mediaOf, parentOf, partsOf, priorityOf, referrersOf, refsOf } from "../../lib/todo.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -60,7 +61,7 @@ function list(url: URL): Response {
     const doc = docs[n];
     if (!doc) return [];
     const states = stagesBy(repo, doc);
-    return doc.items.map((i) => row(repo.key, i, states.get(todos.refOf(i))));
+    return doc.items.map((i) => row(repo.key, i, states.get(String(i.id))));
   });
   // A director job has no repo: its target alone names the issue.
   const by = runsByIssue(allRuns()), key = (r: Row) => `${r.repo}-${r.ref}`;
@@ -102,7 +103,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const n = item.id;
 
   const main = `refs/remotes/origin/${repo.main}`;
-  const partRefs = partsOf(doc, item).map(todos.refOf);
+  const partRefs = partsOf(doc, item).map((p) => String(p.id));
   const every = allRuns(), jobsAll = allJobs(every);
   const states = stagesBy(repo, doc, [ref, ...partRefs], jobsAll);
   const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
@@ -128,7 +129,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
   const up = parentOf(doc, item);
-  const parent = up ? `${repo.key}-${todos.refOf(up)}` : null;
+  const parent = up ? `${repo.key}-${up.id}` : null;
 
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
   // The issue's own commits, then each part's, with the part it landed for.

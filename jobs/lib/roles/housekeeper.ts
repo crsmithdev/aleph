@@ -10,7 +10,8 @@ import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import * as issues from "../../../lib/todo.ts";
-import { priorityOf, readFetched, readList } from "../../../lib/store.ts";
+import { readFetched, readList } from "../../../lib/store.ts";
+import { priorityOf } from "../../../lib/todo.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
@@ -137,8 +138,8 @@ function section(repo: Repo, i: issues.Issue, tracked: string[], now: number): s
   const age = filed ? `filed ${filed.slice(0, 10)} (${Math.floor((now - Date.parse(filed)) / DAY)} days ago)` : "filed: unknown";
   const log = history(repo, i, tracked);
   return [
-    `### ${repo.key}-${issues.refOf(i)}: ${i.title}`,
-    `id ${issues.refOf(i)}, ${issues.kindOf(i)}, priority ${priorityOf(i)}, ${age}, updated ${(issues.updated(i) ?? "-").slice(0, 10)}`,
+    `### ${repo.key}-${i.id}: ${i.title}`,
+    `id ${i.id}, ${issues.kindOf(i)}, priority ${priorityOf(i)}, ${age}, updated ${(issues.updated(i) ?? "-").slice(0, 10)}`,
     i.request.trim() && `#### Request\n${i.request.trim()}`,
     i.spec.trim() && `#### Spec\n${i.spec.trim()}`,
     i.notes.length && `#### Notes\n${i.notes.join("\n")}`,
@@ -168,7 +169,7 @@ export function prompt(b: Batch, now: number): string {
     "- unpark: the issue is ready to build now and waits for nothing. Intake takes it from there.",
     "",
     land,
-    `## Open and parked issues of this list, for duplicates\n${all.map((i) => `${issues.refOf(i)} [${issues.status(i)}] ${i.title}`).join("\n")}`,
+    `## Open and parked issues of this list, for duplicates\n${all.map((i) => `${i.id} [${issues.status(i)}] ${i.title}`).join("\n")}`,
     `## Issues to review\n\n${b.items.map((i) => section(b.repo, i, tracked, now)).join("\n\n")}`,
   ].filter((x) => x !== undefined).join("\n");
 }
@@ -187,7 +188,7 @@ function evident(repo: Repo, evidence: string): boolean {
 /** Check one action and apply it; the refusal, or null. Only an issue of the batch, still parked, takes an action. */
 async function applyOne(b: Batch, a: Action): Promise<string | null> {
   const { repo } = b;
-  if (!b.items.some((i) => issues.refOf(i) === a.id)) return "not an issue of this batch";
+  if (!b.items.some((i) => String(i.id) === a.id)) return "not an issue of this batch";
   const doc = readList(repo)!;
   const item = issues.find(doc, idArg(a.id));
   if (!item || issues.status(item) !== "parked") return "no longer parked";
@@ -216,7 +217,7 @@ export interface Outcome { repo: string; ids: string[]; applied: string[]; refus
 
 /** One run on one batch: its reply's actions, each applied or refused. A failed run applies nothing. */
 export async function review(b: Batch, now: number): Promise<Outcome> {
-  const ids = b.items.map(issues.refOf);
+  const ids = b.items.map((p) => String(p.id));
   const out: Outcome = { repo: b.repo.key, ids, applied: [], refused: [] };
   const run = openRun({
     role: "housekeeper", who: "the housekeeper", model: readModels().housekeeper.model, seconds: SECONDS, cwd: b.repo.path, repo: b.repo.key, schema: SCHEMA,

@@ -124,7 +124,7 @@ The Status page shows the wrong weekly usage.
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
 
-An issue's children are the issues whose `from` names it (`partsOf` in `lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
+An issue's children are the issues whose `from` names it (`partsOf` in `lib/todo.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
 
 ## Job rows and issue state: `aleph.db`
 

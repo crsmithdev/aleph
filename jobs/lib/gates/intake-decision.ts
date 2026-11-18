@@ -5,7 +5,8 @@
  * it, as the dispatch has always held it. An issue to take in waits for neither: no path held it before, and intake on
  * a red main turns a close into an Ask.
  */
-import { afterOf, isSorted, planSet } from "../../../lib/store.ts";
+import { isSorted } from "../../../lib/store.ts";
+import { afterOf, planSet } from "../../../lib/todo.ts";
 import * as issues from "../../../lib/todo.ts";
 import { pendingWaits } from "./issue-decision.ts";
 import type { Repo } from "../records/ledger.ts";

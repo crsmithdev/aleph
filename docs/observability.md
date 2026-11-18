@@ -26,7 +26,7 @@ An event has the 6 fields of `Event` in `lib/naming.ts:138`: `seq`, `time`, `sub
 
 ### Who writes events
 
-The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:246`, that eight call sites use.
+The count is 53 direct `logEvent(` calls in code that is not a test, and one helper, `logAlways` in `jobs/lib/asks/ask.ts:247`, that eight call sites use.
 
 | `subject` | Action (detail) | Logged at |
 |---|---|---|
@@ -40,13 +40,13 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `rule` | `missed` for a stalled key, `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:179`, `:188`, `:244` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:137` |
 | `rule` | `failed` for a filing, a detached start, a land start, a job diff, a correction, a UI read | `jobs/lib/transitions/filing.ts:27`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:90`, `jobs/lib/records/jobdiff.ts:48`, `jobs/lib/learning/corrections.ts:16`, `ui/state.ts:39` |
-| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:246`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:344`, `jobs/lib/asks/timeout.ts:111`, `jobs/lib/learning/corrections.ts`, `issues/lib/issues.ts` |
+| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:247`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:344`, `jobs/lib/asks/timeout.ts:111`, `jobs/lib/learning/corrections.ts`, `issues/lib/issues.ts` |
 | `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/gates/firefighter.ts:217` to `:244` |
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:113` to `:405` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:151` |
 | `director` | `failed`, when a case text or a decision fails | `jobs/lib/roles/director.ts:648`, `:730`, `:733` |
 | `intake` | `skipped` (`intake`) for an issue that intake skips | `jobs/lib/transitions/factory.ts:153` |
-| the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `lib/store.ts:598` |
+| the filer: `intake`, `firefighter`, `human`, `claude`, `worker` | `filed`, one event per new issue | `lib/store.ts:524` |
 | the closer: `human`, `claude`, `worker` (set by `actor()`), `rule`, `firefighter`, `director`, `intake` | `done` or `dropped`, one event per issue that a write closes, with its `closed_why` as the detail | `logClosed` in `lib/store.ts:174` |
 | `human` | `changed`, when an Always rule is set back to Ask me | `jobs/lib/asks/ask.ts:234` |
 | `human` | `changed` on the object `settings`: `pause: on` and `pause: off`, from the pause and resume commands | `jobs/lib/gates/pause.ts:12`, through `logSetting` in `lib/layout.ts:38` |

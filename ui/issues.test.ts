@@ -329,7 +329,7 @@ describe("views", () => {
   });
 
   test("a parent's runs hold its sub-issue's jobs; its own holds its alone", async () => {
-    const sub = writeList({ key: "fac" }, "seed", (doc) => todos.refOf(addPart(doc, todos.find(doc, "3")!, { title: "sub", spec: "x" })), true)!.value;
+    const sub = writeList({ key: "fac" }, "seed", (doc) => String(addPart(doc, todos.find(doc, "3")!, { title: "sub", spec: "x" }).id), true)!.value;
     run("", { name: "on-sub", repo: "fac", target: `issue.${sub}` });
     run("", { name: "on-3", repo: "fac", on: "fac-3" });
     const parent = (await rowsAfterSeed("fac")).find((r: any) => r.id === 3);

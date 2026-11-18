@@ -99,7 +99,7 @@ describe("labels", () => {
   });
 
   test("priorityOf reads the priority, and medium for none or an unknown one", () => {
-    expect([it({ priority: "critical" }), it({}), it({ priority: "weird" })].map(store.priorityOf)).toEqual(["critical", "medium", "medium"]);
+    expect([it({ priority: "critical" }), it({}), it({ priority: "weird" })].map(issues.priorityOf)).toEqual(["critical", "medium", "medium"]);
   });
 });
 
@@ -336,13 +336,13 @@ describe("the writers of the new shape", () => {
     expect(commits()).toBe(before + 1);
     expect([one, two, other]).toEqual([big + 1, big + 2, big + 3]);
     const doc = store.readList(r)!;
-    expect(store.partsOf(doc, issues.find(doc, big)!).map(issues.refOf)).toEqual([String(one), String(two)]);
+    expect(issues.partsOf(doc, issues.find(doc, big)!).map((p) => String(p.id))).toEqual([String(one), String(two)]);
     expect(item(r, one).fm).toMatchObject({ priority: "high", from: `issue.${big}` });
     expect(item(r, two).fm.after).toEqual([`issue.${one}`]);
     expect(item(r, two).spec).toBe("Do two.");
     expect(store.isBuildable(doc, item(r, one))).toBe(true);
     expect(store.isSorted(doc, item(r, big))).toBe(true);
-    expect(store.afterOf(item(r, two))).toEqual([`issue.${one}`]);
+    expect(issues.afterOf(item(r, two))).toEqual([`issue.${one}`]);
   });
 });
 
@@ -352,9 +352,9 @@ describe("an issue's children", () => {
     const top = issues.add(doc, "big");
     const child = issues.add(doc, "[Big] new child", { spec: "x", from: `issue.${top.id}`, after: [`issue.${top.id}`] });
     issues.add(doc, "other");
-    expect(store.partsOf(doc, top)).toEqual([child]);
-    expect([store.parentOf(doc, child), store.parentOf(doc, top)]).toEqual([top, undefined]);
-    expect(store.partsOf(doc, child)).toEqual([]);
+    expect(issues.partsOf(doc, top)).toEqual([child]);
+    expect([issues.parentOf(doc, child), issues.parentOf(doc, top)]).toEqual([top, undefined]);
+    expect(issues.partsOf(doc, child)).toEqual([]);
     expect(issues.parseItem(child.id, issues.renderItem(child)).fm).toMatchObject({ from: `issue.${top.id}`, after: [`issue.${top.id}`] });
     expect(issues.lint(doc)).toEqual([]);
     child.fm.from = "r-1.1";
@@ -371,8 +371,8 @@ describe("a child's source", () => {
     expect(addPart(doc, b, { title: "p", spec: "x" }).fm.source).toBe("worker");
     const old = addPart(doc, a, { title: "old", spec: "x" });
     delete old.fm.source;
-    expect(store.sourceOf(old)).toBe("agent");
-    expect(store.sourceOf(a)).toBe("chris");
+    expect(issues.sourceOf(old)).toBe("agent");
+    expect(issues.sourceOf(a)).toBe("chris");
   });
 });
 

@@ -21,7 +21,8 @@ import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { runNowOf } from "./issues.ts";
-import { parentOf, partsOf, readList } from "../../lib/store.ts";
+import { readList } from "../../lib/store.ts";
+import { parentOf, partsOf } from "../../lib/todo.ts";
 import * as todos from "../../lib/todo.ts";
 
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */
@@ -106,9 +107,9 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   if (place) Object.assign(out, runNowOf(place, doc, item));
   const up = parentOf(doc, item);
   if (!up) return out;
-  const parts = partsOf(doc, up).map(todos.refOf);
-  const n = parts.indexOf(todos.refOf(item)), next = parts[n + 1];
-  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(`${repo}-${todos.refOf(up)}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: issueHref(`${repo}-${next}`) } } : {}) };
+  const parts = partsOf(doc, up).map((p) => String(p.id));
+  const n = parts.indexOf(String(item.id)), next = parts[n + 1];
+  out.parent = { id: `${repo}-${up.id}`, href: issueHref(`${repo}-${up.id}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: issueHref(`${repo}-${next}`) } } : {}) };
   return out;
 }
 

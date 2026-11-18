@@ -15,9 +15,11 @@ setDefaultTimeout(30000);
 
 // The verbs of `aleph issue`, called in-process as cli/cli.ts calls them, under the CLI's environment.
 // issues/cli.test.ts keeps the CLI test of each verb's wiring.
-useFixture();
+// The save runs before useFixture's hooks and the restore after them, so the restore does not bring back the fixture's deleted ALEPH_DB.
 let saved: Record<string, string | undefined> = {};
-beforeEach(() => { saved = { ...process.env }; Object.assign(process.env, env()); });
+beforeEach(() => { saved = { ...process.env }; });
+useFixture();
+beforeEach(() => { Object.assign(process.env, env()); });
 afterEach(() => {
   for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
   Object.assign(process.env, saved);
@@ -175,7 +177,7 @@ test("media: add and attach store images in the store, and a run reads them back
   const a = await add("Fix the header", { request: "see the shot", media: [png] });
   verbs.attach(proj(), a.item.id, [png, pdf]);
   const item = verbs.show(proj(), a.item.id);
-  expect(store.mediaOf(item)).toEqual(["shot.png", "shot-2.png", "spec_sheet.pdf"]);
+  expect(issues.mediaOf(item)).toEqual(["shot.png", "shot-2.png", "spec_sheet.pdf"]);
   const files = store.mediaFiles(item);
   expect(readFileSync(files[0])).toEqual(readFileSync(png));
   expect(readFileSync(files[2], "utf8")).toBe("%PDF-1.4");

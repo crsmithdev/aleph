@@ -40,7 +40,7 @@ export interface Fields {
   media?: string[];
 }
 
-export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: store.priorityOf(i), updated: issues.updated(i) ?? null, source: store.sourceOf(i), after: store.afterOf(i), refs: store.refsOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: issues.sinceOf(i), ask: askOfItem(i), notes: i.notes.length });
+export const brief = (i: issues.Issue) => ({ id: i.id, title: i.title, status: issues.status(i), priority: issues.priorityOf(i), updated: issues.updated(i) ?? null, source: issues.sourceOf(i), after: issues.afterOf(i), refs: issues.refsOf(i), areas: issues.areasOf(i), plan: issues.planSet(i) || undefined, tracker: issues.isTracker(i) || undefined, since: issues.sinceOf(i), ask: askOfItem(i), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -80,9 +80,9 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
 /** After a write that dropped `dropped` (of `doc`): ask about the parent of each dropped part, and park the open waiters of each dropped blocker. */
 export function askAfterDrops(doc: issues.Doc, dropped: issues.Issue[]): void {
   for (const item of dropped) {
-    askIfPartDropped(doc, item, store.closedWhy(item) ?? "no reason given");
+    askIfPartDropped(doc, item, issues.closedWhy(item) ?? "no reason given");
     const blocker = key("issue", item.id);
-    for (const w of store.everyFetched()) if (issues.status(w.item) === "open" && store.afterOf(w.item).includes(blocker)) parkWaiter({ key: w.repo }, w.item, blocker);
+    for (const w of store.everyFetched()) if (issues.status(w.item) === "open" && issues.afterOf(w.item).includes(blocker)) parkWaiter({ key: w.repo }, w.item, blocker);
   }
 }
 
@@ -98,8 +98,8 @@ function parkWaiter(repo: store.Place, waiter: issues.Issue, blocker: string): v
   const standing = always("blocker-dropped", repo.key)?.action === "resolve";
   const w = store.writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
     const item = issues.find(doc, waiter.id);
-    if (!item || issues.status(item) !== "open" || !store.afterOf(item).includes(blocker)) return null;
-    if (standing) store.setAfter(item, store.afterOf(item).filter((r) => r !== blocker));
+    if (!item || issues.status(item) !== "open" || !issues.afterOf(item).includes(blocker)) return null;
+    if (standing) issues.setAfter(item, issues.afterOf(item).filter((r) => r !== blocker));
     else issues.setStatus(item, "parked");
     return true;
   });
@@ -140,7 +140,7 @@ function readMedia(paths: string[]): { name: string; data: Uint8Array }[] {
 
 /** Put `files` on `item`: each in `blobs`, its name in the item's `media`. A name already there gets a number. */
 function attachTo(item: issues.Issue, files: { name: string; data: Uint8Array }[], blobs: Record<string, Uint8Array>): string[] {
-  const names = store.mediaOf(item);
+  const names = issues.mediaOf(item);
   for (const f of files) {
     let name = f.name;
     for (let n = 2; names.includes(name); n++) name = f.name.replace(/(\.[^.]+)$/, `-${n}$1`);
@@ -213,7 +213,7 @@ function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?
   return doc.items
     .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))
     .filter((i) => (o.kind ? issues.kindOf(i) === o.kind : true))
-    .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
+    .filter((i) => (o.label ? issues.areasOf(i).includes(o.label) : true));
 }
 
 export function show(repo: store.Place, id: number | string): issues.Issue {
@@ -267,7 +267,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     for (const r of kept ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot wait for itself");
     for (const r of named ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot reference itself");
     issues.edit(i, { kind, title, request, spec, priority, areas: labels });
-    if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
+    if (priority !== undefined) for (const p of issues.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
     if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");
     else if (status === "open") store.reopen(doc, i, mainHead(repo));
@@ -321,7 +321,7 @@ export async function retitle(repo: store.Place, fit: (group: string, rest: stri
   const fresh = new Map<string, string>();
   for (const i of readIssues(repo).items.filter(bad)) {
     const group = (issues.parentRef(i) !== undefined && /^\[[^\]]*\] /.exec(i.title)?.[0]) || "";
-    fresh.set(issues.refOf(i), await fit(group, i.title.slice(group.length)));
+    fresh.set(String(i.id), await fit(group, i.title.slice(group.length)));
   }
   const w = fresh.size ? write(repo, "todo: retitle", (doc) => {
     const done: { id: string; title: string }[] = [];

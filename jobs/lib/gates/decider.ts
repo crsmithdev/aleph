@@ -71,7 +71,7 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   function decide(repo: Repo, item: issues.Issue, mode: Exclude<Mode, { route: Route }>): IssueDecision;
   function decide(repo: Repo, item: issues.Issue, mode: Extract<Mode, { route: Route }>): Promise<StartDecision>;
   function decide(repo: Repo, item: issues.Issue, mode: Mode): IssueDecision | Promise<StartDecision> {
-    if ("cheap" in mode) return issueDecision({ name: issueKey(issues.idOf(item)), ref: `${repo.key}-${issues.idOf(item)}`, item, done, red: redOf(repo) });
+    if ("cheap" in mode) return issueDecision({ name: issueKey(item.id), ref: `${repo.key}-${item.id}`, item, done, red: redOf(repo) });
     const f = { ...issueFacts(repo, item, mode.jobs, mode.now, mode.lists ?? lists), done, red: redOf(repo) };
     return "route" in mode ? decideStart(repo, f, mode.jobs, mode.route) : issueDecision({ ...f, ...mode.gates });
   }

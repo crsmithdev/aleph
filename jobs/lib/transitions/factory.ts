@@ -126,7 +126,7 @@ export function hookLines(now = Date.now()): string[] {
   const refs = jobs.filter((j) => isOpen(j) && isWaiting(stateOf(j)) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${issues.idOf(item)}`);
+      if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${item.id}`);
     }
   }
   refs.push(...proposals().map((l) => l.id));

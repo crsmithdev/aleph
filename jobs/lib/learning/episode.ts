@@ -15,9 +15,9 @@ import { appendDaily } from "../../../vault/lib/vault.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
 import { traceIdFor } from "../../../lib/otlp.ts";
-import { partsOf, readList } from "../../../lib/store.ts";
+import { readList } from "../../../lib/store.ts";
 import * as issues from "../../../lib/todo.ts";
-import { section } from "../../../lib/todo.ts";
+import { section, partsOf } from "../../../lib/todo.ts";
 import { factoryDir } from "../../../lib/layout.ts";
 import { touch } from "../../../lib/sources.ts";
 import { trimUse } from "../../../lib/episode-use.ts";
@@ -72,11 +72,11 @@ const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
 /** The ledger runs of an item: its own runs, a part's under `on: <repo>-<n>.<k>`. */
 const runsOf = (repo: Repo, item: issues.Issue): Entry[] =>
-  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === issues.idOf(item));
+  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === item.id);
 
 /** Whether a page exists for the item: under its ref, or for a part, under the old `<repo>-<parent> ` name. */
 function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
-  if (pages.some((f) => f.startsWith(`${repo.key}-${issues.refOf(item)} `))) return true;
+  if (pages.some((f) => f.startsWith(`${repo.key}-${item.id} `))) return true;
   return issues.parentRef(item) !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
 }
 
@@ -86,11 +86,11 @@ function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   if (!doc) return [];
   const specced = doc.items.filter((i) => !!i.spec.trim());
   if (!specced.length) return [];
-  const done = new Set(repoStages(repo, { fetch: true, doc, items: specced.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
+  const done = new Set(repoStages(repo, { fetch: true, doc, items: specced.map((p) => String(p.id)) }).filter((s) => s.stage === "done").map((s) => s.id));
   const pages = listEpisodes().map((e) => e.file);
   const since = now - KEEP_DAYS * 86400_000;
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => String(onOf(e.run))));
-  return specced.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(String(issues.idOf(i))) && !written(repo, i, pages));
+  return specced.filter((i) => done.has(`${repo.key}-${i.id}`) && ran.has(String(i.id)) && !written(repo, i, pages));
 }
 
 const NAME_MAX = 255; // bytes one file name may take
@@ -119,7 +119,7 @@ function titleUnder(head: string, item: issues.Issue): string {
 
 /** `<repo>-<ref> <title>`, the ref of a part being `<n>.<k>`, so the name and the skip filter agree. */
 export function episodeTitle(repo: Repo, item: issues.Issue): string {
-  return titleUnder(`${repo.key}-${issues.refOf(item)}`, item);
+  return titleUnder(`${repo.key}-${item.id}`, item);
 }
 
 interface Commit { sha: string; subject: string; stat: string }
@@ -131,7 +131,7 @@ function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
   const main = `origin/${repo.main}`;
   const doc = readList(repo);
   const parts = doc ? partsOf(doc, item) : [];
-  const refs = parts.length ? parts.map(issues.refOf) : [issues.refOf(item)];
+  const refs = parts.length ? parts.map((p) => String(p.id)) : [String(item.id)];
   const shas = [...new Set(refs.flatMap((n) => landedCommits(repo.path, main, repo.key, n)))];
   return shas.map((sha) => ({
     sha,
@@ -168,7 +168,7 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
 const minutes = (e: Entry) => Math.round((duration(e) ?? 0) / 60);
 
 function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
-  const id = `${repo.key}-${issues.refOf(item)}`;
+  const id = `${repo.key}-${item.id}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
   const aim = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
   const landed = commits.length ? commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}${c.stat ? `\n${c.stat}` : ""}`).join("\n") : "nothing landed";
@@ -243,7 +243,7 @@ export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written:
   for (const { repo, item } of todo.slice(0, cap)) {
     const r = await writeEpisode(repo, item);
     if ("title" in r) written.push(r.title);
-    else failed.push(`${repo.key}-${issues.refOf(item)}: ${r.error}`);
+    else failed.push(`${repo.key}-${item.id}: ${r.error}`);
   }
   return { written, failed };
 }

@@ -16,7 +16,8 @@ import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/setting
 import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../lib/todo.ts";
-import { afterOf, isDropped, parentOf, partsOf, reopen, setAfter, setPlan, writeList, type Place } from "../../../lib/store.ts";
+import { isDropped, reopen, writeList, type Place } from "../../../lib/store.ts";
+import { afterOf, parentOf, partsOf, setAfter, setPlan } from "../../../lib/todo.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -313,7 +314,7 @@ export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: st
   const issue = parentOf(doc, part);
   if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
-  askPartDropped(issue, `Sub-issue ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
+  askPartDropped(issue, `Sub-issue ${doc.repo}-${part.id} was dropped: ${reason}. What now?`);
 }
 
 /** Put the part-dropped Ask on a parent. */

@@ -6,7 +6,7 @@
 import { issueHref } from "../lib/naming.ts";
 import { askOfItem, asking, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
-import { afterOf, areasOf, priorityOf, sourceOf } from "../lib/store.ts";
+import { afterOf, areasOf, priorityOf, sourceOf } from "../lib/todo.ts";
 import * as todos from "../lib/todo.ts";
 import { today } from "../lib/day.ts";
 import type { NewIssue } from "./state.ts";
@@ -29,7 +29,7 @@ export function row(repo: string, item: todos.Issue, st?: Pick<Stage, "stage" | 
   const day = (t: string | null) => (t ? today(new Date(t)) : null);
   const parked = todos.status(item) === "parked";
   return {
-    id: item.id, ref: todos.refOf(item), repo, title: item.title, href: issueHref(`${repo}-${todos.refOf(item)}`), kind: todos.kindOf(item), status: todos.status(item), priority: priorityOf(item), labels: areasOf(item),
+    id: item.id, ref: String(item.id), repo, title: item.title, href: issueHref(`${repo}-${item.id}`), kind: todos.kindOf(item), status: todos.status(item), priority: priorityOf(item), labels: areasOf(item),
     after: afterOf(item), created: day(createdTime), createdTime, closed: day(closedTime), closedTime, source: sourceOf(item), updated: day(updatedTime), updatedTime, notes: item.notes.length, parent: todos.parentRef(item) ?? null,
     stage: stageOf(item, st), why: parked ? "" : st?.why ?? "",
   };
@@ -37,7 +37,7 @@ export function row(repo: string, item: todos.Issue, st?: Pick<Stage, "stage" | 
 
 /** The Status page card of an open `item` in `repo` at `stage`; with `ask`, the Ask it waits on and the question it puts. */
 export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask): NewIssue {
-  const id = `${repo}-${todos.refOf(item)}`;
+  const id = `${repo}-${item.id}`;
   const c: NewIssue = { id, title: item.title, priority: priorityOf(item), status: "open", href: issueHref(id), labels: areasOf(item), notes: item.notes.length, created: todos.created(item) ?? "", updated: todos.updated(item) ?? "", stage };
   if (!ask) return c;
   const last = item.notes.at(-1);

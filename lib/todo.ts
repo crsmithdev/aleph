@@ -7,7 +7,7 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
 import { next } from "./db.ts";
-import { ISSUE_KINDS, issueKey, parseId, parseKey, shownKey, SOURCES, STATUSES } from "./naming.ts";
+import { ISSUE_KINDS, issueKey, parseId, parseKey, PRIORITIES, shownKey, SOURCES, STATUSES } from "./naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;
@@ -42,12 +42,6 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (process.env.ALEPH_NOW ? new Date(process.env.ALEPH_NOW) : new Date());
 
-/** `<repo>-<n>` split into its parts, or null. */
-export function parseRef(s: string): { repo: string; id: number } | null {
-  const p = parseId(s);
-  return p ? { repo: p.repo, id: p.n } : null;
-}
-
 /** `<repo>-<n>` or a part's `<repo>-<n>.<m>` split into its parts: the id is a number for the first, `"n.m"` for the second. Null for neither. */
 export function parseIssueRef(s: string): { repo: string; id: number | string } | null {
   const p = parseId(s);
@@ -78,6 +72,55 @@ export const closed = (item: Issue): string | undefined => (item.fm.closed_as &&
 
 /** When the issue last changed, as ISO UTC: the latest of its creation, its close and its last note. The file holds no such field; git holds the history. */
 export const updated = (item: Issue): string | undefined => [created(item), closed(item), ...item.notes.slice(-1).map((n) => noteOf(n).at ?? undefined)].filter((t): t is string => !!t).sort().at(-1);
+
+const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
+const text = (v: unknown): string => (typeof v === "string" ? v : "");
+/** The names of an item's media files. */
+export const mediaOf = (item: Issue): string[] => list(item.fm.media);
+
+/** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
+export function sourceOf(item: Issue): Source {
+  const s = text(item.fm.source);
+  return s !== "chris" && (SOURCES as readonly string[]).includes(s) ? (s as Source) : parentRef(item) === undefined ? "chris" : "agent";
+}
+/** The children of an issue, in number order: the issues with a `from` that names it. */
+export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => parentRef(i) === String(item.id));
+/** The parent of a child; undefined for an issue with none. */
+export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up = parentRef(item); return up === undefined ? undefined : find(doc, up); };
+/** Whether the issue needs a plan run, or "plan the rest" on a parent. */
+export const planSet = (item: Issue): boolean => item.fm.plan === "true";
+/** Set or clear `plan`, so the next dispatch starts (or stops) intake splitting the issue. */
+export function setPlan(item: Issue, on: boolean): void { if (on) item.fm.plan = "true"; else delete item.fm.plan; }
+/** Record that intake took the issue in as buildable. */
+export const setIntake = (item: Issue): void => { item.fm.intake = "build"; };
+/** The reason an issue was closed with, if it has one. */
+export const closedWhy = (item: Issue): string | undefined => (item.fm.closed_why ? String(item.fm.closed_why) : undefined);
+/** The flake tracker: a note log, never built. */
+export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
+/** The refs an issue waits for: its `after`. */
+export const afterOf = (item: Issue): string[] => list(item.fm.after);
+/** Replace the issue's `after` links. */
+export const setAfter = (item: Issue, refs: string[]): void => { item.fm.after = refs; };
+/** The issues an issue names as plain references: its `refs`. They hold nothing. */
+export const refsOf = (item: Issue): string[] => list(item.fm.refs);
+/** The issues of `all` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */
+export const referrersOf = (all: Issue[], item: Issue): Issue[] => all.filter((i) => refsOf(i).includes(issueKey(item.id)));
+/** The item's areas: its `areas`. */
+export const areasOf = (item: Issue): string[] => list(item.fm.areas);
+/** The red-main fix issue: `add` writes the label into `areas`; an older issue carries it in `labels`. */
+export const isRedMain = (item: Issue): boolean => areasOf(item).includes("red-main") || labels(item).includes("red-main");
+/** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
+function rank(item: Issue): number {
+  const i = (PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
+  return i < 0 ? (PRIORITIES as readonly string[]).indexOf("medium") : i;
+}
+/** An item's priority; none, or an unknown one, reads medium. */
+export const priorityOf = (item: Issue): string => PRIORITIES[rank(item)];
+
+/** Sort entries by priority, highest first; stable, so equal priorities keep their order. */
+export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {
+  return entries.map((e, n) => ({ e, n })).sort((a, b) => rank(b.e.item) - rank(a.e.item) || a.n - b.n).map((x) => x.e);
+}
 
 const HEADS = { request: "# Request", spec: "# Spec", notes: "# Notes" } as const;
 const HEADINGS: string[] = Object.values(HEADS);
@@ -127,15 +170,11 @@ export function parseItem(id: number, text: string): Issue {
 /** An empty list, for a project that has no issue yet. */
 export const blank = (repo?: string, project?: string): Doc => ({ items: [], ...(repo ? { repo } : {}), ...(project ? { project } : {}) });
 
-/** The number of the issue as text: `"5"`. */
-export const refOf = (item: Issue): string => String(item.id);
 /** The text with each full or short id of the repo `key` as its shown key, `a1234` with the project's code, `i1234` with none. `code` is that code. */
 export const localRefs = (key: string, text: string, code?: string): string =>
   text.replace(/(?<![\w.-])[a-z][a-z0-9-]*\d+(?:\.\d+)?(?![\w-])/g, (r) => { const p = parseId(r); return p?.repo === key && p.sub === undefined ? shownKey(issueKey(p.n), code) : r; });
 /** The number of the parent, as text, from `from: issue.<n>`. Undefined for an issue with no parent. */
 export const parentRef = (item: Issue): string | undefined => { const p = item.fm.from ? parseKey(item.fm.from) : null; return p?.kind === "issue" ? String(p.n) : undefined; };
-/** The id that finds the item: its number. */
-export const idOf = (item: Issue): number => item.id;
 /** The issue with number `id`: a number, its text, or a key such as `issue.5`. */
 export const find = (doc: Doc, id: number | string): Issue | undefined => {
   const n = typeof id === "number" ? id : parseKey(id)?.n ?? Number(id);
@@ -251,7 +290,7 @@ const KEYS = /^issue\.\d+$/;
 export function lint(doc: Doc): Finding[] {
   const findings: Finding[] = [];
   for (const item of doc.items) {
-    const id = refOf(item);
+    const id = String(item.id);
     for (const key of REQUIRED) {
       if (item.fm[key] === undefined || item.fm[key] === "") {
         findings.push({ id, problem: `${key} is missing`, fixable: key === "project" ? doc.project !== undefined : item.fm.created_time !== undefined });
@@ -294,7 +333,7 @@ export function fix(doc: Doc): string[] {
   const fixed: string[] = [];
   // A child with no kind area takes its parent's kind; so parents go first.
   for (const item of [...doc.items].sort((a, b) => (parentRef(a) === undefined ? 0 : 1) - (parentRef(b) === undefined ? 0 : 1))) {
-    const id = refOf(item);
+    const id = String(item.id);
     const areas = areaList(item.fm.areas);
     if (!item.fm.kind || kindProblem(String(item.fm.kind))) {
       const up = parentRef(item), parent = up === undefined ? undefined : find(doc, up);

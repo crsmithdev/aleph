@@ -19,8 +19,8 @@ import { withProjects } from "./api/scope.ts";
 import { chats, type Chat } from "./api/chat.ts";
 import type { Context as HeraldContext } from "./herald.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, byPriority, partsOf, parentIn, priorityOf, reader, isTracker } from "../lib/store.ts";
-import { created, idOf, parentRef, parseIssueRef, refOf, status, updated, type Issue } from "../lib/todo.ts";
+import { parentIn, reader } from "../lib/store.ts";
+import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/todo.ts";
 import { summary, type Wk } from "./usage.ts";
 import { awaiting, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
@@ -277,7 +277,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
-      id: v.run.id, name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      id: v.run.id, name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
       state: v.state, started: v.started, run: { id: v.run.id, kind: v.run.role, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
@@ -377,7 +377,7 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const id = `${repo.key}-${refOf(item)}`;
+      const id = `${repo.key}-${item.id}`;
       if (status(item) === "open") openById.set(id, { title: item.title, href: issueHref(id) });
       const after = afterOf(item);
       if (after.length) waitsOf.set(id, after[0]);
@@ -398,7 +398,7 @@ function partsByKey(registry: Record<string, Repo>, { lists }: Projector): Map<s
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
       const ps = partsOf(doc!, item);
-      ps.forEach((g, i) => partOf.set(`${repo.key}-${refOf(g)}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${refOf(item)}`, href: issueHref(`${repo.key}-${refOf(item)}`) }));
+      ps.forEach((g, i) => partOf.set(`${repo.key}-${g.id}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${item.id}`, href: issueHref(`${repo.key}-${item.id}`) }));
     }
   }
   return partOf;
@@ -411,7 +411,7 @@ function slotsOf(registry: Record<string, Repo>, { lists, stagesOf }: Projector,
   return Object.values(registry).filter((repo) => repo.sandbox).flatMap((repo) => {
     const stageById = stagesOf(repo), doc = lists.list(repo.key);
     return (doc?.items ?? []).map((item) => {
-      const ref = refOf(item), id = `${repo.key}-${ref}`, stage = stageById.get(ref);
+      const ref = String(item.id), id = `${repo.key}-${ref}`, stage = stageById.get(ref);
       // Done lists issues; a part shows under its issue.
       return { repo, item, id, st: stageOf(item, stage), top: parentRef(item) === undefined, parts: partsOf(doc!, item), of: stage?.of, part: partOf.get(id) };
     });
@@ -446,7 +446,7 @@ const queuedOf = (slots: Slot[], { pickedUp }: Pickups, { blocker }: Projector, 
   byPriority(slots.filter(({ item, st }) => status(item) === "open" && (st === "queued" || st === "held")).map(({ repo, item, id, st, part }) => {
     // The stage already says when an issue is to plan.
     const w = decide(repo, item);
-    return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage: st, at: updated(item) ?? created(item) ?? "", since: pickedUp(id), ...(part ? { part } : {}), kind: w.kind,
+    return { item, repo: repo.key, id: item.id, title: item.title, priority: priorityOf(item), stage: st, at: updated(item) ?? created(item) ?? "", since: pickedUp(id), ...(part ? { part } : {}), kind: w.kind,
       ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
     };
   }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q);
@@ -456,7 +456,7 @@ const runningIssuesOf = (slots: Slot[], { pickedUp }: Pickups): RunningIssue[] =
   slots.flatMap(({ repo, item, id, st, parts, of }) => {
     if (status(item) !== "open" || st !== "working" || !parts.length) return [];
     const n = of ?? { n: 0, m: parts.length };
-    return n.n >= n.m ? [{ id, title: item.title, href: issueHref(id), stage: st, priority: priorityOf(item), of: n, since: pickedUp(id, ...parts.map((g) => `${repo.key}-${refOf(g)}`)), at: updated(item) ?? "" }] : [];
+    return n.n >= n.m ? [{ id, title: item.title, href: issueHref(id), stage: st, priority: priorityOf(item), of: n, since: pickedUp(id, ...parts.map((g) => `${repo.key}-${g.id}`)), at: updated(item) ?? "" }] : [];
   });
 
 /** The latest done issues, and the finish time of every done one. Latest done holds the done parts and the done issues without parts; a done parent shows no card. */

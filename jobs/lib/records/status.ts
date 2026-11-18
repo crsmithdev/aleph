@@ -34,7 +34,7 @@ export interface Facts {
  */
 export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs: Entry[][] = allJobs(), only?: (number | string)[]): Facts {
   const items: Record<string, Subject> = {};
-  const byRef = new Map((doc?.items ?? []).map((i) => [issues.refOf(i), i]));
+  const byRef = new Map((doc?.items ?? []).map((i) => [String(i.id), i]));
   const queue = (only ? only.map(String) : [...byRef.keys()]).reverse();
   for (let ref = queue.pop(); ref !== undefined; ref = queue.pop()) {
     const i = byRef.get(ref);

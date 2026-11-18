@@ -52,7 +52,7 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   const part = addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
   part.title = "[Bug] Find the cause: first";
   delete part.fm.kind;
-  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === issues.refOf(i)).map((f) => f.problem);
+  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === String(i.id)).map((f) => f.problem);
   expect(found(lane)).toEqual([]);
   expect(found(long)[0]).toContain("61 characters");
   expect(found(dot)[0]).toContain("period");
@@ -77,7 +77,7 @@ test("lint flags a refs entry that is not issue.<n>, and passes one that is", ()
   const good = issues.add(doc, "Good refs"), bad = issues.add(doc, "Bad refs");
   good.fm.refs = ["issue.3"];
   bad.fm.refs = ["issue.3", "a-7"];
-  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === issues.refOf(i)).map((f) => f.problem);
+  const found = (i: issues.Issue) => issues.lint(doc).filter((f) => f.id === String(i.id)).map((f) => f.problem);
   expect(found(good)).toEqual([]);
   expect(found(bad)).toEqual(["refs: issue.3, a-7 is not issue.<n>"]);
 });

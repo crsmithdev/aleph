@@ -6,7 +6,7 @@
  * The dispatch asks the gates in the order of GATES; the first that binds skips the issue,
  * and its word is the kind of the decision and of the hold record.
  */
-import { afterOf, isRedMain } from "../../../lib/store.ts";
+import { afterOf, isRedMain } from "../../../lib/todo.ts";
 import { RUN_CAP } from "../infra/settings.ts";
 import * as issues from "../../../lib/todo.ts";
 import { detailOf, type Event } from "../../../lib/naming.ts";

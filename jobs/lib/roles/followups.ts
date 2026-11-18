@@ -22,7 +22,7 @@ export async function fileFollowups(repo: Repo, run: Run, followups: Followup[],
     if (/\bflak/i.test(f.title)) { noteFlakes(repo, run, [f.title]); continue; }
     if (fresh.some((g) => sameTopic(g.title, f.title))) continue;
     const same = open.find((i) => sameTopic(i.title, f.title));
-    if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${f.title}`);
+    if (same) note(repo, same.id, `also met in run ${run.name}: ${f.title}`);
     else fresh.push(f);
   }
   const files = fresh.slice(0, 3);
