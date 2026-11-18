@@ -45,6 +45,19 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 
 [Workflow](workflow.md) follows an issue from intake to `main`: the gates, checks, review, land, rescue, Asks and the director, with each send-back.
 
+## What a worker can change
+
+A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so the gates stop a careless worker, not a hostile one.
+
+| A worker can | Stopped | Seen |
+|---|---|---|
+| Edit a file an Oracle command names, on the base and outside the Edit surface | Yes: Verify fails | The check `oracle-pin` on the run |
+| Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate needs each new test to fail on the base |
+| Change its issue's spec with `aleph issue edit` | Yes, for the running job: the job reads the spec copied at dispatch | The store write records the actor `worker` |
+| Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for Chris | The Ask |
+| Write the job folder's `spec.md`, `aleph.db` or the items repo directly | No | No |
+| Push to `origin/main` itself | No: no setting or rule in `identity/AGENT.md` forbids it | Not checked |
+
 ## The tick
 
 The tick starts only periodic work, each step on its own due rule: the maintainer (mechanical vault pass, corrections and the compile of yesterday) and the monitor once a day (from a local hour set on the Automation page, 0 by default), the housekeeper once a day and after a move of a main (at most once an hour), the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, or every minute while a GitHub CI run on a factory repo's main is in progress (by the last CI read) or a land on that main ended in the last 15 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
