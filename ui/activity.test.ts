@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { observationsStore } from "../jobs/lib/infra/settings.ts";
 import { activity } from "./activity.ts";
 import { closePass, openPass } from "../lib/sources.ts";
 import { memory, use } from "../lib/langfuse.ts";
@@ -21,7 +23,8 @@ const reads = () => lf.asked.filter((a) => a.list === "observations");
 
 beforeAll(() => use(lf));
 afterAll(() => use(null));
-beforeEach(() => { lf.asked.length = 0; lf.down = null; rows.observations = observations; });
+const stored = observationsStore().replace(/\.json$/, ".http-langfuse-test.json");
+beforeEach(() => { lf.asked.length = 0; lf.down = null; rows.observations = observations; rmSync(stored, { force: true }); });
 
 describe("activity", () => {
   test("counts the tools, hooks and denials of the window", async () => {
@@ -48,22 +51,75 @@ describe("activity", () => {
     } finally { closePass(); }
   });
 
-  test("in a build pass a later read asks only for the last 10 min and keeps the rows read before; after an hour it reads the window again", async () => {
-    const min = 60_000, start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime();
+  test("in a build pass a later read asks only for the last 10 min and keeps the rows read before; an hour on it reads the last 2 hours and a day on the window", async () => {
+    const min = 60_000, startOf = (t: Date) => new Date(t.getFullYear(), t.getMonth(), t.getDate() - 6).getTime();
     const from = () => reads().at(-1)!.q.from!.getTime();
+    const late = { ...tool(0, "Bash", "tc"), startTime: new Date(now.getTime() + 2 * min).toISOString() };
+    const hour = new Date(now.getTime() + 61 * min), calls = (a: Awaited<ReturnType<typeof activity>>) => a.tools.map((t) => [t.name, t.calls]);
     try {
       openPass({ langfuse: 1 }, "activity.test.later");
       const a = await activity(7, null, now);
-      expect(from()).toBe(start);
-      rows.observations = [{ ...tool(0, "Bash", "tc"), startTime: new Date(now.getTime() + 2 * min).toISOString() }];
+      expect(from()).toBe(startOf(now));
+      rows.observations = [late];
       openPass({ langfuse: 2 }, "activity.test.later");
       const b = await activity(7, null, new Date(now.getTime() + 5 * min));
       expect(from()).toBe(now.getTime() + min - 10 * min);
       expect(b.tools.find((t) => t.name === "Bash")!.calls).toBe(a.tools.find((t) => t.name === "Bash")!.calls + 1);
+      rows.observations = [...observations, late];
       openPass({ langfuse: 3 }, "activity.test.later");
-      // Two hours on is the next day, so the window starts a day later.
-      await activity(7, null, new Date(now.getTime() + 2 * 60 * min));
-      expect(from()).toBe(start + 24 * 60 * min);
+      const c = await activity(7, null, hour);
+      expect(from()).toBe(hour.getTime() + min - 120 * min);
+      closePass();
+      expect(calls(c)).toEqual(calls(await activity(7, null, hour)));
+      openPass({ langfuse: 4 }, "activity.test.later");
+      const day = new Date(now.getTime() + 25 * 60 * min);
+      await activity(7, null, day);
+      expect(from()).toBe(startOf(day));
+    } finally { closePass(); }
+  });
+
+  test("a wider window reads only its older part, and a 30-day and a 7-day read that alternate after it read nothing old", async () => {
+    const old = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6).getTime(), recent = now.getTime() + 60_000 - 10 * 60_000;
+    try {
+      openPass({ langfuse: 1 }, "activity.test.wider");
+      await activity(7, null, now);
+      lf.asked.length = 0;
+      openPass({ langfuse: 2 }, "activity.test.wider");
+      await activity(30, null, now);
+      expect(reads().filter((r) => r.q.to!.getTime() === old).length).toBe(3);
+      expect(reads().every((r) => r.q.from!.getTime() === recent || r.q.to!.getTime() === old)).toBe(true);
+      lf.asked.length = 0;
+      for (const days of [7, 30, 7, 30]) { openPass({ langfuse: days + reads().length }, "activity.test.wider"); await activity(days, null, now); }
+      expect(reads().length).toBe(12);
+      expect(reads().every((r) => r.q.from!.getTime() === recent)).toBe(true);
+    } finally { closePass(); }
+  });
+
+  test("after a restart a pass reads from the stored end and gives the same counts", async () => {
+    try {
+      openPass({ langfuse: 1 }, "activity.test.restart");
+      const a = await activity(7, null, now);
+      // A new environment drops the rows in memory, as a restart does; the store file stays.
+      openPass({ langfuse: 2 }, "activity.test.restart.2");
+      const b = await activity(7, null, new Date(now.getTime() + 5 * 60_000));
+      expect(reads().slice(3).every((r) => r.q.from!.getTime() === now.getTime() + 60_000 - 10 * 60_000)).toBe(true);
+      expect(b.tools).toEqual(a.tools);
+    } finally { closePass(); }
+  });
+
+  test("after a failed read the next pass reads from where the kept rows end, not from the window's start", async () => {
+    const end = now.getTime() + 60_000, recent = end - 10 * 60_000;
+    try {
+      openPass({ langfuse: 1 }, "activity.test.failed");
+      await activity(7, null, now);
+      lf.down = new Error("500");
+      openPass({ langfuse: 2 }, "activity.test.failed");
+      expect((await activity(30, null, now)).langfuse).toBe("error");
+      lf.down = null;
+      lf.asked.length = 0;
+      openPass({ langfuse: 3 }, "activity.test.failed");
+      await activity(7, null, now);
+      expect(reads().every((r) => r.q.from!.getTime() === recent)).toBe(true);
     } finally { closePass(); }
   });
 
