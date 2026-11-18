@@ -35,10 +35,10 @@ test("each error line says its alert, in red", () => {
   const cases: [object, string][] = [
     [{ health: [ciRed] }, "GitHub CI is broken"],
     [{ health: [mainRed] }, "the build is failing on main"],
-    [{ health: [alert("health: 2 passed runs did not land in 15 minutes", "lands-stuck")] }, "lands are stuck"],
-    [{ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stuck")] }, "lands are stuck"],
-    [{ health: [alert("health: 2 issues can start, but no run started in 15 minutes", "queue-stuck")] }, "queued jobs are not starting"],
-    [{ health: [alert("health: 1 new issue did not move to jobs in 15 minutes", "issues-stuck")] }, "new issues are not becoming jobs"],
+    [{ health: [alert("health: 2 passed runs did not land in 15 minutes", "lands-stalled")] }, "lands are stalled"],
+    [{ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stalled")] }, "lands are stalled"],
+    [{ health: [alert("health: 2 issues can start, but no run started in 15 minutes", "queue-stalled")] }, "queued jobs are not starting"],
+    [{ health: [alert("health: 1 new issue did not move to jobs in 15 minutes", "issues-stalled")] }, "new issues are not becoming jobs"],
     [{ health: [alert("health: something new broke.")] }, "something new broke"],
   ];
   for (const [o, text] of cases) {
@@ -50,7 +50,7 @@ test("each error line says its alert, in red", () => {
 test("the page and the status sentence show a health line's issue id in its short form", () => {
   setCodes({ aleph: "a" });
   try {
-    const page = view.view.render(withFactory({ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stuck")] }));
+    const page = view.view.render(withFactory({ health: [alert("health: the land run of aleph-5 is live for over 30 minutes", "lands-stalled")] }));
     expect(page).not.toContain("aleph-5");
     expect(said({ health: [warn("health: koans main is red at def5678: aleph-6 is the cause")] })).toBe("Everything is fine; koans main is red at def5678: a6 is the cause.");
   } finally {

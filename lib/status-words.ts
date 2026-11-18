@@ -38,9 +38,9 @@ const ALERTS = [
   ["tick", TICK_STOPPED],
   // No line says this one: a stuck job adds it. It is here for its rank.
   ["jobs", JOBS_UNHEALTHY],
-  ["lands-stuck", "lands are stuck"],
-  ["queue-stuck", "queued jobs are not starting"],
-  ["issues-stuck", "new issues are not becoming jobs"],
+  ["lands-stalled", "lands are stalled"],
+  ["queue-stalled", "queued jobs are not starting"],
+  ["issues-stalled", "new issues are not becoming jobs"],
 ];
 const rank = (t: string) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 

@@ -78,25 +78,25 @@ export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[]; run?:
 /** How long work may wait with nothing moving before it is stalled: 15 minutes. */
 const STALL_MS = 15 * 60_000;
 
-/** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
-export const LAND_STUCK_MS = 30 * 60_000;
+/** A land run live for longer than this is stalled: 99% of land runs end within 20 minutes. */
+export const LAND_STALL_MS = 30 * 60_000;
 
 
 /** A health line: its text, its kind, and for an alert the key the status sentence ranks it by (lib/status-words.ts). */
 export interface Health { text: string; kind: "alert" | "warn"; key?: string }
 const alert = (key: string, text: string): Health => ({ text, kind: "alert", key });
 
-/** The health lines of work that stayed stalled for STALL_MS, and of land runs live past LAND_STUCK_MS. */
+/** The health lines of work that stayed stalled for STALL_MS, and of land runs live past LAND_STALL_MS. */
 export function stallLines(now: number, jobs?: Job[]): Health[] {
   if (paused()) return [];
   const old = Object.entries(readStalls()).filter(([, at]) => now - Date.parse(at) >= STALL_MS).map(([k]) => k);
   const n = (kind: string) => old.filter((k) => k.startsWith(`${kind}:`)).length;
   const lines: Health[] = [];
-  const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.role === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
-  if (n("land")) lines.push(alert("lands-stuck", `health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`));
-  for (const e of slow) lines.push(alert("lands-stuck", `health: the land run of ${e.run.name} is live for over 30 minutes`));
-  if (n("issue")) lines.push(alert("queue-stuck", `health: ${n("issue")} issue${n("issue") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
-  if (n("ingest")) lines.push(alert("issues-stuck", `health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`));
+  const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.role === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STALL_MS);
+  if (n("land")) lines.push(alert("lands-stalled", `health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`));
+  for (const e of slow) lines.push(alert("lands-stalled", `health: the land run of ${e.run.name} is live for over 30 minutes`));
+  if (n("issue")) lines.push(alert("queue-stalled", `health: ${n("issue")} issue${n("issue") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
+  if (n("ingest")) lines.push(alert("issues-stalled", `health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`));
   return lines;
 }
 

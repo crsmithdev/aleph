@@ -18,7 +18,7 @@ import { isVersion } from "../roles/issue-spec.ts";
 import { close, reader, writeList } from "../../../lib/store.ts";
 import { partsOf, setPlan } from "../../../lib/todo.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
-import { LAND_STUCK_MS } from "../gates/factory-status.ts";
+import { LAND_STALL_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { issue as issueOf, tailOf, type Job } from "../records/job.ts";
@@ -88,9 +88,9 @@ const SLOW_LAND_OPTIONS = [
   { label: "Drop", line: "Stop the land and drop the job" },
 ];
 
-/** The open jobs of factory repos whose last real run is a land live for LAND_STUCK_MS or more, with no Ask set on it. */
+/** The open jobs of factory repos whose last real run is a land live for LAND_STALL_MS or more, with no Ask set on it. */
 const slowLands = (jobs: Job[], now: number): Job[] => factoryJobs(jobs, (last, h) =>
-  last.run.role === "land" && last.run.state === "running" && h === "live" && now - Date.parse(last.run.started) >= LAND_STUCK_MS && !asked(last));
+  last.run.role === "land" && last.run.state === "running" && h === "live" && now - Date.parse(last.run.started) >= LAND_STALL_MS && !asked(last));
 
 /**
  * Each land live for 30 minutes or more gets a rescue Ask (input, rescue) on its issue, once per land run: the director

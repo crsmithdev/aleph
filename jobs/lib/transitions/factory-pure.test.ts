@@ -226,7 +226,7 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   await stallStep(t0);
   await stallStep(t0 + 5 * min);
   expect(said(t0 + 14 * min)).toEqual([]);
-  expect(said(t0 + 15 * min)).toEqual([{ text: "health: 1 issue can start, but no run started in 15 minutes", kind: "alert", key: "queue-stuck" }]);
+  expect(said(t0 + 15 * min)).toEqual([{ text: "health: 1 issue can start, but no run started in 15 minutes", kind: "alert", key: "queue-stalled" }]);
   await change(id, (item) => { issues.setStatus(item, "done"); });
   await stallStep(t0 + 16 * min);
   expect(said(t0 + 16 * min)).toEqual([]);
