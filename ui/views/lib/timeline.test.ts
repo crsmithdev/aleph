@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { noteOf } from "../lib/todo.ts";
+import { noteOf } from "../../../lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./views/lib/timeline.js";
+import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
-import { dur } from "./views/lib/format.js";
-import { setCodes } from "../lib/naming.ts";
+import { dur } from "./format.js";
+import { setCodes } from "../../../lib/naming.ts";
 // @ts-ignore
-import { issueSegments, renderIssue } from "./views/issues.js";
+import { issueSegments, renderIssue } from "../issues.js";
 
 const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", issue: "fac-1", href: "#/jobs/fac-1%231", state: "passed", started, ended, ...extra });
 const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: "2026-11-01T10:00:00Z", runs: [] }, ...over });

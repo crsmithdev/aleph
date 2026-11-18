@@ -1,18 +1,16 @@
-import { setCodes } from "../lib/naming.ts";
+import { setCodes } from "../../../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
-import { renderHerald } from "./views/now.js";
-import { heraldOf, row, withFactory } from "./now.testkit.ts";
+import { renderHerald } from "../now.js";
+import { heraldOf, row, withFactory } from "../../now.testkit.ts";
 // @ts-ignore the module is plain JS, shared with the page
-import { postJson, scope, wireScope, projectKeysOnce, keep, kept } from "./views/lib/address.js";
+import { scope } from "./address.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { chart, fitGrid, chartTheme } from "./views/lib/chart-theme.js";
+import { plural } from "./format.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { plural, localMs, shortModel, when, clock, failMessage, money, pct, wkText, span, dur } from "./views/lib/format.js";
+import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortOf, sortRows } from "./html.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, filterBar, seg, idLink, pageHead, pager, sortHead, sectionHead, card, cmd, diffHtml, loadDiff, empty, error, esc, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, searchBox, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortOf, sortRows } from "./views/lib/html.js";
-// @ts-ignore the module is plain JS, shared with the page
-import * as lib from "./views/lib/html.js";
+import * as lib from "./html.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -49,47 +47,10 @@ test("mountView hands an async mount to the caller, and a failed mount rejects",
   await expect(mountView({ mount: async () => { throw new Error("no chart"); } }, "root", 1)).rejects.toThrow("no chart");
 });
 
-test("chart on() attaches a handler that survives a re-theme", () => {
-  const g = globalThis as any;
-  const made: any[] = [];
-  let retheme = () => {};
-  const keep = { echarts: g.echarts, matchMedia: g.matchMedia, ResizeObserver: g.ResizeObserver, getComputedStyle: g.getComputedStyle, document: g.document };
-  g.echarts = {
-    registerTheme() {},
-    init() {
-      const c: any = { ons: [], getOption: () => ({ legend: [{ show: false }] }), setOption() {}, dispose() {}, resize() {} };
-      c.on = (ev: string, fn: unknown) => c.ons.push([ev, fn]);
-      made.push(c);
-      return c;
-    },
-  };
-  g.matchMedia = () => ({ addEventListener: (_: string, fn: () => void) => { retheme = fn; }, removeEventListener() {} });
-  g.ResizeObserver = class { observe() {} disconnect() {} };
-  g.getComputedStyle = () => ({ getPropertyValue: () => "" });
-  g.document = { documentElement: {} };
-  try {
-    const fn = () => {};
-    const c = chart({}, {});
-    c.on("click", fn);
-    expect(made[0].ons).toEqual([["click", fn]]);
-    retheme();
-    expect(made[1].ons).toEqual([["click", fn]]);
-  } finally {
-    Object.assign(g, keep);
-  }
-});
-
 test("legendHtml() gives one item per entry", () => {
   const h = legendHtml([["One", "c-use"], ["Two"]]);
   expect(h.match(/<li>/g)).toHaveLength(2);
   expect(h).toContain('<i class="c-use"></i>One');
-});
-
-test("failMessage shows the reason from the body", () => {
-  expect(failMessage("/api/sessions", 502, '{"error":"Langfuse is unreachable at http://x"}')).toBe("/api/sessions answered 502: Langfuse is unreachable at http://x");
-  expect(failMessage("/api/sessions", 404, "not found")).toBe("/api/sessions answered 404: not found");
-  expect(failMessage("/api/sessions", 500, "")).toBe("/api/sessions answered 500");
-  expect(failMessage("/api/x", 500, "a".repeat(1000))).toBe(`/api/x answered 500: ${"a".repeat(300)}`);
 });
 
 // A small fake document: just enough of querySelector(All), open, hidden, value and innerHTML for record/restore.
@@ -254,30 +215,6 @@ test("statusRow puts the state, the priority, then the labels in a status row", 
   expect(statusRow(badge("running"), priorityBadge("high"), chips(["ui"]))).toBe(`<div class="status-row">${badge("running")}${priorityBadge("high")}${chips(["ui"])}</div>`);
 });
 
-test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a bad date", () => {
-  const now = new Date(2026, 10, 4);
-  expect(when(new Date(2026, 9, 28, 14, 5), now)).toBe("10/28 14:05");
-  expect(when(new Date(2025, 11, 3, 14, 5), now)).toBe("2025-12-03");
-  expect(when("x")).toBe("");
-});
-
-test("wkText follows the pct rule, and the Values table of docs/design.md lists those examples", async () => {
-  const got = [1.4, 0.4].map((p) => wkText({ pct: p }));
-  expect(got).toEqual(["≈1% wk", "≈0.4% wk"]);
-  const row = (await Bun.file(new URL("../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Weekly share |"))!;
-  expect(row.split("|")[2].trim().split(", ")).toEqual(got);
-});
-
-test("clock gives hh:mm, and '' when it gets no time", () => {
-  expect([null, undefined, "", "x"].map(clock)).toEqual(["", "", "", ""]);
-  expect(clock(new Date(2026, 9, 28, 14, 5))).toBe("14:05");
-});
-
-test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – for none", () => {
-  expect([null, undefined, NaN].map(pct)).toEqual(["–", "–", "–"]);
-  expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);
-});
-
 test("meter draws one share or segments as a .meter with a role=img aria-label", () => {
   const one = meter(42.5, "42.5 of the cap");
   expect(one).toContain('class="meter"');
@@ -346,41 +283,6 @@ test("sortRows sorts a copy, numbers by value, text in numeric mode, ties by tie
   expect(JSON.stringify(rows)).toBe(snap);
 });
 
-test("the legend of the Sources and the Live chart ends above the grid at 390 and 1440px", async () => {
-  // @ts-ignore the vendored ECharts bundle has no types
-  const echarts = (await import("./vendor/echarts.min.js")).default;
-  // @ts-ignore issues.js is plain JS, shared with the page
-  const { sourceFrame } = await import("./views/issues.js");
-  // @ts-ignore chart.js is plain JS, shared with the page
-  const { option } = await import("./views/lib/chart.js");
-  const filed = { ats: [Date.parse("2026-11-04T10:00:00Z")], counts: Object.fromEntries(["chris", "worker", "deps", "memory", "agent"].map((k) => [k, [1]])) };
-  const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"];
-  const live = {
-    measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { name: "Role", keys: roles.map((n) => ({ key: n, name: n })) },
-    rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 1])) }, { at: Date.parse("2026-11-04T11:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 2])) }],
-  };
-  const models = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5", "gpt-5-codex", "gpt-5-mini", "gemini-2.5-pro", "Other"].map((m): string => shortModel(m));
-  const cost = {
-    measure: { name: "Cost", unit: "usd", agg: "sum" }, over: { kind: "time", window: "week" }, by: { name: "Model", keys: models.map((n) => ({ key: n, name: n })) },
-    rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(models.map((n, i) => [n, i + 1])) }],
-  };
-  const charts = { sources: option(sourceFrame(filed, "week"), "columns", {}), live: option(live, "area", {}), cost: option(cost, "columns", {}) };
-  for (const [name, chartOption] of Object.entries(charts)) for (const width of [390, 1440]) {
-    const ec = echarts.init(null, chartTheme({ ink: "#000", rule: "#ccc", sans: "sans" }), { renderer: "svg", ssr: true, width, height: 240 });
-    ec.setOption(chartOption);
-    fitGrid(ec);
-    const model = ec.getModel(), group = ec.getViewOfComponentModel(model.getComponent("legend")).group;
-    const box = group.getBoundingRect().clone();
-    box.applyTransform(group.getLocalTransform());
-    const grid = model.getComponent("grid").coordinateSystem.getRect();
-    const drawn: string[] = [];
-    group.traverse((g: any) => { if (models.includes(g.style?.text)) drawn.push(g.style.text); });
-    ec.dispose();
-    if (name === "cost") { expect(chartOption.legend.type).not.toBe("scroll"); expect(drawn, `${width}px`).toEqual(models); }
-    expect(box.y + box.height, `${name} at ${width}px`).toBeLessThanOrEqual(grid.y);
-  }
-});
-
 test("seg draws a labelled group, and the scope bar names its window group", () => {
   const h = seg("Who", [{ label: "A", on: false, attrs: ' data-x="1"' }, { label: "B", on: true, attrs: "" }]);
   expect(h).toContain('<div class="seg" role="group" aria-label="Who">');
@@ -389,25 +291,6 @@ test("seg draws a labelled group, and the scope bar names its window group", () 
   expect(groups.length).toBe(1);
   expect(groups[0]).toMatch(/aria-label="[^"]+"/);
   expect(scope(new URLSearchParams()).bar()).not.toContain('class="fl">Window');
-});
-
-test("the scope bar takes a window name, its choices and an extra control; a click on days stays out of aleph.window", () => {
-  const days = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
-  const h = scope(new URLSearchParams()).bar({ value: "7", name: "days", options: days, after: "<button>Pause</button>" });
-  expect(h).toContain('data-name="days"');
-  expect(h.match(/data-value="(7|30|90)"/g)).toHaveLength(3);
-  expect(h).toContain('<option value="" selected>All Projects</option>');
-  expect(h).toMatch(/<\/div><div class="fg"><button>Pause<\/button><\/div><\/div>$/);
-  const g = globalThis as any, set: string[] = [];
-  g.localStorage = { getItem: () => null, setItem: (k: string) => set.push(k) };
-  g.location = { hash: "#/sessions" };
-  try {
-    let click: any;
-    wireScope({ querySelector: () => ({ querySelector: () => null, addEventListener: (t: string, f: unknown) => { if (t === "click") click = f; } }) });
-    click({ target: { closest: () => ({ dataset: { value: "30" }, parentElement: { dataset: { name: "days" } } }) } });
-    expect(g.location.hash).toContain("days=30");
-    expect(set).toEqual([]);
-  } finally { delete g.localStorage; delete g.location; }
 });
 
 test("wiring a root again adds no click listener, so a click runs a tab or an edit once", () => {
@@ -461,48 +344,6 @@ describe("loadDiff", () => {
   });
 });
 
-describe("projectKeysOnce", () => {
-  const real = globalThis.fetch;
-  afterEach(() => { globalThis.fetch = real; });
-  // address.js keeps the keys for the page's life: each test takes a copy of the module of its own.
-  let copies = 0;
-  const once = async () => (await import(`./views/lib/address.js?copy=${++copies}`)).projectKeysOnce as typeof projectKeysOnce;
-  test("a non-ok response gives an empty list and does not throw, and the next call fetches again", async () => {
-    const projectKeysOnce = await once();
-    let calls = 0;
-    globalThis.fetch = (async () => { calls++; return new Response("no", { status: 500 }); }) as any;
-    expect(await projectKeysOnce()).toEqual([]);
-    globalThis.fetch = (async () => { calls++; throw new Error("down"); }) as any;
-    expect(await projectKeysOnce()).toEqual([]);
-    expect(calls).toBe(2);
-  });
-  test("two calls give the same keys from one request", async () => {
-    const projectKeysOnce = await once();
-    const urls: string[] = [];
-    globalThis.fetch = (async (u: string) => { urls.push(u); return Response.json({ aleph: { code: "a", issues: 1, onboarded: true }, other: { code: null, issues: 0, onboarded: false } }); }) as any;
-    expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
-    expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
-    expect(urls).toEqual(["/api/projects"]);
-  });
-  test("the Project select has no label and lists All and aleph, the onboarded repos, then the rest with an open issue, each with its count", async () => {
-    const copy = await import(`./views/lib/address.js?copy=${++copies}`);
-    const p = (issues: number, onboarded = false) => ({ code: null, issues, onboarded });
-    globalThis.fetch = (async () => Response.json({ zed: p(2), aleph: p(9, true), mid: p(0, true), beta: p(3, true), idle: p(0), alpha: p(1) })) as any;
-    await copy.projectKeysOnce();
-    const h = copy.scope(new URLSearchParams()).bar();
-    expect(h).not.toContain('class="fl"');
-    expect(h.match(/<select[^>]*>.*<\/select>/)![0]).toBe('<select name="project" aria-label="Project"><option value="" selected>All Projects (15)</option><option value="aleph">aleph (9)</option>' +
-      '<hr><option value="beta">beta (3)</option><option value="mid">mid (0)</option><hr><option value="alpha">alpha (1)</option><option value="zed">zed (2)</option></select>');
-    // The chosen project and a name the page adds stay listed, though neither has an open issue in the registry.
-    const picked = copy.scope(new URLSearchParams("project=idle")).bar({ more: ["notes"] });
-    expect(picked).toContain('<option value="idle" selected>idle (0)</option><option value="zed">zed (2)</option><option value="notes">notes</option>');
-  });
-});
-
-test("dur writes seconds, minutes, hours and days", () => {
-  expect([43, 245, 3720, 187200, null].map(dur)).toEqual(["43s", "4m 05s", "1h 02m", "2d 04h", "–"]);
-});
-
 test("clamp() puts a button with aria-expanded after the clamped text, and moreFold() folds the rows after n", () => {
   expect(clamp("<b>x</b>")).toMatch(/^<div class="clamp"><b>x<\/b><\/div><button[^>]*type="button"[^>]*aria-expanded="false"[^>]*>Show more<\/button>$/);
   const row = (n: number) => `r${n}`;
@@ -510,28 +351,6 @@ test("clamp() puts a button with aria-expanded after the clamped text, and moreF
   expect(h.match(/<li>/g)?.length).toBe(5);
   expect(h).toContain("<ul class=\"tight\"><li>r1</li><li>r2</li><li>r3</li></ul><details><summary>2 more</summary><ul");
   expect(moreFold([1, 2, 3], row, 3)).not.toContain("<details");
-});
-
-
-test("postJson posts the JSON body with the UI header and throws the error text of a failed reply", async () => {
-  const real = globalThis.fetch, seen: { url: unknown; init: any }[] = [];
-  let reply = () => Response.json({ added: 7 });
-  globalThis.fetch = (async (url: unknown, init: any) => { seen.push({ url, init }); return reply(); }) as any;
-  try {
-    expect(await postJson("/api/x", { a: 1 })).toEqual({ added: 7 });
-    expect(seen[0].url).toBe("/api/x");
-    expect(seen[0].init.method).toBe("POST");
-    expect(seen[0].init.headers["X-Aleph-UI"]).toBe("1");
-    expect(seen[0].init.body).toBe('{"a":1}');
-    reply = () => Response.json({ error: "it cannot wait" }, { status: 422 });
-    await expect(postJson("/api/x", {})).rejects.toThrow("it cannot wait");
-    reply = () => new Response("no job named x", { status: 404 });
-    await expect(postJson("/api/x", {})).rejects.toThrow("no job named x");
-    reply = () => new Response("forbidden", { status: 403 });
-    await expect(postJson("/api/x", {})).rejects.toThrow("forbidden");
-    reply = () => new Response("Bad Gateway", { status: 502 });
-    await expect(postJson("/api/x", {})).rejects.toThrow("Bad Gateway");
-  } finally { globalThis.fetch = real; }
 });
 
 test("actButton makes an .act button with the data attributes and label, and primary when asked", () => {
@@ -542,35 +361,6 @@ test("actButton makes an .act button with the data attributes and label, and pri
 test("codeText sets a backtick span as a code element and escapes an ampersand", () => {
   expect(lib.codeText("run `a & b` now")).toBe("run <code>a &amp; b</code> now");
 });
-
-test("localMs reads a bare date as local midnight, not UTC midnight", () => {
-  const tz = process.env.TZ;
-  process.env.TZ = "America/Los_Angeles";
-  try {
-    expect(localMs("2026-11-05")).toBe(new Date(2026, 10, 5).getTime());
-  } finally {
-    // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
-    process.env.TZ = tz ?? "UTC";
-    if (tz === undefined) delete process.env.TZ;
-  }
-});
-
-test("keep stores JSON under aleph.<key>, kept reads it back, and with no storage kept gives the fallback", () => {
-  const g = globalThis as any, store = new Map<string, string>();
-  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
-  try {
-    keep("factory/agents/live", { form: "lines", hidden: ["Worker"] });
-    expect(store.get("aleph.factory/agents/live")).toBe('{"form":"lines","hidden":["Worker"]}');
-    expect(kept("factory/agents/live", {})).toEqual({ form: "lines", hidden: ["Worker"] });
-    expect(kept("nope", {})).toEqual({});
-    store.set("aleph.bad", "not json");
-    expect(kept("bad", 1)).toBe(1);
-    delete g.localStorage;
-    expect(kept("factory/agents/live", {})).toEqual({});
-    expect(() => keep("x", 1)).not.toThrow();
-  } finally { delete g.localStorage; }
-});
-
 
 test("fold() writes a details element with its class, keep key and open state", () => {
   expect(fold("<b>S</b>", "<p>B</p>")).toBe("<details><summary><b>S</b></summary><p>B</p></details>");

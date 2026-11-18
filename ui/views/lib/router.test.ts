@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
-import { loader, keysOf, markOf, morph, moved } from "./views/lib/router.js";
+import { loader, keysOf, markOf, morph, moved } from "./router.js";
 // @ts-ignore plain JS, shared with the page
-import { view as issues } from "./views/issues.js";
+import { view as issues } from "../issues.js";
 // @ts-ignore plain JS, shared with the page
-import { view as sessions } from "./views/sessions.js";
+import { view as sessions } from "../sessions.js";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { markLine } from "./views/lib/format.js";
+import { markLine } from "./format.js";
 
 /** A stream the test sends messages on. */
 class FakeStream {
