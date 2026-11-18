@@ -141,12 +141,13 @@ describe("Asks, reopens and holds", () => {
 
   test("a hold kind's records, issues and hours until the issue's next record; the held share leaves out open and started", () => {
     expect(t.today.holds).toEqual([
-      { kind: "spec-check", records: 1, goals: 1, hours: 2 },
-      { kind: "started", records: 1, goals: 1, hours: 0 },
-      { kind: "open", records: 1, goals: 1, hours: 0 },
-      { kind: "busy", records: 1, goals: 1, hours: 0 },
+      { kind: "spec-check", records: 1, issues: 1, hours: 2 },
+      { kind: "started", records: 1, issues: 1, hours: 0 },
+      { kind: "open", records: 1, issues: 1, hours: 0 },
+      { kind: "busy", records: 1, issues: 1, hours: 0 },
     ]);
-    expect(t.today.held).toEqual({ goals: 2, seen: 3 });
+    expect(t.today.held).toEqual({ issues: 2, seen: 3 });
+    expect(renderTable(t)).not.toMatch(/goal/i);
   });
 
   test("the hold words count as the old kinds did: job or a done issue holds nothing, the other holds hold", () => {
@@ -155,7 +156,7 @@ describe("Asks, reopens and holds", () => {
       rec("g-1", "job", "job.1"), rec("g-2", "done", ""),
       rec("g-3", "after", "blocked: after g-1"), rec("g-4", "red", "main baseline running"), rec("g-5", "red", "an old record"),
     ] }, DAY, Date.parse(at(DAY, 23)));
-    expect(v6.today.held).toEqual({ goals: 3, seen: 5 });
+    expect(v6.today.held).toEqual({ issues: 3, seen: 5 });
   });
 });
 

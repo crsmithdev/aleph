@@ -64,7 +64,7 @@ describe("job", () => {
     expect((await actionJob("gamma", "commit a.txt")).code).toBe(0);
     const list = await aleph(["jobs"]);
     const gamma = list.json.find((j: any) => j.name === "gamma");
-    expect(gamma).toMatchObject({ repo: "demo", goal: "Goal: gamma", state: "passed" });
+    expect(gamma).toMatchObject({ repo: "demo", issue: "Goal: gamma", state: "passed" });
     const one = await aleph(["jobs", "gamma"]);
     expect(one.json.result).toBe("did commit a.txt");
     expect(one.json.checks).toContain("## tests: exit 0");

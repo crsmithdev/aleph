@@ -2,7 +2,8 @@
   "demo": [
     {
       "title": "Show the build time on the status page",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "priority": "high",
       "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.",
@@ -10,7 +11,8 @@
     },
     {
       "title": "Retry flaky uploads",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "status": "dropped",
       "notes": [
@@ -19,14 +21,16 @@
     },
     {
       "title": "Rename the config keys",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "priority": "low",
       "body": "Held: touches a protected path."
     },
     {
       "title": "Cache the index page",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "due": "2026-11-15",
       "after": [
@@ -77,7 +81,8 @@
     },
     {
       "title": "Speed up the import",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "status": "dropped",
       "notes": [
@@ -86,17 +91,20 @@
     },
     {
       "title": "Resize the avatar upload",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris"
     },
     {
       "title": "Land the CSV export",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris"
     },
     {
       "title": "Show the build log tail",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris"
     },
     {
@@ -109,7 +117,8 @@
     },
     {
       "title": "Drop the legacy exporter",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "status": "dropped",
       "notes": [
@@ -118,7 +127,8 @@
     },
     {
       "title": "Add a --json flag to the report",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "status": "done"
     },
@@ -132,7 +142,8 @@
     },
     {
       "title": "Batch the thumbnail jobs",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "worker",
       "areas": [
         "images"
@@ -140,13 +151,15 @@
     },
     {
       "title": "Stream the log tail",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "worker",
       "issue": "demo-23"
     },
     {
       "title": "Land the thumbnail cache",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "worker",
       "issue": "demo-23",
       "after": [
@@ -155,7 +168,8 @@
     },
     {
       "title": "Warm the cache on deploy",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "after": [
         "demo-10"
@@ -163,7 +177,8 @@
     },
     {
       "title": "Prune stale thumbnails",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "areas": [
         "images"
@@ -195,7 +210,8 @@
     },
     {
       "title": "Approve the schema change",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris"
     },
     {
@@ -218,13 +234,15 @@
   "tools": [
     {
       "title": "Parse dates in the import command",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "body": "Dates in the CSV come through as text."
     },
     {
       "title": "Flaky test in the parser suite",
-      "kind": "goal",
+      "kind": "task",
+      "spec": true,
       "source": "chris",
       "priority": "high"
     },

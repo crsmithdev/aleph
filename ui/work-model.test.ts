@@ -98,7 +98,7 @@ describe("the Issue page", () => {
 
   test("a part's page names its issue and has no parts of its own", async () => {
     const d = await getJson("/api/issues/fac-3");
-    expect(d).toMatchObject({ ref: "3", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
+    expect(d).toMatchObject({ ref: "3", parts: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-3"]);
     expect((await fetch(`http://127.0.0.1:${server.port}/api/issues/fac-99`)).status).toBe(404);
   });

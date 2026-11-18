@@ -168,7 +168,7 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (job: string, kind: string, state: string, a: string, b: string) => ({ n: 1, role: kind, job, name: job, state: state, started: a, ended: b }) as any;
   const since = new Date(2026, 9, 28, 5).getTime(), end = new Date(2026, 9, 28, 15).getTime();
-  const none = { issue: new Map(), goal: new Map() };
+  const none = { issue: new Map() };
   const p = phases([
     // A fix round: 1 hour from the first start to the last finish, then 10 minutes to the land, then a run after the land.
     r("a", "build", "failed", t(6), t(6, 10)), r("a", "build", "passed", t(6, 30), t(7)), r("a", "land", "landed", t(7, 5), t(7, 10)), r("a", "build", "passed", t(8), t(8, 5)),
@@ -250,7 +250,7 @@ test("classify: one run of each class, with its cause", () => {
   expect(by("reran").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
   expect(by("failed").causes.map((c) => c.name)).toEqual(["Issue had landed"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
-  expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
+  expect(by("dropped").top[0]).toMatchObject({ issue: "fx-3", href: "#/issues/fx/3" });
   for (const c of out.classes) {
     expect(c).toHaveProperty("week");
     for (const e of [...c.causes, ...c.top]) expect(e).not.toHaveProperty("week");
@@ -372,12 +372,12 @@ test("runs read their issue from target: an issue run counts under its number", 
   const fit = { fable: 0.1, rest: 0.1, pooled: true, hours: 24 };
   const w = speed("week", now, fit);
   expect(w.issues.week).toBe(0.2); // the runs under the one key aleph-1430
-  expect(w.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
+  expect(w.issues.usage).toEqual([{ issue: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
   expect(speed("week", now).issues.usage).toEqual([]);
   run({ ...a("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) });
   const w2 = speed("week", now, fit);
   expect(w2.issues.week).toBe(0.1); // aleph-1359 counts too: median of 0.2 and 0.1
-  expect(w2.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }, { goal: "aleph-1359", href: "#/issues/aleph/1359", week: 0.1, runs: 1 }]);
+  expect(w2.issues.usage).toEqual([{ issue: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }, { issue: "aleph-1359", href: "#/issues/aleph/1359", week: 0.1, runs: 1 }]);
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {

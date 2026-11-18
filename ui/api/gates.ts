@@ -212,7 +212,7 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
       fired: sent.length,
       fixed: sent.filter(Boolean).length,
     },
-    held: { goals: names.size, hours: Math.round(ms / 360_000) / 10 },
+    held: { issues: names.size, hours: Math.round(ms / 360_000) / 10 },
   };
 }
 

@@ -4,8 +4,8 @@ import { quantile, type buckets } from "../../lib/windows.ts";
 import type { Filed } from "../../lib/store.ts";
 import type { Speed } from "../api/flow.ts";
 
-/** The goal a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */
-export const goalOf = (r: Pick<Run, "repo" | "target">): string | undefined => { const n = onOf(r); return n === undefined || !r.repo ? undefined : `${r.repo}-${n}`; };
+/** The issue a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */
+export const issueOf = (r: Pick<Run, "repo" | "target">): string | undefined => { const n = onOf(r); return n === undefined || !r.repo ? undefined : `${r.repo}-${n}`; };
 
 export const HOUR = 3600_000;
 
@@ -56,7 +56,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     // A job can run again after it lands; what finished the work is the last finish before the land.
     const ends = agents.filter((r) => passedState(r.state) || r.state === "waiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
-    const key = rs.map((r) => goalOf(r)).find((k) => k !== undefined);
+    const key = rs.map((r) => issueOf(r)).find((k) => k !== undefined);
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
     if (inWindow(finished)) { implement.push({ at: finished, secs: (finished - started) / 1000 }); note(key, "implement", (finished - started) / 1000); }
     if (inWindow(landed)) { land.push({ at: landed, secs: (landed - finished) / 1000 }); note(key, "land", (landed - finished) / 1000); }
@@ -64,7 +64,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   // Queue and Lead are per issue. A run older than its filing (a file added again) has no such span.
   const firstStart = new Map<string, number>(), lastLand = new Map<string, number>(), triaged = new Map<string, number>();
   for (const r of runs) {
-    const key = goalOf(r);
+    const key = issueOf(r);
     if (key === undefined) continue;
     if (isAgentRun(r.role)) {
       const a = Date.parse(r.started);
@@ -104,7 +104,7 @@ export function activeIssues(runs: Run[], { issue }: Filed, b: ReturnType<typeof
   type Span = [number, number];
   const per = new Map<string, { triaged?: number; start?: number; end?: number; land?: number }>();
   for (const r of runs) {
-    const key = goalOf(r);
+    const key = issueOf(r);
     if (key === undefined) continue;
     const t = per.get(key) ?? {}, a = Date.parse(r.started), e = Date.parse(r.ended ?? "");
     if (isAgentRun(r.role)) {

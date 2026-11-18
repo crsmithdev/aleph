@@ -42,7 +42,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/issues": { issues: [{ ...issue, runs: "number", cost: "number", everParked: "boolean" }], projects: ["string"] },
   "/api/issues/:id": {
     ...issue, labels: "array", after: "array", "created?": "string", "closed?": "string", "closedTime?": "string", "source?": "string", "updated?": "string", "updatedTime?": "string",
-    notes: "array", "parent?": "any", "why?": "string", blockers: "array", "ask?": "object", request: "string?", spec: "string?", goals: "array", refs: "array", referencedBy: "array", "issue?": "object",
+    notes: "array", "parent?": "any", "why?": "string", blockers: "array", "ask?": "object", request: "string?", spec: "string?", parts: "array", refs: "array", referencedBy: "array", "issue?": "object",
     media: "array", frontmatter: "object", derived: "object", jobs: [{ id: "string", name: "string", state: "string" }],
     timeline: { filed: "time?", runs: [{ kind: "string", started: "time", ended: "time?" }] }, holds: "array", commits: "array", specs: ["string"],
   },

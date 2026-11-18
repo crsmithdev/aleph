@@ -155,7 +155,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const waiting = awaiting(repo.key, item, mine?.stage ?? "waiting");
   const ask = waiting && attend({ runs: [], issues: [waiting] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

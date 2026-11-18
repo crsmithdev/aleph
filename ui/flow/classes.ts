@@ -4,7 +4,7 @@ import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { RUN_CAP } from "../../jobs/lib/infra/settings.ts";
 import { CLOSED, clip, issueHref, SPEEDS } from "../../lib/naming.ts";
 import { runShare, type Fit } from "../usage.ts";
-import { goalOf, HOUR, MAX_RUN, passedState, round, splitId } from "./phases.ts";
+import { issueOf, HOUR, MAX_RUN, passedState, round, splitId } from "./phases.ts";
 
 /** What `classify`'s `statusOf` returns for an issue that is no longer in the store: closed issues left it, so one with no landing was closed without landing. */
 export const GONE = "gone";
@@ -47,7 +47,7 @@ export interface ClassStat extends Measure {
   /** `lost`: the class's work did not reach main. */
   key: Class; lost: boolean; text: string; issues: number;
   causes: (Omit<Measure, "week"> & { name: string; text: string })[];
-  top: (Omit<Measure, "week"> & { goal: string; title?: string; href?: string; reason: string })[];
+  top: (Omit<Measure, "week"> & { issue: string; title?: string; href?: string; reason: string })[];
 }
 
 /** Class every agent run of the window by what its work came to; see the parent issue's Classes list. */
@@ -57,7 +57,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   for (const r of runs) {
     const t = t0(r);
     if (Number.isFinite(t)) firstStart.set(r.job, Math.min(firstStart.get(r.job) ?? Infinity, t));
-    const g = goalOf(r);
+    const g = issueOf(r);
     if (g === undefined) continue;
     const m = isAgentRun(r.role) ? agentsOf : r.role === "land" && r.state === "landed" ? landsOf : null;
     if (!m) continue;
@@ -79,7 +79,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
-    const g = goalOf(r);
+    const g = issueOf(r);
     if (!isAgentRun(r.role) || g === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
@@ -129,7 +129,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const [repo, n] = splitId(issue);
       return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: issueHref(`${repo}-${n}`) };
-    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
+    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ issue: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, lost: LOST.includes(key), text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });
   const hoursOf = (cs: readonly Class[]) => cs.reduce((x, c) => x + sum(rows.get(c)!).hours, 0);

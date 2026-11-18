@@ -61,12 +61,12 @@ test("a returned review and a retried job both leave a landed issue out of first
 
 const cls = (key: string, lost: boolean, h: number, causes: any[], top: any[] = []) => ({ key, lost, text: `${key} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });
 const D: any = {
-  window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02, usage: [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", week: 0.5, runs: 3 }, { goal: "fx-2", week: 0.1, runs: 1 }] }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
+  window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02, usage: [{ issue: "fx-1", href: "#/issues/fx/1", title: "One", week: 0.5, runs: 3 }, { issue: "fx-2", week: 0.1, runs: 1 }] }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
   classes: [
     cls("landed", false, 10, [{ name: "First run", hours: 10, runs: 5 }]),
     cls("returned", false, 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
-    cls("failed", true, 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
-    cls("reran", true, 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
+    cls("failed", true, 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ issue: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
+    cls("reran", true, 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ issue: "fx-2", reason: "", hours: 3, runs: 2 }]),
     cls("dropped", true, 0, []),
   ],
   figures: { lost: 0.3, hours: 6, kept: 14, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: 0.5 },
@@ -170,7 +170,7 @@ test("a click on a card selects its class", () => {
 test("the Usage, Causes and Issues tables show empty() with no rows; Usage and Causes page at 50 rows", () => {
   expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: [] } }, "usage")).toContain('class="empty"');
   expect(renderEfficiency(D, "dropped").match(/class="empty"/g)!.length).toBe(2);
-  const usage = Array.from({ length: 51 }, (_, i) => ({ goal: `fac-${i}`, week: 0.01, runs: 1 }));
+  const usage = Array.from({ length: 51 }, (_, i) => ({ issue: `fac-${i}`, week: 0.01, runs: 1 }));
   expect(renderEfficiency({ ...D, issues: { ...D.issues, usage } }, "usage")).toContain("50 of 51");
   const causes = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, hours: 1, runs: 1 }));
   expect(renderEfficiency({ ...D, flakes: causes.map((c) => ({ name: c.name, count: 1 })) }, "flakes")).toContain("50 of 51");

@@ -43,7 +43,7 @@ function copyPlain(from: string, to: string): void {
 
 interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[]; parts?: { title: string; spec: string; status?: string }[];
   /** The new-shape fields, written as the item's own: `kind`, `source`, `route`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
-  kind?: string; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string; situation?: string; effects?: string[]; recommend?: string }
+  kind?: string; spec?: boolean; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string; situation?: string; effects?: string[]; recommend?: string }
 
 const NEW_SHAPE = ["kind", "source", "route", "issue", "goals", "after", "areas", "ask", "reason", "question", "situation", "effects", "recommend"] as const;
 
@@ -117,7 +117,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
       writeList({ key }, "fixture", (doc) => {
         for (const r of rows) {
           // A part or a sorted item in the fixture is an issue with a spec.
-          const spec = r.kind === "goal" || r.route;
+          const spec = r.spec || r.route;
           const item = add(doc, r.title, { labels: r.labels, priority: r.priority, ...(spec ? { spec: r.body || "Do it." } : { request: r.body }) });
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
           // Status reads the Ask from the issue's state row, so the fixture's ask is stored there.

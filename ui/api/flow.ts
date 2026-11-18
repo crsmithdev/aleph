@@ -22,7 +22,7 @@ import { issueHref, parseId, parseKey, type EventRow } from "../../lib/naming.ts
 import { eventIn, inProject, repoIn, scopeOf } from "./scope.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
-import { activeIssues, goalOf, MAX_RUN, phaseTimes, PHASE_KEYS, phaseStat, round, splitId, stat, type Active, type IssueTimes, type Pct, type Phase, type PhaseStat } from "../flow/phases.ts";
+import { activeIssues, issueOf, MAX_RUN, phaseTimes, PHASE_KEYS, phaseStat, round, splitId, stat, type Active, type IssueTimes, type Pct, type Phase, type PhaseStat } from "../flow/phases.ts";
 import { classify, GONE, type ClassStat } from "../flow/classes.ts";
 import { agentStats, type Agents } from "../flow/agents.ts";
 import { BASELINE, averageFigures, figures, type Baseline } from "../flow/baseline.ts";
@@ -74,7 +74,7 @@ export interface Speed {
     /** Median over landed issues of the week share their agent runs took, 2 decimals; null with no fit or none landed. */
     week: number | null;
     /** The landed issues that used the most of the weekly limit, largest first, at most 8: `week` is the share of the week their agent runs took (2 decimals), `runs` how many agent runs that sums. Empty with no fit or none landed. */
-    usage: { goal: string; title?: string; href?: string; week: number; runs: number }[];
+    usage: { issue: string; title?: string; href?: string; week: number; runs: number }[];
   };
   classes: ClassStat[];
   notCounted: { runs: number; issues: number; hours: number };
@@ -123,7 +123,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
   const landedBy = new Map<string, Run[]>();
   for (const r of landed) {
-    const k = goalOf(r) ?? "none";
+    const k = issueOf(r) ?? "none";
     landedBy.set(k, [...(landedBy.get(k) ?? []), r]);
   }
   const issuesLanded = landedBy.size;
@@ -138,7 +138,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
   if (fit) {
     const weekOf = new Map<string, number>();
-    const keyOf = goalOf;
+    const keyOf = issueOf;
     for (const r of all) if (isAgentRun(r.role) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (runShare(fit, r)?.pct ?? 0));
     const keys = [...new Set(landed.map(keyOf).filter((k) => k !== undefined))];
     const per = keys.map((g) => weekOf.get(g) ?? 0);
@@ -146,7 +146,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     for (const r of all) if (isAgentRun(r.role) && keyOf(r)) nRuns.set(keyOf(r)!, (nRuns.get(keyOf(r)!) ?? 0) + 1);
     issues.usage = keys.map((g) => {
       const [repo, n] = splitId(g);
-      return { goal: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
+      return { issue: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
     }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(quantile(per, 0.5)!, 2) : null;
   }
@@ -160,7 +160,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()) };
   for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage]) {
-    const [repo, n] = splitId(t.goal);
+    const [repo, n] = splitId(t.issue);
     const item = lists.item(repo, n);
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
@@ -170,7 +170,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   // The size of an issue is the size of its last build run, in all the records.
   const sizeOf = new Map<string, { at: number; size: string | null }>();
   for (const r of all) {
-    const key = r.role === "build" ? goalOf(r) : undefined, at = Date.parse(r.started);
+    const key = r.role === "build" ? issueOf(r) : undefined, at = Date.parse(r.started);
     if (key !== undefined && at >= (sizeOf.get(key)?.at ?? -Infinity)) sizeOf.set(key, { at, size: r.size ?? null });
   }
   const timed = ended.issues.map((i) => ({ ...i, size: sizeOf.get(i.id)?.size ?? null }));
@@ -210,7 +210,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], tokens: tokens[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: timed,
     wait: { count: shares.length, p50: shares.length ? round(quantile(shares, 0.5)!, 4) : null },
-    builds: built.map(({ r, secs }) => ({ issue: goalOf(r) ?? null, model: shortModel(r.model || "unset"), size: r.size ?? null, secs: round(secs), landed: landedBy.has(goalOf(r) ?? "") })),
+    builds: built.map(({ r, secs }) => ({ issue: issueOf(r) ?? null, model: shortModel(r.model || "unset"), size: r.size ?? null, secs: round(secs), landed: landedBy.has(issueOf(r) ?? "") })),
     active: activeIssues(all, inp.filed, b, now.getTime(), (k) => inProject(k, project) && statusOf(k) === "open"),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,

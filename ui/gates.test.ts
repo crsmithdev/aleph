@@ -208,7 +208,7 @@ const data = () => ({
   now: new Date(NOW).toISOString(),
   schedules: [{ name: "tick", last: null, result: null }],
   factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, caps: CAPS },
-  metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { goals: 2, hours: 3 } },
+  metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { issues: 2, hours: 3 } },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
@@ -321,7 +321,7 @@ test("the body's automation rate counts every decision in the 7 days, past the l
 
 test("the held time sums, over the issues, the hours from a hold to the next start, or to now, in the 7 days", () => {
   const h = [rec(300, "a-1", "gate"), rec(120, "a-1", "started"), rec(60, "b-1", "gate"), rec(30, "b-1", "gate"), rec(60 * 24 * 9, "c-1", "gate"), rec(60 * 24 * 8, "c-1", "started")];
-  expect(metrics([], h, NOW).held).toEqual({ goals: 2, hours: 4 });
+  expect(metrics([], h, NOW).held).toEqual({ issues: 2, hours: 4 });
 });
 
 test("gate catches are the builds a check or the reviewer sent back in the 7 days, against those a later build of the job passed", () => {
@@ -755,7 +755,7 @@ test("every seg group on the Automation page has an accessible name, rule toggle
 
 test("the Held time card reads hours() and the Automation rate reads pct()", () => {
   const d = data();
-  const h = gates.renderGates({ ...d, metrics: { ...d.metrics, held: { goals: 2, hours: 3513.1 }, rate: { auto: 1, total: 8, percent: 12.5 } } });
+  const h = gates.renderGates({ ...d, metrics: { ...d.metrics, held: { issues: 2, hours: 3513.1 }, rate: { auto: 1, total: 8, percent: 12.5 } } });
   expect(h).toContain("<b>3513h<em>");
   expect(h).toContain(`<b>${pct(12.5)}<em>`);
 });

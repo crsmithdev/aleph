@@ -1036,7 +1036,8 @@ describe("priority badges", () => {
       return i.id;
     }, true)!.value;
     const d = await getJson(`/api/issues/fac-${n}`);
-    expect(d.goals.map((g: any) => g.priority)).toEqual(["medium", "critical"]);
+    expect(d.parts.map((g: any) => g.priority)).toEqual(["medium", "critical"]);
+    expect(d).not.toHaveProperty("goals");
     d.priority = "critical";
     const h = v.renderIssue(d);
     const head = h.slice(h.indexOf('<div class="status-row">'), h.indexOf("</div>", h.indexOf('<div class="status-row">')));
@@ -1052,7 +1053,7 @@ describe("priority badges", () => {
 
 describe("the Issue timeline names why a wait waited", () => {
   const run = (kind: string, started: string, ended: string) => ({ kind, name: "fac-1", on: "fac-1", state: "passed", started, ended });
-  const d = (holds?: object[]) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], holds,
+  const d = (holds?: object[]) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], parts: [], holds,
     timeline: { filed: "2026-11-01T10:00:00Z", runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
   const evs = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events);
   const html = (x: any) => evs(x).map((e: any) => e.html).join("\n");
@@ -1117,7 +1118,7 @@ test("the Issues row, the issue's id and its Work head show the short id, and th
     const row = (repo: string) => v.renderRow({ repo, n: 12, id: `${repo}-12`, href: `#/issues/${repo}/12`, title: "t", stage: "new", project: repo, priority: "medium", labels: [] });
     expect(row("fac")).toContain('data-annotate="f12"><td><a class="idl" href="#/issues/fac/12">f12</a></td>');
     expect(row("lb")).toContain('data-annotate="lb12"><td><a class="idl" href="#/issues/lb/12">lb12</a></td>');
-    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
+    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], parts: [], timeline: { runs: [] } };
     expect(v.renderIssue(d)).toContain('<span class="idp">f1</span></div>');
     expect(v.issueSegments(d)[0].rows[0].head).toContain('<span class="idp">f1</span>');
   } finally {
@@ -1128,7 +1129,7 @@ test("the Issues row, the issue's id and its Work head show the short id, and th
 test("the Issue page's notes show an issue id in its short form", () => {
   setCodes({ aleph: "a" });
   try {
-    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], goals: [], timeline: { runs: [] },
+    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], parts: [], timeline: { runs: [] },
       notes: ["- 2026-11-05T11:02:00.000Z: intake: filed aleph-1443 for x", "- 2026-11-05T11:03:00.000Z: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"].map(noteOf) };
     const h = v.renderIssue(d);
     expect(h).toContain("filed a1443 for x");
@@ -1143,7 +1144,7 @@ test("the Issue page's notes show an issue id in its short form", () => {
 });
 
 test("the Issue page gives a machine note and a plain note each a dp-ev row with its time, tag and body", () => {
-  const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], goals: [], timeline: { runs: [] },
+  const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], parts: [], timeline: { runs: [] },
     notes: ["- 2026-11-05T11:02:00.000Z: intake: sized it", "- 2026-11-05T11:03:00.000Z: call me back"].map(noteOf) };
   const notes = v.renderIssue(d).match(/<ul class="notes">.*?<\/ul>/gs)!.join("");
   const row = (tag: string, body: string) => new RegExp(`<li class="dp-ev"><span class="dp-at">\\d\\d/\\d\\d \\d\\d:\\d\\d</span><span><span [^>]*>${tag}</span></span><div class="dp-evt">${body}</div></li>`);
@@ -1199,10 +1200,10 @@ test("the kit's values: a zero cost shows $0.00, a kind with no closed rows has 
   expect(v.renderRow(row)).toContain('<td class="num">$0.00</td>');
   const frame = v.closeFrame({ kinds: ["bug", "task"], unit: "days", p50: [null, 2], p90: [null, 3] });
   expect(frame.rows.map((r: any) => [r.p50, r.p90])).toEqual([[null, null], [172800, 259200]]);
-  const d = { repo: "fac", id: 1, ref: "1", title: "A title", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
+  const d = { repo: "fac", id: 1, ref: "1", title: "A title", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], parts: [], timeline: { runs: [] } };
   const h = v.renderIssue(d);
   expect(h).toContain('<span class="dp-v text">open</span>');
   expect(h).toMatch(/<h1><span class="view-only">A title<\/span><span class="edit-only"><input [^>]*name="title"/);
-  const parts = v.renderIssue({ ...d, goals: [{ id: "1.1", stage: "review", status: "open", title: "p", href: "#/issues/fac/1.1" }] });
+  const parts = v.renderIssue({ ...d, parts: [{ id: "1.1", stage: "review", status: "open", title: "p", href: "#/issues/fac/1.1" }] });
   expect(parts).toContain('<span class="dp-sub">1.1 review</span>');
 });

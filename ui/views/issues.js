@@ -529,7 +529,7 @@ const kinds = (runs) => [...new Set(runs.map((x) => runWord(x.r.kind)))].join(",
  * Sub-issues (one row per sub-issue), After the sub-issues (to the close). Without: one Work row. Notes are events at their time.
  */
 export function issueSegments(d, now = Date.now()) {
-  const id = `${d.repo}-${d.ref}`, parts = d.goals, open = !CLOSED.includes(d.status);
+  const id = `${d.repo}-${d.ref}`, parts = d.parts, open = !CLOSED.includes(d.status);
   const all = spans(d.timeline?.runs ?? [], now), filed = filedAt(d, all);
   const notes = (d.notes ?? []).map(noteEvent).filter(Boolean).map(noteItem);
   // A closed issue closes at its last stamped note after its jobs, else at its last job.
@@ -565,7 +565,7 @@ export function issueSegments(d, now = Date.now()) {
 
 /** The KPI strip of an issue: sub-issues or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
-  const parts = d.goals, open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
+  const parts = d.parts, open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   const lo = Math.min(...times), hi = open ? now : Math.max(...times);
   // Waiting is the time no job ran, on the whole issue, so a sub-issue waiting beside a running sub-issue does not count.
@@ -625,7 +625,7 @@ export function renderIssue(d) {
   // The picker shows the refs in edit mode, so these lines show only in view mode.
   const linked = (label, rows) => (rows?.length ? `<div class="dp-blocked view-only"><span class="quiet">${label}</span>${blockersHtml(rows.map((r) => ({ ...r, state: r.status })), d.repo, d.ref)}</div>` : "");
   const references = linked("Refs", d.refs) + linked("Referenced by", d.referencedBy);
-  const partList = d.goals;
+  const partList = d.parts;
   const part = (id, title, name, text) => (text || !partList.length
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");

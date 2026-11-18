@@ -59,7 +59,7 @@ export interface StageRow {
   p90: number | null;
 }
 
-interface HoldRow { kind: string; records: number; goals: number; hours: number }
+interface HoldRow { kind: string; records: number; issues: number; hours: number }
 
 interface Window {
   from: string; to: string;
@@ -67,7 +67,7 @@ interface Window {
   asks: Record<string, number>;
   holds: HoldRow[];
   /** Issues with a hold record of a kind that stops a start, of all issues with a record. */
-  held: { goals: number; seen: number };
+  held: { issues: number; seen: number };
   reopens: number;
   /** The seven-day usage, in percent, at the end of the window. */
   quota: number | null;
@@ -161,9 +161,9 @@ export function stageRows(src: Pick<Sources, "runs">, from: number, to: number):
 function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRow[]; held: Window["held"] } {
   const byName = new Map<string, HoldRecord[]>();
   for (const h of holds) byName.set(h.name, [...(byName.get(h.name) ?? []), h]);
-  const rows = new Map<string, { records: number; goals: Set<string>; ms: number }>();
+  const rows = new Map<string, { records: number; issues: Set<string>; ms: number }>();
   const seen = new Set<string>(), held = new Set<string>();
-  const row = (k: string) => { if (!rows.has(k)) rows.set(k, { records: 0, goals: new Set(), ms: 0 }); return rows.get(k)!; };
+  const row = (k: string) => { if (!rows.has(k)) rows.set(k, { records: 0, issues: new Set(), ms: 0 }); return rows.get(k)!; };
   for (const [name, list] of byName) {
     list.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
     list.forEach((h, i) => {
@@ -171,7 +171,7 @@ function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRo
       if (at >= from && at < to) {
         const r = row(h.kind);
         r.records++;
-        r.goals.add(name);
+        r.issues.add(name);
         seen.add(name);
         if (stopsStart(h)) held.add(name);
       }
@@ -184,8 +184,8 @@ function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRo
   }
   return {
     rows: [...rows].filter(([, r]) => r.records || r.ms).sort((a, b) => b[1].records - a[1].records)
-      .map(([kind, r]) => ({ kind, records: r.records, goals: r.goals.size, hours: r.ms / 3600_000 })),
-    held: { goals: held.size, seen: seen.size },
+      .map(([kind, r]) => ({ kind, records: r.records, issues: r.issues.size, hours: r.ms / 3600_000 })),
+    held: { issues: held.size, seen: seen.size },
   };
 }
 
@@ -328,14 +328,14 @@ export function renderTable(t: Table): string {
   for (const r of reasons) out.push(`| ${r} | ${cell(String(d.asks[r] ?? 0), per(w.asks[r] ?? 0))} |`);
   if (!reasons.length) out.push("| none | 0 (0) |");
   out.push("", "## Holds", "");
-  out.push(`- Goals held at least once: ${cell(`${d.held.goals} of ${d.held.seen} (${pct(d.held.goals, d.held.seen)})`, `${pct(w.held.goals, w.held.seen)}`)}`);
+  out.push(`- Issues held at least once: ${cell(`${d.held.issues} of ${d.held.seen} (${pct(d.held.issues, d.held.seen)})`, `${pct(w.held.issues, w.held.seen)}`)}`);
   out.push(`- Reopens: ${cell(String(d.reopens), per(w.reopens))}`);
   out.push(`- Seven-day quota used at the end of the day: ${d.quota === null ? "-" : `${d.quota}%`} (${w.quota === null ? "-" : `${w.quota}% a week before`})`);
-  out.push("", "| hold record kind | records | goals | hours in the state |", "|---|---|---|---|");
+  out.push("", "| hold record kind | records | issues | hours in the state |", "|---|---|---|---|");
   const kinds = [...new Set([...d.holds.map((h) => h.kind), ...w.holds.map((h) => h.kind)])];
   for (const k of kinds) {
-    const a = d.holds.find((h) => h.kind === k) ?? { records: 0, goals: 0, hours: 0 }, b = w.holds.find((h) => h.kind === k) ?? { records: 0, goals: 0, hours: 0 };
-    out.push(`| ${k} | ${cell(String(a.records), per(b.records))} | ${cell(String(a.goals), per(b.goals))} | ${cell(num(a.hours), per(b.hours))} |`);
+    const a = d.holds.find((h) => h.kind === k) ?? { records: 0, issues: 0, hours: 0 }, b = w.holds.find((h) => h.kind === k) ?? { records: 0, issues: 0, hours: 0 };
+    out.push(`| ${k} | ${cell(String(a.records), per(b.records))} | ${cell(String(a.issues), per(b.issues))} | ${cell(num(a.hours), per(b.hours))} |`);
   }
   out.push("", "## Flakes in the 7 days to the end of the day", "");
   const f = flakeHealth(t.flakes).map((l) => `- ${l.replace(/^health: /, "")}`);
@@ -378,7 +378,7 @@ export interface Pair { day: number | null; trailing: number | null }
 export function monitorPanel(): {
   day: string; findings: string[]; error?: string;
   stages: { stage: string; costPerItem: Pair; runsPerItem: Pair; p90: Pair; unusable: Pair }[];
-  holds: { kind: string; goals: Pair; hours: Pair }[];
+  holds: { kind: string; issues: Pair; hours: Pair }[];
 } | null {
   const r = latestReport();
   if (!r) return null;
@@ -396,7 +396,7 @@ export function monitorPanel(): {
   const kinds = [...new Set([...d.holds.map((h) => h.kind), ...w.holds.map((h) => h.kind)])];
   const holds = kinds.map((kind) => {
     const a = d.holds.find((h) => h.kind === kind), b = w.holds.find((h) => h.kind === kind);
-    return { kind, goals: { day: a?.goals ?? 0, trailing: (b?.goals ?? 0) / 7 }, hours: { day: a?.hours ?? 0, trailing: (b?.hours ?? 0) / 7 } };
+    return { kind, issues: { day: a?.issues ?? 0, trailing: (b?.issues ?? 0) / 7 }, hours: { day: a?.hours ?? 0, trailing: (b?.hours ?? 0) / 7 } };
   });
   return { day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), stages, holds };
 }

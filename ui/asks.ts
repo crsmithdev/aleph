@@ -199,8 +199,8 @@ function detailsFor(c: Ctx): Details {
 const RISK: Record<string, string> = {
   "held-path": "Lands held-path changes unseen.",
   "review-held": "Lands work the reviewer held.",
-  "no-commit": "Restarts a goal that commits nothing.",
-  "run-cap": "Restarts a goal at its hourly cap.",
+  "no-commit": "Restarts an issue that commits nothing.",
+  "run-cap": "Restarts an issue at its hourly cap.",
 };
 
 /** The auto-yes choice: the first choice's label with the mark, and a hint that names the rule it grants. No rule, no choice. */

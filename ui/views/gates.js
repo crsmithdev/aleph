@@ -57,7 +57,7 @@ export function renderNow(d) {
   const tilesHtml = [
     statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["auto", "asks"] } : {}) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed"] }),
-    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["held", "issues"] }),
+    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.issues), q: ["held", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }

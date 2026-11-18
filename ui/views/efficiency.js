@@ -43,10 +43,10 @@ const causeBars = (s) => {
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Jobs"], ["Took", "Jobs"]), rows.map((x) =>
-  row([`<td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td>`, cell(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`, { wide: true }), cell(hours(x.hours), { num: true }), cell(count(x.runs), { num: true })])).join(""));
+  row([`<td>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`, cell(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`, { wide: true }), cell(hours(x.hours), { num: true }), cell(count(x.runs), { num: true })])).join(""));
 
 const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Jobs"], ["Usage", "Jobs"]), rows.map((x) =>
-  row([`<td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td>`, cell(pct(x.week), { num: true }), cell(count(x.runs), { num: true })])));
+  row([`<td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`, cell(pct(x.week), { num: true }), cell(count(x.runs), { num: true })])));
 
 /** The page head, the scorecard and the Agent Time card, which every selection shows. */
 function head(d, key) {

@@ -200,7 +200,7 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
 function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
-    name: v.name, repo: v.repo, kind: v.run.role, job: v.job, run: v.run.id, goal: issueTitle(runs), state: v.state, needs: v.needs, phase: v.phase,
+    name: v.name, repo: v.repo, kind: v.run.role, job: v.job, run: v.run.id, issue: issueTitle(runs), state: v.state, needs: v.needs, phase: v.phase,
     reason: v.reason, say: v.say, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
