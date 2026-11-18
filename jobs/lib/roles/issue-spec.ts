@@ -94,3 +94,9 @@ const asPath = (command: string): string =>
 export function oracleCommands(body: string): string[] {
   return commandsIn(section(body, "Oracle")).map(asPath).filter((c) => RUNNABLE.test(c) && !hasPlaceholder(c));
 }
+
+/** The repo-relative file paths the Oracle commands name: each argument with a `/` or a file extension, without a leading `./`. */
+export const oraclePaths = (body: string): string[] => {
+  const args = oracleCommands(body).flatMap((c) => c.split(/\s+/)).filter((w) => /^[\w@][\w./@-]*$/.test(w) || /^\.\/[\w./@-]+$/.test(w));
+  return [...new Set(args.filter((w) => /[/]|\.\w+$/.test(w)).map((w) => w.replace(/^\.\//, "")))];
+};

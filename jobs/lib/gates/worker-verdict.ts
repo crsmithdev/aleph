@@ -14,7 +14,7 @@ import { git } from "../../../lib/git.ts";
 import * as jobRecord from "../records/record.ts";
 import { jobOfFolder, jobSpecFile, logTo } from "../records/run-files.ts";
 import type { CheckResult, Entry, Repo, Run, TestRecord } from "../records/ledger.ts";
-import { oracleCommands } from "../roles/issue-spec.ts";
+import { oracleCommands, oraclePaths, outsideSurface } from "../roles/issue-spec.ts";
 import { skillSection } from "../roles/role-skill.ts";
 import { FOREGROUND, repeatedFailure } from "../transitions/continuation.ts";
 import { existsSync, readFileSync, rmSync } from "node:fs";
@@ -264,7 +264,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
     security: () => securityChange(repo.path, base, tip),
     heldRule: () => heldRule(repo.path, repo.held, base, tip),
-    oracle: () => oracleFailure(folder, run, repo, branch, o.runner ?? runOnCommit, verify),
+    oracle: () => oracleFailure(folder, run, repo, base, branch, o.runner ?? runOnCommit, verify),
     review: () => {
       phase("review");
       findings ??= testFindings(repo.path, base, tip);
@@ -275,14 +275,16 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
 
 /**
  * The issue's Oracle commands, run on the branch in a detached worktree, the last step of Verify.
+ * Before them, a branch that edits a file the Oracle names, on the base and outside the Edit surface, fails with an `oracle-pin` check.
  * A command the run's checks already ran is skipped; one that fails runs once more.
  * Returns the reason of the first that fails twice, or null. A command that could not run to a verdict (`infra`: its
  * setup failed, or a clock or a signal ended it) stops the Oracle with no verdict: it is neither a pass nor a failure.
  * When a command ran, the run's `checks` gets one result `oracle` beside the repo's checks; checks.log gets each command's section.
  */
-async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | NoVerdict | null> {
+async function oracleFailure(folder: string, run: Run, repo: Repo, base: string, branch: string, runner: Runner, phase: () => void): Promise<string | NoVerdict | null> {
   const specFile = jobSpecFile(run);
   if (!existsSync(specFile)) return null;
+  const spec = readFileSync(specFile, "utf8");
   const ran = new Set((jobRecord.getRun(jobOfFolder(folder))?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
@@ -299,12 +301,19 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
     result(false, true);
     return { noVerdict: `no verdict: oracle: ${command}` };
   };
+  // The worker must not edit a file its Oracle runs that is on the base and outside the Edit surface.
+  const pinned = outsideSurface(spec, git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean))
+    .filter((f) => oraclePaths(spec).includes(f) && git(repo.path, "cat-file", "-e", `${base}:${f}`).ok);
+  if (pinned.length) {
+    jobRecord.appendCheck(jobOfFolder(folder), { name: "oracle-pin", ok: false, seconds: 0 });
+    return `oracle-pin: the branch edits ${pinned.length === 1 ? "a file" : "files"} the Oracle runs, outside the Edit surface: ${pinned.join(", ")}`;
+  }
   const report = junitFile(folder, "oracle");
   const once = (command: string) => {
     rmSync(report, { force: true });
     return runner(repo, tip, withJunit(command, report));
   };
-  for (const command of oracleCommands(readFileSync(specFile, "utf8"))) {
+  for (const command of oracleCommands(spec)) {
     if (done.has(command)) continue;
     phase();
     let r = await once(command);
