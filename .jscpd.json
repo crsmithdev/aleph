@@ -198,8 +198,7 @@
       ],
       "allow": [
         "jobs/lib/gates/checks.ts",
-        "**/*.test.ts",
-        "jobs/lib/gates/keep-earn.ts"
+        "**/*.test.ts"
       ],
       "disable": [
         "semantic"

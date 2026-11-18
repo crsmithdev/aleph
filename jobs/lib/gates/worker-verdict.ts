@@ -1,13 +1,13 @@
 /**
  * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks,
- * the doc claims, the keep-gate and the Oracle. A keep-gate or Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
- * no verdict runs once more). A reviewer's pass on a diff that changes a security path or a held path waits
- * for Chris with a held-path Ask. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to
+ * the doc claims, the keep-gate and the Oracle. An Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
+ * no verdict runs once more), which gets the keep-gate's finding: the new tests that pass on the base, or that it did not run. A reviewer's pass on a diff that changes a security path or a held path waits
+ * for Chris with a held-path Ask. A failure of a check, the Oracle or the reviewer goes back to
  * the worker as a fix round while rounds are left. The ports run each step: `branchPorts` gives the git and worktree
  * ones. `workerVerdict` does no IO.
  */
 import { plainAsk, type AskReason } from "../asks/ask.ts";
-import { changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, runsBunTest, stopFields, testRecord, withJunit, type ChecksStop, type Ran, type Runner } from "./checks.ts";
+import { checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, runsBunTest, stopFields, testRecord, withJunit, type ChecksStop, type Ran, type Runner } from "./checks.ts";
 import { buildChecks } from "./related.ts";
 import { heldRule, securityChange, testFindings } from "./gate.ts";
 import { git } from "../../../lib/git.ts";
@@ -34,8 +34,8 @@ export interface VerdictPorts {
   repeatedFailure(check: string): { question: string } | null;
   /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
   docClaims(): string | null;
-  /** The keep-gate: why a new test case of the branch does not fail on its base, does not pass on its head, or earns no keep, else null. */
-  keepGate(): Promise<string | NoVerdict | null>;
+  /** The keep-gate: the new tests of the branch that pass on its base, as `file > name`. */
+  keepGate(): Promise<string[] | NoVerdict>;
   /** The diff stat, for an Ask. */
   stat(): string;
   /** The security path the diff changes, else null. */
@@ -44,7 +44,8 @@ export interface VerdictPorts {
   heldRule(): string | null;
   /** The reason of the first Oracle command that fails twice, else null. */
   oracle(): Promise<string | NoVerdict | null>;
-  review(): Promise<ReviewCall>;
+  /** The reviewer call, given the keep-gate's finding: the new tests that pass on the base, or null when it did not run. */
+  review(keep: string[] | null): Promise<ReviewCall>;
 }
 
 /** A step that could not run to a verdict (its setup failed, a clock or a signal ended it): neither a pass nor a failure. */
@@ -123,10 +124,9 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   // After the checks, so a doc-claims failure leaves their runs and results as they were.
   const claims = p.docClaims();
   if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(done, "doc-claims", claims, rounds) });
-  // A step with no verdict fails as `infra`: not a fix round; the rescue checks the branch again once, then asks.
   const kept = await p.keepGate();
-  if (typeof kept === "object" && kept) return stopped({ cause: "infra", checkName: "keep-gate", reason: kept.noVerdict }, facts);
-  if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(done, "keep-gate", kept, rounds) });
+  const keep = Array.isArray(kept) ? kept : null;
+  // An Oracle with no verdict fails as `infra`: not a fix round; the rescue checks the branch again once, then asks.
   Object.assign(facts, b.checked);
   const bad = await p.oracle();
   if (typeof bad === "object" && bad) return stopped({ cause: "infra", checkName: "oracle", reason: bad.noVerdict }, facts);
@@ -138,7 +138,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   const sessions: string[] = [];
   const call = async () => {
     const t = Date.now();
-    const rv = await p.review();
+    const rv = await p.review(keep);
     ms += Date.now() - t;
     if (rv.session) sessions.push(rv.session);
     // The reviewer is a job of its own: its cost is its job's, not the build's.
@@ -188,8 +188,9 @@ Check each Oracle clause of the spec and each requirement in the Goal section.
 The Oracle is a check stored on the issue, so the issue does not need a new committed test. A committed test
 needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
 behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
-command wiring. A case named \`guard: ...\` is a ratchet or a lint row over a clean codebase: it passes on the base by design, so the
-keep-gate skips it; hold it unless it guards something real. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
+command wiring. The keep-gate ran each new test on the base commit, and the section below lists the ones that pass there. Hold such a test
+when the issue is a bug fix or a behaviour change, since it does not test the change. Accept it for a refactor, a moved test or a test-only change.
+Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
 The "summary" is the verdict in one sentence and the passes as a count, such as \`7 of 9 passed\`, in at most 80 words.
 Each failure goes in "failures": its clause, named by a few words without its reason, and what was observed. Do not
 list a pass. Say each thing once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
@@ -214,15 +215,16 @@ change on main and this job's change. The job's own work was reviewed in an earl
  * The reviewer's prompt: the instructions, the test findings if any, the files outside the Edit surface if any,
  * the issue and the diff. A merge run's diff is the merge commit's only (`merge`).
  */
-export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], o: { outside?: string[]; merge?: boolean } = {}): string {
+export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], o: { outside?: string[]; merge?: boolean; keep?: string[] | null } = {}): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
   const outside = o.outside?.length ? `\n\n## Changes outside the Edit surface\n\n${OUTSIDE}\n\n${o.outside.map((f) => `- ${f}`).join("\n")}` : "";
+  const kept = o.keep === undefined ? "" : `\n\n## Keep-gate\n\n${o.keep === null ? "The keep-gate was not run." : o.keep.length ? `These new tests pass on the base commit:\n\n${o.keep.map((t) => `- ${t}`).join("\n")}` : "No new test passes on the base commit."}`;
   const head = o.merge ? `## The merge commit's conflict resolution\n\n${MERGE}` : "## Diff from the merge base";
-  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}\n\n## Issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
+  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}${kept}\n\n## Issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
 }
 
 /** One reviewer call on the branch: `review` of roles/unit.ts. */
-export type Review = (folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>) => Promise<ReviewCall>;
+export type Review = (folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>, keep: string[] | null) => Promise<ReviewCall>;
 
 /**
  * The ports of the worker verdict for `branch` of a run, based on `base`. The checks and the reviewer each run in a
@@ -257,10 +259,12 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       verify();
       const head = git(repo.path, "rev-parse", tip).out;
       const start = performance.now();
-      const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), changedSources(repo.path, base, head), o.runner ?? runOnCommit);
-      if (!kept) return null;
-      logTo(folder, "checks", `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
-      if (!kept.noVerdict) return kept.reason;
+      const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), o.runner ?? runOnCommit);
+      if (Array.isArray(kept)) {
+        if (kept.length) logTo(folder, "checks", `## keep-gate: new tests that pass on the base commit\n${kept.map((t) => `- ${t}`).join("\n")}\n\n`);
+        return kept;
+      }
+      logTo(folder, "checks", `## keep-gate: no verdict\n${kept.log}\n\n`);
       // No verdict is a result on the run beside the checks, so the job page shows it.
       jobRecord.appendCheck(jobOfFolder(folder), { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true });
       return { noVerdict: kept.reason };
@@ -269,10 +273,10 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
     security: () => securityChange(repo.path, base, tip),
     heldRule: () => heldRule(repo.path, repo.held, base, tip),
     oracle: () => oracleFailure(folder, run, repo, base, branch, o.runner ?? runOnCommit, verify),
-    review: () => {
+    review: (keep) => {
       phase("review");
       findings ??= testFindings(repo.path, base, tip);
-      return o.review(folder, run, repo, base, branch, findings, o.changed, env);
+      return o.review(folder, run, repo, base, branch, findings, o.changed, env, keep);
     },
   };
 }

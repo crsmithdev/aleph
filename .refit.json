@@ -16,14 +16,6 @@
       "reason": "issues.ts is the `aleph issue` verb layer: it sits above both the store and the factory's Asks and decides an Ask on close or drop, and writes the Asks a drop leaves (askAfterDrops, parkWaiter). The store itself imports only the job record, accepted above; it never imports asks/ask.ts (improve S1, 2026-11-10; refit f64)."
     },
     {
-      "concept": "junit entity decode",
-      "copies": [
-        "jobs/lib/gates/checks.ts:282",
-        "jobs/lib/gates/keep-earn.ts:49"
-      ],
-      "reason": "keep-earn.ts runs in the target repo and imports nothing from aleph, so it keeps its own copy of unxml from checks.ts."
-    },
-    {
       "copies": [
         "jobs/lib/roles/monitor.ts:7-12",
         "jobs/lib/roles/intake.ts:24-29"

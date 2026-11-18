@@ -140,13 +140,13 @@ A failed run goes to the rescue (section 7).
 
 ## 4. Verify
 
-Verify runs five checks in order, each in a detached worktree at the branch's tip. The first failure stops it.
+Verify runs four checks and the keep-gate in order, each in a detached worktree at the branch's tip. The first failure of a check stops it.
 
 | Check | Code | Passes when |
 |---|---|---|
 | Repo checks | `checks.ts` `runAll`, `related.ts` `buildChecks` | The setup and the test files the change reaches pass, and every check that is not a test (such as `tsc`). "ran 0 tests" fails |
 | Doc claims | `hooks/lib/docclaims.ts` | Each claim in the final message that a doc matches the code has a run, value or `file:line` behind it in the transcript |
-| Keep-gate | `checks.ts` `keepGate`, `keep-earn.ts` | Each new test fails on the base and passes on the head; a test that cannot load on the base earns its place by coverage or a mutant; a case named `guard: ...` is skipped, and the reviewer judges it |
+| Keep-gate | `checks.ts` `keepGate` | Never fails the run: it runs each new test on the head and on the base and gives the reviewer the ones that pass on the base, or that it did not run (no verdict). The reviewer holds such a test for a bug fix or a behaviour change, and accepts it for a refactor, a moved test or a test-only change |
 | Oracle pin | `worker-verdict.ts` `oracleFailure` | No file that an Oracle command names, that is on the base and outside the Edit surface, is edited; the check `oracle-pin` |
 | Oracle | `unit.ts` `oracleFailure` | Each Oracle command that the checks did not run passes |
 

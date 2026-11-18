@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { addedLines, failedTests, failureLine, keepGate, mutants, newCases, newTests, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { failedTests, failureLine, keepGate, newCases, newTests, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner } from "./checks.ts";
 import { git } from "../../../lib/git.ts";
 import { flakes } from "./tables.ts";
 import { readSection } from "../records/run-files.ts";
@@ -241,7 +241,7 @@ test("newTests: a case the split adds, whose name no test file loses, is the onl
  * The keep-gate with a runner that runs the command in a plain folder: `code` maps a commit to the source of
  * m.ts there, and `hidden` goes to `.hidden` as runOnCommit gives it. The test file is new on the head.
  */
-async function gate(code: Record<string, string>, testText: string, sources: Source[] = [], names = ["new", "fixed"]) {
+async function gate(code: Record<string, string>, testText: string, names = ["new", "fixed"]) {
   const commands: string[] = [];
   const runner: Runner = async (_repo, sha, command, hidden) => {
     commands.push(`${sha}: ${command}`);
@@ -253,100 +253,47 @@ async function gate(code: Record<string, string>, testText: string, sources: Sou
     return { code: p.exitCode ?? 1, output: p.stdout.toString() + p.stderr.toString() };
   };
   const tests = [{ path: "lib/m.test.ts", text: testText, names }];
-  return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, sources, runner), commands };
+  return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, runner), commands };
 }
 
 describe("the keep-gate", () => {
   const testText = `import { expect, test } from "bun:test";\nimport { m } from "../m.ts";\ntest("old", () => expect(1).toBe(1));\ntest("new", () => expect(m()).toBe(2));\ntest("fixed", () => expect(typeof m).toBe("function"));\n`;
 
-  test("a new case that passes on the base sends the branch back with its name; the head's file runs on the base code", async () => {
+  test("a new case that passes on the base is listed with its name; the head's file runs on the base code", async () => {
     const { result, commands } = await gate({ base: "export const m = () => 1;\n", head: "export const m = () => 2;\n" }, testText);
-    expect(result?.reason).toBe("keep-gate: 1 new test passes on the base commit: lib/m.test.ts > fixed");
-    expect(result?.log).toContain("- lib/m.test.ts > fixed\n");
+    expect(result).toEqual(["lib/m.test.ts > fixed"]);
     expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
   });
 
-  test("a case named guard: is not held for passing on the base", async () => {
-    const code = { base: "export const m = () => 1;\n", head: "export const m = () => 2;\n" };
+  test("a case named guard: that passes on the base is listed too", async () => {
     const text = testText.replace('test("fixed"', 'test("guard: fixed"');
-    expect((await gate(code, text, [], ["new", "guard: fixed"])).result).toBeNull();
-    expect((await gate(code, testText, [], ["new", "fixed"])).result?.reason).toContain("lib/m.test.ts > fixed");
+    const { result } = await gate({ base: "export const m = () => 1;\n", head: "export const m = () => 2;\n" }, text, ["new", "guard: fixed"]);
+    expect(result).toEqual(["lib/m.test.ts > guard: fixed"]);
   });
 
-  test("new cases that all fail on the base pass the gate", async () => {
-    const { result } = await gate({ base: "export const other = 1;\n", head: "export const m = () => 2;\n" }, testText);
-    expect(result).toBeNull();
+  test("a new case whose file does not load on the base is not listed, and only the head and the base run", async () => {
+    const { result, commands } = await gate({ base: "export const other = 1;\n", head: "export const m = () => 2;\n" }, testText);
+    expect(result).toEqual([]);
+    expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
   });
 
-  test("a new case that fails on the head fails the gate after one rerun, and the base does not run", async () => {
+  test("a new case that fails on the head is no verdict after one rerun, and the base does not run", async () => {
     const { result, commands } = await gate({ base: "export const m = () => 1;\n", head: "export const m = () => 3;\n" }, testText);
-    expect(result?.reason).toBe("keep-gate: the new tests fail on the head");
+    expect(result).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests fail on the head" });
     expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "head"]);
   });
 
-  test("a command that could not run (infra) on the head or the base is no verdict, not a pass", async () => {
+  test("a command that could not run (infra) on the head or the base is no verdict, not a list", async () => {
     const tests = [{ path: "lib/m.test.ts", text: testText, names: ["new"] }];
     const infraOn = (where: string): Runner => async (_r, sha) => (sha === where ? { code: 124, output: "timed out after 1200 s", infra: true } : { code: sha === "head" ? 0 : 1, output: "" });
-    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, [], infraOn("head"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the head" });
-    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, [], infraOn("base"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the base" });
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, infraOn("head"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the head" });
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, infraOn("base"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the base" });
   });
 
   test("no new case runs nothing", async () => {
-    expect(await keepGate({ key: "r" } as Repo, "base", "head", [], [], async () => { throw new Error("ran"); })).toBeNull();
-  });
-
-  describe("the second stage: a new case whose file does not load on the base", () => {
-    const head = "export const other = 1;\nexport function m(x: number) {\n  if (x > 0) return x + 1;\n  return 0;\n}\n";
-    const sources = [{ path: "m.ts", lines: [2, 3, 4, 5], text: head }];
-    const code = { base: "export const other = 1;\n", head };
-
-    test("a case that covers no changed line beyond the other cases and kills no mutant goes back with its name; one that covers a changed line stays", async () => {
-      const { result, commands } = await gate(code, testText.replace("m()).toBe(2)", "m(1)).toBe(2)"), sources);
-      expect(result?.reason).toBe("keep-gate: 1 new test adds no coverage of the changed lines and kills no mutant: lib/m.test.ts > fixed");
-      expect(result?.log).toContain("- lib/m.test.ts > fixed\n");
-      expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base", "head"]);
-    }, 30_000);
-
-    test("two cases that cover the same changed lines each kill a mutant and stay; a branch with no changed source line runs no second stage", async () => {
-      const twin = testText.replace("m()).toBe(2)", "m(1)).toBe(2)").replace(`expect(typeof m).toBe("function")`, "expect(m(2)).toBe(3)");
-      expect((await gate(code, twin, sources)).result).toBeNull();
-      expect((await gate(code, twin)).commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
-    }, 30_000);
-
-    test("of more than 10 mutants, the ones run are on the lines the new cases cover, which the even spread of 10 does not pick", async () => {
-      const many = "export const other = 1;\n" + Array.from({ length: 12 }, (_, k) => `export function f${k}() {\n  return ${k};\n}\n`).join("");
-      const manySources = [{ path: "m.ts", lines: Array.from({ length: 12 }, (_, k) => 3 + 3 * k), text: many }];
-      const both = `import { expect, test } from "bun:test";\nimport { f5, f11 } from "../m.ts";\ntest("new", () => expect(f5() + f11()).toBe(16));\ntest("fixed", () => expect(f5() + f11()).toBe(16));\n`;
-      expect((await gate({ base: "export const other = 1;\n", head: many }, both, manySources)).result).toBeNull();
-    }, 30_000);
-
-    test("with no mutant of the changed lines, a case that runs a changed line stays even when another case runs it; one that runs none goes back", async () => {
-      const flat = "export const other = 1;\nexport function m(x: number) {\n  return x;\n}\n";
-      const flatSources = [{ path: "m.ts", lines: [3], text: flat }];
-      const shared = testText.replace("m()).toBe(2)", "m(1)).toBe(1)").replace(`expect(typeof m).toBe("function")`, "expect(m(2)).toBe(2)");
-      expect((await gate({ base: "export const other = 1;\n", head: flat }, shared, flatSources)).result).toBeNull();
-      const { result } = await gate({ base: "export const other = 1;\n", head: flat }, shared.replace("expect(m(2)).toBe(2)", `expect(typeof m).toBe("function")`), flatSources);
-      expect(result?.reason).toBe("keep-gate: 1 new test covers no changed line: lib/m.test.ts > fixed");
-    }, 30_000);
-
-    test("with no mutant, a case that only loads a file of two changed functions runs no changed line and goes back", async () => {
-      const two = "export const other = 1;\nexport function m(x: number) {\n  return x;\n}\nexport function n(y: number) {\n  return y;\n}\n";
-      const twoSources = [{ path: "m.ts", lines: [3, 6], text: two }];
-      const loadOnly = testText.replace("m()).toBe(2)", "m(1)).toBe(1)");
-      const { result } = await gate({ base: "export const other = 1;\n", head: two }, loadOnly, twoSources);
-      expect(result?.reason).toBe("keep-gate: 1 new test covers no changed line: lib/m.test.ts > fixed");
-    }, 30_000);
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", [], async () => { throw new Error("ran"); })).toEqual([]);
   });
 });
-
-test("addedLines and mutants: the new-side lines of a diff, and one mutant a changed line, at most `max`, spread evenly", () => {
-  expect(addedLines("@@ -1,0 +2,3 @@\n+a\n@@ -9 +12 @@\n@@ -20,2 +23,0 @@\n")).toEqual([2, 3, 4, 12]);
-  const text = ["// note", "if (a === b && c) go();", "x = n < 3;", "save(x);", "return true;", "const y = 4;", "import { z } from \"z\";"].join("\n");
-  const all = mutants([{ path: "a.ts", lines: [1, 2, 3, 4, 5, 6, 7], text }]);
-  expect(all.map((m) => m.text)).toEqual(["if (a !== b && c) go();", "x = n >= 3;", "", "return false;", "const y = 5;"]);
-  expect(mutants([{ path: "a.ts", lines: [2, 3, 4, 5, 6], text }], 2).map((m) => m.line)).toEqual([2, 4]);
-});
-
 
 test("failureLine gives one short line on why a check failed", () => {
   expect(failureLine("x.test.ts:\n(fail) suite > one [1.0ms]\n(fail) two\n")).toBe("2 fail (suite > one)");

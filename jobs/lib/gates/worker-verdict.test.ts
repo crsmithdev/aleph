@@ -1,27 +1,28 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { ChecksStop } from "./checks.ts";
 import type { Run } from "../records/ledger.ts";
-import { missingVerdict, workerVerdict, type Branch, type NoVerdict, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
+import { missingVerdict, workerVerdict, reviewPrompt, type Branch, type NoVerdict, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
 
 const run = (r: Partial<Run> = {}): Run => ({ n: 1, role: "build", job: "j1", name: "fac-1", state: "failed", ...r } as Run);
 const checked = { checkedBase: "b0", checkedTip: "t1" };
 
 /** Fake ports: each step passes unless given; `calls` names the steps that ran. */
-function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; kept?: string | NoVerdict; security?: string; rule?: string; oracle?: string | NoVerdict; reviews?: ReviewCall[] } = {}) {
+function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; kept?: string[] | NoVerdict; security?: string; rule?: string; oracle?: string | NoVerdict; reviews?: ReviewCall[] } = {}) {
   const calls: string[] = [];
+  const seen: (string[] | null)[] = [];
   const reviews = [...(o.reviews ?? [{ reason: null }])];
   const p: VerdictPorts = {
     checks: async () => { calls.push("checks"); return { stop: o.stop ?? null, failed: o.failed }; },
     repeatedFailure: (check) => { calls.push(`repeatedFailure ${check}`); return o.same ? { question: o.same } : null; },
     docClaims: () => { calls.push("docClaims"); return o.claims ?? null; },
-    keepGate: async () => { calls.push("keepGate"); return o.kept ?? null; },
+    keepGate: async () => { calls.push("keepGate"); return o.kept ?? []; },
     stat: () => " a.ts | 1 +",
     security: () => { calls.push("security"); return o.security ?? null; },
     heldRule: () => o.rule ?? null,
     oracle: async () => { calls.push("oracle"); return o.oracle ?? null; },
-    review: async () => { calls.push("review"); return reviews.shift() ?? { reason: null }; },
+    review: async (keep) => { calls.push("review"); seen.push(keep); return reviews.shift() ?? { reason: null }; },
   };
-  return { p, calls };
+  return { p, calls, seen };
 }
 /** The branch facts; `done`, the record's fix rounds, follows the runs sent back unless the test gives it. */
 const branch = (b: Partial<Branch> = {}): Branch => {
@@ -76,19 +77,6 @@ describe("checks", () => {
     expect((await workerVerdict(branch(), p)).outcome).toEqual({ state: "returned", cause: "check", checkName: "doc-claims", reason: "doc claims: x", failed: "doc-claims", round: 0 });
     expect(calls).toEqual(["checks", "docClaims"]);
   });
-
-  test("a keep-gate failure goes back as the check keep-gate, before the Oracle and the reviewer", async () => {
-    const reason = "keep-gate: 1 new test passes on the base commit: a.test.ts > adds";
-    const { p, calls } = ports({ kept: reason, security: "jobs/lib/gates/gate.ts" });
-    expect((await workerVerdict(branch(), p)).outcome).toEqual({ state: "returned", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
-    expect(calls).toEqual(["checks", "docClaims", "keepGate"]);
-    expect((await workerVerdict(branch({ earlier: two }), ports({ kept: reason }).p)).outcome.reason).toBe(`${reason} after 2 fix rounds`);
-  });
-
-  test("a second-stage keep-gate failure, a new test that earns no keep, goes back the same way", async () => {
-    const reason = "keep-gate: 1 new test adds no coverage of the changed lines and kills no mutant: a.test.ts > adds";
-    expect((await workerVerdict(branch(), ports({ kept: reason }).p)).outcome).toEqual({ state: "returned", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
-  });
 });
 
 describe("after the checks", () => {
@@ -127,10 +115,7 @@ describe("after the checks", () => {
     expect(calls).not.toContain("review");
   });
 
-  test("a keep-gate or an Oracle with no verdict is an infra stop: no pass, no fix round, no reviewer", async () => {
-    const kept = ports({ kept: { noVerdict: "no verdict: keep-gate: the new tests did not run on the head" } });
-    expect((await workerVerdict(branch(), kept.p)).outcome).toEqual({ state: "failed", cause: "infra", checkName: "keep-gate", reason: "no verdict: keep-gate: the new tests did not run on the head" });
-    expect(kept.calls).toEqual(["checks", "docClaims", "keepGate"]);
+  test("an Oracle with no verdict is an infra stop: no pass, no fix round, no reviewer", async () => {
     const oracle = ports({ oracle: { noVerdict: "no verdict: oracle: bun test x" } });
     expect((await workerVerdict(branch(), oracle.p)).outcome).toEqual({ state: "failed", cause: "infra", checkName: "oracle", reason: "no verdict: oracle: bun test x", ...checked });
     expect(oracle.calls).not.toContain("review");
@@ -139,6 +124,32 @@ describe("after the checks", () => {
   test("a held rule waits for Chris after the reviewer passes, with one held-path Ask and no next step", async () => {
     const v = await workerVerdict(branch(), ports({ rule: "held path held/x.txt" }).p);
     expect(v).toEqual({ code: 0, outcome: { state: "waiting", reason: "held path held/x.txt", stat: " a.ts | 1 +", review: { call: "passed", seconds: 0 }, ...checked, ask: expect.objectContaining({ reason: "held-path", why: [" a.ts | 1 +"] }) } });
+  });
+});
+
+describe("the keep-gate", () => {
+  test("a new test that passes on the base goes to the reviewer, and a reviewer pass is a pass with no keep-gate stop", async () => {
+    const { p, calls, seen } = ports({ kept: ["a.test.ts > adds"] });
+    const v = await workerVerdict(branch(), p);
+    expect(v).toEqual({ outcome: { state: "passed", review: { call: "passed", seconds: 0 }, ...checked }, code: 0 });
+    expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
+    expect(seen).toEqual([["a.test.ts > adds"]]);
+  });
+
+  test("a keep-gate with no verdict does not stop the run: the Oracle and the reviewer go on, and the reviewer is told it did not run", async () => {
+    const { p, calls, seen } = ports({ kept: { noVerdict: "no verdict: keep-gate: the new tests did not run on the head" } });
+    expect((await workerVerdict(branch(), p)).outcome).toEqual({ state: "passed", review: { call: "passed", seconds: 0 }, ...checked });
+    expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
+    expect(seen).toEqual([null]);
+  });
+
+  test("the reviewer prompt lists each test that passes on the base with the hold rule, says `not run` with no verdict, and names no test with none", () => {
+    const prompt = (keep: string[] | null) => reviewPrompt("n", "spec", "diff", [], { keep });
+    const some = prompt(["lib/m.test.ts > fixed"]);
+    expect(some).toContain("- lib/m.test.ts > fixed");
+    expect(some).toContain("Hold such a test\nwhen the issue is a bug fix or a behaviour change");
+    expect(prompt(null)).toContain("not run");
+    expect(prompt([])).not.toContain("lib/m.test.ts");
   });
 });
 
@@ -159,7 +170,7 @@ describe("the reviewer", () => {
     setSystemTime(at);
     const { p } = ports({ reviews: [{ reason: "reviewer: no verdict", none: true }, { reason: null }] });
     const review = p.review;
-    p.review = async () => { const rv = await review(); setSystemTime(at += 2400); return rv; };
+    p.review = async () => { const rv = await review(null); setSystemTime(at += 2400); return rv; };
     expect((await workerVerdict(branch(), p)).outcome.review).toEqual({ call: "passed", seconds: 5 });
   });
 

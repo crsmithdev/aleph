@@ -52,7 +52,7 @@ A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so
 | A worker can | Stopped | Seen |
 |---|---|---|
 | Edit a file an Oracle command names, on the base and outside the Edit surface | Yes: Verify fails | The check `oracle-pin` on the run |
-| Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate needs each new test to fail on the base |
+| Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate lists each new test that passes on the base, and the reviewer holds it for a bug fix or a behaviour change |
 | Change its issue's spec with `aleph issue edit` | Yes, for the running job: the job reads the spec copied at dispatch | The store write records the actor `worker` |
 | Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for Chris | The Ask |
 | Write the job folder's `spec.md`, `aleph.db` or the items repo directly | No | No |

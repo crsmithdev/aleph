@@ -12,7 +12,6 @@ import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
 import { git } from "../../../lib/git.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
-import type { Plan } from "./keep-earn.ts";
 import { isJsTestFile } from "../../../lib/test-files.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -301,16 +300,11 @@ export function newTests(cwd: string, base: string, tip: string): NewTests[] {
   });
 }
 
-/** keep-earn.ts keeps a copy of this decode: it imports nothing from aleph. */
 const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n").replace(/&amp;/g, "&");
 
 /** The cases that passed in bun's junit report: a `testcase` with no child element. */
 const junitPassed = (xml: string): { file: string; name: string }[] =>
   [...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => ({ file: unxml(m[2]), name: unxml(m[1]) }));
-
-/** The cases in bun's junit report that ran, passed or failed, as `file > name`. */
-const junitRan = (xml: string): Set<string> =>
-  new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"/g)].map((m) => `${unxml(m[2])} > ${unxml(m[1])}`));
 
 /** The record of bun's JUnit report `xml`. A `testsuite` inside a file's `testsuite` is a `describe`. */
 function junitRecord(xml: string): TestRecord {
@@ -352,122 +346,32 @@ function junitRecord(xml: string): TestRecord {
 /** Where the keep-gate's command writes its junit report, in the clone. */
 const REPORT = ".keep-gate.xml";
 
-/** A source file that a branch changes: its path, the changed line numbers on the head and its text on the head. */
-export interface Source { path: string; lines: number[]; text: string }
-
-const SOURCE = /\.[cm]?[jt]sx?$/;
-
-/** The line numbers on the new side of a `git diff -U0`. */
-export const addedLines = (diff: string): number[] =>
-  [...diff.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)].flatMap((m) => Array.from({ length: m[2] === undefined ? 1 : Number(m[2]) }, (_, i) => Number(m[1]) + i));
-
-/** The JavaScript and TypeScript files, not test files, that the diff from `base` to `tip` adds or changes. */
-export function changedSources(cwd: string, base: string, tip: string): Source[] {
-  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => SOURCE.test(f) && !isJsTestFile(f));
-  return files.flatMap((path) => {
-    const lines = addedLines(git(cwd, "diff", "-U0", base, tip, "--", path).out);
-    return lines.length ? [{ path, lines, text: git(cwd, "show", `${tip}:${path}`).out }] : [];
-  });
-}
-
-/** The mutation operators, in order: a comparison, a logical operator, a boolean, a state, a constant. */
-const OPS: [RegExp, (m: string) => string][] = [
-  [/===|!==/, (m) => m === "===" ? "!==" : "==="],
-  [/ (?:<=|>=|<|>) /, (m) => ({ " <= ": " > ", " >= ": " < ", " < ": " >= ", " > ": " <= " })[m]!],
-  [/&&|\|\|/, (m) => m === "&&" ? "||" : "&&"],
-  [/\b(?:true|false)\b/, (m) => m === "true" ? "false" : "true"],
-  [/\bif \(/, () => "if (!"],
-  [/\b\d+\b/, (m) => String(Number(m) + 1)],
-];
-const CALL = /^\s*(?:await\s+)?[\w$.]+\(.*\);?\s*$/;
-
-/** One mutant of a source line, or null: the first operator that applies, else the line empty when it is a call statement. */
-function mutate(line: string): string | null {
-  const t = line.trim();
-  if (!t || /^(?:\/\/|\/?\*|import\b|export\b.*\bfrom\b)/.test(t)) return null;
-  for (const [re, op] of OPS) {
-    const m = re.exec(line);
-    if (m) return line.slice(0, m.index) + op(m[0]) + line.slice(m.index + m[0].length);
-  }
-  return CALL.test(line) ? "" : null;
-}
-
-/** At most `max` mutants of the changed lines, one a line, spread evenly over them. */
-export function mutants(sources: Source[], max = 10): { path: string; line: number; text: string }[] {
-  const all = sources.flatMap((s) => {
-    const text = s.text.split("\n");
-    return s.lines.flatMap((line) => {
-      const m = text[line - 1] === undefined ? null : mutate(text[line - 1]);
-      return m === null ? [] : [{ path: s.path, line, text: m }];
-    });
-  });
-  return all.length <= max ? all : Array.from({ length: max }, (_, i) => all[Math.floor((i * all.length) / max)]);
-}
-
 /**
- * The keep-gate: each new case of `tests` must pass on `tip` and fail on `base`. The head's text of each file
- * runs against the base code, so a file that is new on the head runs there too. A case that did not run on the
- * base (its file did not load there) must then earn its keep on `sources`, the changed source files: see earnKeep.
- * A case named `guard: ...` is a guard test (a ratchet, a lint row over a clean codebase): it passes on the base
- * by design, so the gate skips it and the reviewer judges that it guards something. The `tests` check still runs it.
- * Returns the reason and the lines for checks.log, or null. A fault of the set-up is not a failure.
+ * The keep-gate: the new cases of `tests` that pass on `base`, as `file > name`, so the reviewer can judge each. The
+ * head's text of each file runs against the base code, so a file that is new on the head runs there too; a case whose
+ * file does not load on the base did not run there and is not listed. A branch with no new case runs nothing.
+ * A step that could not run to a verdict (a fault of the set-up, or tests that fail on the head) is no verdict.
  */
-export async function keepGate(repo: Repo, base: string, tip: string, all: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
-  const tests = all.map((t) => ({ ...t, names: t.names.filter((n) => !n.startsWith("guard: ")) })).filter((t) => t.names.length);
-  if (!tests.length) return null;
+export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], runner: Runner = runOnCommit): Promise<string[] | KeepNoVerdict> {
+  if (!tests.length) return [];
   const test = `bun test --reporter=junit --reporter-outfile=${REPORT} ${tests.map((t) => q(`./${t.path}`)).join(" ")}; c=$?; cat ${REPORT}; exit $c`;
   let head = await runner(repo, tip, test);
   if (!head.infra && head.code !== 0) head = await runner(repo, tip, test);
   if (head.infra) return noVerdict("the new tests did not run on the head", head);
-  if (head.code !== 0) return { reason: "keep-gate: the new tests fail on the head", log: `The new tests fail on the head commit:\n${lastLines(head.output.split("<?xml")[0], 40).replaceAll(" ⏎ ", "\n")}` };
+  if (head.code !== 0) return noVerdict("the new tests fail on the head", { ...head, output: head.output.split("<?xml")[0] });
   // The head's files reach the base clone in `.hidden`, by index, as runOnCommit gives hidden files.
   const files = Object.fromEntries(tests.map((t, i) => [String(i), t.text]));
   const copy = tests.map((t, i) => `mkdir -p ${q(dirname(t.path))} && cp .hidden/${i} ${q(t.path)}`).join(" && ");
   const onBase = await runner(repo, base, `${copy} && { ${test}; }`, files);
   if (onBase.infra) return noVerdict("the new tests did not run on the base", onBase);
   const fresh = new Set(tests.flatMap((t) => t.names));
-  const passed = junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
-  if (passed.length) return {
-    reason: `keep-gate: ${passed.length} new test${passed.length > 1 ? "s pass" : " passes"} on the base commit: ${passed.join("; ")}`,
-    log: `These new tests pass on the base commit ${base.slice(0, 10)}, without the branch's change, so they do not test it:\n${passed.map((p) => `- ${p}`).join("\n")}\nMake each one fail without the change, or remove it: a committed test needs a lasting reason. A ratchet or a lint row that guards a clean codebase passes on the base by design: start its name with \`guard: \`.`,
-  };
-  const ran = junitRan(onBase.output);
-  const unran = tests.flatMap((t) => t.names.filter((name) => !ran.has(`${t.path} > ${name}`)).map((name) => ({ file: t.path, name })));
-  return earnKeep(repo, tip, tests, unran, sources, runner);
+  return junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
 }
 
-/** A keep-gate step whose command could not run to a verdict (`infra`): no pass, and no failure of the branch. */
-const noVerdict = (what: string, r: Ran): { reason: string; log: string; noVerdict: true } =>
-  ({ reason: `no verdict: keep-gate: ${what}`, log: `No verdict: ${what}:\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}`, noVerdict: true });
-
-let earnScript: string | undefined;
-
-/**
- * The keep-gate's second stage. A case that fails on the base because its file does not load there shows only
- * that the file needs the change: it must also cover a changed line of `sources` that the other cases of the test
- * files do not cover, or fail on a mutant of a changed line. keep-earn.ts runs it on `tip`, with at most 10 mutants of the changed lines that the new cases cover.
- * A branch with no changed source line has nothing to earn against, so it passes.
- */
-async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan["cases"], sources: Source[], runner: Runner): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
-  if (!cases.length || !sources.length) return null;
-  const plan: Plan = { cases, files: tests.map((t) => t.path), changed: Object.fromEntries(sources.map((s) => [s.path, s.lines])), mutants: mutants(sources, Infinity) };
-  earnScript ??= readFileSync(join(import.meta.dir, "keep-earn.ts"), "utf8");
-  const r = await runner(repo, tip, "bun .hidden/earn.ts .hidden/plan.json", { "earn.ts": earnScript, "plan.json": JSON.stringify(plan) });
-  if (r.infra) return noVerdict("the coverage and mutant run did not finish", r);
-  const line = r.output.match(/^KEEP-EARN (.*)$/gm)?.pop();
-  if (!line) return null;
-  const { unearned, mutants: n } = JSON.parse(line.slice("KEEP-EARN ".length)) as { unearned: string[]; mutants: number };
-  if (!unearned.length) return null;
-  const one = unearned.length === 1;
-  if (!plan.mutants.length) return {
-    reason: `keep-gate: ${unearned.length} new test${one ? " covers" : "s cover"} no changed line: ${unearned.join("; ")}`,
-    log: `These new tests fail on the base commit only because their file does not load there. The changed lines have no mutant, so a new test must run a changed line, and on the head these run none:\n${unearned.map((u) => `- ${u}`).join("\n")}\nMake each one check what the change does, or remove it: a committed test needs a lasting reason.`,
-  };
-  return {
-    reason: `keep-gate: ${unearned.length} new test${one ? " adds" : "s add"} no coverage of the changed lines and kill${one ? "s" : ""} no mutant: ${unearned.join("; ")}`,
-    log: `These new tests fail on the base commit only because their file does not load there. On the head they cover no changed line that the other cases of their files do not cover, and they pass on each of the ${n} mutant${n === 1 ? "" : "s"} of the changed lines:\n${unearned.map((u) => `- ${u}`).join("\n")}\nMake each one check what the change does, or remove it: a committed test needs a lasting reason.`,
-  };
-}
+/** A keep-gate step whose command could not run to a verdict: neither a list nor a failure of the branch. */
+export interface KeepNoVerdict { noVerdict: true; reason: string; log: string }
+const noVerdict = (what: string, r: Ran): KeepNoVerdict =>
+  ({ noVerdict: true, reason: `no verdict: keep-gate: ${what}`, log: `No verdict: ${what}:\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}` });
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
 export async function baselineChecks(repo: Repo, commit: string, logs: string, record?: CheckTask["record"]): Promise<ChecksStop | null> {

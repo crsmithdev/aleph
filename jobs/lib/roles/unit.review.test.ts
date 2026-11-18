@@ -138,3 +138,22 @@ test("an edit of an Oracle file that the Edit surface names passes the pin", asy
   expect(r.outcome.state).not.toBe("returned");
   expect(getRun(id)!.checks!.map((c) => c.name)).not.toContain("oracle-pin");
 });
+
+test("the reviewer call carries the new tests that pass on the base, and the run is not stopped by them", async () => {
+  git(repo.path, "switch", "-q", "work");
+  commit(repo.path, "x.test.ts", `test("adds", () => {});\n`, "a new test");
+  git(repo.path, "switch", "-q", "main");
+  const cases = `<testsuites><testsuite name="x.test.ts" file="x.test.ts"><testcase name="adds" file="x.test.ts" /></testsuite></testsuites>`;
+  const runner: Runner = async (_r, _s, command) => {
+    if (!command.includes(".keep-gate.xml")) { report(command, PASS); return { code: 0, output: "" }; }
+    return { code: 0, output: cases };
+  };
+  let keep: string[] | null | undefined;
+  const base = git(repo.path, "rev-parse", "main").out;
+  const review = async (...args: unknown[]) => { keep = args[8] as string[] | null; return { reason: null }; };
+  const ports = { ...branchPorts(folder, run, repo, base, "work", { changed: ["x.test.ts"], runner, review }), checks: async () => ({ stop: null }) };
+  const r = await workerVerdict({ earlier: [], done: 0, rounds: 2, facts: {}, checked: {} }, ports);
+  expect(keep).toEqual(["x.test.ts > adds"]);
+  expect(r.outcome.state).toBe("passed");
+  expect(readSection(folder, "checks")).toContain("## keep-gate: new tests that pass on the base commit\n- x.test.ts > adds");
+});

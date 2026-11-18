@@ -26,7 +26,7 @@ const fake = (verdict: object) => {
 };
 /** The reviewer on `work` from `base`, and its review job. */
 const review = async (r: Run, base: string) => {
-  const call = await reviewer(() => {})(folder, r, repo, base, "work", [], ["job.txt"], {});
+  const call = await reviewer(() => {})(folder, r, repo, base, "work", [], ["job.txt"], {}, []);
   return { call, job: allRuns().findLast((e) => e.run.role === "review")! };
 };
 

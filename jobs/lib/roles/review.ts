@@ -41,11 +41,11 @@ function reviewDiff(cwd: string, range: { from: string; to: string; merge: boole
  * The reviewer call of the worker verdict, on the review model with the build's env. It gives the reason to hold, or
  * null on a pass, and the cost; it fails closed. `onSpawn` gets the reviewer's process, so the unit's stop signal reaches it.
  */
-export const reviewer = (onSpawn: (p: ReturnType<typeof Bun.spawn>) => void): Review => async (folder, run, repo, base, branch, findings, changed, env) => {
+export const reviewer = (onSpawn: (p: ReturnType<typeof Bun.spawn>) => void): Review => async (folder, run, repo, base, branch, findings, changed, env, keep) => {
   const spec = jobSpec(run);
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
-  const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
+  const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge, keep });
   const model = readModels().review.model;
   // The reviewer is a job of its own: it follows the build, which holds the unit and the process.
   // No GPU slot: the job's own run holds it, as in the worker's call.
