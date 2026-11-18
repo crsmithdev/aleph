@@ -190,6 +190,22 @@ test("a renamed copy that the base did not have blocks as a new copy", () => {
   expect(out.reason).toMatch(/lib\/money\.ts:1-\d+ \(\d+ lines\), a copy the base did not have|ui\/pay\.ts:1-\d+ \(\d+ lines\), a copy the base did not have/);
 });
 
+const IMPORTS = 'import { a, b, c, d } from "./a.ts";\nimport type { e, f, g, h } from "./b.ts";\nimport {\n  i,\n  j,\n  k,\n  l,\n} from "./c.ts";\nexport * from "./d.ts";\nexport { m, n, o, p } from "./e.ts";\nimport "./f.ts";\n';
+const LOGIC = "export function total(items: number[], rate: number): number {\n  const sum = items.reduce((acc, n) => acc + n, 0);\n  const tax = sum * rate;\n  if (tax < 0) throw new Error(\"negative\");\n  const net = sum - tax;\n  return Math.round(net * 100) / 100;\n}\n";
+
+test("a copy of import lines alone does not block, and imports with 6 lines of logic still block", () => {
+  write(".jscpd.json", JSON.stringify(RENAMES));
+  write("lib/one.ts", IMPORTS);
+  write("lib/two.ts", IMPORTS);
+  session("i1").set({ start: 1 });
+  expect(scan(root).clones).toEqual([]);
+  expect(stop({ hook_event_name: "Stop", session_id: "i1", cwd: root })).toBe("");
+  write("lib/one.ts", IMPORTS + LOGIC);
+  write("lib/two.ts", IMPORTS + LOGIC);
+  session("i2").set({ start: 1 });
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "i2", cwd: root })).reason).toContain("a copy the base did not have");
+});
+
 test("a copy the base already had does not block, and an accepted pair does not block", () => {
   sh("git", "checkout", "-q", "main");
   write("lib/money.ts", SETTLE);

@@ -1,7 +1,7 @@
 /**
  * jscpd over the repo, with the repo's `.jscpd.json`: the copies of code (renamed copies too, when the config sets
  * `ignoreIdentifiers` and `ignoreLiterals`) and the copies of code a boundary keeps in its owner. One run answers
- * both. Given a base commit, each clone says whether the base already had it.
+ * both. Given a base commit, each clone says whether the base already had it. A clone of import lines alone is no clone.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +14,21 @@ export function jscpd(dir: string): string {
 }
 
 const JSCPD = jscpd(join(import.meta.dir, "../.."));
+
+// A statement that imports, or re-exports from, a module; it may span lines.
+const IMPORT = /^(?:import\b[^;'"]*?|export\b[^;'"]*?\bfrom\s*)["'][^"']*["'];?[ \t]*$/gm;
+
+/** Whether every line of `side` is a blank line or part of an import statement. */
+function isImports(root: string, side: { name: string; start: number; end: number }): boolean {
+  const text = readFileSync(join(root, side.name), "utf8");
+  const lines = text.split("\n");
+  const imported = new Set<number>();
+  for (const m of text.matchAll(IMPORT)) {
+    const first = text.slice(0, m.index).split("\n").length;
+    for (let n = first; n < first + m[0].split("\n").length; n++) imported.add(n);
+  }
+  return lines.slice(side.start - 1, side.end).every((line, i) => !line.trim() || imported.has(side.start + i));
+}
 
 type Side = { name: string; start: number; end: number };
 export type Clone = { a: Side; b: Side; lines: number; isNew: boolean };
@@ -32,7 +47,8 @@ export function scan(root: string, base?: string): { clones: Clone[]; violations
     const violations = (report.boundaries ?? []).flatMap((b: any) => b.violations.map((v: any) => ({ rule: b.name, copy: side(v.copy), owner: side(v.protected) })));
     // jscpd exits 1 when it finds a boundary violation; any other failure is an error.
     if (run.exitCode !== 0 && !violations.length) throw new Error(`jscpd exited ${run.exitCode}: ${run.stderr}`);
-    return { clones: report.duplicates.map((d: any) => ({ a: side(d.firstFile), b: side(d.secondFile), lines: d.lines, isNew: d.isNew === true })), violations };
+    const clones = report.duplicates.map((d: any) => ({ a: side(d.firstFile), b: side(d.secondFile), lines: d.lines, isNew: d.isNew === true }));
+    return { clones: clones.filter((c: Clone) => !(isImports(root, c.a) && isImports(root, c.b))), violations };
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
