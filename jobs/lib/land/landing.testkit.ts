@@ -93,6 +93,8 @@ export function queued(e: Entry): Entry {
   // bash blocks on its own stdin: no child to orphan, and it exits when the test process dies.
   const s = Bun.spawn(["bash", "-c", "read", e.folder], { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
   sleepers.push(s);
+  // Until bash execs, /proc/<pid>/cmdline is the parent's: isLive reads it as lost. A spin, as the lint bars a sleep.
+  while (!readFileSync(`/proc/${s.pid}/cmdline`, "utf8").includes(e.folder));
   writeFileSync(join(e.folder, "pid"), String(s.pid));
   return e;
 }
