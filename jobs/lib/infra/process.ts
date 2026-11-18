@@ -6,7 +6,8 @@ import { systemctl } from "./systemd.ts";
 
 /**
  * A run's process: `starting` (made, no `pid` yet, for STARTING_MS), `live` (`pid`, no `exit`, and that process names
- * the folder), `lost` (`pid`, no `exit`, the process is gone), `ended` (`exit`), or `none` (none of these).
+ * the folder), `lost` (no `exit`, and the process is gone, or a `running` run still has no `pid` after STARTING_MS),
+ * `ended` (`exit`), or `none` (none of these).
  */
 type ProcessState = "starting" | "live" | "lost" | "ended" | "none";
 
@@ -49,7 +50,8 @@ export function processState(e: { folder: string; run: Pick<Run, "state" | "made
     const pid = pidOf(e.folder);
     return pid !== null && names(pid, e.folder) ? "live" : "lost";
   }
-  return e.run.state === "running" && Date.now() - (e.run.made ?? 0) < STARTING_MS ? "starting" : "none";
+  if (e.run.state !== "running") return "none";
+  return Date.now() - (e.run.made ?? 0) < STARTING_MS ? "starting" : "lost";
 }
 
 /** When this host booted, in ms. */

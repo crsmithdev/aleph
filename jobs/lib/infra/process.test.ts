@@ -47,7 +47,7 @@ test("each state of a run's process", async () => {
   setSystemTime(NOW);
   const starting = entry("a");
   expect(processState(starting)).toBe("starting");
-  expect(processState(entry("b", { made: NOW - STARTING_MS - 1000 }))).toBe("none");
+  expect(processState(entry("b", { made: NOW - STARTING_MS - 1000 }))).toBe("lost");
   expect(processState(entry("c", { state: "done" }))).toBe("none");
   const lost = entry("d");
   markStarted(lost.folder, 999_999_999);
@@ -100,6 +100,10 @@ test("a running run with a dead pid is killed when it started before the boot, a
   expect(runHealth(e, NOW - 1)).toBe("lost");
   expect(runHealth({ ...e, run: { ...e.run, state: "done" } }, NOW + 1)).toBe("lost");
   expect(runHealth(entry("r-new"), NOW + 1)).toBe("starting");
+  const stale = entry("r-stale", { made: NOW - 180_000 });
+  expect(runHealth(stale, NOW - 1)).toBe("lost");
+  expect(runHealth({ ...stale, run: { ...stale.run, state: "done" } }, NOW - 1)).not.toBe("lost");
+  expect(runHealth(entry("r-fresh"), NOW - 1)).toBe("starting");
 });
 
 test("a lost director run frees its work and a live one holds it", async () => {

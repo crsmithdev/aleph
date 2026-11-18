@@ -8,7 +8,7 @@
  * case hits one issue, sets an Ask (input, rescue) on the issue, which goes to the director. A run whose cause is not
  * `rescuable` (`POLICY`), such as credit, never reaches the rescue: its step is a wait. A run that a host
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
- * the issue; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
+ * the issue; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, or it has had no `pid` for two minutes, and no host
  * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */

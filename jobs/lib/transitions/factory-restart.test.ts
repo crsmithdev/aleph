@@ -133,6 +133,17 @@ test("a lost land is marked failed and lands again, and the issue does not start
   expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
 });
 
+test("a running land that wrote no pid in two minutes is lost, fails and lands again", async () => {
+  const id = newIssue();
+  const first = mk(`fac-${id}`, "build", "passed", { branch: "b" });
+  const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", made: Date.parse(BEFORE_BOOT) }, {});
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls[0]).toBe(`land issue.${id}`);
+  expect(f.calls).not.toContain(`drop issue.${id}`);
+  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
+});
+
 test("a land killed by a host restart fails and lands again, and the issue does not start over", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
