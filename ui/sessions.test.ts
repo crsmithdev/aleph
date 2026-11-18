@@ -81,6 +81,20 @@ test("the sessions list groups the window's traces by session", async () => {
   expect(d.sessions.map((s: any) => [s.id, s.turns]).sort()).toEqual([["s1", 2], ["s2", 1]]);
 });
 
+test("the window read asks for core traces, and a session's firstPrompt comes from the traces' input read one by one", async () => {
+  TRACES.push(
+    trace("t5", "s5", "aleph", iso(8), { input: "<system-reminder>\nnote\n</system-reminder>" }),
+    trace("t6", "s5", "aleph", iso(7), { input: "typed text" }),
+  );
+  try {
+    const d: any = await listSessions(new Request("http://localhost/api/sessions"));
+    expect(lf.asked.find((a) => a.list === "traces")!.q.core).toBe(true);
+    const first = (id: string) => d.sessions.find((s: any) => s.id === id).firstPrompt;
+    expect(first("s5")).toBe("typed text");
+    expect(first("s1")).toBe("prompt t1 second line");
+  } finally { TRACES.length -= 2; }
+});
+
 test("the sessions list pages newest first by ?limit= and ?before=, and says whether Langfuse held more pages", async () => {
   const page = async (q: string) => listSessions(new Request(`http://localhost/api/sessions?${q}`)) as Promise<any>;
   const all = await page("");

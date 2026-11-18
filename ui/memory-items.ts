@@ -46,7 +46,7 @@ type Sessions = Awaited<ReturnType<typeof sessionRows>>;
 const sessions = (): Promise<Sessions | null> => later("memory:sessions", ["usage"], loadSessions, null);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuse()) return null;
-  try { return (await sessionRows((await windowTraces(7, null)).rows)).slice(0, 10); } catch (e) { console.error(`ui/memory-items: no sessions: ${errText(e)}`); return null; }
+  try { return await sessionRows((await windowTraces(7, null)).rows, 10); } catch (e) { console.error(`ui/memory-items: no sessions: ${errText(e)}`); return null; }
 }
 
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };

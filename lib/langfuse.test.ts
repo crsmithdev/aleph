@@ -50,7 +50,7 @@ test("a read asks Langfuse's list with its query, and a session is known when La
   await lf().traces({ from, to, core: true });
   await lf().observations({ from, trace: "t1", type: "TOOL" });
   expect(asked.map((u) => [u.pathname, Object.fromEntries(u.searchParams)])).toEqual([
-    ["/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core", limit: "100", page: "1" }],
+    ["/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core,metrics", limit: "100", page: "1" }],
     ["/api/public/observations", { fromStartTime: from.toISOString(), traceId: "t1", type: "TOOL", limit: "100", page: "1" }],
   ]);
   expect([await lf().session("s1"), await lf().session("s2")]).toEqual([true, false]);

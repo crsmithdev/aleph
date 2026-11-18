@@ -11,7 +11,7 @@ export class LangfuseError extends Error {
 
 /** A time span: `from` inclusive, `to` exclusive, as Langfuse reads them. */
 export interface Span { from?: Date; to?: Date }
-/** `core` leaves out each trace's input and output. */
+/** `core` leaves out each trace's input and output; it asks for `metrics` too, since a bare core read prices each trace -1 and its latency -1. */
 export interface TraceQuery extends Span { session?: string; core?: boolean }
 export interface ObservationQuery extends Span { trace?: string; type?: string; name?: string }
 /** One model's cost in one UTC hour: `at` is the hour's start in ms, `cost` is USD. */
@@ -82,7 +82,7 @@ export function http(cfg: LangfuseConfig): Langfuse {
   const headers = { authorization: auth(cfg) };
   return {
     base: cfg.baseUrl,
-    traces: (q, source) => allPages(cfg, "/api/public/traces", params({ fromTimestamp: iso(q.from), toTimestamp: iso(q.to), sessionId: q.session, fields: q.core ? "core" : undefined }), source),
+    traces: (q, source) => allPages(cfg, "/api/public/traces", params({ fromTimestamp: iso(q.from), toTimestamp: iso(q.to), sessionId: q.session, fields: q.core ? "core,metrics" : undefined }), source),
     observations: (q, source) => allPages(cfg, "/api/public/observations", params({ fromStartTime: iso(q.from), toStartTime: iso(q.to), traceId: q.trace, type: q.type, name: q.name }), source),
     trace: async (id) => {
       const path = `/api/public/traces/${encodeURIComponent(id)}`;
@@ -109,16 +109,19 @@ export function http(cfg: LangfuseConfig): Langfuse {
 
 /** A Langfuse that holds `rows`, for tests. `asked` lists each list read; a set `down` fails each one. */
 export function memory(rows: { [K in keyof Lists]: Lists[K][] }) {
-  const asked: { list: string; q: Span }[] = [];
+  const asked: { list: string; q: Span & { core?: boolean } }[] = [];
   const within = (at: string | undefined, q: Span) => { const t = Date.parse(at ?? ""); return (!q.from || t >= q.from.getTime()) && (!q.to || t < q.to.getTime()); };
-  const read = async <K extends keyof Lists>(list: K, q: Span, keep: (r: Lists[K]) => boolean): Promise<Rows<Lists[K]>> => {
+  const read = async <K extends keyof Lists>(list: K, q: Span & { core?: boolean }, keep: (r: Lists[K]) => boolean): Promise<Rows<Lists[K]>> => {
     asked.push({ list, q });
     if (lf.down) throw lf.down;
     return { rows: rows[list].filter(keep), partial: false, pages: 1 };
   };
   const lf = {
     base: "http://langfuse.test", asked, down: null as Error | null,
-    traces: (q: TraceQuery) => read("traces", q, (t) => within(t.timestamp, q) && (!q.session || t.sessionId === q.session)),
+    traces: async (q: TraceQuery) => {
+      const got = await read("traces", q, (t) => within(t.timestamp, q) && (!q.session || t.sessionId === q.session));
+      return q.core ? { ...got, rows: got.rows.map(({ input, output, ...t }) => t) } : got;
+    },
     observations: (q: ObservationQuery) => read("observations", q, (o) => within(o.startTime, q) && (!q.trace || o.traceId === q.trace) && (!q.type || o.type === q.type) && (!q.name || o.name === q.name)),
     trace: async (id: string) => {
       const t = rows.traces.find((t) => t.id === id);

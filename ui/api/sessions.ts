@@ -86,8 +86,17 @@ const durationMs = (o: Span): number | null => {
   return typeof o.latency === "number" ? Math.round(o.latency * 1000) : null; // Langfuse reports latency in seconds
 };
 
-/** The first prompt the user typed: system text (a `<task-notification>`, a `<system-reminder>`) skipped. */
-const firstTyped = (ts: Trace[]) => ts.map((t) => systemParts(text(t.input)).text).find(Boolean) ?? text(ts[0]?.input);
+/** The first prompt the user typed, read trace by trace in time order until one has it: system text (a `<task-notification>`, a `<system-reminder>`) skipped. */
+async function firstTyped(lf: Langfuse, ts: Trace[]) {
+  let first: unknown;
+  for (const [i, t] of ts.entries()) {
+    const input = (await lf.trace(t.id))?.input;
+    if (i === 0) first = input;
+    const typed = systemParts(text(input)).text;
+    if (typed) return typed;
+  }
+  return text(first);
+}
 
 /** A tool input as an object, when it is one or is JSON for one. */
 function inputObject(input: unknown): Record<string, unknown> | null {
@@ -183,36 +192,47 @@ type Session = Trace & { sessionId: string };
 export async function windowTraces(days: number, project: string | null): Promise<{ rows: Session[]; partial: boolean }> {
   const hour = 3600_000; // whole hours, so the cache key holds
   const from = new Date(Math.floor((Date.now() - Math.min(days > 0 ? days : 7, 90) * 86400_000) / hour) * hour);
-  const { rows, partial } = await list(need(), "traces", { from });
+  const { rows, partial } = await list(need(), "traces", { from, core: true });
   return { rows: rows.filter((t): t is Session => !!t.sessionId && traceIn(t, project)), partial };
 }
 
 const LIMIT = 100, MAX = 2000;
 
-/** One row per session of `traces`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0. */
-export async function sessionRows(traces: Session[]) {
+/**
+ * The first `limit` sessions of `traces` that ended before `before`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0.
+ * The window's traces hold no input, so only these sessions have their `firstPrompt` read.
+ */
+export async function sessionRows(traces: Session[], limit: number, before: string | null = null) {
   const groups = new Map<string, Session[]>();
-  for (const t of traces) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
+  for (const t of traces) {
+    const g = groups.get(t.sessionId);
+    if (g) g.push(t); else groups.set(t.sessionId, [t]);
+  }
   const ledger = jobs();
   const fit = await currentFit();
-  return [...groups].map(([id, ts]) => {
+  const rows = [...groups].map(([id, ts]) => {
     ts.sort(byTime);
     const job = ledger.get(id);
     const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
     const wk = share(fit, langfuse || job?.cost || 0, job?.model);
     return {
-      ...(wk ? { wk } : {}),
-      id,
-      ...(job ? { label: job.name } : {}),
-      project: projectOf(ts[0]),
-      firstPrompt: clip(text(firstTyped(ts)), 160),
-      turns: ts.length,
-      start: ts[0].timestamp as string,
-      last: ts[ts.length - 1].timestamp as string,
-      cost: langfuse || job?.cost || 0,
-      taskTypes: taskTypes(ts),
+      ts,
+      row: {
+        ...(wk ? { wk } : {}),
+        id,
+        ...(job ? { label: job.name } : {}),
+        project: projectOf(ts[0]),
+        turns: ts.length,
+        start: ts[0].timestamp as string,
+        last: ts[ts.length - 1].timestamp as string,
+        cost: langfuse || job?.cost || 0,
+        taskTypes: taskTypes(ts),
+      },
     };
-  }).sort((a, b) => ms(b.last) - ms(a.last));
+  }).filter((x) => before === null || ms(x.row.last) < Date.parse(before))
+    .sort((a, b) => ms(b.row.last) - ms(a.row.last)).slice(0, limit);
+  const lf = need();
+  return Promise.all(rows.map(async ({ ts, row }) => ({ ...row, firstPrompt: clip(text(await firstTyped(lf, ts)), 160) })));
 }
 
 /** The fields of turn `i` that the session and chat views share. A factory worker's session is one turn Langfuse prices at 0: it has the ledger's cost, as on the list. */
@@ -233,7 +253,7 @@ export async function listSessions(req: Request) {
   if (before !== null && Number.isNaN(Date.parse(before))) throw new Error("before must be an ISO time");
   const lf = need();
   const { rows: all, partial } = await windowTraces(days, project);
-  const sessions = (await sessionRows(all)).filter((x) => before === null || ms(x.last) < Date.parse(before));
+  const sessions = await sessionRows(all, limit + 1, before); // one more than the page says whether there is a next
   const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
   return { base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial };
 }
