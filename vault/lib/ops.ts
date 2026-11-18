@@ -2,7 +2,6 @@
  * The ops of `aleph memory`, each a function of the vault root with typed arguments. An op returns its value or a
  * refusal as data and prints nothing; vault/lib/cli.ts parses argv and prints.
  */
-import { readJsonOr } from "../../lib/json.ts";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -16,7 +15,7 @@ import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, appendRecallLog, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
+import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, noteRead, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
@@ -93,27 +92,6 @@ function rollback(root: string, paths: string[]): void {
     if (git(root, "ls-files", "--error-unmatch", "--", rel).ok) git(root, "checkout", "--", rel);
     else if (existsSync(p)) unlinkSync(p);
   }
-}
-
-/**
- * When `recall` last returned each note, by title. The Memory page shows it as use;
- * staleness does not read it.
- *
- * It lives outside git: a read is not a change to memory, and committing one
- * on every recall would bury the writes that matter. Losing the file only
- * costs the Memory page's read dates, so every access here is best-effort.
- */
-const readLogPath = (root: string) => join(root, ".recall.json");
-function noteRead(root: string, titles: string[], query: string, unlogged: boolean): void {
-  // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
-  // `ALEPH_RECALL_UNLOGGED`: a dry compile's model recalls without a flag it could leave out.
-  if (!titles.length || unlogged || process.env.ALEPH_RECALL_UNLOGGED) return;
-  try {
-    const log = readJsonOr<Record<string, string>>(readLogPath(root), {});
-    for (const t of titles) log[t] = today();
-    writeFileSync(readLogPath(root), JSON.stringify(log, null, 0));
-    appendRecallLog(root, titles, query);
-  } catch { /* a read must never fail on its own bookkeeping */ }
 }
 
 /** Write Home.md, generated from the notes, with the health line last. */

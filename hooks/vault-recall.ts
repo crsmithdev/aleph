@@ -11,7 +11,7 @@ import { judgeChoice, nouls, type Noul } from "../lib/jev.ts";
 import { truncate } from "../lib/otlp.ts";
 import { postTurnSpan } from "./lib/trace.ts";
 import { claimLine, recallWiki } from "../vault/lib/index.ts";
-import { appendRecallLog, recordRun } from "../vault/lib/vault.ts";
+import { noteRead, recordRun } from "../vault/lib/vault.ts";
 import { scopeOfCwd, vaultDir } from "../lib/paths.ts";
 import { errText } from "../lib/errtext.ts";
 import { isAgent } from "../lib/env.ts";
@@ -98,7 +98,7 @@ async function main() {
   await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext, candidates.map((n) => n.rel));
   if (!picked.length) return;
   writeSeen(root, input.session_id, seen, picked.map(({ n }) => n.rel));
-  try { appendRecallLog(root, picked.map(({ n }) => n.title), prompt); } catch { /* the log must never block the injection */ }
+  noteRead(root, picked.map(({ n }) => n.title), prompt, false);
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }
 

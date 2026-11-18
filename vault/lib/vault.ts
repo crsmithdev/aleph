@@ -588,9 +588,30 @@ export function dailyNotes(root: string): { day: string; text: string }[] {
     .map((f) => ({ day: f.slice(0, 10), text: readFileSync(join(dir, f), "utf8") }));
 }
 
-/** When `vault recall` last returned each note, by title; empty when the file is absent. */
+/**
+ * When `recall` or the recall hook last returned each note, by title. The Memory page shows it as use;
+ * staleness does not read it.
+ *
+ * It lives outside git: a read is not a change to memory, and committing one
+ * on every recall would bury the writes that matter. Losing the file only
+ * costs the Memory page's read dates, so every access here is best-effort.
+ */
+const readLogPath = (root: string) => join(root, ".recall.json");
+export function noteRead(root: string, titles: string[], query: string, unlogged: boolean): void {
+  // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
+  // `ALEPH_RECALL_UNLOGGED`: a dry compile's model recalls without a flag it could leave out.
+  if (!titles.length || unlogged || process.env.ALEPH_RECALL_UNLOGGED) return;
+  try {
+    const log = readJsonOr<Record<string, string>>(readLogPath(root), {});
+    for (const t of titles) log[t] = today();
+    writeJson(readLogPath(root), log);
+    appendRecallLog(root, titles, query);
+  } catch { /* a read must never fail on its own bookkeeping */ }
+}
+
+/** The dates of `noteRead`, by title; empty when the file is absent. */
 export function recallSeen(root: string): Record<string, string> {
-  return readJsonOr(join(root, ".recall.json"), {});
+  return readJsonOr(readLogPath(root), {});
 }
 
 /** Whether the vault has a Home.md, which is what makes a directory a vault. */

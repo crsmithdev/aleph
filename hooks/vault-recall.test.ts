@@ -139,7 +139,7 @@ test("a vault at the same HEAD answers from its index: an edit not yet committed
   expect(questionsOf()[1][0]).toContain("Jev answers bounded questions before Haiku.");
 });
 
-test("each injected note is appended to the recall log, and nothing is appended when none is injected", async () => {
+test("each injected note is appended to the recall log and dated in .recall.json, and nothing is appended when none is injected", async () => {
   const v = mkdtempSync(join(tmpdir(), "aleph-recall-log-"));
   note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");
   const file = join(v, ".recall-log.jsonl");
@@ -150,7 +150,7 @@ test("each injected note is appended to the recall log, and nothing is appended 
   await run(v, PROMPT, {}, { session_id: "s-log" });
   const lines = readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   expect(lines).toEqual([{ date: lines[0].date, title: "Jev Screens Bounded Judgments", query: PROMPT }]);
-  expect(existsSync(join(v, ".recall.json"))).toBe(false);
+  expect(JSON.parse(readFileSync(join(v, ".recall.json"), "utf8"))).toEqual({ "Jev Screens Bounded Judgments": lines[0].date });
   rmSync(v, { recursive: true, force: true });
 });
 
