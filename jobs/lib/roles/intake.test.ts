@@ -47,6 +47,7 @@ const VERDICTS: Record<string, object> = {
   chris: { route: "ask", reason: "a product choice", question: "Which plan, A or B?" },
   missing: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "nope.ts", new: false }] }) },
   leftout: { route: "build", reason: "one run", left_out: "the page head and the audit", spec: spec() },
+  removal: { route: "build", reason: "it undoes a removal", removal: { sha: "abc1234", subject: "drop the old gate", reason: "it was too slow to keep" } },
   testonly: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "x.test.ts", new: false }] }) },
   bad: { route: "maybe", reason: "x" },
 };
@@ -278,6 +279,27 @@ test("parseRoute keeps the left-out text of a build verdict, and the schema take
   expect(build.required).not.toContain("left_out");
 });
 
+test("a build that reports the commit that removed what the issue asks back writes no spec and asks Chris; one that reports none is unchanged", async () => {
+  reset([{ title: "a", body: "VERDICT:goal" }, { title: "b", body: "VERDICT:removal" }]);
+  const t = await run();
+  expect(t.counts).toEqual({ build: 1, ask: 1 });
+  expect(item(1).spec).toContain("Do it.");
+  expect(askOf("issue.1")).toBeNull();
+  expect(item(2).spec).toBe("");
+  expect(askOf("issue.2")!.reason).toBe("question");
+  expect(askOf("issue.2")!.question).toContain("abc1234");
+  expect(askOf("issue.2")!.question).toContain("drop the old gate");
+  expect(askOf("issue.2")!.question).toContain("it was too slow to keep");
+});
+
+test("the build route's schema takes the removal commit with its sha, subject and reason, and nothing else", () => {
+  const build = INTAKE_SCHEMA.properties.verdict.oneOf.find((r) => r.properties.route.const === "build")!;
+  const removal = (build.properties as any).removal;
+  expect(removal.required).toEqual(["sha", "subject", "reason"]);
+  expect(removal.additionalProperties).toBe(false);
+  expect(removal.properties.sha.pattern).toBe("^[0-9a-f]{7,40}$");
+});
+
 describe("a repo with author", () => {
   test("an issue filed with a spec is taken in before it builds; in a repo without author it builds as filed", async () => {
     reset([{ title: "a", body: "VERDICT:goal", spec: "## Goal\nOld.\n## Edit surface\nx.ts\n## Oracle\n`bun test x.test.ts`" }], { author: true });
@@ -371,6 +393,16 @@ test("the prompt tells intake to cover the whole request and to name what it lea
 test("the prompt has intake search past work for the issue's title, quoted for the shell", () => {
   const p = prompt(repo, { id: 1, title: "Fix Chris's land", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("# Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Fix Chris'\\''s land'` as it stands, with no pipe.");
+});
+
+test("the intake run may run git log, and the prompt has it search history before a spec that adds something back", async () => {
+  reset([{ title: "a", body: "VERDICT:goal" }]);
+  await run();
+  expect(calls()[0]).toContain("--allowedTools Bash(aleph memory recall:*),Bash(git log:*)");
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("Before you write a spec that adds back, re-enables or widens something");
+  expect(p).toContain("`git log -S<text>`");
+  expect(p).toContain('give the commit as "removal" in the build verdict');
 });
 
 const grant = (reason: string, action: string) => putJson("settings", "always", { [reason]: { action, at: new Date(NOW).toISOString() } });

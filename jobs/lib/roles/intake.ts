@@ -96,7 +96,15 @@ export const INTAKE_SCHEMA = {
           },
           after: refs,
           left_out: { type: "string", minLength: 1, description: "What the spec or the parts leave out of the issue's request, one sentence. Omit it when they cover the whole request." },
-        }, ["spec", "parts", "after", "left_out"]),
+          removal: {
+            type: "object", additionalProperties: false, required: ["sha", "subject", "reason"],
+            properties: {
+              sha: { type: "string", pattern: "^[0-9a-f]{7,40}$", description: "The short sha of the commit that removed or narrowed what the issue asks back." },
+              subject: { type: "string", minLength: 1, description: "Its subject line." },
+              reason: { type: "string", minLength: 1, description: "The reason its message gives for the removal." },
+            },
+          },
+        }, ["spec", "parts", "after", "left_out", "removal"]),
         route("close", {}),
         route("done", { commit: { type: "string", pattern: "^[0-9a-f]{7,40}$" } }),
         route("ask", {
@@ -120,6 +128,12 @@ function specOf(raw: any): Spec | undefined {
   return { goal: text(raw.goal) ?? "", surface, oracle };
 }
 
+/** The commit a build reports as the one that removed what the issue asks back: its sha, subject and reason. */
+function removalOf(raw: any): { sha: string; subject: string; reason: string } | null {
+  const sha = text(raw?.sha), subject = text(raw?.subject), reason = text(raw?.reason);
+  return sha && subject && reason ? { sha, subject, reason } : null;
+}
+
 /** The route in intake's structured output, or why there is none. The spec's own problems are `problems`'s. */
 export function parseRoute(reply: any): Route | string {
   if (reply === undefined) return NO_OUTPUT;
@@ -129,6 +143,9 @@ export function parseRoute(reply: any): Route | string {
   if (!reason) return `${raw.route} without a reason`;
   switch (raw.route) {
     case "build": {
+      // A build that names the commit that removed what the issue asks back writes no spec: Chris decides whether to undo it.
+      const removal = removalOf(raw.removal);
+      if (removal) return { route: "ask", reason, ask: plainAsk("question", `This issue asks back something commit ${removal.sha} removed: ${removal.subject}. The commit's reason: ${removal.reason}. Undo that removal?`) };
       const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => ISSUE_KEY.test(x));
       const parts = Array.isArray(raw.parts) && raw.parts.length
         ? raw.parts.map((p: any) => ({ title: (text(p?.title) ?? "").replace(/\s+/g, " "), spec: specOf(p?.spec) ?? { goal: "", surface: [], oracle: [] }, after: Array.isArray(p?.after) ? p.after : [] }))
@@ -303,6 +320,8 @@ One "verdict", with a "reason": one sentence that says why.
 
 Never ask Chris how to build it: code structure, which module, naming, test shape, whether to wait for another issue, or whether a refactor is worth it. Decide those, and "build" or "close".
 
+Before you write a spec that adds back, re-enables or widens something (a check, a gate, a slot, a path in a list, a test), search the history for the commit that removed or narrowed it: \`git log -S<text>\` (or \`git log -G<regex>\`) over the paths it names, and read the message it prints. When that message gives a reason, write no spec: give the commit as "removal" in the build verdict, with its short "sha", its "subject" and its "reason" from the message, and code asks Chris whether to undo that removal. When history holds no such commit, or its message gives no reason, build as before.
+
 When the source is \`worker\` and all the issue asks for is a new test of behaviour that works today, a rerun of a check elsewhere, or a screenshot or a measurement with no change behind it: "close", with the reason "test-only follow-up". A worker issue that names a defect still builds.
 
 A fresh request from Chris that goes against the current design or its tests is not stale: "build" it, or "ask" Chris, and do not "close" it.
@@ -471,7 +490,7 @@ async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, s
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: issueKey(id) });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*),Bash(git log:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: issueKey(id) });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.
