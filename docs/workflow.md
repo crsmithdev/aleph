@@ -187,7 +187,7 @@ Lands of one repo go one at a time, in the order they became ready (`landing.ts`
 2. Refuse a change to the repo's own to-do list (cause `other`): the worker gets it back with a note.
 3. Run the land checks: the test files the change reaches, the repo's `critical` globs, and every check that is not a test. A change to a file that is not a module runs every test. When `origin/main` has not moved since the run's checks, only the critical tests run.
 4. Push one squash commit with the trailers `Issue: <repo>-<n>` and `Job: <job>`, and `Held-by:` for a held land.
-5. Fast-forward the repo's main checkout if it is clean. Restart `aleph-ui` when the change touches a file the server imports.
+5. Fast-forward the repo's main checkout if it is clean. `aleph-ui` restarts by itself: its unit runs `bun --watch`. When the move changes a file under `jobs/systemd/`, run `systemctl --user daemon-reload`; a failed reload does not fail the land.
 
 **Batch.** The land that takes the lock also takes up to `ALEPH_LAND_BATCH` (8) passed runs queued behind it. It checks the last commit once and pushes all of them. On a failure it splits the batch in half until it finds the run that fails.
 
