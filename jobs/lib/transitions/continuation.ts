@@ -13,6 +13,7 @@ import { needsOf } from "../asks/ask.ts";
 import { git } from "../../../lib/git.ts";
 import { jobsNamed, notes, readFile, type Job } from "../records/job.ts";
 import { jobOfRun } from "../records/record.ts";
+import { runsBunTest } from "../gates/checks.ts";
 import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
@@ -37,10 +38,13 @@ and print a line \`QUESTION: <one question>\`. ${TAG_FORMAT} ${FOREGROUND} End w
 summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.
 ${ENDING}`;
 
+// The gate runs the related test files, and a timer runs the full suite, so a worker that runs it only repeats the timer.
+const RELATED_ONLY = "run only the test files your change reaches, by path (`bun test ./path/to/x.test.ts`), and never the whole suite: the factory's gate runs the related tests and the full suite runs on a timer";
+
 /** What the worker runs before it ends: the repo's own checks, else today's sentence. */
 function checksSentence(checks: Check[]): string {
   if (!checks.length) return "Run the repo's tests before you end.";
-  const list = checks.map((c) => `\n- \`${c.name}\`: \`${c.run}\`${c.when?.length ? ` (when ${c.when.join(", ")} change)` : ""}`).join("");
+  const list = checks.map((c) => `\n- \`${c.name}\`: ${runsBunTest(c.run) ? RELATED_ONLY : `\`${c.run}\``}${c.when?.length ? ` (when ${c.when.join(", ")} change)` : ""}`).join("");
   return `Run each of the repo's checks before you end, and fix what fails:${list}\n`;
 }
 
@@ -65,7 +69,7 @@ file do not: a changed line they do not cover, or a result they do not assert. T
 factory's checks reject any other new test. So do not add a test for a helper that the
 existing tests already reach through its callers.
 
-If the goal already holds and no edit is needed, make no commit, run the repo's tests,
+If the goal already holds and no edit is needed, make no commit, run the test files the goal names or reaches,
 and set \`already_met.evidence\` to the files, lines and commit on \`${main}\` that show it;
 else \`already_met\` is null. If you cannot do the goal, make no commit and give the reason
 in \`summary\`.

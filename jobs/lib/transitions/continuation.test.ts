@@ -222,6 +222,16 @@ describe("the worker brief", () => {
     expect(b).not.toContain("sandbox");
   });
 
+  test("a factory brief tells the worker to run only the test files its change reaches, and keeps the other checks", () => {
+    const jc = jobWith({}, { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });
+    const checks = [{ name: "tests", run: "bun run test" }, { name: "types", run: "bunx tsc" }];
+    const b = brief(jc.id, run({ job: jc.id, worktree: "/w", branch: "factory/fac-1" }), { ...repo, sandbox: true, checks } as Repo).replace(/\s+/g, " ");
+    expect(b).toContain("- `tests`: run only the test files your change reaches, by path (`bun test ./path/to/x.test.ts`), and never the whole suite:");
+    expect(b).not.toContain("`bun run test`");
+    expect(b).toContain("- `types`: `bunx tsc`");
+    expect(brief(jc.id, run({ job: jc.id, worktree: "/w", branch: "factory/fac-1" }), { ...repo, sandbox: true, checks: [] } as Repo)).toContain("Run the repo's tests before you end.");
+  });
+
   test("a factory brief asks for each follow-up's evidence and score, and limits what it may be", () => {
     const jf = jobWith({}, { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });
     const b = brief(jf.id, run({ job: jf.id }), { ...repo, sandbox: true } as Repo).replace(/\s+/g, " ");
