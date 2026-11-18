@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./worker-verdict.ts";
-import { heldRule, securityChange, testFindings, parseReview, parseWorker, WORKER_SCHEMA } from "./gate.ts";
+import { heldRule, securityChange, testFindings, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -94,6 +94,7 @@ test("parseReview names the failed clauses as the reason, and gives review.json 
   expect(text).toBe("Two fail.\n\nCHECK: fail flag test: none\nCHECK: fail doc line: exit 1\nVERDICT: hold flag test; doc line\n");
   expect((hold as { json: object }).json).toEqual({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "doc line", observed: "exit 1" }] });
   expect(parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] })).toMatchObject({ pass: true, json: { verdict: "pass", summary: "9 of 9 passed.", failures: [] } });
+  expect(parseReview({ verdict: "hold", summary: "x", failures: [{ clause: "c", observed: "o" }] })).toMatchObject({ pass: false, reason: "c", followups: [] });
   expect(parseReview(undefined)).toBe("no structured output");
   expect(parseReview({ verdict: "maybe" })).toBe('unknown verdict "maybe"');
 });
@@ -113,4 +114,15 @@ test("parseWorker drops a follow-up with no path:line or a bad score, and keeps 
   const reply = (followups: object[]) => parseWorker({ summary: "x", defaults: [], followups, flakes: [], already_met: null, question: null }) as { followups: { title: string }[] };
   expect(reply([ok(1), { ...ok(2), location: "a.ts" }, { ...ok(3), location: "see a.ts" }, { ...ok(4), effort: 6 }, { ...ok(5), impact: 2.5 }]).followups.map((f) => f.title)).toEqual(["fix 1"]);
   expect(reply([1, 2, 3, 4, 5].map(ok)).followups.map((f) => f.title)).toEqual(["fix 1", "fix 2", "fix 3"]);
+});
+
+test("parseReview keeps at most 3 follow-ups of a pass and drops one with no path:line; the prompt says what is minor", () => {
+  const fu = (location: string) => ({ title: "t", location, saw: "s", why: "w", impact: 1, risk: 1, effort: 1 });
+  const one = parseReview({ verdict: "pass", summary: "ok", failures: [], followups: [fu("a.ts:3"), fu("somewhere")] });
+  expect(one).toMatchObject({ pass: true, followups: [{ location: "a.ts:3" }] });
+  expect((parseReview({ verdict: "pass", summary: "ok", followups: Array(5).fill(fu("a.ts:3")) }) as { followups: unknown[] }).followups).toHaveLength(3);
+  expect(REVIEW_SCHEMA.properties.followups.maxItems).toBe(3);
+  const p = reviewPrompt("n", "spec", "diff", []);
+  expect(p).toMatch(/minor finding[^]*still meets every Goal clause and Oracle line[^]*"followups"/);
+  expect(p).toContain("Hold for anything else");
 });

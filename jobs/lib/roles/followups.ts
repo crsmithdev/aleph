@@ -9,9 +9,9 @@ import { writeTitle } from "./title.ts";
 /**
  * A worker's `followups` (at most 3) each become a `task` with `source: worker`: the title writer's title, and the run, the location, what the worker saw, why it matters and the score in its request,
  * filed parked in one store commit, so Chris picks which to open. The priority comes from the score, (impact + risk) x (6 - effort): high at 30 or more, medium from 15, else low. An empty title such as "none" files nothing, and a title on the topic of an open or parked issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
- * Its `flakes` become notes on the repo's flake tracker; they file no issue and start no intake.
+ * `by` says who found it, as the request's words. Its `flakes` become notes on the repo's flake tracker; they file no issue and start no intake.
  */
-export async function fileFollowups(repo: Repo, run: Run, followups: Followup[], flakes: string[]): Promise<void> {
+export async function fileFollowups(repo: Repo, run: Run, followups: Followup[], flakes: string[], by = `the worker met in run ${run.name}`): Promise<void> {
   noteFlakes(repo, run, flakes);
   const lists = reader();
   const open = (lists.list(repo.key)?.items ?? []).filter((i) => ["open", "parked"].includes(issues.status(i)));
@@ -32,7 +32,7 @@ export async function fileFollowups(repo: Repo, run: Run, followups: Followup[],
     const score = (f.impact + f.risk) * (6 - f.effort);
     return {
       title: titles[n], kind: "task", priority: score >= 30 ? "high" : score >= 15 ? "medium" : "low", source: "worker" as const, parked: true,
-      request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${f.title}\nLocation: ${f.location}\nSeen: ${f.saw}\nWhy it matters: ${f.why}\nScore: ${score} (impact ${f.impact}, risk ${f.risk}, effort ${f.effort})`,
+      request: `A follow-up ${by}:\n\nFOLLOWUP: ${f.title}\nLocation: ${f.location}\nSeen: ${f.saw}\nWhy it matters: ${f.why}\nScore: ${score} (impact ${f.impact}, risk ${f.risk}, effort ${f.effort})`,
     };
   }), "worker", filing);
 }

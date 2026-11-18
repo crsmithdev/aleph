@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "../../../lib/git.ts";
+import * as store from "../../../lib/store.ts";
 import { type Repo, type Run } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";
 import { runFile } from "../records/run-files.ts";
@@ -12,7 +13,7 @@ import { reviewer } from "./review.ts";
 let root = "";
 let repo: Repo;
 let folder = "", id = "", run: Run;
-const saved = { ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_DB: process.env.ALEPH_DB, ALEPH_REVIEWER_CMD: process.env.ALEPH_REVIEWER_CMD };
+const saved = { ALEPH_ITEMS: process.env.ALEPH_ITEMS, ALEPH_RULE_CMD: process.env.ALEPH_RULE_CMD, GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL, ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_DB: process.env.ALEPH_DB, ALEPH_REVIEWER_CMD: process.env.ALEPH_REVIEWER_CMD };
 const commit = (path: string, file: string, text: string, msg: string) => {
   writeFileSync(join(path, file), text);
   git(path, "add", "."); git(path, "commit", "-qm", msg);
@@ -46,6 +47,13 @@ beforeEach(() => {
   ({ folder, id, run } = seed({ role: "build", name: "j1", state: "running" }));
   writeFileSync(runFile(folder, "spec.md"), "## Goal\nx\n");
   fake({ verdict: "pass", summary: "fine", failures: [] });
+  // An items store of its own; the title writer's model fails, so a follow-up gets cutTitle's title.
+  const bare = join(root, "items.git");
+  git(root, "init", "-q", "--bare", "-b", "main", bare);
+  git(root, "clone", "-q", bare, join(root, "items"));
+  git(join(root, "items"), "commit", "-q", "--allow-empty", "-m", "start");
+  git(join(root, "items"), "push", "-q", "origin", "main");
+  Object.assign(process.env, { ALEPH_ITEMS: join(root, "items"), ALEPH_RULE_CMD: "false", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });
@@ -86,4 +94,21 @@ test("a reply with no verdict holds the run, and its review job ends failed", as
   const { call, job } = await review(run, git(repo.path, "rev-parse", "main").out);
   expect(call).toMatchObject({ reason: 'reviewer: no verdict (unknown verdict "maybe")', none: true });
   expect(job.run).toMatchObject({ state: "failed", reason: 'unknown verdict "maybe"' });
+});
+
+const minor = { title: "Rename the loose helper in a.ts", location: "a.ts:3", saw: "a wording nit", why: "it reads wrong", impact: 1, risk: 1, effort: 1 };
+const filed = () => store.readList(repo)?.items ?? [];
+
+test("a pass files its follow-up as one parked worker task that names the review job; no follow-up, or a hold, files none", async () => {
+  const main = git(repo.path, "rev-parse", "main").out;
+  await review(run, main);
+  fake({ verdict: "hold", summary: "no", failures: [{ clause: "c", observed: "o" }], followups: [minor] });
+  expect((await review(run, main)).call.reason).toBe("reviewer: c");
+  expect(filed()).toHaveLength(0);
+  fake({ verdict: "pass", summary: "fine", failures: [], followups: [minor] });
+  const { call, job } = await review(run, main);
+  expect(call.reason).toBeNull();
+  expect(filed()).toHaveLength(1);
+  expect(filed()[0]).toMatchObject({ fm: { kind: "task", source: "worker", parked: "true" } });
+  expect(filed()[0].request).toContain(`the reviewer found in review ${job.id}`);
 });

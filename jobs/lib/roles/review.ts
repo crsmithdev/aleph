@@ -13,6 +13,7 @@ import type { Run } from "../records/ledger.ts";
 import { jobOfFolder, jobSpec, runFile } from "../records/run-files.ts";
 import { readModels } from "../routing/models.ts";
 import { agentEnv, openRun } from "./agent-run.ts";
+import { fileFollowups } from "./followups.ts";
 import { outsideSurface } from "./issue-spec.ts";
 
 /**
@@ -66,6 +67,7 @@ export const reviewer = (onSpawn: (p: ReturnType<typeof Bun.spawn>) => void): Re
       if (typeof v === "string") return none(v);
       writeFileSync(runFile(rv.folder, "review.json"), JSON.stringify({ ...v.json, model }));
       rv.end(v.pass ? "pass" : "hold");
+      if (v.pass) await fileFollowups(repo, run, v.followups, [], `the reviewer found in review ${jobOfFolder(rv.folder)} of run ${run.name}`);
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
     });
   } catch (e) {

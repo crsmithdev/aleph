@@ -193,7 +193,11 @@ keep-gate skips it; hold it unless it guards something real. Hold a committed te
 The "summary" is the verdict in one sentence and the passes as a count, such as \`7 of 9 passed\`, in at most 80 words.
 Each failure goes in "failures": its clause, named by a few words without its reason, and what was observed. Do not
 list a pass. Say each thing once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
-failed, else "hold".`;
+failed, else "hold".
+
+A minor finding does not hold the build. It is a true finding that still meets every Goal clause and Oracle line and
+breaks no caller, such as a scope or wording nit. Pass the build and give it in "followups" (at most 3), each with a \`path:line\`
+location and a score, as a worker's follow-up has. Hold for anything else: a failed clause, a broken caller, or a doubt.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the issue: hold only
 when the issue does not call for the change, or the change weakens a check the

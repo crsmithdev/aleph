@@ -67,6 +67,9 @@ function followup(f: any): Followup | null {
   return { title, location, saw, why, impact, risk, effort };
 }
 
+/** The valid follow-ups of a reply's `followups`, at most 3. */
+const followups = (v: unknown): Followup[] => (Array.isArray(v) ? v : []).map(followup).filter((f): f is Followup => f !== null).slice(0, 3);
+
 /** The worker's structured output, or why it does not do. */
 export function parseWorker(raw: any): WorkerReply | string {
   if (raw === undefined) return NO_OUTPUT;
@@ -76,7 +79,7 @@ export function parseWorker(raw: any): WorkerReply | string {
   return {
     summary: raw.summary,
     defaults: list(raw.defaults).map((d) => `${line(d?.choice)} -> ${line(d?.chose)}`),
-    followups: list(raw.followups).map(followup).filter((f): f is Followup => f !== null).slice(0, 3),
+    followups: followups(raw.followups),
     flakes: list(raw.flakes).map((f) => `${line(f?.file)} > ${line(f?.name)}: ${line(f?.what)}`),
     alreadyMet: raw.already_met ? line(raw.already_met.evidence) || "no reason given" : null,
     question: line(raw.question) || null,
@@ -87,6 +90,7 @@ export function parseWorker(raw: any): WorkerReply | string {
 export const REVIEW_SCHEMA = {
   type: "object", additionalProperties: false, required: ["verdict", "summary", "failures"],
   properties: {
+    followups: { ...WORKER_SCHEMA.properties.followups, description: "On a pass, a minor finding to file instead of holding, at most 3: true, still meets every Goal clause and Oracle line, and breaks no caller. A hold files none." },
     verdict: { enum: ["pass", "hold"] },
     summary: { type: "string", minLength: 1, description: "The verdict in one sentence and the count of passes, in at most 80 words." },
     failures: {
@@ -102,7 +106,8 @@ export const REVIEW_SCHEMA = {
 /** What review.json holds: the reviewer's reply, with its failures cleaned. */
 interface ReviewJson { verdict: "pass" | "hold"; summary: string; failures: { clause: string; observed: string }[] }
 
-export interface Review { pass: boolean; reason: string; text: string; json: ReviewJson }
+/** `followups` are the minor findings of the reply; the reviewer files them on a pass only. */
+export interface Review { pass: boolean; reason: string; text: string; json: ReviewJson; followups: Followup[] }
 
 const line = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
 
@@ -123,7 +128,7 @@ export function parseReview(raw: any): Review | string {
     ...failures.map((f: { clause: string; observed: string }) => `CHECK: fail ${f.clause}: ${f.observed}`),
     `VERDICT: ${pass ? "pass" : `hold ${reason}`}`,
   ].join("\n");
-  return { pass, reason, text: `${text.trim()}\n`, json: { verdict: raw.verdict, summary, failures } };
+  return { pass, reason, text: `${text.trim()}\n`, json: { verdict: raw.verdict, summary, failures }, followups: followups(raw.followups) };
 }
 
 const isGateTest = (p: string): boolean => inTestDir(p) || isJsTestFile(p);
