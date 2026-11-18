@@ -302,11 +302,21 @@ export function newCases(diff: string): string[] {
   return names;
 }
 
-/** The test files that the diff from `base` to `tip` adds or changes with a new case. */
+/** The names of the `test(` and `it(` cases that the removed lines of a diff close. */
+const removedCases = (diff: string): string[] =>
+  diff.split("\n").filter((line) => CHANGE.exec(line)?.[1] === "-").flatMap((line) => CASE.exec(line)?.[2] ?? []);
+
+/**
+ * The test files that the diff from `base` to `tip` adds or changes with a new case. A case whose name the diff
+ * also removes from a test file is a move, not a new case: a split, a rename or a delete of its file.
+ */
 export function newTests(cwd: string, base: string, tip: string): NewTests[] {
-  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => isJsTestFile(f));
-  return files.flatMap((path) => {
-    const names = newCases(git(cwd, "diff", base, tip, "--", path).out);
+  // A renamed test file lists as its new path alone, so `--no-renames` keeps the old path, which holds the moved cases.
+  const files = git(cwd, "diff", "--name-only", "--no-renames", base, tip).out.split("\n").filter((f) => isJsTestFile(f));
+  const diffs = files.map((path) => ({ path, diff: git(cwd, "diff", base, tip, "--", path).out }));
+  const moved = new Set(diffs.flatMap((d) => removedCases(d.diff)));
+  return diffs.flatMap(({ path, diff }) => {
+    const names = newCases(diff).filter((n) => !moved.has(n));
     return names.length ? [{ path, text: git(cwd, "show", `${tip}:${path}`).out + "\n", names }] : [];
   });
 }

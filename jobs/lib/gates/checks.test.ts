@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { addedLines, CHECK_SLOTS, failedTests, failureLine, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { dirname, join } from "node:path";
+import { addedLines, CHECK_SLOTS, failedTests, failureLine, keepGate, mutants, newCases, newTests, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { git } from "../../../lib/git.ts";
 import { lock } from "../../../lib/locks.ts";
 import { flakes } from "./tables.ts";
 import { readSection } from "../records/run-files.ts";
@@ -203,6 +204,53 @@ test("newCases: the names of the test and it cases on added lines only", () => {
 test("newCases: an added case that pairs with a removed one is a rename, not a new case", () => {
   const diff = `--- a/x.test.ts\n+++ b/x.test.ts\n@@ -3,4 +3,5 @@\n test("kept", () => {});\n-test("old goal title", () => {});\n+test("new objective title", () => {});\n test("kept too", () => {});\n+test("adds one", () => {});\n`;
   expect(newCases(diff)).toEqual(["adds one"]);
+});
+
+/** The base commit of the `newTests` rows: one test file of three cases. */
+const SPLIT_BASE = { "lib/one.test.ts": `test("a", () => {});\ntest("b", () => {});\ntest("c", () => {});\n` };
+
+/**
+ * A git repo under `base` in folder `name`: the base commit holds `files`, then `tip` goes on top, where a `null`
+ * value deletes that path. Returns the repo folder and the two commits.
+ */
+function repoOf(name: string, files: Record<string, string>, tip: Record<string, string | null>): { dir: string; base: string; tip: string } {
+  const dir = join(base, name);
+  const put = (path: string, text: string | null) => {
+    if (text === null) return void rmSync(join(dir, path));
+    mkdirSync(dirname(join(dir, path)), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  };
+  const commit = (message: string): string => {
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", message);
+    return git(dir, "rev-parse", "HEAD").out;
+  };
+  mkdirSync(dir, { recursive: true });
+  git(dir, "init", "-q", "-b", "main");
+  git(dir, "config", "user.email", "a@b.c");
+  git(dir, "config", "user.name", "a");
+  for (const [path, text] of Object.entries(files)) put(path, text);
+  const first = commit("base");
+  for (const [path, text] of Object.entries(tip)) put(path, text);
+  return { dir, base: first, tip: commit("tip") };
+}
+
+/** The tip that deletes `lib/one.test.ts` and spreads its three cases over three files. */
+const SPLIT_TIP = {
+  "lib/one.test.ts": null,
+  "lib/a.test.ts": `test("a", () => {});\n`,
+  "lib/b.test.ts": `test("b", () => {});\n`,
+  "lib/c.test.ts": `test("c", () => {});\n`,
+};
+
+test("newTests: a split that deletes the file and spreads its cases over three files adds no case", () => {
+  const r = repoOf("split", SPLIT_BASE, SPLIT_TIP);
+  expect(newTests(r.dir, r.base, r.tip)).toEqual([]);
+});
+
+test("newTests: a case the split adds, whose name no test file loses, is the only new one, under its file", () => {
+  const r = repoOf("split-new", SPLIT_BASE, { ...SPLIT_TIP, "lib/c.test.ts": `test("c", () => {});\ntest("d", () => {});\n` });
+  expect(newTests(r.dir, r.base, r.tip)).toEqual([{ path: "lib/c.test.ts", text: `test("c", () => {});\ntest("d", () => {});\n`, names: ["d"] }]);
 });
 
 /**
