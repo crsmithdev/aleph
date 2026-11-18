@@ -24,6 +24,7 @@ import { hasFile } from "../records/job.ts";
 import { onMain } from "../records/status.ts";
 import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
 import { landBatch } from "../infra/settings.ts";
+import { systemctl } from "../infra/systemd.ts";
 import { jobOfFolder, logTo, runFile } from "../records/run-files.ts";
 import { writeTitle } from "../roles/title.ts";
 import * as record from "../records/record.ts";
@@ -440,8 +441,12 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
   return done.get(leader) ?? { outcome: { state: "failed", cause: "other", reason: "not landed" }, code: 1 };
 }
 
-/** After the land is on origin/<main>: fast-forward the repo's main checkout. It does not fail the land; the log says what happened. aleph-ui runs under `bun --watch`, so it restarts by itself. */
+/** After the land is on origin/<main>: fast-forward the repo's main checkout. It does not fail the land; the log says what happened. aleph-ui runs under `bun --watch`, so it restarts by itself. A moved unit file needs a daemon-reload: the units are linked into this checkout, so nothing is copied. */
 function followCheckout(repo: Repo, log: (step: string, out?: string) => void): void {
+  const old = git(repo.path, "rev-parse", "HEAD").out;
   const why = followMain(repo.path, repo.main);
   log(why ?? "main checkout updated");
+  if (why || !git(repo.path, "diff", "--name-only", old, "HEAD", "--", "jobs/systemd/").out) return;
+  const r = systemctl("daemon-reload");
+  log(r.ok ? "systemd reloaded" : `systemd reload failed: ${r.out}`);
 }

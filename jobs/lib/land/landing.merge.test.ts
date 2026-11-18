@@ -1,6 +1,6 @@
 // A land's merge and push: a rebase, no net change, a refused branch, a lost push race, a job already on main, and what happens after a failed land.
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL, MERGE_SECONDS } from "../transitions/continuation.ts";
 import { land, landTerms } from "./landing.ts";
@@ -129,4 +129,39 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   expect(MERGE_SECONDS).toBe(600);
   expect(isMergeBounce({ ...e.run, ...r.outcome } as Run)).toBe(true);
   expect(isMergeBounce({ ...e.run, cause: "other", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
+});
+
+/** Points ALEPH_SYSTEMCTL at a script that appends its arguments to a file, prints `say` and exits `code`. */
+function stand(code: number, say = ""): string {
+  const log = join(dir, "systemctl.log");
+  const bin = join(dir, "systemctl.sh");
+  writeFileSync(bin, `#!/bin/sh\necho "$@" >> ${log}\n${say ? `echo ${say}\n` : ""}exit ${code}\n`, { mode: 0o755 });
+  process.env.ALEPH_SYSTEMCTL = bin;
+  return log;
+}
+
+test("a land that adds a unit file reloads systemd once and logs it", async () => {
+  const calls = stand(0);
+  const e = job("unit", [["jobs/systemd/x.service", "[Unit]\n"]]);
+  const r = await land(e, repo, ports());
+  expect(r.outcome.state).toBe("landed");
+  expect(readFileSync(calls, "utf8")).toBe("--user daemon-reload\n");
+  expect(landLog(e)).toContain("systemd reloaded");
+});
+
+test("a failed systemd reload is logged and does not fail the land", async () => {
+  stand(1, "boom");
+  const e = job("unitbad", [["jobs/systemd/x.service", "[Unit]\n"]]);
+  const r = await land(e, repo, ports());
+  expect(r.outcome.state).toBe("landed");
+  expect(landLog(e)).toContain("systemd reload failed: boom");
+});
+
+test("guard: a land that changes no unit file makes no systemctl call", async () => {
+  const calls = stand(0);
+  const e = job("plain", [["x.txt", "x\n"]]);
+  const r = await land(e, repo, ports());
+  expect(r.outcome.state).toBe("landed");
+  expect(existsSync(calls)).toBe(false);
+  expect(landLog(e)).not.toContain("systemd reload");
 });

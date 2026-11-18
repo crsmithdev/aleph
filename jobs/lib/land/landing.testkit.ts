@@ -9,7 +9,7 @@ import { type Check, type Entry, type Repo, type Run } from "../records/ledger.t
 import { seed, type Seed } from "../../job.testkit.ts";
 import { readSection } from "../records/run-files.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_DB", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ITEMS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_DB", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ITEMS", "ALEPH_SYSTEMCTL", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 export let dir: string, repo: Repo;
 let saved: Record<string, string | undefined>;
 let sleepers: ReturnType<typeof Bun.spawn>[];
