@@ -197,6 +197,65 @@ test("an approved claude-md proposal reopens its issue with a spec with Goal, Ed
   expect(section(item.spec, "Oracle")).not.toContain("Signals:");
 });
 
+describe("a global claude-md lesson lands where its signals' agents read", () => {
+  /** Mines one claude-md lesson and approves it: its target and the spec's Edit surface and Oracle. */
+  async function landed() {
+    pickFirst = true; checkP = 0.4; ruleP = 0.5;
+    await mine(NOW, quiet);
+    const l = proposals()[0];
+    expect(approve(l.id, repo, quiet)).toBe("fac-1");
+    const { spec } = readList(repo)!.items[0];
+    return { l, edit: section(spec, "Edit surface"), oracle: section(spec, "Oracle"), goal: section(spec, "Goal") };
+  }
+  const grep = (sentence: string, path: string) => `\`grep -F '${sentence}' ${path}\` exits 0.`;
+
+  test("only a drop signal: identity/AGENT.md", async () => {
+    traces = []; observations = [];
+    process.env.ALEPH_PROPOSE_AT = "1";
+    const { l, edit, oracle, goal } = await landed();
+    expect(l.signals.map((s) => s.source)).toEqual(["drop"]);
+    expect([l.target, edit]).toEqual(["identity/AGENT.md", "- identity/AGENT.md"]);
+    expect(goal).toContain(`to identity/AGENT.md: ${l.sentence}`);
+    expect(oracle).toContain(grep(l.sentence, "identity/AGENT.md"));
+  });
+
+  test("no drop signal: identity/CLAUDE.md", async () => {
+    faultP = 0.4;
+    process.env.ALEPH_PROPOSE_AT = "2";
+    const { l, edit, oracle } = await landed();
+    expect(l.signals.map((s) => s.source)).not.toContain("drop");
+    expect([l.target, edit]).toEqual(["identity/CLAUDE.md", "- identity/CLAUDE.md"]);
+    expect(oracle).not.toContain("AGENT.md");
+  });
+
+  test("chris, gate and drop signals: both files, each with its own grep line", async () => {
+    const { l, edit, oracle, goal } = await landed();
+    expect(l.signals.map((s) => s.source).sort()).toEqual(["chris", "drop", "gate"]);
+    expect(l.target).toBe("identity/CLAUDE.md + identity/AGENT.md");
+    expect(edit).toBe("- identity/CLAUDE.md\n- identity/AGENT.md");
+    expect(goal).toContain("to identity/CLAUDE.md and identity/AGENT.md:");
+    expect(oracle).toContain(grep(l.sentence, "identity/CLAUDE.md"));
+    expect(oracle).toContain(grep(l.sentence, "identity/AGENT.md"));
+  });
+});
+
+test("a skill lesson whose signals are all drops chooses only among the skills a factory role loads", async () => {
+  for (const n of ["code-review", "write-tests"]) {
+    mkdirSync(join(base, "fac-repo", "skills", n), { recursive: true });
+    writeFileSync(join(base, "fac-repo", "skills", n, "SKILL.md"), `---\nname: ${n}\ndescription: d ${n}\n---\n`);
+  }
+  traces = []; observations = [];
+  process.env.ALEPH_PROPOSE_AT = "1";
+  pickFirst = true; checkP = 0.4; ruleP = 0.4; skillPick = "code-review";
+  await mine(NOW, quiet);
+  expect(Object.keys(lastSkillCriteria!)).toEqual(["code-review"]);
+  conn().run("DELETE FROM state WHERE key = 'corrections'");
+  observations = [{ id: "o1", traceId: "t1", name: "verify-gate", metadata: { verdict: "deny" }, output: "deny: no run backs tests pass", startTime: ago(1) }];
+  process.env.ALEPH_PROPOSE_AT = "2";
+  await mine(NOW, quiet);
+  expect(Object.keys(lastSkillCriteria!).sort()).toEqual(["alpha", "code-review", "write-tests"]);
+});
+
 test("approve reopens the issue as reopen does: since is main's head and a closed parent opens", async () => {
   pickFirst = true;
   await mine(NOW, quiet);

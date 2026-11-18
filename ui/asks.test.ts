@@ -223,6 +223,17 @@ describe("stuck rows", () => {
   });
 });
 
+test("a claude-md proposal for identity/AGENT.md names AGENT.md in its texts and has its own standing key", () => {
+  STORE = { situation: "Stored situation." };
+  try {
+    const [card] = asks({ runs: [], issues: [] }, [{ ...lesson("claude-md"), target: "identity/AGENT.md" }]);
+    expect(card.problem).toStartWith("The correction memory proposes a line in identity/AGENT.md:");
+    expect(card.actions.map((a) => a.label)).toEqual(["Reopen the issue: Add a line to identity/AGENT.md", "Leave identity/AGENT.md unchanged"]);
+    expect(card.always!.reason).toBe("proposal-claude-md:identity/AGENT.md");
+    expect(card.always!.reason).not.toBe("proposal-claude-md:global");
+  } finally { STORE = undefined; }
+});
+
 test("run-cap and intake-failed texts read the settings", () => {
   const off = withEnv({ ALEPH_RUN_CAP: "5", ALEPH_INTAKE_TRIES: "4" });
   try {

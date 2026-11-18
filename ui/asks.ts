@@ -92,8 +92,9 @@ function words(l: Lesson | undefined) {
   const kind = l?.kind ?? "skill";
   const p = place(kind, l?.target);
   if (kind === "claude-md") {
-    const f = p ? `${p} CLAUDE.md` : "CLAUDE.md";
-    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, decline: "Leave CLAUDE.md unchanged", hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
+    const agent = p.includes("AGENT.md"); // the target names its files
+    const f = agent ? p : p ? `${p} CLAUDE.md` : "CLAUDE.md";
+    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, decline: `Leave ${agent ? f : "CLAUDE.md"} unchanged`, hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
   }
   if (kind === "skill") {
     const s = p ? `the ${p} skill` : "the skill";

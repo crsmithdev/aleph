@@ -69,18 +69,26 @@ function repoSkills(repo: Repo): Record<string, string> {
   return out;
 }
 
-/** The exact place the change goes; throws when Jev fails or there is no skill to pick. */
+const CHRIS_MD = "identity/CLAUDE.md"; // read by Chris's sessions and the verify gate
+const AGENT_MD = "identity/AGENT.md"; // read by the factory's runs
+/** The skills a factory role loads in its prompt: the reviewer's and the build worker's (`jobs/lib/roles/role-skill.ts`). */
+const FACTORY_SKILLS = ["code-review", "write-code"];
+
+/** The exact place the change goes: where the agents that made the signals read. Throws when Jev fails or there is no skill to pick. */
 async function targetOf(l: Lesson, repo: Repo): Promise<string> {
   const kind = l.kind ?? "skill";
   if (kind === "check") return `${repo.key} checks`;
   const input = { lesson: l.sentence, signals: l.signals.map((s) => s.quote) };
+  const drops = l.signals.filter((s) => s.source === "drop").length;
   if (kind === "claude-md") {
     const d = await decide(input, { scope: { type: "choice", instructions: "Where does this rule belong?", criteria: { global: "The rule holds in every repo and task", repo: "The rule is about this repo's code or workflow" } } });
     const a = d.answers.scope;
     if (a?.type !== "choice" || (a.choice !== "global" && a.choice !== "repo")) throw new Error("no scope chosen");
-    return a.choice === "global" ? "identity/CLAUDE.md" : `${repo.key}/CLAUDE.md`;
+    if (a.choice === "repo") return `${repo.key}/CLAUDE.md`;
+    return [...(drops < l.signals.length ? [CHRIS_MD] : []), ...(drops ? [AGENT_MD] : [])].join(" + ");
   }
   const skills = repoSkills(repo);
+  if (drops === l.signals.length) for (const n of Object.keys(skills)) if (!FACTORY_SKILLS.includes(n)) delete skills[n];
   if (!Object.keys(skills).length) throw new Error(`no skills under ${repo.path}/skills`);
   const d = await decide(input, { skill: { type: "choice", instructions: "Which skill should this lesson change?", criteria: skills } });
   const a = d.answers.skill;
@@ -257,7 +265,7 @@ async function propose(lessons: Lesson[], effects: Effects): Promise<Lesson[]> {
   return made;
 }
 
-/** The short name of a proposal's target: global, the repo key, or the skill name. */
+/** The short name of a proposal's target: global, the repo key, the skill name, or the identity file names when AGENT.md is a target. */
 export function place(kind: Kind, target = ""): string {
   if (kind === "check") return target.replace(/ checks$/, "");
   if (kind === "skill") return target.match(/^skills\/([^/]+)\/SKILL\.md$/)?.[1] ?? target;
@@ -318,12 +326,12 @@ export function approve(id: string, repo: Place, effects: Effects): string {
   const l = pending(store, id, "approved");
   if (typeof l === "string") return l;
   const kind = l.kind ?? "skill";
-  // A claude-md issue names its line, its file in the filing repo and a command that proves the line is there.
-  const path = l.target === "identity/CLAUDE.md" ? l.target : "CLAUDE.md";
+  // A claude-md issue names its line, each file in the filing repo and a command for each that proves the line is there.
+  const paths = l.target?.startsWith("identity/") ? l.target.split(" + ") : ["CLAUDE.md"];
   const sections = kind !== "claude-md" ? [] : [specText({
-    goal: `Add this line to ${path}: ${l.sentence}`,
-    surface: [{ path, new: false }],
-    oracle: [`\`grep -F '${l.sentence.replace(/'/g, "'\\''")}' ${path}\` exits 0.`, "`bun run test` passes."],
+    goal: `Add this line to ${paths.join(" and ")}: ${l.sentence}`,
+    surface: paths.map((path) => ({ path, new: false })),
+    oracle: [...paths.map((path) => `\`grep -F '${l.sentence.replace(/'/g, "'\\''")}' ${path}\` exits 0.`), "`bun run test` passes."],
   }), ""];
   const body = [
     `Chris approved a proposal from the correction memory: ${KIND_TITLE[kind]}.`,
