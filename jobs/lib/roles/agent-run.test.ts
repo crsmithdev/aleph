@@ -157,3 +157,11 @@ test("a non-chat run records the session of its reply on its run", async () => {
   await run.ask("x");
   expect(getRun(run.id)!.session).toBe("s1");
 });
+
+test("reply gives a failed call's cause without throwing, and a reviewer's run follows its build, waits for the news and can end failed", async () => {
+  fake(`echo '{"type":"result","is_error":true,"result":"out of turns"}'; exit 1`);
+  const run = openRun({ ...opening, role: "review", cmd: process.env.ALEPH_INTAKE_CMD, prev: "job.1", told: false });
+  expect((await run.reply("x")).cause).toMatchObject({ kind: "other", reason: "out of turns" });
+  run.end("out of turns", {}, "failed");
+  expect(getRun(run.id)).toMatchObject({ role: "review", prev: "job.1", told: false, state: "failed", reason: "out of turns" });
+});

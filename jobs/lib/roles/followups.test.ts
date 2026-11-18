@@ -6,7 +6,7 @@ import * as issues from "../../../lib/todo.ts";
 import * as store from "../../../lib/store.ts";
 import type { Followup } from "../gates/gate.ts";
 import type { Repo, Run } from "../records/ledger.ts";
-import { fileFollowups, sameTopic } from "./unit.ts";
+import { fileFollowups, sameTopic } from "./followups.ts";
 
 const fu = (title: string, o: Partial<Followup> = {}): Followup => ({ title, location: "a.ts:3", saw: "it fails", why: "it breaks a run", impact: 3, risk: 2, effort: 3, ...o });
 
@@ -50,7 +50,7 @@ test("a worker follow-up takes its priority from its score, not from the run's i
       fu("Fix the first loose end in a.ts", { impact: 1, risk: 1, effort: 5 }),
       fu("Mend the second gate in b.ts", { impact: 5, risk: 5, effort: 1 }),
       fu("Paint the third fence in c.ts", { impact: 3, risk: 2, effort: 3 }),
-    ]);
+    ], []);
     expect(store.readList(repo)!.items.map((i) => [i.title, i.fm.priority])).toEqual([
       ["the job", "high"], ["Fix the first loose end in a.ts", "low"], ["Mend the second gate in b.ts", "high"], ["Paint the third fence in c.ts", "medium"],
     ]);
@@ -62,7 +62,7 @@ test("five follow-ups file three issues, each with its location, what was seen, 
   try {
     const repo = { key: "fup" } as Repo;
     const names = ["Fix the loose end in a.ts", "Mend the gate in b.ts", "Paint the fence in c.ts", "Sweep the porch in d.ts", "Oil the hinge in e.ts"];
-    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, names.map((t, n) => fu(t, { location: `f${n}.ts:${n + 1}`, saw: `saw ${n}`, why: `why ${n}` })));
+    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, names.map((t, n) => fu(t, { location: `f${n}.ts:${n + 1}`, saw: `saw ${n}`, why: `why ${n}` })), []);
     const items = store.readList(repo)!.items;
     expect(items.map((i) => i.title)).toEqual(names.slice(0, 3));
     items.forEach((i, n) => {
@@ -77,7 +77,7 @@ test("a long follow-up files a task with a title the rule accepts and the whole 
     const repo = { key: "fup" } as Repo;
     const line = `Gate check: ${"the reviewer drops a changed test and the run still lands on main ".repeat(3).trim()}.`;
     expect(line.length).toBeGreaterThanOrEqual(150);
-    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, [fu(line)]);
+    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, [fu(line)], []);
     const [item] = store.readList(repo)!.items;
     expect(item.fm.kind).toBe("task");
     expect(item.title.length).toBeLessThanOrEqual(60);
@@ -91,8 +91,8 @@ test("a worker follow-up files parked, and a repeat of a parked one is a note", 
   const l = listIn();
   try {
     const repo = { key: "fup" } as Repo;
-    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, [fu("Fix the first loose end in a.ts")]);
-    await fileFollowups(repo, { name: "r2", repo: "fup" } as Run, [fu("Fix the first loose end in a.ts")]);
+    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, [fu("Fix the first loose end in a.ts")], []);
+    await fileFollowups(repo, { name: "r2", repo: "fup" } as Run, [fu("Fix the first loose end in a.ts")], []);
     const items = store.readList(repo)!.items;
     expect(items.map((i) => issues.status(i))).toEqual(["parked"]);
   } finally { l.restore(); }

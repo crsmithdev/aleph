@@ -5,35 +5,27 @@
  * Like every role's run it ends `done`; a call that gave no reply says why in `reason` and has the cause `unanswered`.
  */
 import { readModels } from "../routing/models.ts";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { callAgent, type Reply } from "./agent-call.ts";
-import { makeJob, setState } from "../records/record.ts";
+import { readSection } from "../records/run-files.ts";
+import { openRun } from "./agent-run.ts";
 
 const FALLBACK = "haiku";
 
 /** The reply to `input` under `system` on its role model, killed after `box` ms: its exit code, its stderr, its text and whether the box killed it. */
 export async function oneShot(role: "title" | "judge", cmd: string, system: string, input: string, box: number): Promise<{ code: number; stderr: string; result: string; timedOut: boolean }> {
-  const env = {
-    ...process.env, CLAUDECODE: undefined, CLAUDE_CODE_ENTRYPOINT: undefined,
-    ANTHROPIC_API_KEY: undefined, // the call runs on the subscription, never the API
-    MAX_THINKING_TOKENS: "0", // measured: 3 s without thinking, 15-45 s with it, same verdicts
-  };
-  const model = readModels()[role].model;
-  const run = makeJob({ role: role, name: role, model, told: true, shown: true }).id;
-  let r: Reply | undefined;
-  const dir = mkdtempSync(join(tmpdir(), "aleph-one-shot-"));
-  const [stdout, stderr] = [join(dir, "out"), join(dir, "err")];
+  const run = openRun({
+    role, who: role, name: role, command: role, shown: true, model: readModels()[role].model, cmd, fallback: FALLBACK, seconds: Math.max(box, 0) / 1000,
+    flags: ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--system-prompt", system],
+    env: {
+      CLAUDE_CODE_ENTRYPOINT: undefined,
+      MAX_THINKING_TOKENS: "0", // measured: 3 s without thinking, 15-45 s with it, same verdicts
+    },
+  });
+  let r;
   try {
-    r = await callAgent(role, input, {
-      model, cmd, flags: ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--system-prompt", system],
-      env, stdout, stderr, limit: Math.max(box, 0) / 1000, fallback: FALLBACK,
-    });
-    return { code: r.step.code, stderr: readFileSync(stderr, "utf8"), result: r.text, timedOut: r.step.timedOut };
+    r = await run.reply(input);
+    return { code: r.step.code, stderr: readSection(run.folder, "stderr") ?? "", result: r.text, timedOut: r.step.timedOut };
   } finally {
     const ok = r?.step.code === 0 && !r.step.timedOut;
-    setState(run, "done", { ...(r?.model === FALLBACK ? { model: FALLBACK } : {}), cost: r?.cost, tokens: r?.tokens, ...(ok ? {} : { reason: `failed: ${r?.cause?.reason ?? "no reply"}`, cause: "unanswered" }) });
-    rmSync(dir, { recursive: true, force: true });
+    run.end(ok ? "replied" : `failed: ${r?.cause?.reason ?? "no reply"}`, ok ? {} : { cause: "unanswered" });
   }
 }

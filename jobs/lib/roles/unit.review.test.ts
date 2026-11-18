@@ -1,4 +1,4 @@
-// v6 phase 6: Verify as one station, the reviewer's list of files outside the Edit surface, and a merge run's review of the merge commit only.
+// v6 phase 6: Verify as one station, and the reviewer's list of files outside the Edit surface.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +11,6 @@ import { type Repo, type Run } from "../records/ledger.ts";
 import { getRun } from "../records/record.ts";
 import { logTo, readSection, runFile } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";
-import { reviewDiff, reviewRange } from "./unit.ts";
 import { branchPorts, reviewPrompt, workerVerdict } from "../gates/worker-verdict.ts";
 
 let root = "";
@@ -110,33 +109,4 @@ test("outsideSurface lists the changed files the Edit surface does not name, and
   expect(p).toContain("## Changes outside the Edit surface");
   expect(p).toContain("- jobs/lib/gates/gate.ts\n- uix.ts");
   expect(reviewPrompt("n", spec, "diff", [])).not.toContain("## Changes outside the Edit surface");
-});
-
-test("a merge run's reviewer reads only how the merge commit resolved its conflict; another run reads the whole branch", () => {
-  const path = repo.path;
-  commit(path, "main.txt", "main's change\n", "main moves");
-  commit(path, "shared.txt", "main's line\n", "main edits shared");
-  git(path, "switch", "-q", "work");
-  commit(path, "shared.txt", "the job's line\n", "work edits shared");
-  git(path, "merge", "-q", "--no-edit", "main");
-  writeFileSync(join(path, "shared.txt"), "both lines, resolved\n");
-  git(path, "add", "shared.txt");
-  git(path, "commit", "-q", "--no-edit");
-  git(path, "switch", "-q", "main");
-  const base = git(path, "merge-base", "main", "work").out;
-  const merge = reviewRange(path, { ...run, merge: true }, base, "work");
-  expect(merge.merge).toBe(true);
-  const diff = reviewDiff(path, merge, 1e6);
-  expect(diff).toContain("+both lines, resolved");
-  expect(diff).not.toContain("main's change");
-  const whole = reviewRange(path, run, base, "work");
-  expect(whole).toEqual({ from: base, to: "work", merge: false });
-  expect(reviewDiff(path, whole, 1e6)).toContain("+the job's change");
-  expect(reviewPrompt("n", "goal", diff, [], { merge: true })).toContain("## The merge commit's conflict resolution");
-  expect(reviewPrompt("n", "goal", diff, [])).toContain("## Diff from the merge base");
-});
-
-test("a merge run that made no merge commit reads the whole branch", () => {
-  const base = git(repo.path, "rev-parse", "main").out;
-  expect(reviewRange(repo.path, { ...run, merge: true }, base, "work")).toEqual({ from: base, to: "work", merge: false });
 });

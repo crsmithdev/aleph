@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
 import { gpuSlot } from "../gates/gpu.ts";
 import { setModel } from "../routing/models.ts";
+import { allRuns } from "../records/ledger.ts";
 import { cutTitle, fit, writeLine, writeTitle } from "./title.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "aleph-title-"));
@@ -55,4 +56,15 @@ test("a rule writer that fails returns its error text, not an empty string", asy
   writeFileSync(f, "#!/bin/sh\necho 'rule writer broke' >&2\nexit 1\n", { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = f;
   expect(await writeLine("Write a rule.", "a quote", 200)).toEqual({ err: expect.stringContaining("rule writer broke") });
+});
+
+test("a rule writer's call is a title run whose folder holds its prompt and its reply", async () => {
+  const f = join(dir, "replying");
+  writeFileSync(f, `#!/bin/sh\nprintf '%s' '{"type":"result","is_error":false,"result":"A rule"}'\n`, { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = f;
+  expect(await writeLine("Write a rule.", "the quote", 200)).toBe("A rule");
+  const { folder, run } = allRuns().findLast((e) => e.run.role === "title")!;
+  expect(run.state).toBe("done");
+  expect(readFileSync(join(folder, "prompt.md"), "utf8")).toBe("the quote");
+  expect(readFileSync(join(folder, "transcript.jsonl"), "utf8")).toContain('"result":"A rule"');
 });

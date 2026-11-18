@@ -5,37 +5,35 @@
  */
 import { logEvent } from "../../../lib/layout.ts";
 import * as jobRecord from "../records/record.ts";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
-import { file as fileIssues, note, noteFlake, reader } from "../../../lib/store.ts";
-import { filing } from "../transitions/filing.ts";
 import { callAgent, transcriptOf, type Reply } from "./agent-call.ts";
 import { addWorktree } from "../infra/git.ts";
 import { fetchOrigin, git, mainRef } from "../../../lib/git.ts";
 import { branchFacts, jobGrep, trailerLine } from "../records/status.ts";
-import { parseReview, type Followup, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA } from "../gates/gate.ts";
-import { branchPorts, recorder, reviewPrompt, waiting, workerVerdict, type Outcome, type ReviewCall } from "../gates/worker-verdict.ts";
+import { parseWorker, WORKER_SCHEMA } from "../gates/gate.ts";
+import { branchPorts, recorder, waiting, workerVerdict, type Outcome } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, allRuns, loadRegistry, newsLine, readEnvFile, realTell, type Entry, type Repo, type Run, type Tell, allJobs } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive, killGroup, markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { jobById, openJob } from "../records/job.ts";
-import { atCommit, checkEnv as checksEnv, checksAt, shell, runChecks, stopFields, type CheckExec, type CheckTask } from "../gates/checks.ts";
+import { checkEnv as checksEnv, checksAt, shell, runChecks, stopFields, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { paused } from "../gates/pause.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { conflictsOf, land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { readModels, SIZE_OF } from "../routing/models.ts";
 import { brief, earlierRounds, MERGE_SECONDS, nextStep, questionOf } from "../transitions/continuation.ts";
-import { outsideSurface } from "./issue-spec.ts";
-import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
 import { postTrace } from "../learning/trace.ts";
 import { runLogged, runPath, startUnit } from "../transitions/launch.ts";
 import { start } from "../transitions/kept.ts";
-import { writeTitle } from "./title.ts";
-import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile } from "../infra/settings.ts";
-import { jobOfFolder, jobSpec, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
+import { agentEnv } from "./agent-run.ts";
+import { reviewer } from "./review.ts";
+import { fileFollowups } from "./followups.ts";
+import { docClaims } from "./docclaims.ts";
+import { checkSeconds, dispatchOn, fixRounds, jobSeconds, runEnvFile } from "../infra/settings.ts";
+import { jobOfFolder, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
@@ -93,7 +91,7 @@ function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, strin
 const inWorktree = (wt: string, env: Record<string, string | undefined>): CheckExec => (check, out, limit) => exec(check.run, { cwd: wt, env, out, limit });
 
 /** What `branchPorts` takes from this unit: its reviewer call, and each check's process, kept in `child`. */
-const ports = { review, onSpawn: (p: ReturnType<typeof Bun.spawn>) => { child = p; } };
+const ports = { review: reviewer((p) => { child = p; }), onSpawn: (p: ReturnType<typeof Bun.spawn>) => { child = p; } };
 
 /** One run of checks: its steps are recorded in the run, and the process of each is kept in `child`. */
 const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string) => void): CheckTask =>
@@ -111,21 +109,6 @@ function stampJob(wt: string, base: string, run: Run, id: string): void {
   const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer '${trailerLine("Job", id)}'${issue}`;
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
-
-/**
- * The Stop gate's doc-claim check (hooks/lib/docclaims.ts) on a finished worker run: the run's transcript
- * (output.log, stream-json) against its final message. A failure here goes back to the worker as a fix round. Null when the message makes no such claim or the transcript
- * backs it; else the reason, which also goes into checks.log for the next worker's fix note.
- */
-export function docClaims(folder: string, result: string): string | null {
-  const log = runFile(folder, "transcript.jsonl");
-  if (!existsSync(log)) return null;
-  const problems = docClaimProblems(transcriptOf(readFileSync(log, "utf8")).entries, result);
-  if (!problems.length) return null;
-  logTo(folder, "checks", `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
-  return `doc claims: ${problems.join("; ")}`;
-}
-
 
 export async function unit(folder: string, tell: Tell = realTell): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -194,16 +177,6 @@ async function dispatchFree(folder: string): Promise<void> {
 
 /** The worker's time limit: a merge run has a short one. */
 const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSeconds());
-
-/** The env of an agent that works in a worktree: it cannot push to github or reach gh; see "No push, no gh" in the spec. */
-function agentEnv(env: Record<string, string | undefined>, folder: string): Record<string, string | undefined> {
-  const ghDir = runFile(folder, "gh");
-  mkdirSync(ghDir, { recursive: true });
-  return {
-    ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
-    GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
-  };
-}
 
 /**
  * An agent run: the worker in the job's worktree on its branch. A factory repo's run then gets the worker verdict
@@ -325,8 +298,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const facts: Partial<Outcome> = w.cost !== undefined ? { cost: w.cost } : {};
   if (typeof reply !== "string") {
     Object.assign(facts, { defaults: reply.defaults, followups: reply.followups.map((f) => f.title) }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
-    await fileFollowups(repo, run, reply.followups);
-    noteFlakes(repo, run, reply.flakes);
+    await fileFollowups(repo, run, reply.followups, reply.flakes);
   }
   if (w.cause) return stop(w.cause.kind, w.cause.reason, { ...facts, limit: w.cause.limit });
   if (typeof reply === "string") return stop("other", `worker: ${reply}`, facts);
@@ -374,117 +346,4 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
   if (!bf) return stop("no-commit", "no commit");
   const { base, changed, checked } = bf;
   return workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(folder, run, repo, base, branch, { changed, env, ...ports }));
-}
-
-/**
- * The range the reviewer reads: from the merge base to the tip; for a merge run, the newest merge commit
- * ahead of the base, read as its remerge diff (the conflict resolution only). A merge run that made no merge commit reads the whole range.
- */
-export function reviewRange(cwd: string, run: Run, base: string, tip: string): { from: string; to: string; merge: boolean } {
-  const r = run.merge ? git(cwd, "rev-list", "--merges", "-1", `${base}..${tip}`) : null;
-  const m = r?.ok ? r.out : "";
-  return m ? { from: `${m}^1`, to: m, merge: true } : { from: base, to: tip, merge: false };
-}
-
-/**
- * The diff the reviewer reads, cut at `max` characters with a stat in front. A merge run's own work is how it
- * resolved the merge, so its diff is the remerge diff of the merge commit: the resolution only, not what main brought in.
- */
-export function reviewDiff(cwd: string, range: { from: string; to: string; merge: boolean }, max: number): string {
-  const show = (...o: string[]) => range.merge ? git(cwd, "show", "--remerge-diff", "--format=", ...o, range.to).out : git(cwd, "diff", ...o, range.from, range.to).out;
-  const whole = show() || (range.merge ? "(the merge applied cleanly: it resolved no conflict)" : "");
-  return whole.length <= max ? whole
-    : `${show("--stat")}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
-}
-
-/**
- * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 in a detached worktree at the branch's tip,
- * with the worker's env. Returns the reason to hold, or null on a pass, and the cost. Fails closed.
- */
-async function review(folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>): Promise<ReviewCall> {
-  const spec = jobSpec(run);
-  const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
-  const diff = reviewDiff(repo.path, range, reviewDiffMax());
-  const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
-  const model = readModels().review.model;
-  // The reviewer is a job of its own: it follows the build, which holds the unit and the process.
-  const rv = jobRecord.makeJob({ role: "review", name: run.name, prev: jobOfFolder(folder), target: run.target, repo: run.repo, model }, (dir) => writeFileSync(runFile(dir, "prompt.md"), text));
-  const end = (state: "done" | "failed", fields: Parameters<typeof jobRecord.setState>[2] = {}) => jobRecord.setState(rv.id, state, fields);
-  const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
-  try {
-    return await atCommit(repo, tip, async (wt) => {
-      const w = await callAgent("reviewer", text, {
-        model, cmd: reviewerCmd(), flags: ["--permission-mode", "bypassPermissions", "--tools", "Read", "Grep", "Glob", "Bash"], schema: REVIEW_SCHEMA,
-        cwd: wt, env: agentEnv(env, rv.folder), stdout: runFile(rv.folder, "transcript.jsonl"), stderr: logStream(rv.folder, "stderr"), limit: reviewSeconds(),
-        // No GPU slot: the job's own run holds it, as in the worker's call.
-        slot: false, onSpawn: (p) => { child = p; },
-      });
-      child = null;
-      const v = parseReview(w.data);
-      writeFileSync(runFile(rv.folder, "result.md"), typeof v === "string" ? w.text : v.text);
-      const cost = w.cost, tokens = w.tokens;
-      const none = (why: string) => { end("failed", { reason: why, cost, tokens }); return { reason: `reviewer: no verdict (${why})`, cost, none: true, model, session: w.session }; };
-      if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
-      if (w.cause) return none(w.cause.reason);
-      if (typeof v === "string") return none(v);
-      writeFileSync(runFile(rv.folder, "review.json"), JSON.stringify({ ...v.json, model }));
-      end("done", { cost, tokens });
-      return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost, model, session: w.session };
-    });
-  } catch (e) {
-    const why = errText(e);
-    end("failed", { reason: why });
-    return { reason: `reviewer: no verdict (${why})`, none: true, model };
-  }
-}
-
-/**
- * A worker's `followups` (at most 3) each become a `task` with `source: worker`: the title writer's title, and the run, the location, what the worker saw, why it matters and the score in its request,
- * filed parked in one store commit, so Chris picks which to open. The priority comes from the score, (impact + risk) x (6 - effort): high at 30 or more, medium from 15, else low. An empty title such as "none" files nothing, and a title on the topic of an open or parked issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
- */
-export async function fileFollowups(repo: Repo, run: Run, followups: Followup[]): Promise<void> {
-  const lists = reader();
-  const open = (lists.list(repo.key)?.items ?? []).filter((i) => ["open", "parked"].includes(issues.status(i)));
-  const fresh: Followup[] = [];
-  for (const f of followups) {
-    if (/^(none|n\/a|nothing)\.?$/i.test(f.title.trim())) continue;
-    // Chris paused flake follow-ups on 1 Nov 2026: a title about a flake is a tracker note, and files no issue.
-    if (/\bflak/i.test(f.title)) { noteFlakes(repo, run, [f.title]); continue; }
-    if (fresh.some((g) => sameTopic(g.title, f.title))) continue;
-    const same = open.find((i) => sameTopic(i.title, f.title));
-    if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${f.title}`);
-    else fresh.push(f);
-  }
-  const files = fresh.slice(0, 3);
-  if (!files.length) return;
-  const titles = await Promise.all(files.map((f) => writeTitle(f.title)));
-  fileIssues(repo, `followups from ${run.name}`, files.map((f, n) => {
-    const score = (f.impact + f.risk) * (6 - f.effort);
-    return {
-      title: titles[n], kind: "task", priority: score >= 30 ? "high" : score >= 15 ? "medium" : "low", source: "worker" as const, parked: true,
-      request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${f.title}\nLocation: ${f.location}\nSeen: ${f.saw}\nWhy it matters: ${f.why}\nScore: ${score} (impact ${f.impact}, risk ${f.risk}, effort ${f.effort})`,
-    };
-  }), "worker", filing);
-}
-
-const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;
-const COMMON = new Set(["the", "and", "for", "from", "with", "that", "this", "not", "but", "are", "was", "its", "into"]);
-/**
- * Two titles say the same thing: most of the shorter title's words are in the other, half with a
- * shared file path, 70% without. A shared path alone is not enough: busy files have unrelated issues.
- */
-export function sameTopic(a: string, b: string): boolean {
-  const paths = (t: string) => new Set(t.match(PATH) ?? []);
-  const words = (t: string) => new Set((t.replace(PATH, " ").toLowerCase().match(/[a-z0-9][a-z0-9_-]{2,}/g) ?? []).filter((w) => !COMMON.has(w)));
-  const [wa, wb] = [words(a), words(b)];
-  const [short, long] = wa.size <= wb.size ? [wa, wb] : [wb, wa];
-  if (!short.size) return false;
-  const pb = paths(b);
-  const shared = [...paths(a)].some((p) => pb.has(p));
-  return [...short].filter((w) => long.has(w)).length / short.size >= (shared ? 0.5 : 0.7);
-}
-
-/** A worker's `flakes` become notes on the repo's flake tracker; they file no issue and start no intake. */
-function noteFlakes(repo: Repo, run: Run, lines: string[]): void {
-  for (const line of lines) noteFlake(repo, `job ${run.name}: ${line}`);
 }
