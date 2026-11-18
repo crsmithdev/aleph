@@ -64,7 +64,7 @@ test("a housekeeper run records the model the housekeeper setting names", async 
 
 test("code applies each action and refuses one with no evidence, a bad title, or an issue outside the batch", async () => {
   seed([{ title: "Close this one" }, { title: "Drop this one" }, { title: "Keep this one" }, { title: "Retitle this one" },
-    { title: "Lower this one" }, { title: "Note this one" }, { title: "Unpark this one" }, { title: "Not in the batch" }]);
+    { title: "Lower this one" }, { title: "Note this one" }, { title: "Leave this one" }, { title: "Not in the batch" }]);
   const head = sh(repoPath(), "git", "rev-parse", "main");
   act([
     { do: "close", id: "1", why: "done on main", how: "done", evidence: head },
@@ -74,14 +74,13 @@ test("code applies each action and refuses one with no evidence, a bad title, or
     { do: "retitle", id: "4", why: "bad", title: "Retitle it." },
     { do: "reprioritize", id: "5", why: "nobody needs it", priority: "low" },
     { do: "note", id: "6", why: "the file moved to lib/b.ts" },
-    { do: "unpark", id: "7", why: "ready now" },
     { do: "close", id: "6", why: "made up", how: "obsolete", evidence: "deadbeef" },
     { do: "note", id: "8", why: "outside" },
   ]);
   const items = readList(repo())!.items.filter((i) => i.id <= 7);
   const o = await review({ repo: repo(), items }, NOW);
-  expect(o.applied).toHaveLength(6);
-  const tally = { reviewed: 7, closed: 1, dropped: 1, retitled: 1, reprioritized: 1, noted: 1, unparked: 1, refused: 4 };
+  expect(o.applied).toHaveLength(5);
+  const tally = { reviewed: 7, closed: 1, dropped: 1, retitled: 1, reprioritized: 1, noted: 1, refused: 4 };
   const ran = runs().at(-1)!.run;
   expect(ran.tally).toEqual(tally);
   expect(readEvents().findLast((e) => e.action === "done" && e.object_role === "housekeeper")).toMatchObject({ subject: "gate", object: expect.stringMatching(/^job\.\d+$/) });
@@ -95,7 +94,7 @@ test("code applies each action and refuses one with no evidence, a bad title, or
   expect(item(4).title).toBe("Retitle the stale issue");
   expect(item(5).fm.priority).toBe("low");
   expect(item(6).notes.at(-1)).toContain("housekeeper: the file moved to lib/b.ts");
-  expect(issues.status(item(7))).toBe("open");
+  expect(issues.status(item(7))).toBe("parked");
   expect(item(8).notes).toEqual([]);
 });
 

@@ -20,7 +20,6 @@ import { paused } from "../gates/pause.ts";
 import { git, mainRef } from "../../../lib/git.ts";
 import { held, lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
-import { dispatchAfterIssue } from "../transitions/filing.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -91,8 +90,7 @@ export type Action =
   | { do: "drop"; id: string; why: string; keep: string }
   | { do: "retitle"; id: string; why: string; title: string }
   | { do: "reprioritize"; id: string; why: string; priority: string }
-  | { do: "note"; id: string; why: string }
-  | { do: "unpark"; id: string; why: string };
+  | { do: "note"; id: string; why: string };
 
 const nonEmpty = { type: "string", minLength: 1 };
 const id = { type: "string", pattern: "^\\d+(\\.\\d+)?$" };
@@ -114,7 +112,6 @@ const SCHEMA = {
           shape("retitle", { title: nonEmpty }),
           shape("reprioritize", { priority: { enum: [...PRIORITIES] } }),
           shape("note"),
-          shape("unpark"),
         ],
       },
     },
@@ -166,7 +163,6 @@ export function prompt(b: Batch, now: number): string {
     `- retitle: the title is wrong or stale. A title is one imperative of at most 60 characters that says what changes, with no final period and no "<words>: " prefix.`,
     `- reprioritize: the priority is wrong now; one of ${PRIORITIES.join(", ")}.`,
     "- note: a fact the issue lacks: a moved or deleted file, a commit that did part of it, a question it raises. Nobody answers here: write what is unclear and move on.",
-    "- unpark: the issue is ready to build now and waits for nothing. Intake takes it from there.",
     "",
     land,
     `## Open and parked issues of this list, for duplicates\n${all.map((i) => `${i.id} [${issues.status(i)}] ${i.title}`).join("\n")}`,
@@ -206,12 +202,11 @@ async function applyOne(b: Batch, a: Action): Promise<string | null> {
   }
   if (a.do === "retitle") return issues.titleProblem(a.title) ?? refusal(async () => verbs.edit(repo, idArg(a.id), { title: a.title }, said(a.why)));
   if (a.do === "reprioritize") return refusal(async () => verbs.edit(repo, idArg(a.id), { priority: a.priority }, said(a.why)));
-  if (a.do === "note") return refusal(async () => verbs.note(repo, idArg(a.id), said(a.why)));
-  return refusal(async () => dispatchAfterIssue(repo, verbs.edit(repo, idArg(a.id), { status: "open" }, said(a.why)).item));
+  return refusal(async () => verbs.note(repo, idArg(a.id), said(a.why)));
 }
 
 /** The tally word of each action. */
-const WORD = [["close", "closed"], ["drop", "dropped"], ["retitle", "retitled"], ["reprioritize", "reprioritized"], ["note", "noted"], ["unpark", "unparked"]] as const;
+const WORD = [["close", "closed"], ["drop", "dropped"], ["retitle", "retitled"], ["reprioritize", "reprioritized"], ["note", "noted"]] as const;
 
 export interface Outcome { repo: string; ids: string[]; applied: string[]; refused: string[]; error?: string }
 
