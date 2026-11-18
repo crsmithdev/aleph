@@ -17,6 +17,7 @@ import { counting, getRun, makeJob, patchRun, setState, type NewJob, allRuns } f
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../../../lib/git.ts";
+import { find } from "../../../lib/transcripts.ts";
 import { onMain } from "../records/status.ts";
 import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates } from "../gates/factory-status.ts";
@@ -177,10 +178,12 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     on ??= (open && issueOf(open));
     // A fix round follows the build that came before it; a build of a name whose last work did not land redoes that work.
     const before = open ? counting(open).id : undefined, prior = open ? undefined : latestJob(name, repo.key);
+    // A fix round after a review hold resumes the held build's session, when Claude Code still has its file.
+    const held = open && counting(open).run, resume = held?.role === "build" && held.failed === "review" && !held.merge && held.session && find(held.session) ? held.session : undefined;
     const retry = prior && !["landed", "done"].includes(stateOf(prior)) ? counting(prior).id : undefined;
     return await dispatch({
       role: "build", by: o.by, ...(before ? { prev: before } : {}), ...(retry ? { retryOf: retry } : {}), name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
-      state: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
+      state: "running", phase: "starting", session: resume ?? crypto.randomUUID(), ...(resume ? { resumed: true as const } : {}), ...(a.model ? { model: a.model } : {}),
       ...(on !== undefined ? { target: key("issue", Number(on)) } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false,
     }, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(runFile(folder, "spec.md"), a.spec);

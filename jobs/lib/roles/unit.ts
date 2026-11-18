@@ -241,7 +241,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   phase("worker");
   // No GPU slot: a worker's run on the local backend counts against LOCAL_CAP itself, and the live cap admitted it.
   const w = await callAgent("worker", text, {
-    model: run.model, flags: ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "--session-id", run.session!, "--permission-mode", "bypassPermissions"],
+    model: run.model, flags: ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", run.resumed ? "--resume" : "--session-id", run.session!, "--permission-mode", "bypassPermissions"],
     schema: repo.sandbox ? WORKER_SCHEMA : undefined, cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "transcript.jsonl"), stderr: logStream(folder, "stderr"),
     limit: workSeconds(run), slot: false, onSpawn: (p) => { child = p; },
   });

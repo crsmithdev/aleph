@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { seed } from "../../job.testkit.ts";
 import { STARTING_MS } from "../infra/process.ts";
+import { getRun } from "../records/record.ts";
+import type { Run } from "../records/ledger.ts";
 import { recheck, startJob, type Start } from "./transitions.ts";
 import { Refusal } from "../../../lib/refusal.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
@@ -63,6 +65,30 @@ describe("startJob", () => {
   test("does not refuse for the starting rule once the last run's made is older than STARTING_MS", async () => {
     seed({ role: "build", name: "x", repo: "fac", branch: "factory/x", state: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW - STARTING_MS - 1000 });
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
+  });
+});
+
+describe("a fix round's session", () => {
+  const SESSION = "5a5f0000-0000-4000-8000-000000000001";
+  /** The run `startJob` makes after a build that returned with `failed` and `more`; the build's session file is there unless `file` is false. */
+  async function nextRun(name: string, failed: string, file = true, more: Partial<Run> = {}): Promise<Run> {
+    process.env.ALEPH_CLAUDE_PROJECTS = join(base, "projects");
+    mkdirSync(join(base, "projects", "p"), { recursive: true });
+    const f = join(base, "projects", "p", `${SESSION}.jsonl`);
+    if (file) writeFileSync(f, ""); else rmSync(f, { force: true });
+    seed({ role: "build", name, repo: "fac", branch: `factory/${name}`, state: "returned", failed, session: SESSION, ...more });
+    const s = await startJob({ repo: "fac", name, spec: "note" });
+    await s.child?.exited;
+    return getRun(s.started.run)!;
+  }
+  afterEach(() => delete process.env.ALEPH_CLAUDE_PROJECTS);
+
+  test("after a review hold the new build is resumed; after a failed check, a held merge round or with the session file gone it is not", async () => {
+    expect(await nextRun("held", "review")).toMatchObject({ session: SESSION, resumed: true });
+    for (const run of [await nextRun("check", "tests"), await nextRun("merge", "review", true, { merge: true }), await nextRun("gone", "review", false)]) {
+      expect(run.session).not.toBe(SESSION);
+      expect(run.resumed).toBeUndefined();
+    }
   });
 });
 

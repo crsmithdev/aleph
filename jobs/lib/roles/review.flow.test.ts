@@ -115,6 +115,21 @@ describe("a factory run", () => {
       await drop("rheldhold");
     }, 30_000);
 
+    test("a round after a review hold resumes the held build's session and sends the hold note alone", async () => {
+      rmSync(join(fakeLog, "holdonce"), { force: true });
+      await rjob("rresume", "REVIEW:holdonce", undefined, { ALEPH_CLAUDE_PROJECTS: join(base, "projects") });
+      const rs = runsOf("rresume");
+      expect(rs[0]).toMatchObject({ state: "returned", failed: "review" });
+      expect(rs[1]).toMatchObject({ session: rs[0].session, resumed: true });
+      const args = readFileSync(join(fakeLog, "args"), "utf8");
+      expect(args).toContain(`--resume ${rs[0].session}`);
+      expect(args).not.toContain("--session-id");
+      const prompt = readFileSync(join(jobFolder(rs[1].id), "prompt.md"), "utf8");
+      expect(prompt).toContain("the flag has no test");
+      expect(prompt).not.toContain("## Spec");
+      await drop("rresume");
+    }, 30_000);
+
     test("the reviewer's prompt lists the changed files outside the Edit surface", async () => {
       await job("fac", "rsurf", "## Goal\nrsurf REVIEW:pass\nACTION: commit-all in/a.txt out/b.txt\n\n## Edit surface\n- in/ (the change)\n\n## Oracle\nIt ships.\n");
       const p = readFileSync(join(fakeLog, "review-prompt"), "utf8");

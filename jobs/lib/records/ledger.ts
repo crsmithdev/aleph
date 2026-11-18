@@ -63,6 +63,8 @@ export interface Run {
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
+  /** A fix round after a review hold: it resumed the held build's `session`, and its prompt is the hold note alone. */
+  resumed?: true;
   /** A housekeeper run: counts of what it did by word (`reviewed`, `dropped`, ...); its `done` event carries it. */
   tally?: Record<string, number>;
   /** The size a build was routed to: small, medium or large. */

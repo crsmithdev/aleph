@@ -90,13 +90,14 @@ at most 120 words of prose, plus a list only for separate items.`;
 /** The text that has an agent search past factory work for `title` before it plans: the worker brief and the intake prompt. */
 export const pastWork = (title: string): string =>
   `Before you plan, run \`aleph memory recall --episodes '${title.replace(/'/g, "'\\''")}'\` as it stands, with no pipe. It lists the pages of earlier factory work that match. Read each page about the same issue or files, and do not repeat an approach that failed there.`;
-/** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
+/** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief, and a resumed run only its last note. */
 export function brief(id: string, run: Run, repo: Repo): string {
   if (run.merge) {
     const land = jobOfRun(run.job).filter((e) => e.run.role === "land" && e.id !== id).at(-1)?.run;
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
+  if (run.resumed) return notes(jobOfRun(run.job)).at(-1)!.text.trim() + "\n";
   const spec = jobSpec(run);
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${spec}`];
   // An issue's spec opens with `# <title>` (issueBrief).

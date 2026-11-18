@@ -220,6 +220,12 @@ printf '%s' "$prompt" > "$FAKE_LOG/prompt"
 echo "$@" > "$FAKE_LOG/args"
 env > "$FAKE_LOG/env"
 action=$(printf '%s\\n' "$prompt" | grep '^ACTION:' | tail -1 | cut -d' ' -f2-)
+# With ALEPH_CLAUDE_PROJECTS set, the session file is there as Claude Code leaves it, and a resumed prompt, which has no ACTION, repeats the session's first.
+if [ -n "$ALEPH_CLAUDE_PROJECTS" ]; then
+  sid=$(printf '%s\\n' "$@" | grep -x -A1 -e --session-id -e --resume | tail -1)
+  mkdir -p "$ALEPH_CLAUDE_PROJECTS/p"; touch "$ALEPH_CLAUDE_PROJECTS/p/$sid.jsonl"
+  if [ -n "$action" ]; then echo "$action" > "$FAKE_LOG/action-$sid"; else action=$(cat "$FAKE_LOG/action-$sid"); fi
+fi
 if printf '%s' "$prompt" | grep -q '^# Merge '; then
   # A merge run has no ACTION: it merges main, except in clash.txt, which this worker cannot resolve.
   if printf '%s' "$prompt" | grep -q 'clash.txt'; then git commit -q --allow-empty -m "unresolved"

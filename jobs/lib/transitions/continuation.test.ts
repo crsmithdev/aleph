@@ -188,6 +188,20 @@ describe("the worker brief", () => {
     expect(brief(first.id, r, repo)).not.toContain("write-code");
   });
 
+  test("a resumed run's brief is its note alone; a fix round that did not resume keeps the spec and the previous run", () => {
+    const first = jobWith({ failed: "review", reason: "reviewer: no test" }, { "spec.md": "# Spec\n\nship it\n" });
+    const hold = nextBrief(first.folder, run({ failed: "review", reason: "reviewer: no test" })).note;
+    mkdirSync(join(first.folder, "notes"));
+    writeFileSync(join(first.folder, "notes", "001.md"), hold);
+    const second = seed({ role: "build", name: "issue.1", state: "running", prev: first.id });
+    const resumed = brief(second.id, { ...second.run, resumed: true }, repo);
+    expect(resumed).toBe(hold.trim() + "\n");
+    expect(resumed).not.toContain("## Spec");
+    const fresh = brief(second.id, second.run, repo);
+    expect(fresh).toContain("## Spec\n\n# Spec");
+    expect(fresh).toContain("## Previous run: build, failed");
+  });
+
   test("an issue's brief has the worker search past work for its title; a spec with no title gets no search", () => {
     const jp = jobWith({}, { "spec.md": "# Retry the land push\n\n## Goal\n\nx\n" });
     const b = brief(jp.id, run({ job: jp.id }), repo);
