@@ -239,8 +239,7 @@ An Obsidian vault in its own git repo, pushed on each commit. `vault/lib/` owns 
 | `daily/<date>.md` | One line per write |
 | `archive/` | Notes out of the index |
 | `MEMORY.md` | Standing context, at most 150 lines |
-| `Home.md` | Generated index |
-| `VAULT.md` | Chris's contract; the agent never edits it |
+| `VAULT.md` | Chris's contract; the agent never edits it. Its presence makes a directory a vault |
 | `.index/vault.sqlite` | FTS5 search index, git-ignored |
 | `.index/seen/<session>.json` | Notes recall already showed, kept 7 days |
 | `.index/runs/<name>.json` | The newest run of one vault process (`seen prune`, `recall trim`, `vault push`) as `{at, result, detail?}`; `result` is `ok` or `failed` |

@@ -20,7 +20,7 @@ decision 180, concept and entity 365.
 
 `aleph memory archive "<title>" --why "<one line>"` retires a note when the
 subject is over and no replacement exists. It moves the file to `archive/`
-with a reason, regenerates Home, and names every note that links to it.
+with a reason, and names every note that links to it.
 Nothing is deleted and the note stays a link target. Use `supersedes` in a
 write instead when a newer note covers the same ground.
 
@@ -46,9 +46,8 @@ Use `write` instead for a new note, or to rewrite a tracked one.
 
 ## lint
 
-`aleph memory lint` prints refusals and warnings for the whole vault, regenerates
-Home and sets its health line. Run it after a batch of writes or when the
-health line shows dangling links. It also warns `relative-date` for a body
+`aleph memory lint` prints refusals and warnings for the whole vault.
+Run it after a batch of writes or when a link may dangle. It also warns `relative-date` for a body
 that says "yesterday" instead of a date. Refusals are structural: schema, folder,
 duplicate title, dangling link, budget. A broken template warns instead,
 because a note on disk cannot be un-written; past one note the warnings

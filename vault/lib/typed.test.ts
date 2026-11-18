@@ -14,7 +14,7 @@ let base = "", saved: Record<string, string | undefined> = {};
 const draft = (title: string, supersedes = "[]"): string => {
   const path = join(base, `${title}.md`);
   const fm = `kind: gotcha\nscope: aleph\nconfidence: measured\nupdated: ${today()}\nsupersedes: ${supersedes}\nsources: [trace:abc123]\n`;
-  writeFileSync(path, `---\n${fm}---\n**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n[[Home]]\n`);
+  writeFileSync(path, `---\n${fm}---\n**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n`);
   return path;
 };
 
@@ -64,6 +64,5 @@ test("maintain keeps its own root for the lint and adopt it runs, whatever the e
   expect(r).toMatchObject({ ok: true, value: { adopt: [{ note: "Loose Note", adopted: true }] } });
   const log = Bun.spawnSync(["git", "-C", mine, "log", "--format=%s"]).stdout.toString();
   expect(log).toContain("adopt: Loose Note");
-  expect(log).toContain("lint: ");
   expect(Bun.spawnSync(["git", "-C", other, "log", "--format=%s"]).stdout.toString()).not.toContain("adopt");
 });

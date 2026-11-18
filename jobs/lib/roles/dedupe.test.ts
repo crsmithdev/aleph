@@ -26,7 +26,7 @@ const archived = (t: string) => existsSync(join(root, "archive", `${t}.md`));
 /** A note written through the vault op so git tracks it. */
 async function seed(title: string, extra: Record<string, unknown> = {}) {
   const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: ["Home"], ...extra }, today());
+  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, today());
   writeFileSync(file, extra.core ? text.replace("\nsupersedes", `\ncore: ${extra.core}\nsupersedes`) : text);
   const r = await write(root, file, "seed");
   expect(r.ok).toBe(true);

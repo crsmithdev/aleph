@@ -25,7 +25,7 @@ function write(title: string, body: string, kind = "gotcha") {
   const p = Bun.spawnSync(["bun", CLI, "memory", "write", f, "--why", "fixture"], { env: process.env, stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(p.stderr.toString());
 }
-const body = (claim: string, related = "[[Home]]") => `**Claim.** ${claim}, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n${related}\n`;
+const body = (claim: string, related = "") => `**Claim.** ${claim}, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n${related}\n`;
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-memory-write-"));
@@ -123,7 +123,7 @@ test("handoffs and episodes are edited and deleted as files; MEMORY.md through v
   expect(readFileSync(join(hand, "edit-me.md"), "utf8")).toBe("## Intent\n\nNew.\n");
   expect((await post(fileAt("episode", "aleph-8 Drop.md", "delete"), {})).status).toBe(200);
   expect(existsSync(join(eps, "aleph-8 Drop.md"))).toBe(false);
-  expect((await post(fileAt("handoff", "../vault/Home.md", "delete"), {})).status).toBe(404);
+  expect((await post(fileAt("handoff", "../vault/VAULT.md", "delete"), {})).status).toBe(404);
   expect((await post(fileAt("memory-md", "MEMORY.md", "delete"), {})).status).toBe(404);
   const mem = readFileSync(join(vault, "MEMORY.md"), "utf8");
   expect((await post(fileAt("memory-md", "MEMORY.md", "edit"), { text: `${mem}\n- Chris likes short answers.\n` })).status).toBe(200);

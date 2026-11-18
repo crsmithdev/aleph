@@ -58,7 +58,7 @@ beforeAll(async () => {
   const root = join(base, "vault");
   for (const d of ["decisions", "gotchas", "concepts"]) mkdirSync(join(root, "wiki", d), { recursive: true });
   mkdirSync(join(root, "daily"));
-  writeFileSync(join(root, "Home.md"), "# Home\n\n## Decisions\n\n- [[Use Bun]] — why we run on Bun\n\n## Gotchas\n\n- [[Other trap]] — elsewhere\n\nHealth: 2 notes\n");
+  writeFileSync(join(root, "VAULT.md"), "# VAULT.md\n");
   note("decisions", "Use Bun", "decision", "aleph", "**Claim.** We use Bun.\n\n## Related\n[[Other trap]]");
   note("gotchas", "Other trap", "gotcha", "other", "**Claim.** A trap; see [[Use Bun]].");
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
@@ -121,7 +121,6 @@ test("a note has its links and backlinks; a missing note is 404", async () => {
   expect(n.frontmatter.kind).toBe("decision");
   expect(n.links.map((l: any) => l.title)).toEqual(["Other trap"]);
   expect(n.backlinks.map((l: any) => l.title)).toContain("Other trap");
-  expect(n.backlinks.map((l: any) => l.title)).toContain("Home");
   expect((await at("/api/memory/notes/Nope")).status).toBe(404);
 });
 

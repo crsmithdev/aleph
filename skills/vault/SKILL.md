@@ -62,12 +62,10 @@ re-derive at any price. Prefer them.
 
    Body: `**Claim.** <one or two sentences>, as of <date>.` then
    `## Details`, `## Evidence`, `## Related` with `[[links]]` to notes that
-   exist. `[[Home]]` is always a valid link.
+   exist. An empty `## Related` is valid.
 2. `aleph memory write "<path>" --why "<one line>"`. The script files it by kind,
-   appends the daily note, regenerates Home.md and commits. A refusal names
+   appends the daily note and commits. A refusal names
    the rule; fix the draft and rerun. Warnings are yours to judge.
-
-Home.md is generated from the notes on each write. Never edit it.
 
 **`core:` is for a fact every session in the scope needs before it starts**,
 such as a decision in force. It is injected at every session start, so the

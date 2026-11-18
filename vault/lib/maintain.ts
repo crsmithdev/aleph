@@ -59,7 +59,7 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
 
   if (dry) report.lint = { fixed: fixes };
   else {
-    // Core lines go first: the lint that follows regenerates Home from them.
+    // Core lines go first: the lint that follows reads them.
     for (const c of cores) writeFileSync(c.n.path, c.n.text.replace(/^core:.*$/m, (l) => dedupe(l)));
     const l = await lintOp(root, { fix: true });
     if (!l.ok) failed.push("lint");

@@ -8,7 +8,7 @@
  * See docs/workflow.md and docs/factory.md.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
 import { workerCmd } from "../jobs/lib/infra/settings.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
@@ -34,6 +34,7 @@ import { suiteStep } from "../jobs/lib/transitions/baseline.ts";
 import { report } from "../jobs/lib/transitions/report.ts";
 import { setPaused } from "../jobs/lib/gates/pause.ts";
 import { maintainAll, runTick } from "../jobs/lib/transitions/tick.ts";
+import { isVault } from "../vault/lib/vault.ts";
 import { vaultDir } from "../lib/paths.ts";
 import { dispatchDetached } from "../jobs/lib/transitions/launch.ts";
 import { health } from "../jobs/lib/gates/factory-status.ts";
@@ -401,7 +402,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     }
     case "memory": {
       // `maintain` is the whole maintainer: the vault's mechanical pass, the corrections mining and the compile of yesterday. A missing vault falls to the op, which says so.
-      if (ctx.command[1] === "maintain" && existsSync(join(resolve(vaultDir()), "Home.md"))) {
+      if (ctx.command[1] === "maintain" && isVault(resolve(vaultDir()))) {
         const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, corr: true, compile: true, decay: true, overlap: true, misses: true });
         ctx.out(r);
         if (!r.ok || r.corrections?.error || r.compile?.error || r.recheck?.error || r.dedupe?.error) ctx.code = 1;

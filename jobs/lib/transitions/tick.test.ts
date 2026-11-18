@@ -328,7 +328,7 @@ test("a tick where an episode page fails to write records the episodes result as
   expect(tickRows().episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
 });
 
-// The daily vault maintenance, dry: from 03:00 local, on a vault that has Home.md, once per local date.
+// The daily vault maintenance, dry: from 03:00 local, on a vault that has VAULT.md, once per local date.
 
 test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
   const dir = vaultHere();
@@ -337,11 +337,11 @@ test("guard: the maintain step from 03:00 local returns the dry run's counts and
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 
-test("guard: the maintain step returns null before 03:00, with no Home.md, and while the factory is paused", async () => {
+test("guard: the maintain step returns null before 03:00, with no VAULT.md, and while the factory is paused", async () => {
   const dir = vaultHere();
   // 02:00 local: too early, so nothing runs and no run record is written.
   expect(await maintainStep(Date.parse("2026-11-04T02:00:00Z"))).toBeNull();
-  // A folder that is there, with no Home.md: not a vault, so only the corrections mining runs.
+  // A folder that is there, with no VAULT.md: not a vault, so only the corrections mining runs.
   const empty = join(base, "no-home");
   mkdirSync(empty, { recursive: true });
   process.env.ALEPH_VAULT = empty;

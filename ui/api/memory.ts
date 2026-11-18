@@ -20,7 +20,7 @@ import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { backlinks, coreNotes, dailyNotes, hasHome, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, scopeOf, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, dailyNotes, isVault, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, scopeOf, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -53,9 +53,9 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
  * Langfuse for about 35 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
  * and the 30 s Langfuse poll does not hold the build Worker with it. */
 const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], runMisses, null);
-/** The vault's notes, or none when it has no Home.md, read once until a file in the vault changes or the UI writes: a page
+/** The vault's notes, or none when it has no VAULT.md, read once until a file in the vault changes or the UI writes: a page
  * that wrote reads its write even when the watcher's event comes after its request. */
-const vaultNotes = async (root: string): Promise<Note[]> => (hasHome(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
+const vaultNotes = async (root: string): Promise<Note[]> => (isVault(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
 async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn([...cli(), "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 180_000 });

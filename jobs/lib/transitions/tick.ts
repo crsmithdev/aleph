@@ -6,11 +6,10 @@
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { addDays, today, yesterday } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
-import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
+import { compiledDays, isVault, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { maintain } from "../../../vault/lib/maintain.ts";
 import { compileDay } from "../roles/maintainer.ts";
 import { recheck } from "../roles/recheck.ts";
@@ -137,7 +136,7 @@ const summary = (r: Json): string => {
 export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
   if (new Date(now).getHours() < DAILY_HOUR || paused()) return null;
-  const mech = existsSync(join(root, "Home.md")) && !(at && today(new Date(at)) === today(new Date(now)));
+  const mech = isVault(root) && !(at && today(new Date(at)) === today(new Date(now)));
   const corr = correctionsDue(now);
   if (!mech && !corr) return null;
   const r = await maintainAll(root, true, now, { mech, corr, compile: mech, decay: mech, overlap: mech, misses: mech });

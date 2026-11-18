@@ -32,7 +32,7 @@ const read = (t: string) => readFileSync(page(t), "utf8");
 /** A stale note, written through the vault op so git tracks it, with `n` recalls in the log. */
 async function seed(title: string, n = 0, extra: Record<string, unknown> = {}) {
   const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: ["Home"], ...extra }, OLD);
+  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, OLD);
   writeFileSync(file, extra.core ? text.replace("\nsupersedes", `\ncore: ${extra.core}\nsupersedes`) : text);
   const r = await write(root, file, "seed");
   expect(r.ok).toBe(true);
@@ -74,7 +74,7 @@ test("the decay queue is the stale notes by recall count, most first, ties in li
 });
 
 test("refresh bumps updated only, correct rewrites the claim and keeps frontmatter and Related, archive moves the note", async () => {
-  await seed("Keep", 3); await seed("Fix", 2, { related: ["Home", "Keep"], tags: ["x"] }); await seed("Drop", 1);
+  await seed("Keep", 3); await seed("Fix", 2, { related: ["Keep"], tags: ["x"] }); await seed("Drop", 1);
   const fm = (t: string) => read(t).split("---")[1];
   const before = { keep: read("Keep"), fix: fm("Fix") };
   reply([
@@ -89,7 +89,7 @@ test("refresh bumps updated only, correct rewrites the claim and keeps frontmatt
   expect(fix.split("---")[1]).toBe(before.fix.replace(`updated: ${OLD}`, `updated: ${today()}`));
   expect(fix).toContain(`**Claim.** Fix now holds, as of ${today()}.`);
   expect(fix).toContain("new details");
-  expect(fix).toMatch(/## Related\n\n- \[\[Home\]\]\n- \[\[Keep\]\]\n$/);
+  expect(fix).toMatch(/## Related\n\n- \[\[Keep\]\]\n$/);
   expect(existsSync(page("Drop"))).toBe(false);
   expect(existsSync(join(root, "archive", "Drop.md"))).toBe(true);
   expect(readRun(root, "recheck")?.detail).toBe("3 rechecked");

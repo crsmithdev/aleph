@@ -516,7 +516,7 @@ describe("vault-context hook", () => {
     note(vault, "Theirs", "cloudchamber", "They ship from trunk");
     note(vault, "Everyone", "global", "Times are Pacific", "2026-11-01");
     note(vault, "No Core", "aleph");
-    writeFileSync(join(vault, "Home.md"), "# Home\n\n- [[Home Only]] — not injected\n");
+    writeFileSync(join(vault, "VAULT.md"), "# VAULT.md\n");
     writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
     repo = join(base, "aleph");
     const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { stdout: "ignore", stderr: "ignore" });
@@ -535,7 +535,7 @@ describe("vault-context hook", () => {
     return (await new Response(proc.stdout).text()).trim();
   }
   const context = async (dir: string, cwd?: string): Promise<string> => JSON.parse(await start(dir, cwd)).hookSpecificOutput.additionalContext;
-  test("injects MEMORY whole, then the core lines of the session's repo and global, newest first; not Home", async () => {
+  test("injects MEMORY whole, then the core lines of the session's repo and global, newest first", async () => {
     const out = JSON.parse(await start(vault));
     const ctx: string = out.hookSpecificOutput.additionalContext;
     expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
@@ -544,7 +544,6 @@ describe("vault-context hook", () => {
     expect(ctx.indexOf("- We ship from main [[Ours]]")).toBeLessThan(ctx.indexOf("- Times are Pacific [[Everyone]]"));
     expect(ctx).not.toContain("Theirs");
     expect(ctx).not.toContain("No Core");
-    expect(ctx).not.toContain("Home Only");
   });
   test("a worktree takes the scope of its main checkout", async () => {
     const ctx = await context(vault, worktree);
@@ -554,7 +553,7 @@ describe("vault-context hook", () => {
   test("over-budget core lines are cut at whole lines to 6,000 bytes, with a pointer to the rest", async () => {
     const big = join(base, "big");
     for (let i = 0; i < 200; i++) note(big, `Note ${String(i).padStart(3, "0")}`, "aleph", "x".repeat(80), `2026-10-${String(1 + (i % 28)).padStart(2, "0")}`);
-    writeFileSync(join(big, "Home.md"), "# Home\n");
+    writeFileSync(join(big, "VAULT.md"), "# VAULT.md\n");
     writeFileSync(join(big, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
     const ctx = await context(big);
     expect(Buffer.byteLength(ctx)).toBeLessThanOrEqual(6000);
@@ -589,7 +588,6 @@ describe("git-guard vault clause", () => {
   }
   test("allows a note on main in the vault", async () => {
     expect(await guard(join(vault, "wiki", "gotchas", "A Note.md"))).toBe("");
-    expect(await guard(join(vault, "Home.md"))).toBe("");
   });
   test("denies VAULT.md", async () => {
     const out = JSON.parse(await guard(join(vault, "VAULT.md")));

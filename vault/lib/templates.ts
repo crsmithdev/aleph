@@ -42,7 +42,6 @@ hook extracts facts. \`aleph memory compile\` is the safety net, run on demand.
 
 | Path | Holds | Write rule |
 |---|---|---|
-| \`Home.md\` | map of content, generated: decisions, projects, concepts and entities by scope and kind, health line last | \`aleph memory write\` only; never edited |
 | \`MEMORY.md\` | standing context about Chris and the environment | agent, ≤150 lines, rewrite sections |
 | \`wiki/decisions/\` | what was decided and why | one note per decision |
 | \`wiki/concepts/\` | how something works | |

@@ -59,7 +59,7 @@ export function prompt(day: string, digest: string): string {
     "Prefer decisions and projects over gotchas. Cite each note's evidence as `trace:<id>` in its sources.",
     'Skip every trace id listed under "Already cited". Zero notes is a valid answer: reply `{"notes": []}`.',
     "Do not set `core`. Reply only with the JSON the schema asks for. Code writes each note from your fields; the vault refuses a note that breaks its rules.",
-    "Each note gives `claim` as one or two sentences ending in `as of YYYY-MM-DD`, then `details`, `evidence` and `related` (titles of notes that exist; `Home` is always valid).",
+    "Each note gives `claim` as one or two sentences ending in `as of YYYY-MM-DD`, then `details`, `evidence` and `related` (titles of notes that exist).",
     "",
     writeRules(),
     "",
@@ -77,7 +77,7 @@ export function body(n: Note, day: string, related: string): string {
 /** The note's file text: frontmatter from its fields, then the body. */
 export function render(n: Note, day: string): string {
   const fm = { aliases: n.aliases ?? [], kind: n.kind, scope: n.scope, confidence: n.confidence, updated: day, supersedes: [], sources: n.sources ?? [], tags: n.tags ?? [] };
-  return serializeFrontmatter(fm) + body(n, day, (n.related?.length ? n.related : ["Home"]).map((t: string) => `- [[${t}]]`).join("\n"));
+  return serializeFrontmatter(fm) + body(n, day, (n.related ?? []).map((t: string) => `- [[${t}]]`).join("\n"));
 }
 
 /** A scratch dir for the files of one pass; `fn` gets it and it is removed after. */

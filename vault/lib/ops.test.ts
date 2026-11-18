@@ -64,7 +64,7 @@ function note(title: string, over: Record<string, string> = {}, body?: string): 
   // Today, not a fixed date: the default note must read as freshly written, and a
   // pinned date silently crosses its decay window and fails tests months later.
   const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: new Date(NOW).toISOString().slice(0, 10), supersedes: "[]", sources: "[trace:abc123]", ...over };
-  const text = `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n")}\n---\n` + (body ?? `**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n[[Home]]\n`);
+  const text = `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n")}\n---\n` + (body ?? `**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n`);
   const path = join(drafts, `${title}.md`);
   writeFileSync(path, text);
   return path;
@@ -87,14 +87,14 @@ describe("init", () => {
     const r = (await spawnCli("init"));
     expect(r.code).toBe(0);
     expect(r.json.commit).toMatch(/^[0-9a-f]{7,}$/);
-    for (const p of ["VAULT.md", "Home.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
+    for (const p of ["VAULT.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
     const daily = JSON.parse(readFileSync(join(vault, ".obsidian/daily-notes.json"), "utf8"));
     expect(daily).toEqual({ folder: "daily", format: "YYYY-MM-DD" });
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
     expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain("workspace*.json");
     expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain(".recall-log.jsonl");
     expect(Bun.spawnSync(["git", "-C", vault, "remote"], { stdout: "pipe" }).stdout.toString().trim()).toBe("");
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 stale, lint \d{4}-\d{2}-\d{2}$/);
+    expect(existsSync(join(vault, "Home.md"))).toBe(false);
   });
   test("refuses a second init", async () => {
     expect((await cli("init")).code).toBe(1);
@@ -107,7 +107,7 @@ describe("init", () => {
 });
 
 describe("write", () => {
-  test("files by kind, logs the day, sets health, commits with the trailer", async () => {
+  test("files by kind, logs the day, commits with the trailer", async () => {
     // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     const r = (await spawnCli("write", note("Stop Hook Block Shape"), "--why", "measured three shapes"));
     expect(r.code).toBe(0);
@@ -116,24 +116,11 @@ describe("write", () => {
     // The test process can run in UTC while the CLI child runs in local time, so ask a child for the date.
     const date = Bun.spawnSync(["date", "+%F"], { stdout: "pipe" }).stdout.toString().trim();
     expect(readFileSync(join(vault, "daily", `${date}.md`), "utf8")).toMatch(/^- \d\d:\d\d write \[\[Stop Hook Block Shape\]\] — measured three shapes$/m);
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 stale, lint ${date}`);
+    expect(existsSync(join(vault, "Home.md"))).toBe(false);
     const log = gitLog();
     expect(log).toContain("write: Stop Hook Block Shape");
     expect(log).toContain("Co-Authored-By: Claude");
     expect(gitStatus()).toBe("");
-  });
-  test("Home is generated: a decision gets its line, and two writes in either order give the same Home", async () => {
-    const home = join(vault, "Home.md");
-    const a = note("Ordered Decision A", { kind: "decision", scope: "order", updated: "2026-09-03", core: "A comes second" });
-    const b = note("Ordered Decision B", { kind: "decision", scope: "order", updated: "2026-09-04" });
-    expect((await cli("write", a, "--why", "x")).code).toBe(0);
-    expect((await cli("write", b, "--why", "x")).code).toBe(0);
-    const first = readFileSync(home, "utf8");
-    expect(first).toContain("## order\n\n### Decisions\n- [[Ordered Decision B]]\n- [[Ordered Decision A]] — A comes second\n");
-    expect(first).not.toContain("[[Stop Hook Block Shape]]");  // a gotcha has no Home line
-    expect((await cli("write", note("Ordered Decision B", { kind: "decision", scope: "order", updated: "2026-09-04" }), "--why", "x")).code).toBe(0);
-    expect((await cli("write", note("Ordered Decision A", { kind: "decision", scope: "order", updated: "2026-09-03", core: "A comes second" }), "--why", "x")).code).toBe(0);
-    expect(readFileSync(home, "utf8")).toBe(first);
   });
   test("a decision goes to wiki/decisions", async () => {
     const r = (await cli("write", note("No API Judge", { kind: "decision" }), "--why", "subscription only"));
@@ -190,7 +177,7 @@ describe("write", () => {
     expect(r.json.findings).toContainEqual(expect.objectContaining({ note: "Dangling Json", rule: "dangling", detail: expect.any(String) }));
   });
   test("links inside code are not links", async () => {
-    const body = "**Claim.** x as of 2026-09-04.\n\n## Details\nuse `[[Title]]` and\n```\n[[Fenced]]\n```\n\n## Evidence\n\n## Related\n[[Home]]\n";
+    const body = "**Claim.** x as of 2026-09-04.\n\n## Details\nuse `[[Title]]` and\n```\n[[Fenced]]\n```\n\n## Evidence\n\n## Related\n";
     expect((await cli("write", note("Code Links", {}, body), "--why", "x")).code).toBe(0);
   });
   test("refuses a body without the template", async () => {
@@ -225,11 +212,6 @@ describe("write", () => {
     expect(r.code).toBe(0);
     expect(readFileSync(join(vault, "wiki/gotchas/Stop Hook Deny Shape.md"), "utf8")).toContain("updated: 2026-09-05");
   });
-  test("Home.md is generated: a write of it is refused", async () => {
-    const r = (await cli("write", join(vault, "Home.md"), "--why", "hand edit"));
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("refuse generated Home");
-  });
   test("MEMORY.md: commits and refuses a dangling link", async () => {
     expect((await cli("write", note("No API Judge", { kind: "decision" }), "--why", "x")).code).toBe(0);
     const memory = join(vault, "MEMORY.md");
@@ -246,12 +228,11 @@ describe("write", () => {
 });
 
 describe("lint", () => {
-  test("reports warnings as JSON, exit 0 when nothing refuses, and sets health", async () => {
+  test("reports warnings as JSON, exit 0 when nothing refuses", async () => {
     // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     const r = (await spawnCli("lint"));
     expect(r.json.refuse).toEqual([]);
     expect(r.code).toBe(0);
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ stale, lint \d{4}-\d{2}-\d{2}$/);
   });
   test("warns on stale; overlap is opt-in; exit 1 on a hand-made structural break", async () => {
     (await cli("write", note("Langfuse Ingestion Drops Batches", { updated: "2026-01-01" }), "--why", "x"));
@@ -296,7 +277,7 @@ describe("commit scope", () => {
 describe("lint --fix", () => {
   test("repairs frontmatter, leaves the body, and reports what it cannot judge", async () => {
     const p = join(vault, "wiki/gotchas/Needs Repair.md");
-    const body = "**Claim.** repairs happen in frontmatter only, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- run\n\n## Related\n[[Home]]\n";
+    const body = "**Claim.** repairs happen in frontmatter only, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- run\n\n## Related\n";
     writeFileSync(p, "---\naliases: one name\nkind: gotcha\nscope: aleph\nconfidence: sure\nupdated: 2026-09-04\nsources: [chris]\n---\n" + body);
     const r = (await cli("lint", "--fix"));
     expect(r.json.fixed).toContainEqual({ note: "Needs Repair", path: "wiki/gotchas/Needs Repair.md", repairs: ["aliases wrapped in a list", "added supersedes: []"] });
@@ -527,7 +508,7 @@ describe("adopt", () => {
 
 describe("relative dates", () => {
   test("lint reports a relative date without rewriting the note", async () => {
-    const body = "**Claim.** the run passed yesterday, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Home]]\n";
+    const body = "**Claim.** the run passed yesterday, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n";
     (await cli("write", note("Says Yesterday", {}, body), "--why", "x"));
     const r = (await cli("lint"));
     expect(r.json.warn).toContainEqual({ note: "Says Yesterday", rule: "relative-date", detail: 'says "yesterday"; give the date' });
@@ -535,7 +516,7 @@ describe("relative dates", () => {
   });
 
   test("lint ignores a relative word inside inline code", async () => {
-    const body = "**Claim.** `today()` returned the wrong day, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Home]]\n";
+    const body = "**Claim.** `today()` returned the wrong day, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n";
     (await cli("write", note("Names A Function", {}, body), "--why", "x"));
     const r = (await cli("lint"));
     expect(r.json.warn.filter((w: { note: string }) => w.note === "Names A Function")).toEqual([]);
@@ -548,11 +529,9 @@ describe("archive", () => {
     const r = await cli("archive", "Old Name", "--why", "over");
     expect(r.json).toMatchObject({ op: "archive", title: "Aliased Subject" });
   });
-  test("retires a note with no replacement, drops its Home line, names its callers", async () => {
+  test("retires a note with no replacement, names its callers", async () => {
     // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
     (await cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x"));
-    const home = join(vault, "Home.md");
-    expect(readFileSync(home, "utf8")).toContain("- [[Retired Subject]]");
     const body = "**Claim.** a caller, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Retired Subject]]\n";
     (await cli("write", note("Points At The Retired One", {}, body), "--why", "x"));
 
@@ -562,7 +541,6 @@ describe("archive", () => {
     expect(existsSync(join(vault, "wiki/decisions/Retired Subject.md"))).toBe(false);
     const archived = readFileSync(join(vault, "archive/Retired Subject.md"), "utf8");
     expect(archived).toContain("archived_reason: the subject is over");
-    expect(readFileSync(home, "utf8")).not.toContain("Retired Subject");
     expect(r.stderr).toContain("warn inbound Points At The Retired One");
     // An archived note is still a link target, so its caller does not dangle.
     expect((await cli("lint")).json.refuse.filter((f: any) => f.rule === "dangling")).toEqual([]);
@@ -584,7 +562,6 @@ describe("archive", () => {
     expect(r.json).toMatchObject({ op: "delete", title: "Deleted Outright", why: "wrong from the start" });
     expect(existsSync(join(vault, "wiki/decisions/Deleted Outright.md"))).toBe(false);
     expect(existsSync(join(vault, "archive/Deleted Outright.md"))).toBe(false);
-    expect(readFileSync(join(vault, "Home.md"), "utf8")).not.toContain("Deleted Outright");
     expect((await cli("lint")).json.warn.filter((f: any) => f.note === "Deleted Outright")).toEqual([]);
     expect(gitLog()).toContain("delete: Deleted Outright");
     expect(gitStatus()).toBe("");
@@ -631,21 +608,6 @@ describe("archive", () => {
     const r = (await cli("archive", "Never Existed", "--why", "x"));
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("no live wiki note has that title");
-  });
-});
-
-describe("health", () => {
-  test("the line carries the stale count, so a closing window is in context", async () => {
-    const staleCount = async () => {
-      (await cli("lint"));
-      const line = readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)!;
-      return Number(/, (\d+) stale, lint /.exec(line)![1]);
-    };
-    const before = await staleCount();
-    (await cli("write", note("Long Past Its Window", { confidence: "inferred", updated: "2026-01-01" }), "--why", "x"));
-    expect(await staleCount()).toBe(before + 1);
-    (await cli("recall", "long past its window"));
-    expect(await staleCount()).toBe(before + 1);
   });
 });
 
@@ -699,7 +661,7 @@ describe("recall", () => {
   });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
     // The CLI test of this op: it spawns `bun cli/cli.ts memory`.
-    (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));
+    (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n"), "--why", "x"));
     expect((await spawnCli("recall", "verify gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 0 });
     expect((await cli("recall", "stop gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 1 });
     expect((await cli("recall", "gate")).json[0]).toMatchObject({ title: "Verify Gate", rank: 2 });
@@ -1041,7 +1003,6 @@ describe("maintain", () => {
     expect(readdirSync(handoffs).sort()).toEqual([`${day(41)}-101010-not-compiled.md`, `${day(5)}-101010-recent.md`]);
     expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("core: Terse [[UI Text]] always");
     expect(gitLog()).toContain("maintain core: 1 notes");
-    expect(readFileSync(join(vault, "Home.md"), "utf8")).not.toContain("[[UI Text]] [[UI Text]]");
   });
 
   describe("episode pages", () => {

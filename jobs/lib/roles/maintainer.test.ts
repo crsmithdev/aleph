@@ -24,7 +24,7 @@ cat "$FAKE_DIR/reply.json"
 
 const note = (title: string, extra: Record<string, unknown> = {}) => ({
   title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} was decided.`,
-  details: "It came up in the day's work.", evidence: "The handoff says so.", related: ["Home"], ...extra,
+  details: "It came up in the day's work.", evidence: "The handoff says so.", related: [], ...extra,
 });
 const reply = (notes: unknown[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, result: "", structured_output: { notes } }) + "\n");
 
@@ -122,10 +122,10 @@ test("a failed run is in the report and leaves the day uncompiled", async () => 
   expect(retryDays(root)).toEqual([]);
 });
 
-test("render gives the frontmatter and the four body parts, and Home when no note is related", () => {
+test("render gives the frontmatter and the four body parts, and an empty Related when no note is related", () => {
   const text = render(note("T", { related: [], aliases: ["t"], tags: ["x"], core: "no" }), DAY);
   expect(text).toStartWith("---\naliases: [t]\nkind: decision\nscope: aleph\nconfidence: reported\nupdated: 2026-11-03\nsupersedes: []\nsources: [\"trace:abc123\"]\ntags: [x]\n---\n");
   expect(text).toContain("**Claim.** T was decided, as of 2026-11-03.");
-  expect(text).toContain("## Related\n\n- [[Home]]");
+  expect(text).toContain("## Related\n\n\n");
   expect(text).not.toContain("core");
 });

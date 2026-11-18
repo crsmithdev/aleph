@@ -7,7 +7,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const vault = mkdtempSync(join(tmpdir(), "aleph-agent-"));
 mkdirSync(join(vault, "wiki", "decisions"), { recursive: true });
-writeFileSync(join(vault, "Home.md"), "# Home\n");
+writeFileSync(join(vault, "VAULT.md"), "# VAULT.md\n");
 writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\nChris's profile.\n");
 writeFileSync(join(vault, "wiki", "decisions", "Names Are Short.md"), "---\nkind: decision\nscope: global\ncore: Names are short.\n---\nBody.\n");
 afterAll(() => rmSync(vault, { recursive: true, force: true }));

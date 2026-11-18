@@ -1,5 +1,5 @@
 /**
- * Only vault/lib reads the vault's files: daily notes, .recall.json, Home.md, MEMORY.md. A file in ui/ that joins a path under
+ * Only vault/lib reads the vault's files: daily notes, .recall.json, VAULT.md, MEMORY.md. A file in ui/ that joins a path under
  * vaultDir() or a vault `root` reaches past that interface, so a change of the vault's layout would break the page without a type error.
  * Watching vaultDir() as a whole needs no join, so ui/updater.ts passes the lint as it is.
  */

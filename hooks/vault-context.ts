@@ -10,15 +10,15 @@
  * The context is cut at whole core lines to START_BUDGET bytes and then ends
  * with a pointer to the rest (vault/lib/vault.ts startContext).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadVault, startContext } from "../vault/lib/vault.ts";
+import { isVault, loadVault, startContext } from "../vault/lib/vault.ts";
 import { scopeOfCwd, vaultDir } from "../lib/paths.ts";
 import { isAgent } from "../lib/env.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 const root = vaultDir();
-if (!existsSync(join(root, "Home.md"))) process.exit(0);
+if (!isVault(root)) process.exit(0);
 const identity = (f: string) => readFileSync(join(import.meta.dir, "..", "identity", f), "utf8");
 const agent = isAgent();
 const { text } = startContext(root, await loadVault(root), scopeOfCwd(input.cwd ?? process.cwd()), agent ? identity("AGENT.md") : undefined);

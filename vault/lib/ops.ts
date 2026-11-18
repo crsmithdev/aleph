@@ -17,7 +17,7 @@ import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, linkTargets, loadVault, loadWiki, noteRead, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
+import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, isVault, lintVault, linkTargets, loadVault, loadWiki, noteRead, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 import { layout } from "../../lib/layout.ts";
 import { logUse } from "../../lib/episode-use.ts";
@@ -70,7 +70,7 @@ export function commitAndPush(root: string, w: string[], subject: string, paths:
 
 const warn = (w: string[], findings: Finding[]): void => { w.push(...findings.map((f) => line("warn", f))); };
 export function requireVault(root: string): void {
-  if (!existsSync(join(root, "Home.md"))) fail(`no vault at ${root}; run: aleph memory init`);
+  if (!isVault(root)) fail(`no vault at ${root}; run: aleph memory init`);
 }
 
 /** The live wiki notes by title and alias. */
@@ -82,7 +82,7 @@ const live = (notes: Note[]) => linkTargets(wikiNotes(notes));
  * `git checkout -- .` and `git clean -fdq` used to stand here. They reverted
  * every uncommitted change in the vault and deleted every untracked file in it,
  * whoever had made them: on 2026-09-24 a refused write destroyed two notes an
- * earlier session had left uncommitted and six lines of Home.md. A rollback may
+ * earlier session had left uncommitted and six lines of an index file. A rollback may
  * only undo its own write.
  *
  * A path git knows goes back to its committed state; a path git has never seen
@@ -94,12 +94,6 @@ function rollback(root: string, paths: string[]): void {
     if (git(root, "ls-files", "--error-unmatch", "--", rel).ok) git(root, "checkout", "--", rel);
     else if (existsSync(p)) unlinkSync(p);
   }
-}
-
-/** Write Home.md, generated from the notes, with the health line last. */
-async function writeHome(root: string): Promise<void> {
-  const notes = await loadVault(root);
-  writeFileSync(join(root, "Home.md"), homeText(notes, healthLine(health(notes))));
 }
 
 /**
@@ -123,14 +117,13 @@ function coreFindings(root: string, notes: Note[], draft: Note): { findings: Fin
 }
 
 export const init = (root: string) => op(async (w) => {
-  if (existsSync(join(root, "Home.md"))) fail(`vault already at ${root}`);
+  if (isVault(root)) fail(`vault already at ${root}`);
   const made: string[] = [];
   const lay = (rel: string, text: string) => { writeFileSync(join(root, rel), text); made.push(join(root, rel)); };
   for (const d of ["wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian"]) mkdirSync(join(root, d), { recursive: true });
   for (const d of ["daily", "archive", "attachments"]) lay(join(d, ".gitkeep"), "");
   for (const d of ["decisions", "concepts", "entities", "projects", "gotchas"]) lay(join("wiki", d, ".gitkeep"), "");
   lay("VAULT.md", VAULT_MD);
-  lay("Home.md", homeText([], "Health: 0 notes, 0 dangling, 0 stale, lint never"));
   lay("MEMORY.md", MEMORY_MD);
   lay(".gitignore", GITIGNORE);
   for (const [name, value] of Object.entries(OBSIDIAN)) lay(join(".obsidian", name), JSON.stringify(value, null, 2) + "\n");
@@ -138,7 +131,6 @@ export const init = (root: string) => op(async (w) => {
     const r = git(root, "init", "-q", "-b", "main");
     if (!r.ok) fail(r.out);
   }
-  await writeHome(root);
   const commit = commitAndPush(root, w, "init vault", made);
   return { op: "init", path: root, commit };
 });
@@ -153,7 +145,6 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
   const rel = inside ? relative(root, srcPath) : null;
 
   if (rel === "VAULT.md") refuse([{ note: "VAULT", rule: "owner", detail: "VAULT.md is human-owned; propose a change in wiki/decisions/ and ask" }]);
-  if (rel === "Home.md") refuse([{ note: "Home", rule: "generated", detail: "Home.md is generated from the notes on each write; write the note instead" }]);
   if (rel === "MEMORY.md") {
     const name = "MEMORY";
     const notes = await loadVault(root);
@@ -164,8 +155,7 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
     if (dangling.length) refuse(dangling);
     warn(w, warns);
     const daily = writeDaily(root, { op: "write", title: name, why });
-    await writeHome(root);
-    const commit = commitAndPush(root, w, `write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), daily]);
+    const commit = commitAndPush(root, w, `write: ${name}`, [join(root, `${name}.md`), daily]);
     return { op: "write", title: name, path: `${name}.md`, warnings: warns, commit };
   }
 
@@ -197,10 +187,10 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
   if (findings.length) refuse(findings, existsSync(dest) && !tracked(root, dest)
     ? `${relative(root, dest)} is in the vault but no write has accepted it. Fix it and rerun, or remove it.`
     : undefined);
-  // Home and MEMORY are budgeted. A note write may not make either longer
-  // while it is over, but an over-budget Home does not block a note that
-  // leaves it as it was: the factory's facts gate writes unattended, and from
-  // 1 to 3 Nov it lost 28 kept facts to a Home one line over (lint still warns).
+  // MEMORY is budgeted. A note write may not make it longer while it is over,
+  // but an over-budget MEMORY does not block a note that leaves it as it was:
+  // the factory's facts gate writes unattended, and from 1 to 3 Nov it lost 28
+  // kept facts to an index file one line over (lint still warns).
   const overBudget = budgetFindings(await loadVault(root));
 
   // The contradiction screen. A Jev failure never blocks a write.
@@ -224,7 +214,7 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
     }
   }
 
-  const touched: string[] = [join(root, "Home.md"), dest];
+  const touched: string[] = [dest];
   const log = (o: Op) => { const p = writeDaily(root, o); if (!touched.includes(p)) touched.push(p); };
   mkdirSync(dirname(dest), { recursive: true });
   const stamped = stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined);
@@ -241,7 +231,6 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
     log({ op: "supersede", title: o.title, why: `superseded by [[${draft.title}]]` });
   }
   log({ op: "write", title: draft.title, why });
-  await writeHome(root);
   const after = await loadVault(root);
   const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
   if (budget.length) { rollback(root, touched); refuse(budget); }
@@ -382,11 +371,10 @@ export const lint = (root: string, o: LintOpts = {}) => op(async (w) => {
       fixed.push({ note: n.title, path: n.rel, repairs: r.repairs });
     }
   }
-  await writeHome(root);
   const notes = await loadVault(root);
   const result = lintVault(notes, { overlap: o.overlap, templates: o.template, tracked: trackedFiles(root, "wiki") });
   result.warn.push(...relativeDates(notes));
-  const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
+  const touched = [...fixed.map((f) => join(root, f.path))];
   const commit = commitAndPush(root, w, fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
   return { fixed, ...result, commit };
 });
@@ -424,8 +412,7 @@ export const adopt = (root: string, src: string, why: string) => op(async (w) =>
   if (hard.length) refuse(hard, "adopt forgives the template, not the schema");
 
   const daily = writeDaily(root, { op: "adopt", title: note.title, why });
-  await writeHome(root);
-  const commit = commitAndPush(root, w, `adopt: ${note.title}`, [path, join(root, "Home.md"), daily]);
+  const commit = commitAndPush(root, w, `adopt: ${note.title}`, [path, daily]);
   warn(w, template);
   return { op: "adopt", title: note.title, path: rel, template, commit };
 });
@@ -449,9 +436,8 @@ export const renameScopeOp = (root: string, from: string, to: string, apply: boo
   if (apply && changes.length) {
     for (const c of changes) writeFileSync(c.note.path, c.text);
     const daily = writeDaily(root, { op: "rename-scope", title: `${from} → ${to}`, why: `${changes.length} notes` });
-    await writeHome(root);
     commit = commitAndPush(root, w, `rename-scope: ${from} → ${to}, ${changes.length} notes`,
-      [...changes.map((c) => c.note.path), join(root, "Home.md"), daily]);
+      [...changes.map((c) => c.note.path), daily]);
   }
   if (!apply && changes.length) w.push(`rename-scope changed nothing; rerun with --apply to move ${changes.length} notes from ${from} to ${to}`);
   return { op: "rename-scope", from, to, applied: apply, notes: changes.map((c) => c.note.rel), count: changes.length, commit };
@@ -473,17 +459,15 @@ export const archive = (root: string, title: string, why: string) => op<Archived
   const hit = live(notes).get(title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "archive", detail: "no live wiki note has that title" }]);
 
-  // Wiki notes only. Home's line goes with the plan below, and a daily note is
+  // Wiki notes only. A daily note is
   // a record of what happened on a day; neither is a caller to warn about.
   const inbound = backlinks(notes, hit).filter((n) => n.wiki);
   const dest = join(root, "archive", `${hit.title}.md`);
   const fm = { ...hit.fm, archived: today(), archived_reason: why };
   writeFileSync(dest, serializeFrontmatter(fm) + hit.body);
   unlinkSync(hit.path);
-  const home = join(root, "Home.md");
   const daily = writeDaily(root, { op: "archive", title: hit.title, why });
-  await writeHome(root);
-  const commit = commitAndPush(root, w, `archive: ${hit.title}`, [dest, hit.path, home, daily]);
+  const commit = commitAndPush(root, w, `archive: ${hit.title}`, [dest, hit.path, daily]);
   // An archived note stays a link target, so nothing dangles; the callers are
   // named because each one now points at a retired claim.
   warn(w, inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]], which is now archived` })));
@@ -503,8 +487,7 @@ export const del = (root: string, title: string, why: string) => op(async (w) =>
   if (inbound.length) refuse(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]]; unlink it or archive [${hit.title}] instead` })));
   unlinkSync(hit.path);
   const daily = writeDaily(root, { op: "delete", title: hit.title, why });
-  await writeHome(root);
-  const commit = commitAndPush(root, w, `delete: ${hit.title}`, [hit.path, join(root, "Home.md"), daily]);
+  const commit = commitAndPush(root, w, `delete: ${hit.title}`, [hit.path, daily]);
   return { op: "delete", title: hit.title, why, commit };
 });
 

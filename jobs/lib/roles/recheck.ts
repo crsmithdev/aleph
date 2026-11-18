@@ -75,7 +75,7 @@ export function prompt(notes: Note[], day: string): string {
 function text(n: Note, v: Verdict, day: string): string | null {
   if (v.verdict === "refresh") return serializeFrontmatter({ ...n.fm, updated: day }) + n.body;
   if (!v.claim || !v.details || !v.evidence) return null;
-  const related = /^## Related\n\n([\s\S]*)$/m.exec(n.body)?.[1].trim() || "- [[Home]]";
+  const related = /^## Related\n\n([\s\S]*)$/m.exec(n.body)?.[1].trim() || "";
   return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related);
 }
 

@@ -26,7 +26,7 @@ const notes = () => loadWiki(root);
 
 async function seed(title: string, core?: string) {
   const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "d", evidence: "e", related: ["Home"] }, today());
+  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "d", evidence: "e", related: [] }, today());
   writeFileSync(file, core ? text.replace("\nsupersedes", `\ncore: ${core}\nsupersedes`) : text);
   expect((await write(root, file, "seed")).ok).toBe(true);
 }
