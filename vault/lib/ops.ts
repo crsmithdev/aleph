@@ -7,6 +7,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
+import { readJsonOr, writeJson } from "../../lib/json.ts";
+import { missesStore } from "../../jobs/lib/infra/settings.ts";
 import type { Observation } from "../../lib/langfuse.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, pushOrigin, tracked, trackedFiles } from "./git.ts";
@@ -309,12 +311,21 @@ export const misses = (days = 7) => op(async () => {
   if (!lf) fail("no Langfuse keys");
   const to = new Date();
   const from = new Date(to.getTime() - days * 86400_000);
-  let obs: Observation[];
   // Only these three names are read below: asking for them alone skips more than half of a week's pages.
   // One name at a time keeps the in-flight pages at allPages' own limit.
-  const span = { from, to: new Date(to.getTime() + 60_000) };
-  try { obs = []; for (const name of ["Bash", "Read", "vault-recall"]) obs.push(...(await lf.observations({ ...span, name })).rows); }
-  catch (e) { fail(`Langfuse failed: ${errText(e)}`); }
+  const end = new Date(to.getTime() + 60_000);
+  // The rows kept on disk for this base: a run reads only since the last run's end less 2 hours (late writes), and
+  // any older part of its window not kept; each day it reads the whole window again.
+  const file = missesStore(lf.base);
+  const old = readJsonOr<{ rows: Observation[]; from: number; to: number; full: number } | null>(file, null);
+  const full = !old || to.getTime() - old.full > 86400_000;
+  const ranges = full ? [[from.getTime(), end.getTime()]] : [[old.to - 2 * 3600_000, end.getTime()], ...(from.getTime() < old.from ? [[from.getTime(), old.from]] : [])];
+  const kept = new Map<string, Observation>(full ? [] : old.rows.map((o) => [o.id, o]));
+  try {
+    for (const name of ["Bash", "Read", "vault-recall"]) for (const [a, b] of ranges) for (const o of (await lf.observations({ from: new Date(a), to: new Date(b), name })).rows) kept.set(o.id, o);
+  } catch (e) { fail(`Langfuse failed: ${errText(e)}`); }
+  let obs = [...kept.values()];
+  writeJson(file, { rows: obs, from: full ? from.getTime() : Math.min(old.from, from.getTime()), to: end.getTime(), full: full ? to.getTime() : old.full });
   obs = obs.filter((o) => !o.startTime || new Date(o.startTime) >= from).sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
 
   const cmdOf = (o: Observation): string => { const i = asValue(o.input); return String(typeof i === "string" ? i : fieldOf(i, "command") ?? "").trim(); };

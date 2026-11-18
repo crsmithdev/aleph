@@ -25,7 +25,7 @@ beforeEach(() => {
     ALEPH_JUDGE: "haiku", ALEPH_HANDOFFS_DIR: join(base, "handoffs"), ALEPH_BACKUPS_DIR: join(base, "backups"), ALEPH_FACTORY_DIR: join(base, "factory"),
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
   });
-  use({ observations: async () => { throw new Error("down"); } } as any);
+  use({ base: "http://down.test", observations: async () => { throw new Error("down"); } } as any);
 });
 afterEach(() => {
   use(null);

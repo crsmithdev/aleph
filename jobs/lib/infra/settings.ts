@@ -150,6 +150,8 @@ export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.
 export const skillsStore = () => alephPath("ALEPH_SKILLS_STORE", "skills-store.json");
 /** The activity's kept observation rows, beside the skills store. */
 export const observationsStore = () => skillsStore().replace(/\.json$/, ".observations.json");
+/** The rows `memory misses` kept for one Langfuse base, beside the skills store. */
+export const missesStore = (base: string) => skillsStore().replace(/\.json$/, `.misses.${base.replace(/\W+/g, "-")}.json`);
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;
 export const stateSlowMs = () => num("ALEPH_STATE_SLOW_MS", 0);
 /** The credentials file. */

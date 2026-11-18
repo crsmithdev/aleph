@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
 import { use } from "../../lib/langfuse.ts";
 import { cli as memory } from "./cli.ts";
+import { missesStore } from "../../jobs/lib/infra/settings.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -854,7 +855,7 @@ describe("misses", () => {
     hook("e", { candidates: 0, asked: 0, kept: 0, capped: false }),
     hook("f", { candidates: 2, asked: 2, kept: 0, capped: false }),
     { ...hook("old", { candidates: 0, asked: 0, kept: 0, capped: false }), startTime: ago(30) },
-  ];
+  ].map((o, i) => ({ id: `o${i}`, ...o }));
   let seen: URLSearchParams[] = [];
   beforeAll(() => {
     server = Bun.serve({ port: 0, fetch: (req) => {
@@ -868,12 +869,25 @@ describe("misses", () => {
     } });
   });
   afterAll(() => server.stop());
+  beforeEach(() => rmSync(missesStore(`http://127.0.0.1:${server.port}`), { force: true }));
   const env = () => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
   test("without --days the window is 7 days; a wide window counts older calls", async () => {
     expect(JSON.parse((await runAsync(env(), "misses")).stdout).recalls).toBe(7);
+    seen = [];
     const wide = JSON.parse((await runAsync(env(), "misses", "--days", "60")).stdout);
     expect(wide.recalls).toBe(8);
     expect(wide.hook.runs).toBe(4);
+    // The 7 days are kept: the request for the older part ends where they start.
+    const older = seen.filter((p) => p.get("fromStartTime") === ago(60));
+    expect(new Set(older.map((p) => p.get("name")))).toEqual(new Set(["Bash", "Read", "vault-recall"]));
+    expect(older.every((p) => p.get("toStartTime") === ago(7))).toBe(true);
+  });
+  test("a second run asks only for rows since 2 hours before the first run's end, and answers the same", async () => {
+    const first = JSON.parse((await runAsync(env(), "misses")).stdout);
+    seen = [];
+    expect(JSON.parse((await runAsync(env(), "misses")).stdout)).toEqual(first);
+    expect(seen.length).toBeGreaterThan(0);
+    for (const p of seen) expect(Date.parse(p.get("fromStartTime")!)).toBeGreaterThanOrEqual(NOW + 60_000 - 2 * 3600_000);
   });
   test("recallQuery takes cli.ts and vault recall as a command word only", async () => {
     expect(recallQuery('bun ~/.claude/skills/aleph/vault/cli.ts recall "x"')).toBe("x");
@@ -988,7 +1002,7 @@ describe("maintain", () => {
     handoffs = join(base, "handoffs");
     backups = join(base, "backups");
     // Langfuse is unreachable, so the misses queue is left out.
-    use({ observations: async () => { throw new Error("down"); } } as any);
+    use({ base: "http://down.test", observations: async () => { throw new Error("down"); } } as any);
     expect((await cli("write", note("Core Twice", { core: "Terse [[UI Text]] [[UI Text]] always" }, undefined), "--why", "x")).code).toBe(0);
     put(join(handoffs, `${day(40)}-101010-old.md`));
     put(join(handoffs, `${day(41)}-101010-not-compiled.md`));
