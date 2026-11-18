@@ -215,6 +215,7 @@ const data = () => ({
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
+  processes: { steps: [], episodes: { pages: 0, keep: 90, days: [{ date: "2026-11-16", pages: 0, finished: 0 }, { date: "2026-11-17", pages: 0, finished: 0 }], prunes: [] }, corrections: { states: {}, waiting: [] }, decay: { stale: [] } },
 });
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
@@ -521,7 +522,8 @@ test("the Automation page has no explaining aside; the controls panel holds the 
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
     expect(h).not.toContain("gates-two");
-    expect(h.match(/<div class="pair">/g)).toHaveLength(1);
+    // Schedules with Controls, and the memory jobs' Episodes with Lessons.
+    expect(h.match(/<div class="pair">/g)).toHaveLength(2);
     const pair = h.slice(h.indexOf('<div class="pair">'));
     expect(pair.slice(0, pair.indexOf("</div></section></div>"))).toMatch(/id="gates-schedules".*id="gates-caps"/s);
     expect(h.indexOf('id="gates-caps"')).toBeLessThan(h.indexOf('id="gates-held"'));

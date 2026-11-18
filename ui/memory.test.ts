@@ -18,7 +18,9 @@ import { badge, dataTable, empty, heads, md, pageHead, priorityBadge } from "./v
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { fillFrame, mountContext } from "./views/lib/context-panel.js";
+import { needs, writeWeeks } from "./views/lib/memory-health.js";
+// @ts-ignore
+import { renderMemoryJobs } from "./views/lib/processes.js";
 // @ts-ignore
 import { panel } from "./views/lib/timeline.js";
 // @ts-ignore
@@ -250,10 +252,10 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
   const h = v.renderInspector(note, n, "use", hist);
   expect(h).toContain('<aleph-chart key="memory/recall"');
-  expect(h).toContain('aria-label="Recalls per Day: recalls 3"');
+  expect(h).toContain('aria-label="Offers per Day: offers 3"');
   expect(h).not.toContain("mhist");
   expect(h).not.toContain("<i title=");
-  expect(v.recallFrame(hist).by.keys[0].name).toBe("recalls");
+  expect(v.recallFrame(hist).by.keys[0].name).toBe("offers");
   expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
   expect(v.renderInspector(note, n, "use", Array(30).fill(0))).not.toContain("aleph-chart");
 });
@@ -348,24 +350,29 @@ const it = (over: object) => ({ type: "semantic", source: "note", key: "N", titl
 const page = { exists: true, total: 1, scopes: ["aleph", "other"], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
   start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
 
-test("the page is the search, the freshness filter, six type tiles, the results and the inspector, then health", () => {
+test("the Notes tab is the kind filter, the search, the freshness filter, the results and the inspector, with no health", () => {
   const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);
-  for (const t of ['data-ui="mem-search"', 'value="work"', "Read in 7 days", 'id="mem-inspector"', "<h2>Health</h2>", "2.9KiB / 5.9KiB, 1 core lines", '<div class="msearch">', '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
+  for (const t of ['data-ui="mem-search"', 'value="work"', "Offered in 7 days", 'id="mem-inspector"', '<div class="msearch">', '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
     expect(h).toContain(t);
-  expect(h).not.toContain("3000 / 6000 bytes");
+  expect(h).not.toContain("<h2>Health</h2>");
   // The page head's filter is scope().bar(): the Project select, then the window control.
   expect(h).toContain(`<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: "", more: page.scopes }) })}`);
   expect(h).toContain('aria-label="Window" data-name="window"');
-  // Page head, tiles, search, freshness filter, then the results.
-  const at = ["<h1>Memory</h1>", 'name="project"', 'id="mem-board"', 'data-ui="mem-search"', 'id="mem-fresh"', 'id="mem-results"'].map((t) => h.indexOf(t));
+  // Page head, kind filter, search, freshness filter, then the results.
+  const at = ["<h1>Memory</h1>", 'name="project"', 'id="mem-kind"', 'data-ui="mem-search"', 'id="mem-fresh"', 'id="mem-results"'].map((t) => h.indexOf(t));
   expect(at).toEqual([...at].sort((x, y) => x - y));
   expect(at[0]).toBeGreaterThanOrEqual(0);
-  expect(h.match(/data-tile=/g)).toHaveLength(6);
-  expect(h).not.toContain('data-tile="retrieval"');
-  expect(h).toMatch(/data-tile="working" aria-pressed="false"><span class="r1"><span class="k">Working<\/span><\/span><b>1<\/b>/);
-  expect(h).toMatch(/data-tile="parametric"[^]*?<b>–<\/b>/);
-  expect(v.renderMemory(page, v.options(), null)).toContain("Loading memory");
-  expect(v.view.api({}, new URLSearchParams("project=aleph"))).toBe("/api/memory?project=aleph");
+  const kinds = h.slice(h.indexOf('data-name="type"'), h.indexOf("</div>", h.indexOf('data-name="type"')));
+  expect([...kinds.matchAll(/data-value="(\w*)"/g)].map((m) => m[1])).toEqual(["", "semantic", "procedural", "episodic", "working", "prospective"]);
+  expect(kinds).toContain('data-value="" aria-pressed="true">All 2</button>');
+  expect(kinds).toContain('data-value="working" aria-pressed="false">Working 1</button>');
+  expect(h).toContain('data-value="never" aria-pressed="false">Never offered 0</button>');
+  const loading = v.renderMemory(page, v.options(), null);
+  expect(loading).toContain("Loading memory");
+  expect(loading).toContain('aria-pressed="true">All</button>');
+  expect(v.view.api({}, new URLSearchParams("project=aleph"))).toEqual(["/api/memory?project=aleph", "/api/memory/processes"]);
+  expect(v.view.api({}, new URLSearchParams("tab=health"))).toEqual(["/api/memory", "/api/memory/processes", "/api/memory/log"]);
+  expect(v.view.combine([{ notes: [] }, { steps: [] }, { rows: [1] }])).toEqual({ notes: [], processes: { steps: [] }, rows: [1] });
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha", written_by: "w", last_verified: "2026-11-01" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
@@ -384,7 +391,7 @@ test("the page is the search, the freshness filter, six type tiles, the results 
   expect(nh).not.toContain("<dt>kind</dt>");
 });
 
-test("each type has its own layout, filters keep by type and freshness, and the tiles count before the type filter", () => {
+test("each type has its own layout, filters keep by type and freshness, and the kind counts come before the type filter", () => {
   const rs = [it({}), it({ key: "Never", title: "Never" }), it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" }),
     it({ type: "episodic", source: "episode", key: "e.md", title: "e" }), it({ type: "prospective", source: "issue", key: "a/1", title: "a-1", priority: "high" })];
   const status = new Map(v.noteRows(page, NOW).map((n: any) => [n.title, n.status]));
@@ -401,7 +408,7 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   expect(h).toContain('<td class="wide" title="the vault">');  // procedural: the title cell's full text
   expect(v.renderResults([it({ type: "episodic", source: "episode", key: "e.md", title: "e", at: "" })], v.options(), status)).toContain('<span class="time"><span title="No date">–</span></span>');
   expect(h).toContain(priorityBadge("high"));             // prospective: cards with the priority
-  expect(h).toContain("read never");                      // semantic: the read date
+  expect(h).toContain("offered never");                   // semantic: the offer date
   expect(h.match(/<li class="mrow[^>]* tabindex="0"/g)?.length).toBeGreaterThan(0);
   expect(v.renderResults(rs.slice(2, 3), v.options(), status)).toMatch(/<tr class="mrow" tabindex="0"/);
   expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toBe(empty());
@@ -417,15 +424,15 @@ test("the procedural table is dataTable's, so it has the tscroll wrapper, the tb
   expect(h).toContain(dataTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), v.ruleRow(proc, o)));
 });
 
-test("the overview writes its counts through count() and its sizes through bytes()", () => {
-  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000, unoffered_reads: 0, hook: { runs: 0 } }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
-    start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, core: [] } } };
+test("the Notes and Health tabs write their counts through count()", () => {
+  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000, unoffered_reads: 0, missed: [], hook: { runs: 0, zero_candidates: 0, capped: 0 } }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
+    start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, memory: 1000, core: [] } } };
   const rs = Array.from({ length: 1000 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
   const h = v.renderMemory(big, v.options(), rs);
-  expect(h).toMatch(/data-tile="semantic"[^]*?<b>1,000<\/b>/);
+  expect(h).toContain('data-value="semantic" aria-pressed="false">Semantic 1,000</button>');
   expect(h).toContain('<h3>Semantic</h3><span class="count">1,000</span>');
-  for (const t of ["<dd>12,345</dd>", "<dd>1,000 (10%)</dd>", "2.0KiB / 4.0KiB, 0 core lines, 1,500 cut", '<span class="count">1,200</span>', "1,200 warned"]) expect(h).toContain(t);
-  expect(h).not.toContain("refusals,");
+  const health = v.renderHealthTab(big);
+  for (const t of ["<dd>12,345</dd>", "<dd>1,000 of 12,345 (10%)</dd>", "2,048 B / 4,096 B", '<span class="count">1,200</span>', '<td class="num">1,200</td>', "<b>1,500<em> / 0</em></b>"]) expect(health).toContain(t);
 });
 
 test("the procedural table hides its 51st row and its pager says 50 of 51", () => {
@@ -490,7 +497,8 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
   mkdirSync(runs0, { recursive: true });
   writeFileSync(join(runs0, "maintain.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: `dry: ${JSON.stringify({ decay: 3, overlap: 5 })}` }));
   writeFileSync(join(runs0, "compile.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: "dry: 2026-11-03: 2 notes" }));
-  putJson("state", "corrections", { minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ sentence: "Run the checks.", state: "proposed" }, { sentence: "Old.", state: "declined" }] });
+  const signal = (at: string) => ({ id: at, source: "chris", at, quote: "q", link: "" });
+  putJson("state", "corrections", { minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ id: "l1", sentence: "Run the checks.", state: "proposed", signals: [signal("2026-11-02T10:00:00.000Z"), signal("2026-11-01T10:00:00.000Z")] }, { id: "l2", sentence: "Old.", state: "declined", signals: [] }] });
   try {
     const m = await (await at("/api/memory/processes")).json() as any;
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
@@ -507,26 +515,27 @@ test("/api/memory/processes reads the tick, the corrections store, the episode p
     await fresh("factory");
     const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
-    const row = v.renderProcessesTab(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
+    const row = renderMemoryJobs(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
     expect(row).toContain('<span class="badge error" title="no route">failed</span>');
     expect(m.episodes.pages).toBe(1);
-    expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1 });
-    expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ sentence: "Run the checks.", state: "proposed" }] });
-    const h = v.renderProcessesTab(m);
+    expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1, finished: 0 });
+    expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ id: "l1", sentence: "Run the checks.", state: "proposed", since: "2026-11-01T10:00:00.000Z" }] });
+    const h = renderMemoryJobs(m);
     expect(h).toContain("Run the checks.");
+    expect(h).toContain('data-act="approve" data-path="/api/proposals/l1/approve"');
+    expect(h).toContain('data-act="decline" data-path="/api/proposals/l1/decline"');
     expect(h).toContain('<span class="badge error">failed: no page</span>');
-    expect(v.renderProcessesTab({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
-    expect(h).toContain(`<div class="empty"><p>No data</p></div>`);
-    expect(h).toContain('<a href="#/memory?tab=processes" aria-current="page">Processes</a>');
+    expect(renderMemoryJobs({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
+    expect(h).toContain("You decided 1: 0 of 1 approved (0.0%).");
   } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
-test("the tabs link Search, Context, Log and Processes; the log row opens a recall to its notes", () => {
+test("the tabs link Notes, Health and Log; the log row opens a recall to its notes; Episode pages filter alone", () => {
   const h = v.renderTabs("log", "aleph");
-  expect(h).toContain('<a href="#/memory?project=aleph">Search</a>');
+  expect(h).toContain('<a href="#/memory?project=aleph">Notes</a>');
   expect(h).toContain('<a href="#/memory?tab=log&project=aleph" aria-current="page">Log</a>');
-  expect(h).toContain('<a href="#/memory?tab=context&project=aleph">Context</a>');
-  expect(h).toContain('<a href="#/memory?tab=processes&project=aleph">Processes</a>');
+  expect(h).toContain('<a href="#/memory?tab=health&project=aleph">Health</a>');
+  expect(h.match(/<a /g)).toHaveLength(3);
   expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
   const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
   expect(v.logRow(r)).toContain('<details><summary title="q">q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
@@ -534,92 +543,54 @@ test("the tabs link Search, Context, Log and Processes; the log row opens a reca
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
   expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
   expect(v.renderLog({ project: "", rows: [] })).toContain(empty());
+  const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Goal", why: "episode of aleph-1", titles: [] };
+  const w = { ...ep, note: "Use Bun", why: "a fix" };
+  const kept = (kind: string) => v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))).match(/<tr><td class="time lead">/g)?.length;
+  expect([kept("episode"), kept("write")]).toEqual([1, 1]);
+  const log = v.renderLog({ project: "", rows: [ep, w] });
+  for (const k of ["memory/writes", "memory/episode-writes", "memory/recalls"]) expect(log).toContain(`<aleph-chart key="${k}">`);
 });
 
-test("the Context tab draws one parts row per part of the selected request, fixed parts est. and message parts exact", () => {
-  const part = (name: string, tokens: number, how: string) => ({ name, rec: "r", tokens, how });
-  const parts = [part("System prompt", 600, "est"), part("Tools · 2", 300, "est"), part("Your messages · 1", 100, "exact")];
-  const usage = { input: 2, cacheRead: 900, cacheWrite: 98, output: 7 };
-  const session = { id: "s1", requests: [{ n: 1, fill: 1000, usage, parts: parts.slice(0, 2) }, { n: 2, fill: 1000, usage, parts }], items: [], summaries: [] };
-  const sessions = [{ id: "s1aaaaaaaa", project: "aleph", updated: "2026-11-10T10:00:00Z" }];
-  const h = v.renderContextTab({ sessions, session }, new URLSearchParams("tab=context&n=2"));
-  expect(h).toContain('<a href="#/memory?tab=context" aria-current="page">Context</a>');
-  const table = h.slice(h.indexOf("<table"), h.indexOf("</table>"));
-  const rows = table.split("<tr>").slice(2).map((r: string) => r.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
-  expect(rows).toEqual(["System prompt r 600 est.", "Tools · 2 r 300 est.", "Your messages · 1 r 100 exact", "Total message.usage 1,000 exact"]);
-  expect(h).toContain("Fill of Request 2");
-  expect(h).toContain('<aleph-chart key="memory/fill">');
-  expect(fillFrame(session.requests, session.requests[1]).rows).toEqual([{ name: "1", fill: 1000, on: false, dashed: false, pick: 1 }, { name: "2", fill: 1000, on: true, dashed: false, pick: 2 }]);
-  expect(v.renderContextTab({ sessions, session }, new URLSearchParams("n=9"))).toContain("Fill of Request 2");
-  expect(v.renderContextTab({ sessions })).toContain("Loading the session");
-  expect(v.renderContextTab({ sessions: [] })).toContain(empty());
+test("a day frame counts the rows it keeps per local day, oldest first, and writeWeeks takes the median of the 3 weeks before", () => {
+  const now = Date.parse("2026-11-17T12:00:00");
+  const at = (d: number) => new Date(now - d * 86400_000).toISOString();
+  const rows = [at(0), at(0), at(2), at(8), at(9), at(15), at(22), at(22), at(22)].map((a) => ({ at: a, kind: "write", op: "write", note: "N", why: "x", titles: [] }));
+  const f = v.dayFrame(rows, () => true, 3, "W", now);
+  expect(f.rows.map((r: any) => r.n)).toEqual([1, 0, 2]);
+  expect(writeWeeks(rows, now)).toEqual({ week: 3, median: 2, lo: 1, hi: 3 });
 });
 
-test("a kept session draws at once for the same session and request, and mountContext fetches only when the query changes", async () => {
-  const g = globalThis as any, store = new Map<string, string>(), saved = { localStorage: g.localStorage, fetch: g.fetch, location: g.location };
-  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, x: string) => void store.set(k, x) };
-  g.location = { hash: "#/memory?tab=context" };
-  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
-  const session = (id: string) => ({ id, window: 1000, requests: [{ n: 1, fill: 10, usage, parts: [], since: 0 }], items: [], summaries: [] });
-  const sessions = [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }, { id: "s2", project: "p", updated: "2026-11-09T10:00:00Z" }];
-  let calls = 0;
-  g.fetch = async (url: string) => { calls++; return Response.json(session(url.split("/").pop()!)); };
-  const root = (m: any, q: URLSearchParams) => { const b = { outerHTML: "", innerHTML: "" }; return { html: v.renderContextTab(m, q), body: b, root: { querySelector: () => b, addEventListener() {} } as any }; };
-  try {
-    store.set("aleph.memory.context", JSON.stringify({ n: "", session: session("s1") }));
-    const same = new URLSearchParams("tab=context&session=s1"), newest = new URLSearchParams("tab=context");
-    expect(v.renderContextTab({ sessions }, same)).toContain("Fill of Request 1");
-    expect(v.renderContextTab({ sessions }, same)).not.toContain("Loading the session");
-    expect(v.renderContextTab({ sessions }, newest)).toContain("Fill of Request 1");
-    expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s2"))).toContain("Loading the session");
-    expect(v.renderContextTab({ sessions }, new URLSearchParams("session=s1&n=1"))).toContain("Loading the session");
-    await mountContext(root({ sessions }, same).root, { sessions }, same);
-    expect(calls).toBe(0);
-    const other = new URLSearchParams("tab=context&session=s2");
-    await mountContext(root({ sessions }, other).root, { sessions }, other);
-    expect(calls).toBe(1);
-    expect(JSON.parse(store.get("aleph.memory.context")!).session.id).toBe("s2");
-    await mountContext(root({ sessions }, other).root, { sessions }, other);
-    expect(calls).toBe(1);
-  } finally { Object.assign(g, saved); }
+test("the Needs-you strip shows each item only over its act-threshold, and nothing when none is", () => {
+  const old = new Date(NOW - 10 * 86400_000).toISOString();
+  const m = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 }, global: { cut: 0 } }, misses: { unoffered_reads: 11 },
+    processes: { corrections: { waiting: [{ id: "l", sentence: "s", state: "open", since: old }] }, decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
+  const h = needs(m, NOW);
+  for (const t of ["1 lesson wait, oldest 10 d", "2 core lines cut", "1 note refused", "11 reads nobody offered", "1 note over 30 d late"]) expect(h).toContain(t);
+  expect(h).toContain('<span class="badge error">refused</span>');
+  const calm = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { corrections: { waiting: [{ id: "l", sentence: "s", state: "open", since: new Date(NOW).toISOString() }] }, decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
+  expect(needs(calm, NOW)).toBe("");
 });
 
-test("the Context tab scales the fill line, the part segments and the chart bars to the session's window", () => {
-  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
-  const parts = [{ name: "Tools · 1", rec: "r", tokens: 250_000, how: "est" }];
-  const session = { id: "s1", window: 1_000_000, requests: [{ n: 1, fill: 500_000, usage, parts, since: 0 }], items: [], summaries: [] };
-  const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=1"));
-  expect(h).toContain("of 1,000,000 tokens · 50%");
-  expect(h).toContain("width:25.0%");
-  const cut = [{ n: 1, fill: 500 }, { n: 2, fill: 100 }];
-  expect(fillFrame(cut, cut[0]).rows.map((r: any) => [r.on, r.dashed])).toEqual([[true, false], [false, true]]);
-});
-
-test("the Context tab unfolds Tools into each tool and Tool results into each tool's calls the request holds", () => {
-  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
-  const parts = [{ name: "Tools · 2", rec: "prompt_snapshot.tools", tokens: 400, how: "est" }, { name: "Tool results · 3", rec: "tool_result", tokens: 90, how: "exact" }];
-  const call = (id: string, tool: string, n: number, tokens: number) => ({ id, tool, input: `in-${id}`, n, tokens, how: "est" });
-  const session = {
-    id: "s1", requests: [{ n: 3, fill: 1000, usage, parts, since: 1 }],
-    tools: [{ name: "Bash", tokens: 100 }, { name: "mcp__chrome__navigate", tokens: 300 }],
-    calls: [call("a", "Read", 2, 30), call("b", "Bash", 2, 50), call("c", "Bash", 3, 10), call("d", "Bash", 4, 99)],
-  };
-  const h = v.renderContextTab({ sessions: [{ id: "s1", project: "p", updated: "2026-11-10T10:00:00Z" }], session }, new URLSearchParams("n=3"));
+test("the Start Context card splits what the agent receives, lists the cut lines and the kept lines to trim first", () => {
+  const core = (title: string, scope: string, bytes: number, kept: boolean) => ({ title, core: "c", scope, bytes, kept });
+  const m = { notes: [row({ title: "A", history: Array(30).fill(1) }), row({ title: "B" }), row({ title: "C" })], lint: { refuse: [], warn: [] },
+    start: { aleph: { bytes: 1000, budget: 6000, cut: 1, memory: 600, core: [core("A", "aleph", 100, true), core("B", "global", 150, true), core("C", "aleph", 80, false)] } } };
+  const h = v.renderHealthTab(m);
   const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const tools = h.slice(h.indexOf("By tool"), h.indexOf("</details>"));
-  expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75%", "Bash built-in 100 25%"]);
-  // request 4's call is not in request 3; the groups go by tokens
-  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 call · 30 · 33%"]);
-  expect(h).toContain('data-call="b"');
-  expect(h).not.toContain('data-call="d"');
+  const sent = h.slice(h.indexOf("What the aleph agent receives"), h.indexOf("Cut lines"));
+  expect(sent.split("<tr>").slice(2).map(text)).toEqual(["MEMORY.md 600 B 60%", "Global core lines · 1 150 B 15%", "Aleph core lines · 1 100 B 10%", "Tags and pointer 150 B 15%", "Total sent 1,000 B 5,000 B left"]);
+  expect(h).toContain("Cut lines, 1");
+  const trim = h.slice(h.indexOf("Trim first"));
+  expect([...trim.matchAll(/href="#\/memory\/(\w)"/g)].map((x) => x[1])).toEqual(["B", "A"]);
 });
 
-test("Health shows the recall misses card after Lint's: unoffered reads, empty of all recalls and hook runs, or No data", () => {
-  const h = v.renderMemory({ ...page, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, hook: { runs: 1194 } } }, v.options(), []);
-  const card = h.slice(h.indexOf('aria-label="Recall misses"'));
-  for (const t of ["<dd>1,234</dd>", "<dd>0 (0.0%)</dd>", "<dd>7</dd>", "<dd>1,194</dd>"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
-  expect(h.indexOf('aria-label="Recall misses"')).toBeGreaterThan(h.indexOf('aria-label="Lint"'));
-  const none = v.renderMemory(page, v.options(), []);
-  const body = none.slice(none.indexOf('aria-label="Recall misses"'));
+test("Health's Offer Quality card gives the unoffered reads, the empty share of all recalls and the hook runs, or No data", () => {
+  const rows = [3, 10, 10].map((n) => ({ at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: Array(n).fill("A") }));
+  const h = v.renderHealthTab({ ...page, rows, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, missed: [{ query: "lit spike", at: "2026-11-13T08:49:00Z" }], hook: { runs: 1194, zero_candidates: 4, capped: 1100 } } });
+  const card = h.slice(h.indexOf('aria-label="Offer Quality"'));
+  for (const t of ["<strong>1,234</strong>", "<dd>0 of 7 (0.0%)</dd>", "<dd>7</dd>", "<dd>1,194: 4 with no candidate, 1,100 over 100</dd>", "<dd>p50 10, p95 10, n=3</dd>"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
+  expect(h).toContain('title="lit spike">lit spike</td>');
+  const none = v.renderHealthTab(page);
+  const body = none.slice(none.indexOf('aria-label="Offer Quality"'));
   expect(body.slice(0, body.indexOf("</section>"))).toContain(empty());
 });

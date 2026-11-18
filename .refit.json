@@ -206,6 +206,24 @@
         "docs/mocks/agents-retro/options.html:5-10"
       ],
       "reason": "Each mock under docs/mocks/ is a standalone page that Chris opens on its own, so it keeps its own head, switcher bar and table rows. Mocks share no code with each other or with ui/ (CLAUDE.md, Mocks)."
+    },
+    {
+      "concept": "the view object of a page",
+      "copies": [
+        "ui/views/now.js:13-21",
+        "ui/views/gates.js:9-19",
+        "ui/views/memory.js:12-21",
+        "ui/views/issues.js:13-21"
+      ],
+      "reason": "Each page exports the router's view object (path, title, group, order, icon, api): the same shape by design, read by ui/views/lib/router.js."
+    },
+    {
+      "concept": "the docs/mocks copy of app.css",
+      "copies": [
+        "ui/app.css:791-909",
+        "docs/mocks/file-search/app.css:782-900"
+      ],
+      "reason": "A mock keeps a frozen copy of app.css so it renders as drawn; the mock is a record, not a second style sheet."
     }
   ]
 }

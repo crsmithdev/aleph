@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
-import { window } from "../../lib/session-context.ts";
+import { threshold, window } from "../../lib/session-context.ts";
 import { find } from "../../lib/transcripts.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
@@ -34,7 +34,7 @@ export const routes: Routes = {
   },
   "GET /api/context/:id": async (_req, params) => {
     const text = transcript(params.id);
-    return text === undefined ? missing("session") : Response.json({ id: params.id, window: window(), ...await parseExact(text) });
+    return text === undefined ? missing("session") : Response.json({ id: params.id, window: window(), trigger: threshold(), ...await parseExact(text) });
   },
   "GET /api/context/:id/calls/:call": (_req, params) => {
     const text = transcript(params.id), c = text !== undefined && call(text, params.call);

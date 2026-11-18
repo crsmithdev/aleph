@@ -56,7 +56,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/jobs/:id/logs/:file": "text",
   "/api/context": { sessions: [{ id: "string", project: "string", updated: "time" }] },
   "/api/context/:id": {
-    id: "string", window: "number",
+    id: "string", window: "number", trigger: "number",
     requests: [{ n: "number", fill: "number", since: "number", usage: { input: "number", cacheRead: "number", cacheWrite: "number", output: "number" }, parts: [{ name: "string", rec: "string", tokens: "number", how: "string" }] }],
     tools: [{ name: "string", tokens: "number" }],
     calls: [{ id: "string", tool: "string", input: "string", n: "number", tokens: "number", how: "string" }],
@@ -89,9 +89,9 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/memory/log": { project: "string?", rows: [{ at: "string", kind: "string", op: "string", note: "string", why: "string", titles: ["string"] }] },
   "/api/memory/processes": {
     steps: [{ name: "string", runs: "string", last: "string?", next: "string?", result: "string?", does: "string" }],
-    episodes: { pages: "number", keep: "number", days: [{ date: "string", pages: "number" }], prunes: [{ at: "string", text: "string" }] },
-    corrections: { states: { "*": "number" }, waiting: [{ sentence: "string", state: "string" }] },
-    decay: { stale: [{ note: "string", detail: "string" }] },
+    episodes: { pages: "number", keep: "number", days: [{ date: "string", pages: "number", finished: "number" }], prunes: [{ at: "string", text: "string" }] },
+    corrections: { states: { "*": "number" }, waiting: [{ id: "string", sentence: "string", state: "string", since: "string?" }] },
+    decay: { stale: [{ note: "string", detail: "string", window: "number", over: "number" }] },
   },
   "/api/memory/search": { q: "string", results: [{ type: "string", source: "string", key: "string", title: "string" }] },
   "/api/memory/notes/:title": "object",

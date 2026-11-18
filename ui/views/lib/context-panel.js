@@ -1,13 +1,14 @@
-// The Context tab of the Memory page, on /api/context: a picker for the session and its request, the fill of the
-// selected request as a bar, the fill of every request as a chart, and the parts the request holds. A part is exact
-// when the endpoint says so (from API usage) and est. otherwise (chars ÷ 4). The Tools and Tool results rows unfold
-// into each tool and each call; a call's input loads its result text. Every other part unfolds into its items, and
-// the compact summary into its text.
+// The Context tab of a session page, on /api/context/:id: the request picker, tiles for the selected request (its fill
+// against the compaction trigger, the memory share, the fixed overhead, the cache hit, the compactions), the fill of
+// every request by part group as a chart, and the parts the request holds with their growth since the last
+// compaction. A part is exact when the endpoint says so (from API usage) and est. otherwise (chars ÷ 4). The Tools and
+// Tool results rows unfold into each tool and each call; a call's input loads its result text. Every other part
+// unfolds into its items, and the compact summary into its text.
 import { get } from "./router.js";
-import { goQuery, hashQuery, keep, kept, setQuery } from "./address.js";
+import { hashQuery, keep, kept, setQuery } from "./address.js";
 import { panelOf } from "./chart.js";
-import { count, pct, plural, when } from "./format.js";
-import { actButton, card, chip, dataTable, empty, error, esc, field, fold, heads, list, legendHtml, loadingLine, meter, pagedTable, selectBox } from "./html.js";
+import { count, pct, plural } from "./format.js";
+import { actButton, card, chip, dataTable, empty, error, esc, fold, heads, list, loadingLine, pagedTable, statCard, tiles } from "./html.js";
 
 const how = (h) => chip(h === "exact" ? "exact" : "est.");
 const pick = (requests, n) => requests.find((r) => r.n === Number(n)) ?? requests.at(-1);
@@ -59,90 +60,106 @@ function summary(summaries, r) {
   return s ? kfold("summary", "Text", `<pre class="stat tall">${esc(s.text)}</pre>`) : "";
 }
 
-function picker(m, id, session, r) {
+function picker(session, r) {
   const last = session.requests.length;
-  const opts = m.sessions.map((s) => ({ value: s.id, label: `${s.id.slice(0, 8)} · ${when(s.updated)} · ${s.project}` }));
   // actButton() has no disabled option: the attribute goes on its markup.
   const step = (label, n) => { const b = actButton(label, { n }); return n < 1 || n > last || n === r.n ? b.replace("<button", "<button disabled") : b; };
-  return `<div class="actions">${field("Session", selectBox("Session", "session", opts, id, { id: "ctx-session" }))}` +
-    `<span>Request ${step("Previous", r.n - 1)} <strong>${count(r.n)}</strong> of ${count(last)} ${step("Next", r.n + 1)} ${step("Latest", last)}</span></div>`;
+  return `<div class="actions"><span>Request ${step("Previous", r.n - 1)} <strong>${count(r.n)}</strong> of ${count(last)} ${step("Next", r.n + 1)} ${step("Latest", last)}</span></div>`;
 }
 
-/** The class of the nth part's segment and swatch: the series colours, then `--muted` for the eighth. */
-const series = (i) => `c-s${i % 8 + 1}`;
+/** The chart's part groups, each with the records of the parts it sums. */
+// prettier-ignore
+const GROUPS = [
+  ["fixed", "Fixed: system, tools, instructions", ["prompt_snapshot", "prompt_snapshot.tools", "attachment instructions"]],
+  ["other", "Other (rest of request 1)", ["rest of request 1"]],
+  ["results", "Tool results", ["tool_result"]],
+  ["memory", "Memory: start context, recall offers", ["hook_additional_context", "hook UserPromptSubmit"]],
+  ["attach", "Attachments", ["attachment"]],
+  ["talk", "Conversation, compact summary", ["user", "assistant", "isCompactSummary"]],
+];
+const sumOf = (r, recs) => r.parts.filter((p) => recs.includes(p.rec)).reduce((n, p) => n + p.tokens, 0);
+/** The requests whose fill fell below 60% of the request before: a compaction. */
+const compactions = (requests) => requests.filter((x, i) => i > 0 && x.fill < 0.6 * requests[i - 1].fill);
 
-function fillBar(r, limit) {
-  const u = r.usage;
-  return card("Fill of Request " + r.n, `<p><strong>${count(r.fill)}</strong> of ${count(limit)} tokens · ${pct(r.fill / limit * 100)} ${how("exact")}</p>` +
-    `<p class="quiet">input ${count(u.input)} · cache read ${count(u.cacheRead)} · cache write ${count(u.cacheWrite)} · output ${count(u.output)}</p>` +
-    meter(r.parts.map((p, i) => ({ pct: p.tokens / limit * 100, cls: series(i) })), "Context fill by part") + legendHtml(r.parts.map((p, i) => [p.name, series(i)])));
-}
-
-/** The frame of the fill of each request: the selected one in --ink, one that follows a compaction dashed. A click picks it. */
+/** The frame of the fill of each request by part group: the selected one in --ink. A click picks it. */
 export const fillFrame = (requests, r) => ({
-  measure: { name: "Fill per Request", unit: "count", agg: "max" },
+  measure: { name: "Fill per Request by Part", unit: "count", agg: "max" },
   over: { kind: "time", window: "week" },
-  by: { keys: [{ key: "fill", name: "fill" }] },
-  rows: requests.map((x, i) => ({ name: String(x.n), fill: x.fill, on: x === r, dashed: i > 0 && x.fill < requests[i - 1].fill, pick: x.n })),
-  form: "columns",
-  legend: false,
+  by: { keys: GROUPS.map(([key, name]) => ({ key, name })) },
+  rows: requests.map((x) => ({ name: String(x.n), ...Object.fromEntries(GROUPS.map(([key, , recs]) => [key, sumOf(x, recs)])), on: x === r, pick: x.n })),
 });
+
+/** The tiles of request `r`: fill against the compaction trigger, memory share, fixed overhead, cache hit, compactions. */
+function kpis(s, r) {
+  const u = r.usage, mem = sumOf(r, GROUPS[3][2]), fixed = sumOf(r, GROUPS[0][2]), cuts = compactions(s.requests), last = cuts.at(-1);
+  const before = last && s.requests.find((x) => x.n === last.n - 1);
+  return tiles("Context", [
+    statCard({ k: "Fill", v: count(r.fill), v2: count(s.trigger), q: ["tokens", "compaction trigger"] }),
+    statCard({ k: "Memory share", v: pct((mem / r.fill) * 100), note: `${count(mem)} tokens of fill` }),
+    statCard({ k: "Fixed overhead", v: count(fixed), note: `${pct((fixed / r.fill) * 100)} of fill` }),
+    statCard({ k: "Cache hit", v: pct((u.cacheRead / Math.max(r.fill, 1)) * 100), note: `${count(u.cacheWrite)} written` }),
+    statCard({ k: "Compactions", v: count(cuts.length), note: last ? `request ${last.n}: ${count(before.fill)} to ${count(last.fill)}` : "" }),
+  ].join(""));
+}
 
 function parts(r, s) {
   const more = (p) => p.rec === "prompt_snapshot.tools" ? (s.tools.length ? byTool(s.tools, p.tokens) : "") : p.rec === "tool_result" ? byCall(s.calls, r, p.tokens)
     : p.rec === "isCompactSummary" ? summary(s.summaries, r) : byItem(s.items, r, p);
-  const rows = r.parts.map((p) => [p, more(p)]).map(([p, m]) => `<tr><td>${esc(p.name)}</td><td class="mono">${esc(p.rec)}</td><td class="num">${count(p.tokens)}</td><td>${how(p.how)}</td></tr>` +
-    (m ? `<tr><td colspan="4">${m}</td></tr>` : ""));
-  rows.push(`<tr><td><strong>Total</strong></td><td class="mono">message.usage</td><td class="num"><strong>${count(r.fill)}</strong></td><td>${how("exact")}</td></tr>`);
-  return card(`What Is in Request ${r.n}`, dataTable(heads(["Part", "Record", "Tokens", "How"], ["Tokens"]), rows.join("")));
+  // Growth since the last compaction: tokens now less the part's tokens at the compaction's request (request 1 when none).
+  const base = s.requests.find((x) => x.n === r.since) ?? s.requests[0], then = (rec) => base.parts.filter((p) => p.rec === rec).reduce((n, p) => n + p.tokens, 0);
+  const change = (n) => (n > 0 ? `+${count(n)}` : count(n));
+  const row = (name, tokens, grew, h, bold = false) => { const b = (x) => (bold ? `<strong>${x}</strong>` : x); return `<tr><td>${b(esc(name))}</td><td class="num">${b(count(tokens))}</td><td class="num">${share(tokens, r.fill)}</td><td class="num">${change(grew)}</td><td>${how(h)}</td></tr>`; };
+  const rows = r.parts.map((p) => [p, more(p)]).map(([p, m]) => row(p.name, p.tokens, p.tokens - then(p.rec), p.how) + (m ? `<tr><td colspan="5">${m}</td></tr>` : ""));
+  const mem = GROUPS[3][2], memNow = sumOf(r, mem);
+  rows.push(row("Memory, start context and offers", memNow, memNow - sumOf(base, mem), "exact"), row("Total", r.fill, r.fill - base.fill, r.parts.some((p) => p.how !== "exact") ? "est" : "exact", true));
+  return card(`What Is in Request ${count(r.n)}`, dataTable(heads(["Part", "Tokens", "Share of fill", `Change since request ${base.n}`, "How"], ["Tokens", "Share of fill", `Change since request ${base.n}`]), rows.join("")), { aside: "Share is of fill" });
 }
 
 /** The session the tab loaded last, through keep(): `{ n, session }`, with `n` the request of the query it was loaded for. */
-const KEPT = "memory.context";
-/** The kept session when the query names it (or none, for the newest) and the same request, else null: a redraw then needs no load. */
-export function held(m, query) {
+const KEPT = "session.context";
+/** The kept session when it is `id` and the query names the same request, else null: a redraw then needs no load. */
+export function held(id, query) {
   const k = kept(KEPT, null);
-  return k && k.session?.id === (query.get("session") || m.sessions[0]?.id) && k.n === (query.get("n") ?? "") ? k.session : null;
+  return k && k.session?.id === id && k.n === (query.get("n") ?? "") ? k.session : null;
 }
 
-/** The body of the tab: `m` is the /api/context body, with `session` the /api/context/:id body once loaded; `o.n` the request. */
-export function renderContext(m, o = {}) {
-  if (!m.sessions.length) return empty();
-  if (!m.session) return `<div id="ctx-body">${loadingLine("the session")}</div>`;
-  if (!m.session.requests.length) return `<div id="ctx-body">${empty()}</div>`;
-  const r = pick(m.session.requests, o.n);
-  return `<div id="ctx-body">${list(`${picker(m, m.session.id, m.session, r)}${fillBar(r, m.session.window)}${panelOf("memory/fill", fillFrame(m.session.requests, r))}${parts(r, m.session)}`)}</div>`;
+/** The body of the tab: `s` is the /api/context/:id body, or null while it loads; `o.n` the request. */
+export function renderContext(s, o = {}) {
+  if (!s) return `<div id="ctx-body">${loadingLine("the context")}</div>`;
+  if (!s.requests.length) return `<div id="ctx-body">${empty()}</div>`;
+  const r = pick(s.requests, o.n);
+  return `<div id="ctx-body">${list(`${picker(s, r)}${kpis(s, r)}${panelOf("session/fill", fillFrame(s.requests, r))}${parts(r, s)}`)}</div>`;
 }
 
-/** Load the selected session (the newest by default) and draw it; a pick of a request redraws without loading. */
-export async function mountContext(root, m, query) {
-  if (!m.sessions.length) return;
-  const id = query.get("session") || m.sessions[0].id;
+/** Load session `id`'s context and draw it; a pick of a request redraws without loading. */
+export async function mountContext(root, id, query) {
   // The chart panel draws once its element has a frame.
   const plot = () => {
-    const el = root.querySelector('aleph-chart[key="memory/fill"]');
+    const el = root.querySelector('aleph-chart[key="session/fill"]');
     if (el) el.frame = fillFrame(session.requests, pick(session.requests, hashQuery().get("n")));
   };
-  const draw = () => { root.querySelector("#ctx-body").outerHTML = renderContext({ ...m, session }, { n: hashQuery().get("n") }); plot(); };
+  const draw = () => { root.querySelector("#ctx-body").outerHTML = renderContext(session, { n: hashQuery().get("n") }); plot(); };
   const go = (n) => { setQuery({ n }); keep(KEPT, { n, session }); draw(); };
-  let session = held(m, query);
+  let session = held(id, query);
   if (!session) {
     try {
       const res = await get(`/api/context/${encodeURIComponent(id)}`, "ctx-session");
       if (!res) return;
       session = await res.json();
       if (!res.ok) throw new Error(session.error ?? `answered ${res.status}`);
-    } catch (e) { root.querySelector("#ctx-body").innerHTML = error("Could not load the session.", { detail: e.message }); return; }
+    } catch (e) { root.querySelector("#ctx-body").innerHTML = error("Could not load the context.", { detail: e.message }); return; }
     keep(KEPT, { n: query.get("n") ?? "", session });
-    draw();
-  } else plot();
+  }
+  draw();
   // A click on a bar of the chart. A property holds the handler, so each mount replaces the last one's, as for onclick.
   if (root._pick) root.removeEventListener("chartpick", root._pick);
   root._pick = (e) => go(String(e.detail));
   root.addEventListener("chartpick", root._pick);
-  root.onclick = async (e) => {
+  // The session page's onclick runs its tabs, so the context's clicks take a listener of their own, replaced as above.
+  if (root._ctx) root.removeEventListener("click", root._ctx);
+  root._ctx = async (e) => {
     const b = e.target.closest?.("#ctx-body button[data-n]");
-    if (b && !b.disabled) go(b.dataset.n);
+    if (b && !b.disabled) return go(b.dataset.n);
     const c = e.target.closest?.("#ctx-body button[data-call]");
     if (!c) return;
     const out = c.closest("details").querySelector("[data-result]");
@@ -156,5 +173,5 @@ export async function mountContext(root, m, query) {
       out.innerHTML = `<pre class="stat tall">${esc(`${x.tool} ${JSON.stringify(x.input)}\n\n${x.text}`)}</pre>`;
     } catch (err) { out.innerHTML = error("Could not load the call.", { detail: err.message }); }
   };
-  root.onchange = (e) => { if (e.target.id === "ctx-session") goQuery({ session: e.target.value, n: "" }); };
+  root.addEventListener("click", root._ctx);
 }

@@ -1502,6 +1502,51 @@ An empty state shows that there is nothing, that data loads, or that the data di
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
 - **Long page:** page head, then `toc()` around the rest (Structure, Contents).
 
+#### Needs-you strip
+
+The Needs-you strip lists what in the memory waits for Chris. An item shows only while its number is over its act-threshold.
+
+**Use:** under the tabs of each Memory tab. **Not for:** an Ask; use an ask card.
+
+| Helper | Reference |
+|---|---|
+| `needs(m)` in `ui/views/lib/memory-health.js` | `ui/views/memory.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The items | | `--surface`, shadow `--card-lift`, radius `--r-card`, `--fs-sm`; wraps |
+| 2 | Label | `Needs you` | | `--fw-strong` |
+| 3 | Item | A badge, then the number and what it counts, linked to where Chris acts | | `--ink`, no underline until hover; the rule in its `title` |
+
+- Draw nothing when no item is over its threshold.
+- Give each item its threshold in the `title`.
+
+| Do | Don't |
+|---|---|
+| `start 2 core lines cut` | an item at 0 |
+
+#### Lesson row
+
+A lesson row shows one open lesson: the rule it teaches, its age, and the Approve and Decline buttons.
+
+**Use:** in the Lessons card of Automation's Memory Jobs. **Not for:** an Ask; use an ask card.
+
+| Helper | Reference |
+|---|---|
+| `lessonList(lessons)` in `ui/views/lib/processes.js` | `ui/views/gates.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Rule | The lesson's sentence | | `--fs-sm`; wraps |
+| 2 | Age | Days since its first signal | yes | `--muted` |
+| 3 | Actions | Approve, the primary, and Decline | | `actButton()`; under the rule below 720px |
+
+- Post through the router's `act` buttons, so the page reloads after the answer.
+
+| Do | Don't |
+|---|---|
+| `15 d` | the signal's timestamp |
+
 ## Views
 
 A page is a view module in `ui/views/`. The router reads its `view` object (the comment at the top of `ui/views/lib/router.js`).
@@ -1535,7 +1580,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Time column names differ | Tables | aleph-1360 (pending) |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Health in `ui/views/memory.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Jobs in `ui/views/lib/processes.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()` in `ui/views/now.js`; `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
@@ -1553,7 +1598,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
 | The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |
 | The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
-| The legend of the Memory read chart uses `c-use`, `c-stale` and `c-never`, the classes of its meter segments, not timeline classes: no timeline class has the colour of "never" (`--rule`) | `readChart()` in `ui/views/memory.js` | follow-up |
 | The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
 | The Memory inspector's buttons carry `data-mact` and a handler of their own, not the router's `act`: a write reads the Why field and the open memory, and a form submits to the same handler | `act()`, `write()` in `ui/views/memory.js` | allowed |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |

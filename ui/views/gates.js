@@ -1,4 +1,4 @@
-// The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
+// The Automation view: metrics, caps, schedules, the memory jobs (lib/processes.js), rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { moved, redraw } from "./lib/router.js";
 import { postJson, goQuery, setQuery, scope } from "./lib/address.js";
@@ -6,6 +6,7 @@ import { count, day, localMs, plural, hours, pct, when } from "./lib/format.js";
 import { clamp, fold, toc, wireToc, actButton, say, badge, card, cell, row, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, meter, heads, chip, idLink, pageOf, pageRows, pager, pageHead, seg, statCard, tiles } from "./lib/html.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./lib/feed.js";
+import { mountMemoryJobs, renderMemoryJobs } from "./lib/processes.js";
 
 export const view = {
   path: "/automation",
@@ -14,13 +15,13 @@ export const view = {
   group: "factory",
   order: -2,
   icon: "shield-halved",
-  // The caps' use and the live counts come from the factory block of /api/factory.
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url(`/api/factory?window=${s.window}`)]; },
-  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, caps: d.caps, settings: d.settings } }),
+  // The caps' use and the live counts come from the factory block of /api/factory; the memory jobs from /api/memory/processes.
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url(`/api/factory?window=${s.window}`), "/api/memory/processes"]; },
+  combine: ([d, s, p]) => ({ ...d, factory: { ...s.factory, caps: d.caps, settings: d.settings }, processes: p }),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
-  mount: (root) => mount(root),
+  mount: (root, d) => { mount(root); mountMemoryJobs(root, d.processes); },
 };
 
 /** `#/gates` (with or without a query) is now `#/automation`. */
@@ -35,12 +36,12 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["gates-caps", "Controls"], ["monitor", "Monitor"],
+const CONTENTS = [["gates-schedules", "Schedules"], ["memory-jobs", "Memory Jobs"], ["memory-lessons", "Lessons", true], ["memory-episodes", "Episodes", true], ["gates-caps", "Controls"], ["monitor", "Monitor"],
   ["rules", "Rules"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { aside: scope(q).bar() })}` + toc(CONTENTS,
-    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + `<div class="pair">${renderSchedules(d)}${renderCaps(d)}</div>` + renderMonitor(d) + renderRules(d) +
+    renderNow(d) + (d.backend ? notice(`Waiting for ${d.backend.via}: ${d.backend.why}`, false, "gates-backend") : "") + `<div class="pair">${renderSchedules(d)}${renderCaps(d)}</div>` + renderMemoryJobs(d.processes) + renderMonitor(d) + renderRules(d) +
     renderHeld(d) + renderLog(d, q.get("by"), pageOf(q))) + `</div>`;
 }
 

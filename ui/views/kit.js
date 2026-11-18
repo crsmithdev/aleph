@@ -11,9 +11,18 @@ import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.j
 import { askCard } from "./lib/ask-cards.js";
 import { eventRow, findingsList } from "./lib/feed.js";
 import { bar } from "./lib/flow-parts.js";
+import { needs } from "./lib/memory-health.js";
+import { lessonList } from "./lib/processes.js";
 
 const THEMES = ["system", "light", "dark"];
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();
+/** The Memory page's numbers with every Needs-you item over its threshold. */
+const NEEDS = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 } }, misses: { unoffered_reads: 35 },
+  processes: { corrections: { waiting: [{ id: "l1", sentence: "s", state: "open", since: new Date(Date.now() - 15 * DAY).toISOString() }] }, decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
+const LESSONS = [
+  { id: "l1", sentence: "Verify that a dedupe key survives the system's own writes before accepting a spec, or the same event will re-fire.", state: "open", since: new Date(Date.now() - 15 * DAY).toISOString() },
+  { id: "l2", sentence: "Check git diff for the exact set of changed files before reporting which skills or items were updated.", state: "open", since: null },
+];
 
 /** The doc's section under the heading `name` (any level), to the next heading of the same level or higher; "" for none. */
 export function section(doc, name) {
@@ -200,6 +209,8 @@ function renderKit(d, query) {
     spec("ask", "Ask card", askCard(ASK, NOW)) +
     spec("feed", "Feed row", FEED.map(eventRow).join("")) +
     spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
+    spec("needs", "Needs-you strip", needs(NEEDS)) +
+    spec("lessons", "Lesson row", lessonList(LESSONS)) +
 
     group("Labels") +
     spec("badge", "Badge", row(...["open", "running", "landed", "waiting", "failed", "parked", "dropped"].map(badge)) + row(...[...PRIORITIES].reverse().map(priorityBadge)) + row(tag("any text"), tag("with a title", "need", "the title"))) +

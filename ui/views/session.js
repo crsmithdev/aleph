@@ -6,6 +6,7 @@ import { count, durMs as dur, shortModel, when } from "./lib/format.js";
 import { clamp, fold, say, facts, chip, chips, costHtml, crumb, dataTable, empty, error, esc, heads, idLink, md, pageRows, pager, pageHead, linkButton, statusRow, tabs, tag, tone } from "./lib/html.js";
 import { systemParts } from "../system-parts.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
+import { mountContext, renderContext } from "./lib/context-panel.js";
 
 const down = (d) => `<div class="page">${error("Langfuse is unreachable.", { detail: d.error })}</div>`;
 const langfuse = (base, traceId) => (base && traceId ? linkButton("Open in Langfuse", `${base}/trace/${traceId}`) : "");
@@ -102,6 +103,7 @@ const chatBody = (d) => `<div id="chat-pane"><div class="chat">${d.turns.map((t)
 
 const isTable = (query) => query?.get?.("view") === "table";
 const isWaterfall = (query) => query?.get?.("view") === "waterfall";
+const isContext = (query) => query?.get?.("view") === "context";
 
 /** The waterfall's rows in draw order: each turn, then its calls nested by parent. */
 export function wfRows(turns) {
@@ -174,20 +176,22 @@ const wfBody = (rows, sel) => `<div class="wf"><div class="wf-main">${waterfall(
 
 export function renderSession(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
-  const table = isTable(query), wf = isWaterfall(query);
+  const table = isTable(query), wf = isWaterfall(query), ctx = isContext(query);
   const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
-  const view = table ? "table" : wf ? "waterfall" : "chat";
-  // Only the open pane is drawn: the table reads the whole session, the chat and the waterfall page it, so a tab click reloads.
-  const pane = table ? `<div id="turn-table">${turnTable(d)}</div>` : wf ? `<div id="chat-pane"><div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from, d.total)}</div>` : chatBody(d);
+  const view = table ? "table" : wf ? "waterfall" : ctx ? "context" : "chat";
+  // Only the open pane is drawn: the table reads the whole session, the chat and the waterfall page it, so a tab click
+  // reloads. The context loads its transcript in the mount.
+  const pane = table ? `<div id="turn-table">${turnTable(d)}</div>` : wf ? `<div id="chat-pane"><div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from, d.total)}</div>` : ctx ? renderContext(null) : chatBody(d);
   return `<div class="page dp-page">${crumb("#/sessions", [["sessions", "#/sessions"], [d.project], [d.id.slice(0, 8)]])}${pageHead(`Session ${d.id.slice(0, 8)}`, { count: table ? d.turns.length : d.total, aside })}` +
     statusRow("", "", chips([d.project, ...(d.taskTypes ?? [])])) +
     renderKpis([{ k: "Turns", v: esc(count(d.total ?? d.turns.length)) }, { k: "Started", v: esc(when(d.turns[0]?.start) || "–") }]) +
-    tabs("View", [["chat", "Chat"], ["table", "Table"], ["waterfall", "Waterfall"]], { [view]: pane }, view) + `</div>`;
+    tabs("View", [["chat", "Chat"], ["table", "Table"], ["waterfall", "Waterfall"], ["context", "Context"]], { [view]: pane }, view) + `</div>`;
 }
 
 // The toggle writes the hash; "Show all" uncuts a long message; "Next 20" puts the next turns in place of these.
 function mountSession(root, d, query = new URLSearchParams()) {
   if (!d || d.error) return;
+  if (isContext(query)) mountContext(root, d.id, query);
   const wf = isWaterfall(query);
   let loaded = [...d.turns], sel = null;
   const redrawWf = () => {

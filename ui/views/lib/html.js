@@ -190,7 +190,7 @@ export async function loadDiff(el, url) {
     return t;
   } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
 }
-const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "error", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "error", failed: "error", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "error", filed: "done", answered: "done", human: "need", rule: "done", director: "parked", firefighter: "error", gate: "run" };
+const TONES = { "in use": "done", stale: "need", "never offered": "quiet", "lint problem": "error", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", waiting: "need", working: "run", queued: "run", returned: "error", failed: "error", dropped: "quiet", parked: "parked", exploring: "run", built: "done", reran: "run", escalated: "need", red: "error", filed: "done", answered: "done", human: "need", rule: "done", director: "parked", firefighter: "error", gate: "run" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, error, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 

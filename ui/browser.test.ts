@@ -443,7 +443,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("at 390 px each text cut by an ellipsis has its full text in a title, on itself or on an ancestor", async () => {
     await page.go("#/");
-    const hrefs = ["#/kit", "#/issues/demo/21", "#/memory?tab=processes", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
+    const hrefs = ["#/kit", "#/issues/demo/21", "#/memory?tab=health", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
     await page.width(390);
     const cut = `[...document.querySelectorAll("#view *")].filter((e) => getComputedStyle(e).textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth).filter((e) => { const t = e.innerText.replace(/\\s+/g, " ").trim(); for (let a = e; a && a.id !== "view"; a = a.parentElement) if (typeof a.title === "string" && a.title.replace(/\\s+/g, " ").includes(t)) return false; return true; }).map((e) => e.className + ": " + e.textContent.trim().slice(0, 40))`;
     for (const href of hrefs) {
@@ -453,27 +453,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     }
     await page.width(1200);
   }, 90_000);
-
-  test("at 390 px the Context session select stays inside the page width and keeps each option's full label", async () => {
-    await page.go("#/");
-    await page.width(390);
-    const project = "-home-user-a-very-long-directory-name-another-long-directory-name-and-more";
-    const r = await page.ev<any>(`import("/views/lib/context-panel.js").then(({ renderContext }) => {
-      const p = document.createElement("div");
-      p.className = "page";
-      const usage = { input: 1, cacheRead: 0, cacheWrite: 0, output: 1 };
-      p.innerHTML = renderContext({ sessions: [{ id: "abcdef123456", updated: "2026-11-12T10:00:00Z", project: ${JSON.stringify(project)} }], session: { id: "abcdef123456", requests: [{ n: 1, fill: 10, usage, parts: [] }] } });
-      document.body.append(p);
-      const sel = p.querySelector("#ctx-session");
-      const out = { over: sel.getBoundingClientRect().right - p.getBoundingClientRect().right, wide: document.documentElement.scrollWidth - document.documentElement.clientWidth, label: sel.options[0].text };
-      p.remove();
-      return out;
-    })`);
-    await page.width(1200);
-    expect(r.over).toBeLessThanOrEqual(0);
-    expect(r.wide).toBeLessThanOrEqual(0);
-    expect(r.label).toContain(project);
-  }, 30_000);
 
   /**
    * Opens Status with its timed refresh in the test's hands. The shell reads the global setInterval when the route
@@ -1397,20 +1376,20 @@ describe.skipIf(!chromeUsable)("Memory and Skill redraw", () => {
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected on Memory and the search box keeps its typed text", async () => {
-    await page.when('document.querySelector("#view #mem-board button[data-tile]") && document.querySelector("#view [data-ui=mem-search]")');
-    await page.ev('window.mark = document.querySelector("#view #mem-board"); window.mark.old = 1; document.querySelector("#view [data-ui=mem-search]").focus(); document.execCommand("insertText", false, "zz")');
+    await page.when('document.querySelector("#view #mem-kind .seg button") && document.querySelector("#view [data-ui=mem-search]")');
+    await page.ev('window.mark = document.querySelector("#view #mem-kind"); window.mark.old = 1; document.querySelector("#view [data-ui=mem-search]").focus(); document.execCommand("insertText", false, "zz")');
     await redraws();
-    expect(await page.ev('[document.querySelector("#view #mem-board") === window.mark, window.mark.isConnected, document.querySelector("#view [data-ui=mem-search]").value, document.activeElement === document.querySelector("#view [data-ui=mem-search]")]')).toEqual([true, true, "zz", true]);
+    expect(await page.ev('[document.querySelector("#view #mem-kind") === window.mark, window.mark.isConnected, document.querySelector("#view [data-ui=mem-search]").value, document.activeElement === document.querySelector("#view [data-ui=mem-search]")]')).toEqual([true, true, "zz", true]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("after two redraws one click on a type tile runs its handler once", async () => {
+  test("after two redraws one click on a kind runs its handler once", async () => {
     await page.go("#/memory");
-    await page.when('document.querySelector("#view #mem-board button[data-tile]")');
-    await page.ev('window.board = document.querySelector("#view #mem-board")');
+    await page.when('document.querySelector("#view #mem-kind .seg button")');
+    await page.ev('window.board = document.querySelector("#view #mem-kind")');
     await redraws();
-    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view #mem-board button[data-tile]").click()');
-    expect(await page.ev('[window.n, document.querySelector("#view #mem-board") === window.board]')).toEqual([1, true]);
+    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view #mem-kind .seg button[data-value=semantic]").click()');
+    expect(await page.ev('[window.n, document.querySelector("#view #mem-kind") === window.board]')).toEqual([1, true]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 });

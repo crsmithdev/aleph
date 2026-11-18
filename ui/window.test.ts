@@ -143,6 +143,6 @@ test("scope wire keeps the window and the project in storage and in the address;
 });
 
 test("the Automation page asks for the chosen window and project, and the Status page's answer for its asks", () => {
-  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?window=day&project=alpha"]);
+  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?window=day&project=alpha", "/api/memory/processes"]);
 });
 

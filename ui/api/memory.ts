@@ -18,6 +18,9 @@ import { vaultDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
 import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { readLists } from "../../lib/store.ts";
+import { closed, status } from "../../lib/todo.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, dailyNotes, isVault, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, scopeOf, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
@@ -84,11 +87,18 @@ function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: stri
   return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, history: hist.get(n.title) ?? Array(30).fill(0), problems: problems.get(n.title) ?? [] }));
 }
 
-/** Each scope's core lines and the bytes of its start context against the budget. */
+/**
+ * Each scope's core lines and the bytes of its start context against the budget. A core line's `bytes` is its line in
+ * the start context with its newline; `kept` is false for the lines startContext() cut, the oldest. `memory` is the
+ * bytes of MEMORY.md as sent.
+ */
 function start(root: string, all: Note[]) {
+  const memory = Buffer.byteLength(all.find((n) => n.rel === "MEMORY.md")?.text.trim() ?? "");
   return Object.fromEntries(["aleph", "global"].map((scope) => {
     const { text, cut } = startContext(root, all, scope);
-    return [scope, { core: coreNotes(all, scope).map((n) => ({ title: n.title, core: String(n.fm.core).trim() })), bytes: Buffer.byteLength(text), budget: START_BUDGET, cut }];
+    const notes = coreNotes(all, scope), keep = notes.length - cut;
+    const core = notes.map((n, i) => ({ title: n.title, core: String(n.fm.core).trim(), scope: scopeOf(n), bytes: Buffer.byteLength(`- ${String(n.fm.core).trim()} [[${n.title}]]\n`), kept: i < keep }));
+    return [scope, { core, bytes: Buffer.byteLength(text), budget: START_BUDGET, cut, memory }];
   }));
 }
 
@@ -188,14 +198,18 @@ async function processes(): Promise<Response> {
   ];
   const mtimes = listEpisodes().map((e) => e.mtimeMs);
   const days = Array.from({ length: KEEP_DAYS }, (_, i) => daysAgo(KEEP_DAYS - 1 - i, new Date(now)));
-  const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length }));
+  // Issues closed done per local day, in every registry repo: the episode pages should follow them.
+  const closes = readLists(Object.values(loadRegistry())).flatMap((doc) => doc?.items ?? []).filter((i) => status(i) === "done").map((i) => today(new Date(closed(i) ?? 0)));
+  const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length, finished: closes.filter((d) => d === date).length }));
   const all = await vaultNotes(root);
   const stale = lintVault(all).warn.filter((f) => f.rule === "stale");
+  // The stale detail is staleness()'s sentence in vault/lib/vault.ts: "... every <window> days; updated <date>, <days> days ago".
+  const late = (detail: string) => { const [, window, days] = /every (\d+) days.*, (\d+) days ago/.exec(detail) ?? []; return { window: Number(window), over: Number(days) - Number(window) }; };
   return json({
     steps,
     episodes: { pages: mtimes.length, keep: KEEP_DAYS, days: perDay, prunes: opLines(root).filter((l) => l.text.startsWith("prune episodes")).slice(0, 5) },
-    corrections: { states: count(store.lessons.map((l) => l.state)), waiting: store.lessons.filter((l) => l.state === "open" || l.state === "proposed").map((l) => ({ sentence: l.sentence, state: l.state })) },
-    decay: { stale: stale.map((f) => ({ note: f.note, detail: f.detail })) },
+    corrections: { states: count(store.lessons.map((l) => l.state)), waiting: store.lessons.filter((l) => l.state === "open" || l.state === "proposed").map((l) => ({ id: l.id, sentence: l.sentence, state: l.state, since: l.signals.map((s) => s.at).sort()[0] ?? null })) },
+    decay: { stale: stale.map((f) => ({ note: f.note, detail: f.detail, ...late(f.detail) })).sort((a, b) => b.over - a.over) },
   });
 }
 

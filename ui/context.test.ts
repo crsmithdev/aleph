@@ -6,6 +6,10 @@ import { join } from "node:path";
 import { call, parse, parseExact } from "./context.ts";
 import { updater } from "./updater.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
+// @ts-ignore plain JS, shared with the page
+import { fillFrame, mountContext, renderContext } from "./views/lib/context-panel.js";
+// @ts-ignore plain JS, shared with the page
+import { empty } from "./views/lib/html.js";
 
 const req = (id: string, input: number, cacheRead: number, cacheWrite: number) => ({ type: "assistant", requestId: id, message: { usage: { input_tokens: input, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: cacheWrite, output_tokens: 7 } } });
 const result = { type: "user", message: { content: [{ type: "tool_result", content: "x" }] } };
@@ -383,4 +387,74 @@ describe("parseExact", () => {
     restore();
     expect(r[0].parts.slice(0, 4).every((p) => p.how === "est")).toBe(true);
   });
+});
+
+test("the Context tab draws one parts row per part of the selected request, with its share and its growth since the last compaction", () => {
+  const part = (name: string, rec: string, tokens: number, how: string) => ({ name, rec, tokens, how });
+  const fixed = [part("System prompt", "prompt_snapshot", 600, "est"), part("Memory start context", "hook_additional_context", 100, "exact")];
+  const usage = { input: 2, cacheRead: 900, cacheWrite: 98, output: 7 };
+  const session = { id: "s1", window: 4000, trigger: 3000, requests: [{ n: 1, fill: 700, usage, parts: fixed, since: 1 }, { n: 2, fill: 1000, usage, parts: [...fixed, part("Your messages · 1", "user", 300, "est")], since: 1 }], items: [], summaries: [] };
+  const h = renderContext(session, { n: "2" });
+  const table = h.slice(h.indexOf("<table"), h.indexOf("</table>"));
+  const rows = table.split("<tr>").slice(2).map((r: string) => r.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  expect(rows).toEqual(["System prompt 600 60% 0 est.", "Memory start context 100 10% 0 exact", "Your messages · 1 300 30% +300 est.", "Memory, start context and offers 100 10% 0 exact", "Total 1,000 100% +300 est."]);
+  expect(h).toContain("What Is in Request 2");
+  expect(h).toContain("Change since request 1");
+  expect(h).toContain("<b>1,000<em> / 3,000</em></b>");
+  expect(h).toContain('<aleph-chart key="session/fill">');
+  expect(fillFrame(session.requests, session.requests[1]).rows[1]).toMatchObject({ name: "2", fixed: 600, memory: 100, talk: 300, on: true, pick: 2 });
+  expect(renderContext(session, { n: "9" })).toContain("What Is in Request 2");
+  expect(renderContext(null)).toContain("Loading the context");
+  expect(renderContext({ ...session, requests: [] })).toContain(empty());
+});
+
+test("the Compactions tile counts the requests whose fill fell below 60% of the one before", () => {
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const req = (n: number, fill: number) => ({ n, fill, usage, parts: [], since: 1 });
+  const h = renderContext({ id: "s", window: 1000, trigger: 900, requests: [req(1, 500), req(2, 800), req(3, 200), req(4, 300)], items: [], summaries: [] }, {});
+  expect(h).toMatch(/Compactions<\/span><\/span><b>1<\/b>/);
+  expect(h).toContain("request 3: 800 to 200");
+});
+
+test("a kept session draws at once for the same request, and mountContext fetches only when the session or request changes", async () => {
+  const g = globalThis as any, store = new Map<string, string>(), saved = { localStorage: g.localStorage, fetch: g.fetch, location: g.location };
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, x: string) => void store.set(k, x) };
+  g.location = { hash: "#/sessions/s1?view=context" };
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const session = (id: string) => ({ id, window: 1000, trigger: 900, requests: [{ n: 1, fill: 10, usage, parts: [], since: 1 }], items: [], summaries: [] });
+  let calls = 0;
+  g.fetch = async (url: string) => { calls++; return Response.json(session(url.split("/").pop()!)); };
+  const root = () => { const b = { outerHTML: "", innerHTML: "" }; return { querySelector: () => b, addEventListener() {}, removeEventListener() {} } as any; };
+  try {
+    store.set("aleph.session.context", JSON.stringify({ n: "", session: session("s1") }));
+    const none = new URLSearchParams("view=context");
+    await mountContext(root(), "s1", none);
+    expect(calls).toBe(0);
+    await mountContext(root(), "s2", none);
+    expect(calls).toBe(1);
+    expect(JSON.parse(store.get("aleph.session.context")!).session.id).toBe("s2");
+    await mountContext(root(), "s2", none);
+    expect(calls).toBe(1);
+    await mountContext(root(), "s2", new URLSearchParams("view=context&n=1"));
+    expect(calls).toBe(2);
+  } finally { Object.assign(g, saved); }
+});
+
+test("the Context tab unfolds Tools into each tool and Tool results into each tool's calls the request holds", () => {
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const parts = [{ name: "Tools · 2", rec: "prompt_snapshot.tools", tokens: 400, how: "est" }, { name: "Tool results · 3", rec: "tool_result", tokens: 90, how: "exact" }];
+  const call = (id: string, tool: string, n: number, tokens: number) => ({ id, tool, input: `in-${id}`, n, tokens, how: "est" });
+  const session = {
+    id: "s1", window: 4000, trigger: 3000, requests: [{ n: 3, fill: 1000, usage, parts, since: 1 }],
+    tools: [{ name: "Bash", tokens: 100 }, { name: "mcp__chrome__navigate", tokens: 300 }],
+    calls: [call("a", "Read", 2, 30), call("b", "Bash", 2, 50), call("c", "Bash", 3, 10), call("d", "Bash", 4, 99)],
+  };
+  const h = renderContext(session, { n: "3" });
+  const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const tools = h.slice(h.indexOf("By tool"), h.indexOf("</details>"));
+  expect(tools.split("<tr>").slice(2).map(text)).toEqual(["mcp__chrome__navigate chrome 300 75%", "Bash built-in 100 25%"]);
+  // request 4's call is not in request 3; the groups go by tokens
+  expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 call · 30 · 33%"]);
+  expect(h).toContain('data-call="b"');
+  expect(h).not.toContain('data-call="d"');
 });

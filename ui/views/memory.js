@@ -1,29 +1,31 @@
-// The Memory view: one search over the six memory types. Tiles count the matches of each type and filter by it;
-// the results come grouped by type, each type in its own layout; the inspector shows the selected memory, how it
-// reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
+// The Memory view, in three tabs. Notes: one search over the memory types, a kind filter with the matches of each, the
+// results grouped by type, each type in its own layout, and an inspector for the selected memory: how it reaches the
+// agent, when it was written and offered, its links, and the writes it takes. Health and Log: memory-health.js and
+// renderLog(). The Needs-you strip heads every tab.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get, redraw } from "./lib/router.js";
-import { held, mountContext, renderContext } from "./lib/context-panel.js";
-import { mountProcesses, renderProcesses } from "./lib/processes.js";
+import { daysBack, dayOf, isEpisode, needs, renderHealth, writeWeeks } from "./lib/memory-health.js";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel } from "./lib/timeline.js";
 import { goQuery, hashQuery, postJson, setQuery, scope } from "./lib/address.js";
-import { bytes, count, day, localMs, pct, when } from "./lib/format.js";
-import { actButton, badge, chip, fold, list as stack, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, barList, barRow, card, crumb, empty, error, esc, filterBar, legendHtml, arm, loadingLine, md, meter, miss, moreFold, pageHead, pager, say, searchBox, sectionHead, statCard, subHead, tiles } from "./lib/html.js";
+import { count, day, localMs, when } from "./lib/format.js";
+import { actButton, badge, chip, fold, list as stack, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, card, crumb, empty, error, esc, filterBar, arm, loadingLine, md, miss, pageHead, pager, say, searchBox, subHead } from "./lib/html.js";
 
-const TABS = { log: "/api/memory/log", processes: "/api/memory/processes" };
 export const view = {
   path: "/memory",
   title: "Memory",
   icon: "brain",
   group: "claude",
   order: 1,
-  api: (_params, q = new URLSearchParams()) => (q.get("tab") === "context" ? "/api/context" : scope(q).url(TABS[q.get("tab")] ?? "/api/memory")),
+  // Every tab draws the Needs-you strip from the overview and the processes; Health and Log read the log too.
+  api: (_params, q = new URLSearchParams()) => [scope(q).url("/api/memory"), "/api/memory/processes", ...(TABS.includes(q.get("tab")) ? [scope(q).url("/api/memory/log")] : [])],
+  combine: ([m, processes, log]) => ({ ...m, processes, rows: log?.rows }),
   live: true,
-  more: (m, query) => (["context", "log", "processes"].includes(query.get("tab")) ? m : found(m, query)),
-  render: (m, _params, query) => (query?.get("tab") === "context" ? renderContextTab(m, query) : query?.get("tab") === "log" ? renderLog(m, options(query)) : query?.get("tab") === "processes" ? renderProcessesTab(m, query) : renderMemory(m, options(query), m.results ?? null)),
-  mount: (root, m, query) => (query?.get("tab") === "context" ? mountContext(root, m, query) : query?.get("tab") === "log" ? mountLog(root) : query?.get("tab") === "processes" ? mountProcessesTab(root, m) : mount(root, m)),
+  more: (m, query) => (TABS.includes(query.get("tab")) ? m : found(m, query)),
+  render: (m, _params, query) => (query?.get("tab") === "health" ? renderHealthTab(m) : query?.get("tab") === "log" ? renderLog(m, options(query)) : renderMemory(m, options(query), m.results ?? null)),
+  mount: (root, m, query) => (query?.get("tab") === "health" ? scope().wire(root) : query?.get("tab") === "log" ? mountLog(root, m) : mount(root, m)),
 };
+const TABS = ["health", "log"];
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
 const q = (s) => `<span class="quiet">${s}</span>`;
@@ -31,20 +33,19 @@ const DAY = 86_400_000, STEP = 50;
 const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
 const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
 
-/** The six types in the page's order: what each holds. Parametric has no rows: aleph does not store the weights. */
+/** The types aleph stores, in the page's order: what each holds. */
 export const TYPES = [
   { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },
   { id: "procedural", name: "Procedural", holds: "rules, skills, hooks, lessons" },
   { id: "episodic", name: "Episodic", holds: "episodes, daily log, sessions" },
   { id: "working", name: "Working", holds: "handoffs" },
   { id: "prospective", name: "Prospective", holds: "issues with an after" },
-  { id: "parametric", name: "Parametric", holds: "model weights, not stored" },
 ];
 const typeName = (id) => TYPES.find((t) => t.id === id)?.name ?? id;
 const dot = (type) => `<i class="mdot t-${esc(type)}" aria-hidden="true"></i>`;
 
-const STATUS = { use: "in use", stale: "stale", never: "never read", lint: "lint problem" };
-/** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
+const STATUS = { use: "in use", stale: "stale", never: "never offered", lint: "lint problem" };
+/** A note's status: a refusal first; else in use when recall offered it in the last 7 days, stale when earlier, never when it never did. */
 export function noteStatus(n, now = Date.now()) {
   if (n.problems?.length) return "lint";
   if (!n.read) return "never";
@@ -53,7 +54,7 @@ export function noteStatus(n, now = Date.now()) {
 /** The note rows of the overview with their status. */
 export const noteRows = (m, now = Date.now()) => (m.notes ?? []).map((n) => ({ ...n, status: noteStatus(n, now) }));
 
-const FRESH = [{ value: "", label: "All" }, { value: "use", label: "Read in 7 days" }, { value: "never", label: "Never read" }, { value: "old", label: "Not written in 60 days" }, { value: "lint", label: "Lint problem" }];
+const FRESH = [{ value: "", label: "All" }, { value: "use", label: "Offered in 7 days" }, { value: "never", label: "Never offered" }, { value: "old", label: "Not written in 60 days" }, { value: "lint", label: "Lint" }];
 
 /** The page's state from the route's query: ?q=text&type=semantic&fresh=never&item=note:Title. */
 export function options(qs = new URLSearchParams()) {
@@ -77,21 +78,25 @@ export function keepRows(results, o, status = new Map(), now = Date.now()) {
   return results.filter((it) => (!o.type || it.type === o.type) && fresh(it));
 }
 
-/** Matches per type, before the type filter, so a tile shows what choosing it would show. */
+/** Matches per type, before the type filter, so an option shows what choosing it would show. */
 export function typeCounts(results, o, status) {
   const rows = keepRows(results, { ...o, type: "" }, status);
   return Object.fromEntries(TYPES.map((t) => [t.id, rows.filter((it) => it.type === t.id).length]));
 }
 
-const renderTiles = (counts, o, loaded, failed = "") => tiles("Memory types", TYPES.map((t) =>
-  statCard({ k: t.name, v: t.id === "parametric" ? "–" : loaded && !failed ? count(counts[t.id]) : undefined, title: t.holds, key: t.id, on: t.id === o.type, loading: !loaded, failed })).join(""));
+/** The Kind filter, each option with its matches once the search is in. */
+function kindBar(results, o, status) {
+  const n = results ? typeCounts(results, o, status) : null, all = n && Object.values(n).reduce((a, b) => a + b, 0);
+  const label = (name, k) => (n ? `${name} ${count(k)}` : name);
+  return filterBar([{ label: "Kind", name: "type", value: o.type, options: [{ value: "", label: label("All", all) }, ...TYPES.map((t) => ({ value: t.id, label: label(t.name, n?.[t.id]) }))] }]);
+}
 
 const sel = (it, o) => `tabindex="0" data-id="${esc(idOf(it))}" aria-selected="${idOf(it) === o.item}"`;
 const titleLink = (it) => (it.href ? `<a href="${esc(it.href)}">${esc(it.title)}</a>` : esc(it.title));
 
 /** A note: its claim, its kind and scope, when it was written and last read, and how it reaches the agent. */
 const noteRow = (it, o) => `<li class="mrow" ${sel(it, o)}><div class="mh"><b>${titleLink(it)}</b><span class="quiet">${esc([it.kind, it.scope].filter(Boolean).join(" · "))}</span></div>` +
-  `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · read ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
+  `<p>${codeText(it.text)}</p><p class="mm">${it.at ? `written ${esc(shortDay(it.at))}` : ""}${it.source === "note" ? ` · offered ${it.read ? esc(shortDay(it.read)) : "never"}` : ""}${it.core ? ` · <span class="core">core line</span>` : ""}</p></li>`;
 
 /** A rule, a skill, a hook or a lesson: what it says and when it is loaded. */
 export const ruleRow = (it, o) => `<tr class="mrow" ${sel(it, o)}><td class="mono">${titleLink(it)}</td><td class="wide" title="${esc(it.text.replaceAll("`", ""))}">${codeText(it.text)}</td><td title="${esc(it.effect)}">${esc(it.effect)}</td><td class="time">${esc(shortDay(it.at))}</td></tr>`;
@@ -124,16 +129,16 @@ export function renderResults(results, o, status) {
   }).join(""));
 }
 
-/** The frame of a note's recalls per day over 30 days, oldest first, from the recall log. The frame's window only names the x label format: one row per day. */
+/** The frame of a note's offers per day over 30 days, oldest first, from the recall log. The frame's window only names the x label format: one row per day. */
 export const recallFrame = (hist = []) => ({
-  measure: { name: "Recalls per Day", unit: "count", agg: "sum" },
+  measure: { name: "Offers per Day", unit: "count", agg: "sum" },
   over: { kind: "time", window: "week" },
-  by: { keys: [{ key: "recalls", name: "recalls" }] },
+  by: { keys: [{ key: "recalls", name: "offers" }] },
   rows: hist.map((n, i) => ({ at: Date.now() - (hist.length - 1 - i) * DAY, recalls: n })),
   legend: false,
 });
 
-/** The chart panel of a note's recalls (`inspect` sets its frame), or nothing when there were none. */
+/** The chart panel of a note's offers (`mount` sets its frame), or nothing when there were none. */
 const recallHistory = (hist = []) => hist.some(Boolean) ? panelOf("memory/recall", recallFrame(hist)) : "";
 
 const why = field("Why (optional)", inputBox("why"));
@@ -172,70 +177,30 @@ export function renderInspector(it, n = null, status = "", hist = []) {
   const [claim, ...rest] = (n?.body ?? "").trim().split(/\n\s*\n/);
   const what = n ? `<article class="note">${md(claim)}</article>${rest.length ? `${fold("The whole note", `<article class="note">${md(rest.join("\n\n"))}</article>`, { cls: "fold" })}` : ""}` : `<p>${codeText(it.text)}</p>`;
   const reach = `<div class="mreach">${subHead("How it reaches the agent")}<p>${esc(it.effect)}</p>${n ? coreForm(n) : ""}</div>`;
-  const rows = facts([["Written", it.at && esc(shortDay(it.at))], ...(it.source === "note" ? [["Last recalled", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "")]] : [["Scope", esc(it.scope || "all")]])]);
+  const rows = facts([["Written", it.at && esc(shortDay(it.at))], ...(it.source === "note" ? [["Last offered", it.read ? esc(shortDay(it.read)) : "never"], ["Confidence", esc(fm.confidence ?? "")]] : [["Scope", esc(it.scope || "all")]])]);
   return `${head}${what}${reach}${rows}${it.source === "note" ? recallHistory(hist) : ""}${n ? links(n) : ""}${actions(it)}` +
     (n ? `<p class="hint"><code>${esc(n.path)}</code></p>` : "") + `<div class="medit" hidden></div>`;
 }
 
-function renderWrites(m) {
-  return (m.writes.length
-    ? moreFold(m.writes, (w) => `${q(esc(when(w.at) || w.at))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
-    : empty());
+/** The Freshness filter, each option but All with the notes it keeps among the results. */
+function freshBar(results, o, status) {
+  const n = (value) => (results ? ` ${count(keepRows(results, { ...o, fresh: value }, status).length)}` : "");
+  return filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH.map((f) => ({ ...f, label: f.value ? f.label + n(f.value) : f.label })) }]);
 }
 
-function renderHealth(m) {
-  const f = (x) => `<code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span>`;
-  const { refuse, warn } = m.lint;
-  return (refuse.length ? subHead("Refusals") + moreFold(refuse, f) : "") +
-    (warn.length ? subHead("Warnings") + moreFold(warn, f) : "") +
-    (!refuse.length && !warn.length ? empty() : "");
-}
-
-/** Lint by rule, largest first. */
-function lintRules(lint) {
-  const add = (m, f, key) => { const r = m.get(f.rule) ?? { rule: f.rule, refused: 0, warned: 0 }; r[key]++; m.set(f.rule, r); };
-  const m = new Map();
-  for (const f of lint?.refuse ?? []) add(m, f, "refused");
-  for (const f of lint?.warn ?? []) add(m, f, "warned");
-  return [...m.values()].sort((a, b) => b.refused + b.warned - a.refused - a.warned);
-}
-
-const KNOWLEDGE = ["decision", "gotcha", "project", "entity", "concept"];
-/** Each knowledge kind's notes by when recall last returned them. */
-function readChart(rows) {
-  const lines = KNOWLEDGE.map((k) => {
-    const of = rows.filter((n) => n.kind === k);
-    if (!of.length) return "";
-    const week = of.filter((n) => n.read && noteStatus({ read: n.read }) === "use").length, older = of.filter((n) => n.read).length - week, never = of.length - week - older;
-    const w = (x) => ((x / of.length) * 100).toFixed(2);
-    return barRow(esc(k), 0, `${count(week)} · ${count(older)} · ${count(never)} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${count(week)} in the last 7 days, ${count(older)} earlier, ${count(never)} never`) });
-  }).join("");
-  return lines ? `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}` : empty();
-}
-
-function renderBroad(m, rows) {
-  const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
-  const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${count(r.refused)} refused`, r.warned && `${count(r.warned)} warned`].filter(Boolean).join(", "), { top: i === 0 })).join("")) : empty()) +
-    fold("Every finding", renderHealth(m), { cls: "fold" }), { count: count(lint.refuse.length + lint.warn.length) });
-  const med = m.misses;
-  const missCard = card("Recall Misses", med ? facts([["Unoffered reads", count(med.unoffered_reads)], ["Recalls", count(med.recalls)], ["Empty", `${count(med.empty)} (${pct(med.empty_share * 100)})`], ["Reformulated", count(med.reformulated)], ["Days", count(med.days)], ["Hook runs", count(med.hook.runs)]]) : empty(), { label: "Recall misses" });
-  const reads = card("Last Recalled", readChart(rows), { label: "Last recalled" });
-  const start = Object.entries(m.start ?? {});
-  const budget = card("Start Context", start.length ? barList(start.map(([scope, x]) => barRow(esc(scope), (x.bytes / x.budget) * 100, `${bytes(x.bytes)} / ${bytes(x.budget)}, ${count(x.core.length)} core lines${x.cut ? `, ${count(x.cut)} cut` : ""}`)).join("")) : empty(), { label: "Start context" });
-  const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: count((m.writes ?? []).length), label: "Recent writes" });
-  return stack(`<div class="pair">${lintCard}${missCard}</div><div class="pair">${reads}${budget}</div>${writes}`);
-}
-
-const freshBar = (o) => filterBar([{ label: "Freshness", name: "fresh", value: o.fresh, options: FRESH }]);
-
-/** The views of the page: Search, Context, Log and Processes are routes (`?tab=`). */
+/** The views of the page: Notes, Health and Log are routes (`?tab=`). */
 export function renderTabs(on, project = "") {
   const href = (tab) => { const p = new URLSearchParams(); if (tab) p.set("tab", tab); if (project) p.set("project", project); return `#/memory${p.size ? `?${p}` : ""}`; };
   const t = ([id, label]) => `<a href="${href(id)}"${id === on ? ' aria-current="page"' : ""}>${label}</a>`;
-  return `<nav class="vtabs" aria-label="Memory views">${[["", "Search"], ["context", "Context"], ["log", "Log"], ["processes", "Processes"]].map(t).join("")}</nav>`;
+  return `<nav class="vtabs" aria-label="Memory views">${[["", "Notes"], ["health", "Health"], ["log", "Log"]].map(t).join("")}</nav>`;
 }
 
-const KINDS = [{ value: "", label: "All" }, { value: "write", label: "Writes" }, { value: "recall", label: "Recalls" }, { value: "miss", label: "Misses" }];
+/** The head of every tab: the title, the scope, the tabs and the Needs-you strip. */
+const head = (m, on, more) => `${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more }) })}${renderTabs(on, m.project ?? "")}${needs(m)}`;
+
+const KINDS = [{ value: "", label: "All" }, { value: "write", label: "Writes" }, { value: "episode", label: "Episode pages" }, { value: "recall", label: "Recalls" }];
+/** A log row's filter kind: an episode page's write is its own kind. */
+const kindOf = (r) => (isEpisode(r) ? "episode" : r.kind);
 /** The `when` of a log row: a time for a write or a miss, the day for a recall (the recall log keeps no time). */
 const logTime = (at) => (at.length > 10 ? when(at) : shortDay(at));
 
@@ -248,10 +213,24 @@ export function logRow(r) {
     `<td>${r.note ? link(r.note) : miss("No note")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
 }
 
-/** The Log tab: every write, recall and miss of the last 30 days, newest first, 50 to a page. */
+/** The frame of the log rows that `keep` keeps, per local day over the last `n` days, oldest first. */
+export function dayFrame(rows, keep, n, name, now = Date.now()) {
+  const days = Array.from({ length: n }, (_, i) => daysBack(n - 1 - i, now)), per = Map.groupBy(rows.filter(keep), (r) => dayOf(r.at));
+  return { measure: { name, unit: "count", agg: "sum" }, over: { kind: "time", window: "month" }, by: { keys: [{ key: "n", name: "rows" }] }, rows: days.map((d) => ({ at: localMs(d), n: per.get(d)?.length ?? 0 })), legend: false };
+}
+/** The Log tab's charts: key, frame. Episode pages have their own chart: a regeneration writes thousands in a day. */
+const logCharts = (rows) => [
+  ["memory/writes", dayFrame(rows, (r) => r.kind === "write" && !isEpisode(r), 30, "Note Writes per Day")],
+  ["memory/episode-writes", dayFrame(rows, isEpisode, 30, "Episode Page Writes per Day")],
+  ["memory/recalls", dayFrame(rows, (r) => r.kind === "recall", 8, "Recall Runs per Day")],
+];
+
+/** The Log tab: the charts, then every write, recall and miss of the last 30 days, newest first, 50 to a page. */
 export function renderLog(m, o = options()) {
-  const rows = m.rows.filter((r) => !o.kind || r.kind === o.kind);
-  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "" }) })}${renderTabs("log", m.project ?? "")}` +
+  const all = m.rows ?? [], rows = all.filter((r) => !o.kind || kindOf(r) === o.kind), w = writeWeeks(all);
+  const charts = logCharts(all).map(([key, f]) => panelOf(key, f)).join("");
+  return `<div class="page sp memory">${head(m, "log")}` +
+    stack(`${charts}${note(`${count(w.week)} note writes in the last 7 days; the median week of the 3 before had ${count(w.median)} (${count(w.lo)} to ${count(w.hi)}).`)}`) +
     `<div id="log-kind" data-ui="log-filter">${filterBar([{ label: "Kind", name: "kind", value: o.kind, options: KINDS }])}</div>` +
     `<div id="log-rows">${logRows(rows)}</div></div>`;
 }
@@ -259,35 +238,30 @@ const logRows = (rows) => rows.length
   ? pagedTable(heads(["Time", "Kind", "Note", "Why or Query"]), rows.map(logRow), STEP)
   : empty();
 
-function mountLog(root) {
+function mountLog(root, m) {
   scope().wire(root);
+  for (const [key, f] of logCharts(m.rows ?? [])) root.querySelector(`aleph-chart[key="${key}"]`).frame = f;
   root.onclick = (e) => {
     const b = e.target.closest?.("#log-kind .seg button");
     if (b) goQuery({ kind: b.dataset.value });
   };
 }
 
-/** The Context tab: the page head and tabs around the body of `renderContext`. */
-export const renderContextTab = (m, query = new URLSearchParams()) =>
-  `<div class="page sp memory">${pageHead("Memory")}${renderTabs("context", scope(query).project)}${renderContext({ ...m, session: m.session ?? held(m, query) }, { n: query.get("n") })}</div>`;
-
-const mountProcessesTab = (root, m) => { scope().wire(root); mountProcesses(root, m); };
-
-/** The Processes tab: the page head and tabs around the body of `renderProcesses`. */
-export const renderProcessesTab = (m, query = new URLSearchParams()) => `<div class="page sp memory">${pageHead("Memory", { aside: scope(query).bar() })}${renderTabs("processes", scope(query).project)}${renderProcesses(m)}</div>`;
+/** The Health tab: the head around the body of `renderHealth`. */
+export const renderHealthTab = (m) => `<div class="page sp memory">${head(m, "health")}${renderHealth(m)}</div>`;
 
 export function renderMemory(m, o = options(), results = null) {
   const status = new Map(noteRows(m).map((n) => [n.title, n.status]));
   const it = results?.find((x) => idOf(x) === o.item), n = m.note?.error ? null : m.note;
   const inspector = m.note?.error ? error("Could not load the note.", { detail: m.note.error }) : renderInspector(it ?? null, n, n && status.get(it.key), m.notes?.find((x) => x.title === it?.key)?.history);
   const titles = `<datalist id="mem-titles">${(m.notes ?? []).map((n) => `<option value="${esc(n.title)}">`).join("")}</datalist>`;
-  return `<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: m.project ?? "", more: m.scopes }) })}${renderTabs("", m.project ?? "")}` +
-    `<div id="mem-board">${renderTiles(typeCounts(results ?? [], o, status), o, results !== null, m.failed)}</div>` +
+  const found = results && !m.failed ? results : null;
+  return `<div class="page sp memory">${head(m, "", m.scopes)}` +
+    `<div id="mem-kind" data-ui="mem-filter">${kindBar(found, o, status)}</div>` +
     `<div class="msearch">${searchBox("mem-search", o.q, "Search every kind of memory")}</div>` +
-    `<div id="mem-fresh" data-ui="mem-filter">${freshBar(o)}</div>` +
+    `<div id="mem-fresh" data-ui="mem-filter">${freshBar(found, o, status)}</div>` +
     `<div class="browse"><div id="mem-results" aria-live="polite">${m.failed ? error("Could not load the search.", { detail: m.failed }) : renderResults(results, o, status)}</div>` +
-    card("Inspector", `<div id="mem-inspector">${inspector}</div>`, { cls: "ins", label: "Memory inspector" }) + `</div>` +
-    `<section aria-label="Health" id="mem-health">${sectionHead("Health")}${renderBroad(m, noteRows(m))}</section>${titles}</div>`;
+    card("Inspector", `<div id="mem-inspector">${inspector}</div>`, { cls: "ins", label: "Memory inspector" }) + `</div>${titles}</div>`;
 }
 
 const here = () => options(hashQuery());
@@ -387,10 +361,8 @@ function mount(root, m) {
   };
   root.onclick = (e) => {
     const t = e.target;
-    const tile = t.closest?.("#mem-board button[data-tile]");
-    if (tile) { setQuery({ type: tile.dataset.tile === here().type ? "" : tile.dataset.tile }); return redraw(); }
-    const seg = t.closest?.("#mem-fresh .seg button");
-    if (seg) { setQuery({ fresh: seg.dataset.value }); return redraw(); }
+    const seg = t.closest?.("#mem-kind .seg button, #mem-fresh .seg button");
+    if (seg) { setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value }); return redraw(); }
     const btn = t.closest?.("#mem-inspector button[data-mact]");
     if (btn) return write(btn, m);
     const row = t.closest?.(".mrow");
