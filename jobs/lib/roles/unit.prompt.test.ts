@@ -8,7 +8,7 @@ const dir = mkdtempSync(join(tmpdir(), "unit-prompt-"));
 const jobsDir = process.env.ALEPH_JOBS_DIR;
 afterAll(() => { rmSync(dir, { recursive: true, force: true }); if (jobsDir === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = jobsDir; });
 
-test("the fixed brief ends with the summary, then the tag lines, then QUESTION last; the factory brief asks for the `question` field and no tag line; neither tells the worker to merge main", () => {
+test("the fixed brief ends with the summary, then the tag lines, then QUESTION last; the factory brief asks for the `question` field, no tag line, and a failing run of each new test; neither tells the worker to merge main", () => {
   mkdirSync(join(dir, "7"), { recursive: true });
   writeFileSync(join(dir, "7", "spec.md"), "# a goal\n");
   process.env.ALEPH_JOBS_DIR = dir;
@@ -17,8 +17,14 @@ test("the fixed brief ends with the summary, then the tag lines, then QUESTION l
     const text = prompt("job.8", run, { sandbox, main: "main" } as any);
     if (sandbox) {
       expect(text).toContain("set `question` to a question that names the clause");
+      expect(text).toContain("revert the non-test change, run the test, see it");
+      expect(text).toContain("restore the change, and paste the failing line into `summary`");
+      expect(text).toContain("say so in one line in");
       expect(text).not.toContain("QUESTION:");
-    } else expect(text).toContain("After the summary come your tag lines, and the `QUESTION:` line, when you have one, is the last line.");
+    } else {
+      expect(text).toContain("After the summary come your tag lines, and the `QUESTION:` line, when you have one, is the last line.");
+      expect(text).not.toContain("revert the non-test change");
+    }
     expect(text).not.toContain("make your last line");
     expect(text).not.toContain("End the result with");
     expect(text).not.toContain("merge `origin/main`");

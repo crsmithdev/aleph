@@ -68,6 +68,10 @@ Each new test must fail without your change and check something the other tests 
 file do not: a changed line they do not cover, or a result they do not assert. The
 factory's checks reject any other new test. So do not add a test for a helper that the
 existing tests already reach through its callers.
+For each new test, show it fail first: revert the non-test change, run the test, see it
+fail, restore the change, and paste the failing line into \`summary\`. Where no failing
+test is possible (a refactor, a moved test, a test-only change), say so in one line in
+\`summary\` instead.
 
 If the issue already holds and no edit is needed, make no commit, run the test files the issue names or reaches,
 and set \`already_met.evidence\` to the files, lines and commit on \`${main}\` that show it;
