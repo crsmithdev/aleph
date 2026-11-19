@@ -30,9 +30,9 @@ Give Chris the report's absolute path, then the pick. The pick covers the findin
 after `fix`, the ask findings, and after `scan`, every finding.
 
 - In an interactive run with `ALEPH_AGENT` unset, put the report on the shelf:
-  `bun ~/aleph-tools/shelf.ts put <run dir> --kind report`. It prints the item id and URL. Open the URL in
+  `shelf put <run dir> --kind report`, as in [SHELF](../SHELF.md). It prints the item id and URL. Open the URL in
   Chris's browser with `cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"`. Then run
-  `bun ~/aleph-tools/shelf.ts wait <id>` with `run_in_background` and end the turn. When `wait` exits 0, its output
+  `shelf wait <id>` with `run_in_background` and end the turn. When `wait` exits 0, its output
   is Chris's notes: they pick and steer the findings.
 - If `put` fails, or `wait` exits 2, ask which findings to fix in an `AskUserQuestion`.
 - In a headless run, `AskUserQuestion` is not available: end the reply with the open findings as a numbered

@@ -25,9 +25,9 @@ a variant is an `<h3 class="sub-head">`, not a card.
      and a seed line: the top files, pairs and copies that `cochange.ts seed` gave.
    - **Counts.** Two counts after the repo line: the findings fixed, with the commit hash of each, and the findings
      waiting for Chris (the ask findings). A `scan` run fixes none.
-   - **Links.** The page head links back to the shelf, at the shelf's base URL (the first line of
-     `~/.local/share/aleph-tools/shelf/url`) plus `/shelf/`. The repo line links each mock the run made, by the URL that
-     `shelf.ts put` printed for it, so put a mock on the shelf before the report.
+   - **Links.** The page head links back to the shelf, at the shelf's base URL (the output of
+     `shelf url`) plus `/shelf/`. The repo line links each mock the run made, by the URL that
+     `shelf put` printed for it, so put a mock on the shelf before the report.
    - No themes and no baseline line: the units carry the order, and a red baseline ends the run before a report.
 2. **Units.** One section per unit the skill scanned, in the find order, with `data-annotate="<unit id>"`. A unit
    with findings shows one finding card each. A unit with no finding is one line: "No issues." The SKILL.md of

@@ -21,5 +21,6 @@ In every other case, output as the skill says without this file, and run no `she
 3. Open the URL in Chris's browser: `cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"`.
 4. Reply with the verdict or the top line in at most 5 lines, then the URL.
 5. Only where the skill wants notes: run `shelf wait <id>` with `run_in_background`, then end the turn. When `wait`
-   exits 0, its output is Chris's notes. If `put` fails or `wait` exits 2, reply with the full output as the skill says.
+   exits 0, its output is Chris's notes. Exit 3 means another `wait` took the item: say so.
    A skill that does not want notes runs no `wait`.
+6. If `put` exits non-zero (2: no shelf host answers), reply with the full output as the skill says.
