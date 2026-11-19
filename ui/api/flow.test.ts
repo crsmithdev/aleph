@@ -45,7 +45,7 @@ beforeAll(() => {
   // A project filter names a registry key, or it matches nothing.
   writeRepos({ alpha: { path: "/nonexistent/alpha" }, beta: { path: "/nonexistent/beta" }, pc: { path: "/nonexistent/pc" } }, join(base, "issues"));
   restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ITEMS: join(base, "issues") });
-  // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
+  // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (error, model unset), a 5 h broken clock
   run({ role: "build", state: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
   run({ role: "build", state: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
   run({ role: "build", state: "failed", cost: 3, ...secs(0, 10, 1800) });
@@ -456,8 +456,8 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false, [[0, 10 * H]]);
   const by = (role: string, model: string) => a.outcomes.find((x) => x.role === role && x.model === model)!;
-  expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, stuck: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
-  expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, stuck: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
+  expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, error: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
+  expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, error: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
   expect(by("intake", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
   // The verdicts give the pass and fail counts; the runs are those of the review jobs, and there are none here, so no rate.
   expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 0, ended: 0, rate: null });
@@ -586,8 +586,8 @@ test("agents: each outcome row has ended, p95 and, for a worker, the cost per bu
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => true);
   const intake = a.outcomes.find((x) => x.role === "intake")!;
-  expect(intake).toMatchObject({ runs: 4, succeeded: 1, failed: 1, stuck: 1, ended: 3, p50: 7200, p95: 10800 });
-  for (const o of a.outcomes) { expect(o.ended).toBe(o.succeeded + o.failed + o.stuck); if (o.p50 !== null) expect(o.p95).toBeGreaterThanOrEqual(o.p50); }
+  expect(intake).toMatchObject({ runs: 4, succeeded: 1, failed: 1, error: 1, ended: 3, p50: 7200, p95: 10800 });
+  for (const o of a.outcomes) { expect(o.ended).toBe(o.succeeded + o.failed + o.error); if (o.p50 !== null) expect(o.p95).toBeGreaterThanOrEqual(o.p50); }
   expect(a.outcomes.find((x) => x.model === "w")).toMatchObject({ built: 1, perBuilt: 0.91 });
   expect(a.outcomes.find((x) => x.model === "x")).toMatchObject({ built: 0, perBuilt: null });
   // 150.27 over 165 built jobs is 0.91 a job.

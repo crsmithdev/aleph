@@ -46,7 +46,7 @@ test("Per output is cost over built for a size, over verdicts for the reviewer a
 const row = (h: string, name: string) => h.match(new RegExp(`<tr><td title="${name}">${name}</td>.*?</tr>`))![0];
 
 test("an outcome on a full model id joins the row of its short model; an unset model never reads not recorded", () => {
-  const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, ended: runs, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
+  const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, error: 0, ended: runs, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
   const outcomes = [o("intake", "claude-opus-5-5", 151), { ...o("worker", "claude-haiku-4-5-20251001", 7), size: "small" }, o("reviewer", "unset", 3)];
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<\/select><\/td><td class="num">151<\/td>/);
@@ -142,12 +142,12 @@ test("no usage data shows a dash; while the speed data loads the page says so", 
   expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
 
-const T: any = { done: "#d", need: "#n", stuck: "#s", "series-1": "#1", "series-2": "#2" };
+const T: any = { done: "#d", need: "#n", error: "#s", "series-1": "#1", "series-2": "#2" };
 const buckets = [{ at: new Date(2026, 9, 27).toISOString(), cost: { opus: 1.5, sonnet: 0.25 }, tokens: { opus: 1200, sonnet: 300 } }, { at: new Date(2026, 9, 28).toISOString(), cost: { opus: 2 }, tokens: { opus: 800 } }];
 const outcomes = [
-  { role: "worker", model: "haiku", succeeded: 6, failed: 2, stuck: 1 },
-  { role: "worker", model: "sonnet", succeeded: 4, failed: 0, stuck: 0 },
-  { role: "triage", model: "opus", succeeded: 5, failed: 0, stuck: 0 },
+  { role: "worker", model: "haiku", succeeded: 6, failed: 2, error: 1 },
+  { role: "worker", model: "sonnet", succeeded: 4, failed: 0, error: 0 },
+  { role: "triage", model: "opus", succeeded: 5, failed: 0, error: 0 },
 ];
 const E: any = { window: "week", buckets, agents: { ...agents, outcomes } };
 
@@ -297,7 +297,7 @@ test("the Success tile shows the success and first pass shares, its trend with h
   expect(tile(page({ success: 0.91, baseline: null, firstPass: 0.64 }), "Success")).not.toContain('class="tr');
 });
 
-const full = (role: string, model: string, extra: any = {}) => ({ role, model, runs: 30, succeeded: 24, failed: 6, stuck: 0, ended: 30, rate: 0.8, p50: 60, p95: 300, cost: 1.5, baseline: 0.7, ...extra });
+const full = (role: string, model: string, extra: any = {}) => ({ role, model, runs: 30, succeeded: 24, failed: 6, error: 0, ended: 30, rate: 0.8, p50: 60, p95: 300, cost: 1.5, baseline: 0.7, ...extra });
 const M = { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] };
 const page = (outcomes: any[], extra: any = {}) => renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes, ...extra } }, "live", "week", M);
 
@@ -390,16 +390,16 @@ test("the Roles card has no first-pass aside: the Success card shows it", () => 
 });
 
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
-const one = { role: "worker", size: "small", model: "haiku", runs: 1234, succeeded: 1, failed: 0, stuck: 0, ended: 1, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
+const one = { role: "worker", size: "small", model: "haiku", runs: 1234, succeeded: 1, failed: 0, error: 0, ended: 1, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
 
 test("the Roles headers are in Title Case, and every number header has num", () => {
   const heads = th(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } }));
-  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output"]);
+  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output"]);
 });
 
 test("the Roles table heads Agent to Output, with no Failed jobs link, Pass share or worker only cell", () => {
   const h = page([full("worker", "haiku", { size: "small" }), full("reviewer", "opus", { pass: 24, fail: 6 }), full("intake", "opus")]);
-  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output", "Output"]);
+  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output", "Output"]);
   expect(h).not.toMatch(/Failed jobs|failed-jobs|Pass share|worker only/);
   expect(readFileSync(new URL("../app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
 });

@@ -62,12 +62,12 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--run` / `--run-bg` | #3B5FC8 / #EBEFFA | #82AAFF / #353E59 | running |
 | `--done` / `--done-bg` | #437018 / #EDF2E8 | #A9C77D / #3B4347 | delivered |
 | `--need` / `--need-bg` | #8A5A00 / #F3EEE6 | #FFCB6B / #474344 | needs you |
-| `--error` / `--error-bg` | #C0304C / #F9EAED | #F07178 / #3D2C39 | error, a stuck job |
+| `--error` / `--error-bg` | #C0304C / #F9EAED | #F07178 / #3D2C39 | error, a failed job |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | an improving trend; the largest cause |
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--approve`, `--decide`, `--unstick` | see `--approve` in `ui/app.css` | dark block | Ask cards, each with `-bg` and `-ring` |
-| `--kind` / `--kind-bg` | `--error` / `--error-bg` | the same | an issue row's kind: the stuck and error cards |
+| `--kind` / `--kind-bg` | `--error` / `--error-bg` | the same | an issue row's kind: the returned, failed and error cards |
 | `--k` / `--k-bg` / `--k-ring` | `--approve` / `--approve-bg` / `--approve-ring` | the same | an Ask card: `decide` and `unstick` set their own |
 
 #### Data colours
@@ -693,7 +693,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
 - Show one measure on one value axis. For two measures, use two panels.
-- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `error`. Two states can share a colour, such as Failed and Stuck, which are both `error` in the Agents outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
+- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `error`. Two states can share a colour, such as Failed and Error, which are both `error` in the kit outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.

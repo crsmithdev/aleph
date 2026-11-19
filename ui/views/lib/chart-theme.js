@@ -1,7 +1,7 @@
 // The ECharts theme, the page tokens it reads, and the chart mount.
 
 /**
- * The ECharts theme for a token map ({bg, surface, ink, rule, run, done, need, stuck, sans}).
+ * The ECharts theme for a token map ({bg, surface, ink, rule, run, done, need, error, sans}).
  * Series colours `series-1` to `series-5`, then `chart-6` and `chart-7`; a series that is a state sets its tone as `color`.
  */
 export function chartTheme(t) {

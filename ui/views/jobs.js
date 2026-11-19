@@ -80,7 +80,7 @@ function jobKpis(j, now = Date.now()) {
   const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.state)).length, last = builds.at(-1)?.r.state;
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
-    { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
+    { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} failed${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
     { k: "Elapsed", v: esc(dur(runs.length ? (end - runs[0].start) / 1000 : undefined)), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
     { k: "Cost", v: esc(money(j.cost)), sub: j.wk ? wkHtml(j.wk) : "" },
     { k: "Change", v: c ? esc(c.lines) : miss("no change recorded"), sub: [c ? esc(c.files) : "", j.commit ? shaLink(j.commit, j.commitUrl) : ""].filter(Boolean).join(", ") },

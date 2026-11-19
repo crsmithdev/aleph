@@ -366,7 +366,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.
     expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, action"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
-    // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Stuck colour.
+    // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Error colour.
     expect(await page.ev(`({
       ids: ["kit-list", "kit-row-cell"].map((i) => !!document.querySelector("#" + i + ".kit-spec")),
       list: !!document.querySelector("#kit-list .list > .card") && document.querySelectorAll("#kit-list .grp[id]").length,

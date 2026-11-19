@@ -124,7 +124,7 @@ export function barsOf(runs, { cost = false } = {}) {
 }
 
 
-const LEGEND = { wait: "waiting", chris: "awaiting the user", aux: "intake, facts", build: "implement", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
+const LEGEND = { wait: "waiting", chris: "awaiting the user", aux: "intake, facts", build: "implement", bad: "failed, returned or dropped", land: "land", made: "filed", done: "closed or accepted" };
 const pct = (f) => (f * 100).toFixed(3);
 /** The time on the page: "11/02 08:11". */
 const timeOf = (at) => (Number.isFinite(at) ? when(new Date(at)) : "");

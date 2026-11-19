@@ -182,6 +182,7 @@ describe("the timeline panel", () => {
     expect(bars[1]).toContain('tabindex="0"');
     expect(bars[1]).toContain('<span class="sr">implement 2 · landed · 5m 00s</span>');
     expect(renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }])).toContain('<span class="aside">to the &lt;land&gt;</span>');
+    expect(renderTimeline([{ title: "Work", rows: [row] }])).toContain('<i class="t-bad"></i>failed, returned or dropped');
   });
 
   test("it shows the axis, the segments, the bars as links to their jobs and the events, escaped", () => {

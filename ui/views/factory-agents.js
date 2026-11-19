@@ -56,7 +56,7 @@ function goesTo(key, set) {
 }
 
 function roles(a, m) {
-  const num = ["Runs", "OK", "Stuck", "p50", "p95", "Cost", "Per Output"];
+  const num = ["Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output"];
   const gone = miss("no runs in this window");
   const outs = a.outcomes ?? [], set = m?.models ?? {}, open = new Set(kept("agents.open", []));
   // The figures of one outcome. Its output is landed builds for a worker, verdicts for the reviewer and OK runs for another role.
@@ -68,7 +68,7 @@ function roles(a, m) {
     const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(cardPct(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
     const q = worker ? ` <span class="quiet">· ${cardPct(o.built ? o.firstPass / o.built : null)} first · ${cardPct(o.reviewPass)} review</span>` : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.stuck)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td class="out">${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
+    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.error)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td class="out">${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
   };
   const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
   const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? " checked" : ""}> `;

@@ -59,8 +59,8 @@ const FRAMES = {
   category: {
     measure: { name: "Outcomes", unit: "count", agg: "sum" },
     over: { kind: "category", name: "Role" },
-    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "error" }, { key: "stuck", name: "Stuck", color: "error" }] },
-    rows: [{ name: "Worker", succeeded: 31, failed: 4, stuck: 1 }, { name: "Triage", succeeded: 12, failed: 1, stuck: 0 }, { name: "Reviewer", succeeded: 9, failed: 2, stuck: 2 }],
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "error" }, { key: "error", name: "Error", color: "error" }] },
+    rows: [{ name: "Worker", succeeded: 31, failed: 4, error: 1 }, { name: "Triage", succeeded: 12, failed: 1, error: 0 }, { name: "Reviewer", succeeded: 9, failed: 2, error: 2 }],
   },
   cost: {
     measure: { name: "Cost", unit: "usd", agg: "sum" },

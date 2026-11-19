@@ -154,7 +154,7 @@ A writer writes only the new words, and a reader reads the stored words as they 
 
 | Set | Old → new |
 |---|---|
-| Job state | awaiting, needs-you → waiting; stuck → returned (sent back) or failed |
+| Job state | awaiting, needs-you → waiting; stuck → error (a run that ended returned or failed with no next run) or its real state, returned or failed; stalled (work that did not move within a time limit) |
 | Cause | time-box → timeout; lock-busy → locked; reviewer → review; no-answer → unanswered; own-list → other |
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |

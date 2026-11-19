@@ -368,7 +368,7 @@ describe("render", () => {
     expect(h.match(/class="dp-bar /g)).toHaveLength(3);
     for (const t of ["implement 1 · $0.50", "implement 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9#3"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
     for (const t of [">failed<", ">passed<", ">landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
-    expect(h).toContain("1 stuck, then fixed");
+    expect(h).toContain("1 failed, then fixed");
     expect(h).not.toContain("<it>");
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
   });
