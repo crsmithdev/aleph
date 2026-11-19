@@ -21,6 +21,8 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 | `policy-status.html` | Round 4: Status with Asks and Policy changes side by side, and decisions made without Chris split by kind |
 | `policy-review.html` | Round 4: Review › Waiting, issue.3302 in five steps: change, readers, why, outcome and check date, decide |
 | `policy-due.html` | Round 4: Review › Due, aleph-1203 at its check date: 8 misses before, 59 after |
+| `r5-status.html` | Round 5: the live Status page, with a wider Herald, Events and Detail tabs, and policy alerts that link to Automation |
+| `r5-automation.html` | Round 5: Automation with Review, Checks due and Decided without you above the round 3 knobs |
 | [lessons-proposal.md](lessons-proposal.md), [memory-proposal.md](memory-proposal.md) | The decisions, the data changes and what was not verified |
 
 ## Decisions
@@ -46,3 +48,16 @@ Chris proposed two kinds of decision on 2026-11-18: an ask changes one run, and 
 Sources: https://docs.devin.ai/use-cases/gallery/scheduled-knowledge-maintenance, https://claude.com/blog/how-warp-builds-self-improving-agents-on-claude, https://docs.github.com/en/copilot/concepts/agents/copilot-memory, https://cloud.google.com/anthos-config-management/docs/how-to/auditing-constraints, https://earthly.dev/lunar/guardrails/feature-flags/, https://arxiv.org/html/2505.22954v3.
 
 Not verified: the 53 decisions and their split by reason, carried from round 3, whose header said 52. The before and after counts of the Watched lessons, carried from round 3. The 65 review runs, from the 11/17 monitor.
+
+## Round 5 decisions
+
+Chris asked on 2026-11-18 to keep Status to what needs him, and to merge Review and Decided without you into Automation.
+
+- Status is a snapshot of the live page at :3020, so nothing on it is dropped. Its chart is an image of the live canvas.
+- Alerts show in the Herald's Events tab, as now. A policy alert links to its item on Automation, where the diff is.
+- The Detail tab is for drill-ins from Agent Time, Pipeline and the other cards. This mock draws only the tab.
+- The Herald widens from clamp(480px, 38%, 600px) to clamp(560px, 44%, 720px).
+- Checks due lists 5 lessons whose 14-day check passed. Land dates come from the `Issue:` trailers in git.
+- Ideas and Explore are out of the nav, because they are going away.
+
+Not verified: the before and after counts of the lessons, carried from round 3. Whether the Detail tab fits the drill-in proposal, which this mock does not draw.
