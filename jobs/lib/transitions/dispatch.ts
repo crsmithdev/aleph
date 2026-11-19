@@ -8,7 +8,7 @@ import { askChris, plainAsk } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allJobs, type Repo } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
-import { rescueStuck, type Rescue } from "../land/rescue.ts";
+import { rescueErrors, type Rescue } from "../land/rescue.ts";
 import { issueBrief } from "./continuation.ts";
 import type { Fate } from "../records/outcome.ts";
 import { openJob } from "../records/job.ts";
@@ -57,7 +57,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   if (!now && paused()) return { started: [], skipped: [], paused: true };
   const kept = now ? [] : await startKept();
   for (const name of kept) logEvent({ subject: "rule", action: "started", object: name, detail: "the pause kept this step" });
-  if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
+  if (rescue) await rescueErrors(rescue, land, async (repo) => mainState(repo));
   const landed: string[] = [];
   if (land) {
     // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.

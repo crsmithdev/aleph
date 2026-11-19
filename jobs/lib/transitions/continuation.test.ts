@@ -79,7 +79,7 @@ describe("next step after a build or recheck", () => {
     expect(note).toBe("The check `tests` failed on this branch. Its failed tests:\n\n- a.test.ts > s > one\n    Error: boom\n      at a.test.ts:3\n\nFix the cause, run the tests, and commit.");
   });
 
-  test("a stuck run with no fix round left starts nothing", () => {
+  test("a failed run with no fix round left starts nothing", () => {
     expect(nextStep(run({ state: "failed", reason: "tests failed after 2 fix rounds" }), true)).toBeUndefined();
   });
 
@@ -142,7 +142,7 @@ describe("next step after a land", () => {
   });
 });
 
-describe("rescue of a stuck or failed run", () => {
+describe("rescue of a returned or failed run", () => {
   test("no commit and a question asks Chris and waits for a spec edit, whatever else holds", () => {
     const r = run({ state: "failed", cause: "no-commit" });
     expect(askedQuestion({ ...r, question: "which clause wins?" })).toBe("which clause wins?");

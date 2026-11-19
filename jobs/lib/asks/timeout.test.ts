@@ -105,7 +105,7 @@ test("a due drop timeout takes its second verb: disapprove on a run, dismiss on 
   await timeoutStep(taker(took), NOW, [run], [...dismiss, ...early, ...close]);
   expect(took).toEqual([`${run.run.name} disapprove`, `${dismiss[0].name} dismiss`, `${close[0].name} discontinue`]);
   setTimeoutOf("rescue", 30, "pick");
-  const none = onIssue(31, { reason: "rescue", question: "What now?", options: [], why: [], situation: "Stuck." });
+  const none = onIssue(31, { reason: "rescue", question: "What now?", options: [], why: [], situation: "Failed." });
   await timeoutStep(taker(took), NOW, [], none);
   expect(took).toHaveLength(3);
 });

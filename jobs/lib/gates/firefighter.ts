@@ -5,7 +5,7 @@
  * (`Failing commit: <sha>`), so a second tick, or a second source for the same commit, files nothing more. While the
  * repo has an open red-main issue whose failure failed the same tests, a new failing commit is one note on that issue,
  * not a second issue; a failure with other failing tests, or with none where the issue has some, files its own issue. It
- * also sets a rescue Ask on each land live past 30 minutes (`askSlowLands`, rescue.ts). Stuck, failed and lost runs are the
+ * also sets a rescue Ask on each land live past 30 minutes (`askSlowLands`, rescue.ts). Returned, failed and lost runs are the
  * rescue's (rescue.ts), and an issue that loops is the loop guard's (issue-decision.ts); their Asks are the director's.
  * A CI issue's request quotes the failure (`ciFailure`), and its job record keeps it (`ci`), so a claim that the issue is
  * already met reruns while CI on main is red (rescue.ts). Its land leaves it open; `settleCi` closes it when a CI run at

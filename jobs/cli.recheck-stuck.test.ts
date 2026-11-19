@@ -25,7 +25,7 @@ describe("a factory run", () => {
     const kinds = (name: string) => jobRuns(name).map((d) => state(d).role).filter((k: string) => k !== "review");
     const NOFIX = { ALEPH_FIX_ROUNDS: "0" };
 
-    test("a job stuck on a failed check passes once main is fixed, keeps the worker's commit and starts no worker", async () => {
+    test("a job that failed its check passes once main is fixed, keeps the worker's commit and starts no worker", async () => {
       red();
       const r = await fjob("rc1", "commit rc1.txt", NOFIX);
       expect(state(r.json.run)).toMatchObject({ state: "failed", reason: "tests failed: FAIL is present 1" });

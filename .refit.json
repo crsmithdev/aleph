@@ -177,7 +177,7 @@
         "jobs/lib/land/rescue.ts:67-76",
         "jobs/lib/land/rescue.ts:64-73"
       ],
-      "reason": "killed, lost and stuckJobs are three different filters over factoryJobs that share a one-line shape."
+      "reason": "killed, lost and errorJobs are three different filters over factoryJobs that share a one-line shape."
     },
     {
       "copies": [

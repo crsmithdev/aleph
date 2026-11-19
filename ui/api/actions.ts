@@ -64,7 +64,7 @@ const cancel = post(async (body, { id }) => {
 });
 
 /**
- * "Wait for <repo>-<n>": set the stuck job's issue (a part run's dotted `on` names the issue holding the part) to wait
+ * "Wait for <repo>-<n>": set the failed job's issue (a part run's dotted `on` names the issue holding the part) to wait
  * on that open issue, then drop the job. All or none: a failed drop puts the old `after` back, and the error says so.
  */
 const wait = post(async (body, { id }) => {

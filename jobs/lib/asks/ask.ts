@@ -88,8 +88,8 @@ const REASONS = {
     get line() { return `Intake of an issue failed ${INTAKE_TRIES() === 2 ? "twice" : `${INTAKE_TRIES()} times`}.`; },
     problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue.",
     continue: { label: "Run intake again", hint: "Removes the Ask; intake runs again at once." } },
-  "rescue": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Rescue of a stuck job",
-    line: "A stuck job with more than one way out.", problem: "An answer is needed." },
+  "rescue": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Rescue of a failed job",
+    line: "A failed job with more than one way out.", problem: "An answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
   "run-cap": { actions: ["continue", "discontinue"], always: "continue", card: "unstick", name: "Job cap",
     get line() { return `An issue started ${RUN_CAP()} times in one hour.`; },

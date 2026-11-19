@@ -412,7 +412,7 @@ test("a held-path grant does not land a run that changes a security path: the re
 });
 
 test("a no-commit grant for the issue's project clears the Ask with no director run", async () => {
-  fresh([{ title: "stuck", specced: true, ask: plainAsk("no-commit", "3 runs ended with no commit") }]);
+  fresh([{ title: "failed", specced: true, ask: plainAsk("no-commit", "3 runs ended with no commit") }]);
   expect(grant(`no-commit:${key}`, "continue")).toBeNull();
   await direct();
   expect(asked(1)).toBeNull();

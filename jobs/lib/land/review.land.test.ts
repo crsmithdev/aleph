@@ -23,7 +23,7 @@ describe("a factory run", () => {
     expect(factoryBranch("ftest")).toBe(false);
   });
 
-  test("a follow-up on a stuck job starts from the job's previous branch", async () => {
+  test("a follow-up on a failed job starts from the job's previous branch", async () => {
     const r = await fjob("fagain", "commit FAIL");
     expect(state(r.json.run)).toMatchObject({ state: "returned", reason: "tests failed: FAIL is present 1" });
     expect(state(r.json.run).checks).toEqual([{ name: "tests", ok: false, seconds: expect.any(Number) }]);

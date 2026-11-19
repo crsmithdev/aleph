@@ -144,7 +144,7 @@ test("a land that failed with a merge conflict is dropped and the issue reruns; 
   expect(ask(id)).toMatchObject({ reason: "rescue", question: `issue.${id} hit the same case again (land-conflict): how should the factory go on?`, why: [`Run: issue.${id}, failed`, "Reason: merge conflict", "A rerun did not clear it"] });
 });
 
-test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {
+test("a standing rescue: recommended drops the unsafe failed run, no Ask, an always: Rerun note", async () => {
   putJson("settings", "always", { rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } });
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { reason: "tests failed after 2 fix rounds" });
@@ -161,8 +161,8 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
   const id = newIssue();
   const name = `issue.${id}`;
-  const stuck = mk(`fac-${id}`, "build", "failed", { reason: "weird" });
-  // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.
+  const failed = mk(`fac-${id}`, "build", "failed", { reason: "weird" });
+  // Dispatch A holds the lock; the failed state B must act on appears only after A is done.
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   const f = fakes();
   const b = dispatch(f);
@@ -173,7 +173,7 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
     if (waiting()) { w.close(); r(); }
   });
   expect(f.calls).toEqual([]);
-  reseed(stuck.job, { state: "failed", cause: "timeout", reason: "time box" });
+  reseed(failed.job, { state: "failed", cause: "timeout", reason: "time box" });
   release();
   await b;
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);

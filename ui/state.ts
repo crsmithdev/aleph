@@ -12,7 +12,7 @@ import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { pendingWaits, waitsOf, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
 import { stateOf, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { counting, isStuck } from "../jobs/lib/records/record.ts";
+import { counting, isError } from "../jobs/lib/records/record.ts";
 import { type Cause } from "../jobs/lib/records/outcome.ts";
 import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
@@ -350,7 +350,7 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
       const real = counting(runs).run;
       if (isWaiting(real.state)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
-      else if (isStuck(real)) stuck.push(toJob(runs));
+      else if (isError(real)) stuck.push(toJob(runs));
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);

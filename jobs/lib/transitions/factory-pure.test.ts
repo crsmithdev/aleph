@@ -51,7 +51,6 @@ test("the report groups each unshown run under its report lane, in the order of 
   expect(out).toContain("failed:\ni13 failed");
   expect(out).not.toContain("delivered:");
   expect(out).not.toContain("needs you:");
-  expect(out).not.toContain("stuck:");
 });
 
 test("a peek lists the unshown runs and leaves them unshown", () => {
@@ -181,7 +180,7 @@ test("stalled lists what could move: a ready issue, a new issue and a passed run
   expect(await stalled()).toEqual([]);
   setPaused(false);
   reseed(job, { state: "failed", next: undefined });
-  // A stuck run holds only its own issue, which its open job keeps not ready; the new issue can still move.
+  // A failed run holds only its own issue, which its open job keeps not ready; the new issue can still move.
   expect(await stalled()).toEqual([`ingest:issue.${fresh}`]);
 });
 

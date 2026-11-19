@@ -91,7 +91,7 @@ test("a full live cap logs one cap-on event over two dispatches and none on the 
   }
 });
 
-test("a stuck or failed run stops no gate: its open job keeps only its own issue not ready", () => {
+test("a returned or failed run stops no gate: its open job keeps only its own issue not ready", () => {
   expect(gates({ jobs: [[entry("build", "failed")]] as any })).toBeNull();
 });
 

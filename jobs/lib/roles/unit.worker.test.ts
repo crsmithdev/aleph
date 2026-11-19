@@ -12,7 +12,7 @@ afterAll(teardown);
 describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}) => actionJob(name, action, extra, "fac");
 
-  test("a worker that commits only result.md is stuck with no commit, and no check, review or land starts", async () => {
+  test("a worker that commits only result.md ends with no commit, and no check, review or land starts", async () => {
     const r = await fjob("fresult", "commit result.md", { ALEPH_FIX_ROUNDS: "0" });
     const s = state(r.json.run);
     expect(s).toMatchObject({ state: "failed", reason: "no commit" });

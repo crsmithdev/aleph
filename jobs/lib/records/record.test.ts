@@ -233,7 +233,7 @@ test("next: no step keeps the why sentence", () => {
   for (const xs of cases) expect("why" in nx(xs)).toBe(false);
 });
 
-test("next: a stuck run the factory asked Chris about waits", () => {
+test("next: a failed run the factory asked Chris about waits", () => {
   expect(nx([{ state: "failed", asked: { at: AT, question: "q" } }]).step).toBe("wait");
 });
 

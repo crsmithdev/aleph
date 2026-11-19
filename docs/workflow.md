@@ -93,7 +93,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 Each dispatch first does its steps, in this order:
 
 1. start the next steps that a pause kept (`startKept`);
-2. rescue returned, failed, killed and lost runs (`rescueStuck`);
+2. rescue returned, failed, killed and lost runs (`rescueErrors`);
 3. land the passed runs;
 4. close parents whose sub-issues are done (`closeIssues`);
 5. send `plan` issues to intake to split.

@@ -125,7 +125,7 @@ export function killGroup(pid: number, signal: NodeJS.Signals): void {
 /**
  * Stop a live run and wait until its process is gone: its systemd unit (the whole cgroup), else SIGTERM to its process
  * group and its pid; after `ms`, SIGKILL to both. False when the process still lives after that: the caller treats the
- * run as stuck, never as failed.
+ * run as failed `infra`.
  */
 export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
   systemctl("stop", unitOf(e.id));

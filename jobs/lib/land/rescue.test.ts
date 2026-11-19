@@ -10,17 +10,17 @@ import { loadRegistry, type Run } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
 import type { MainState } from "../gates/tables.ts";
 import type { Fate } from "../records/outcome.ts";
-import { rescueStuck } from "./rescue.ts";
+import { rescueErrors } from "./rescue.ts";
 import { ctx, newIssue, mk, ask, fakes, notes, setup, sh, teardown } from "../transitions/factory.testkit.ts";
 
 beforeEach(setup);
 afterEach(teardown);
 
-/** One rescue of the stuck runs in the ledger, with fake actions and main in `main`: the calls, and each drop's reason and fate by issue key. */
+/** One rescue of the failed runs in the ledger, with fake actions and main in `main`: the calls, and each drop's reason and fate by issue key. */
 async function rescue(main: MainState = { state: "green" }) {
   const f = fakes();
   const drops: Record<string, { reason: string; fate?: Fate }> = {};
-  await rescueStuck({ ...f.rescue, drop: (name, reason, fate) => { drops[name] = { reason, fate }; return f.rescue.drop(name, reason, fate); } }, f.land, async () => main);
+  await rescueErrors({ ...f.rescue, drop: (name, reason, fate) => { drops[name] = { reason, fate }; return f.rescue.drop(name, reason, fate); } }, f.land, async () => main);
   return { calls: f.calls, drops };
 }
 /** The rerun note the rescue left for issue `id`. */
@@ -131,7 +131,7 @@ test("a time box that runs out on a child filed with from: asks Chris and sets n
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toEqual([]);
-  expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", options: [{ label: "Rerun" }, { label: "Another way" }] });
+  expect(ask(id)).toMatchObject({ reason: "rescue", recommended: "Rerun", options: [{ label: "Rerun", line: "Drop the failed run and start the issue again as it is" }, { label: "Another way" }] });
   expect(ask(id)!.why).toContain("Intake cannot split it again");
   expect(issues.find(readList(loadRegistry().fac)!, id)!.fm.plan).toBeUndefined();
 });

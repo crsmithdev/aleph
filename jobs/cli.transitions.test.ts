@@ -50,7 +50,7 @@ describe("every transition dispatches at once", () => {
       // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
       expect((await issueClose("fac", id, "drop", "test over")).code).toBe(0);
       // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
-      // and a stuck or failed one holds every later dispatch.
+      // and a returned or failed one holds every later dispatch.
       const d = await drop(`issue.${id}`);
       if (d.code !== 0) expect(d.stderr).toContain("no open job");
       await idle(startLog);
@@ -70,14 +70,14 @@ describe("every transition dispatches at once", () => {
     await when(() => started().includes(`issue.${x}`));
   }, 60_000);
 
-  test("a stuck run holds only its own issue: the next issue starts beside it", async () => {
-    // The safe default actions would release the run; without them it stays stuck.
+  test("a failed run holds only its own issue: the next issue starts beside it", async () => {
+    // The safe default actions would release the run; without them it stays failed.
     const rescue = process.env.ALEPH_RESCUE;
     process.env.ALEPH_RESCUE = "off";
     try {
-      const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--spec", "-"], { ALEPH_FIX_ROUNDS: "0" }));
+      const s = track(await add("ends failed", "commit-all FAIL gate/x", ["--spec", "-"], { ALEPH_FIX_ROUNDS: "0" }));
       await idle(startLog);
-      expect(runs(s).some((r) => ["stuck", "failed"].includes(state(r).state))).toBe(true);
+      expect(runs(s).some((r) => ["returned", "failed"].includes(state(r).state))).toBe(true);
       const b = track(await add("starts beside it", open("hold-b"), ["--spec", "-"]));
       await when(() => started().includes(`issue.${b}`));
       expect(started()).toEqual([`issue.${s}`, `issue.${b}`]);

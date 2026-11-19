@@ -42,7 +42,7 @@ describe("checks", () => {
     expect(calls).toEqual(["checks", "repeatedFailure tests"]);
   });
 
-  test("at the cap the run stays stuck and its reason counts the rounds; a cap of 0 adds nothing; a recheck has no rounds", async () => {
+  test("at the cap the run stays failed and its reason counts the rounds; a cap of 0 adds nothing; a recheck has no rounds", async () => {
     expect((await workerVerdict(branch({ earlier: two }), ports({ stop: tests, failed: "tests" }).p)).outcome).toEqual({ state: "failed", cause: "check", checkName: "tests", reason: "tests failed after 2 fix rounds" });
     expect((await workerVerdict(branch({ rounds: 0 }), ports({ stop: tests, failed: "tests" }).p)).outcome).toEqual({ state: "failed", cause: "check", checkName: "tests", reason: "tests failed" });
     expect((await workerVerdict(branch({ earlier: undefined }), ports({ stop: tests, failed: "tests" }).p)).outcome).toEqual({ state: "failed", cause: "check", checkName: "tests", reason: "tests failed" });

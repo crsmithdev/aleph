@@ -390,8 +390,8 @@ const counts = (run: Run): boolean => run.role !== "director" && run.role !== "r
  */
 export const counting = (j: Entry[]): Entry => j.findLast((e) => counts(e.run)) ?? j.at(-1)!;
 
-/** A run that ended `returned` or `failed` with no `next` queued: it is stuck, not between steps. */
-export const isStuck = (r: Pick<Run, "state" | "next">): boolean => (r.state === "returned" || r.state === "failed") && !r.next;
+/** A run that ended `returned` or `failed` with no `next` queued: it is an error, not between steps. */
+export const isError = (r: Pick<Run, "state" | "next">): boolean => (r.state === "returned" || r.state === "failed") && !r.next;
 
 /** What `next` reads besides the runs: the issue's Ask. */
 export interface Live { ask: Ask | null }
@@ -414,7 +414,7 @@ export function next(runs: RunRecord[], live: Live = { ask: null }): Step {
   if (last?.next === "recheck") return { step: "recheck", action: "returned", ...subOf(last) };
   if (last?.next === "land") return { step: "land", action: last.state };
   if (last?.state === "passed") return { step: "wait", action: "passed", to: "human" };
-  if (last && isStuck(last)) {
+  if (last && isError(last)) {
     // An Ask made while the run was live (a slow land) was about the live run, not about this end.
     if (last.asked && !(last.ended && last.asked.at < last.ended)) return { step: "wait", action: "waiting", to: "human" };
     if (!policyOf(causeOf(last)).rescuable) return { step: "wait", action: last.state, ...subOf(last) };
