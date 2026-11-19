@@ -1247,6 +1247,11 @@ html { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
 
 /* round 5, mock only: tokens from ui/app.css */
 .mockbar { position: sticky; top: 0; z-index: 60; background: var(--ink); color: var(--surface); padding: var(--sp-6) var(--sp-16); font-size: var(--fs-xs); display: flex; gap: var(--sp-16); align-items: center; }
+.pair2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: stretch; }
+.pair2 > * { min-width: 0; margin: 0; }
+.pair2 aleph-chart div { width: auto !important; height: auto !important; max-width: 100%; overflow: visible !important; }
+.pair2 aleph-chart img { width: 100% !important; height: auto !important; }
+@container rail-main (max-width: 640px) { .pair2 { grid-template-columns: minmax(0, 1fr); } }
 .rail { grid-template-columns: minmax(0, 1fr) clamp(560px, 44%, 720px); }
 .htabs { display: flex; gap: var(--sp-4); border-bottom: 1px solid var(--rule); }
 .htabs a { padding: var(--sp-6) var(--sp-12); text-decoration: none; color: var(--muted); font-weight: var(--fw-mid); border-bottom: 2px solid transparent; margin-bottom: -1px; }

@@ -59,5 +59,8 @@ Chris asked on 2026-11-18 to keep Status to what needs him, and to merge Review 
 - The Herald widens from clamp(480px, 38%, 600px) to clamp(560px, 44%, 720px).
 - Checks due lists 5 lessons whose 14-day check passed. Land dates come from the `Issue:` trailers in git.
 - Ideas and Explore are out of the nav, because they are going away.
+- Agent Time and Active Issues share the first row, and Pipeline is second. Chris asked for this to free the third row.
+- The third row is a Decisions card in the form of Agent Time. It shows 53 decisions in 7 days, 18 of them policy changes made without Chris, and links to Automation. The split by who decided comes from the round 3 rows: 44 by rule, 9 by the director, 0 by Chris.
+- The chart is the live page's canvas, drawn again at 330px wide.
 
 Not verified: the before and after counts of the lessons, carried from round 3. Whether the Detail tab fits the drill-in proposal, which this mock does not draw.
