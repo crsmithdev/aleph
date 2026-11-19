@@ -34,7 +34,8 @@ beforeAll(async () => {
   chmodSync(join(base, "claude"), 0o755);
   newItems(base, "issues");
   writeRepos({ aleph: { path: base, code: "a" } }, join(base, "issues"));
-  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv, GIT_COMMITTER_DATE: pinned.toISOString() });
+  // Its own db: `next("idea")` never falls, so a second pass in one process would number the ideas 4, 5, 6.
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ITEMS: join(base, "issues"), ALEPH_LENS_CMD: join(base, "claude"), FAKE_COST: "0.5", ...gitEnv, GIT_COMMITTER_DATE: pinned.toISOString() });
   add("Alpha", "sketch", "aleph");
   add("Beta", "sketch");
   add("Gamma", "sketch");
