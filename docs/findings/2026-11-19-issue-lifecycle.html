@@ -128,13 +128,13 @@ main { max-width: 2200px; }
 <main>
   <header>
     <p class="kicker">aleph factory · issue lifecycle · today beside the revised version</p>
-    <h1>The revised factory keeps its eight steps, cuts memory from every agent and counts every retry against one cap</h1>
-    <p class="answer">After three red-team rounds, the set that survives is small: no vault text in any factory agent, two gates cut, doc claims as a note, and the run cap counted over an issue's life. Only the rebase cut and the keep-gate note are on main.</p>
+    <h1>The revised factory keeps its steps, gates and retry counts, and cuts memory from every factory agent</h1>
+    <p class="answer">After four review rounds, the set that survives is small: no vault text in any factory agent, and doc claims as a note. Round 4 struck the gate cuts and the lifetime run cap. Only the rebase cut, the keep-gate note and the recall-hook check are on main.</p>
   </header>
 
   <div class="pair">
     <div class="side"><p class="tag">Today · page of 2026-11-19 02:26 UTC</p><h2>Every failure on the way to main has one fixed place to go</h2><p>A failed check or a reviewer hold goes back to the worker for at most 2 fix rounds. What is left goes to the rescue once, then to an Ask that the director tries before Chris.</p></div>
-    <div class="side next"><p class="tag">Revised · rounds 1 to 3 and the memory cut · 2026-11-19</p><h2>Agents run on prompts alone, and fewer parts can fail</h2><p>Each section ends with what changes and what round 2 or 3 removed, struck out with the reason. Rounds 1 and 2: <code>docs/findings/2026-11-19-issue-workflow-red-team.md</code>.</p></div>
+    <div class="side next"><p class="tag">Revised · rounds 1 to 4 and the memory cut · 2026-11-19</p><h2>Agents run on prompts alone, and fewer parts can fail</h2><p>Each section ends with what changes and what round 2, 3 or 4 removed, struck out with the reason. Rounds 1 and 2: <code>docs/findings/2026-11-19-issue-workflow-red-team.md</code>. Rounds 3 and 4 are on this page only.</p></div>
   </div>
 
   <div class="pair">
@@ -203,11 +203,11 @@ main { max-width: 2200px; }
   </figure>
 
   <figure class="f1">
-    <figcaption>The eight steps stay in order; memory reaches no step, two gates go, and one run cap per issue bounds every retry.</figcaption>
-    <svg viewBox="0 0 1200 290" role="img" aria-label="The same eight steps with no memory rings; changed steps dashed violet with the change under each, and one band for the run cap">
+    <figcaption>The eight steps, the ten gates and the retry counts stay as today; only memory leaves every factory step.</figcaption>
+    <svg viewBox="0 0 1200 290" role="img" aria-label="The same eight steps with no memory rings; changed steps dashed violet with the change under each, and one band for retry counts as today">
       <rect class="node" x="200" y="10" width="108" height="60" rx="6"/><text x="254" y="36" text-anchor="middle" class="t-title">Filed</text><text x="254" y="56" text-anchor="middle" class="t-muted">issue add</text>
       <rect class="node idea" x="324" y="10" width="108" height="60" rx="6"/><text x="378" y="36" text-anchor="middle" class="t-title">Intake</text><text x="378" y="56" text-anchor="middle" class="t-muted">Opus</text>
-      <rect class="node idea" x="448" y="10" width="108" height="60" rx="6"/><text x="502" y="36" text-anchor="middle" class="t-title">Dispatch</text><text x="502" y="56" text-anchor="middle" class="t-muted">8 gates</text>
+      <rect class="node" x="448" y="10" width="108" height="60" rx="6"/><text x="502" y="36" text-anchor="middle" class="t-title">Dispatch</text><text x="502" y="56" text-anchor="middle" class="t-muted">10 gates</text>
       <rect class="node idea" x="572" y="10" width="108" height="60" rx="6"/><text x="626" y="36" text-anchor="middle" class="t-title">Worker</text><text x="626" y="56" text-anchor="middle" class="t-muted">sized model</text>
       <rect class="node idea" x="696" y="10" width="108" height="60" rx="6"/><text x="750" y="36" text-anchor="middle" class="t-title">Verify</text><text x="750" y="56" text-anchor="middle" class="t-muted">3 checks</text>
       <rect class="node idea" x="820" y="10" width="108" height="60" rx="6"/><text x="874" y="36" text-anchor="middle" class="t-title">Review</text><text x="874" y="56" text-anchor="middle" class="t-muted">Opus</text>
@@ -221,20 +221,20 @@ main { max-width: 2200px; }
       <text x="10" y="100" class="t-title">Change</text><text x="10" y="120" class="t-muted">per step</text>
       <text x="254" y="100" text-anchor="middle" class="t-sm">no change</text>
       <text x="378" y="100" text-anchor="middle" class="t-sm">no recall</text>
-      <text x="502" y="100" text-anchor="middle" class="t-sm">credit, file</text><text x="502" y="116" text-anchor="middle" class="t-sm">gates cut</text>
+      <text x="502" y="100" text-anchor="middle" class="t-sm">no change</text>
       <text x="626" y="100" text-anchor="middle" class="t-sm">brief only,</text><text x="626" y="116" text-anchor="middle" class="t-sm">no recall</text>
       <text x="750" y="100" text-anchor="middle" class="t-sm">doc claims</text><text x="750" y="116" text-anchor="middle" class="t-sm">report only</text>
       <text x="874" y="100" text-anchor="middle" class="t-sm">no memory</text>
       <text x="998" y="100" text-anchor="middle" class="t-sm">rebase cut ✓</text>
 
       <text x="10" y="174" class="t-title">Retry</text><text x="10" y="194" class="t-muted">section 5</text>
-      <rect class="node idea" x="324" y="150" width="728" height="50" rx="6"/><text x="688" y="172" text-anchor="middle" class="t-title">run cap: agent runs over the issue's life</text><text x="688" y="191" text-anchor="middle" class="t-muted">replaces the hourly cap and both once-marks; restart kills do not count</text>
+      <rect class="node" x="324" y="150" width="728" height="50" rx="6"/><text x="688" y="172" text-anchor="middle" class="t-title">retry counts as today: 3 runs in 60 min, once-marks</text><text x="688" y="191" text-anchor="middle" class="t-muted">the lifetime cap is struck: it has no stop point and no value</text>
       <text x="10" y="248" class="t-title">Memory</text><text x="10" y="268" class="t-muted">section 6</text>
-      <rect class="node off" x="324" y="224" width="728" height="50" rx="6"/><text x="688" y="246" text-anchor="middle" class="t-title">no vault text reaches a factory agent</text><text x="688" y="265" text-anchor="middle" class="t-muted">role prompts and role skills only, until memory is added back</text>
+      <rect class="node off" x="324" y="224" width="728" height="50" rx="6"/><text x="688" y="246" text-anchor="middle" class="t-title">no vault text reaches a factory agent</text><text x="688" y="265" text-anchor="middle" class="t-muted">AGENT.md keeps its rules; the recall paragraph and core lines go</text>
     </svg>
     <ol class="notes">
       <li><span class="key-mem">Violet dashed</span> marks a proposal, not code on main. <span class="chip ok">green</span> Land is already changed on main (<code>70d0e57d</code>).</li>
-      <li>This is the set that survived round 3, plus the memory cut. Round 3 removed 12 of the round-1 changes; the table at the end of each section lists them.</li>
+      <li>This is the set that survived rounds 3 and 4, plus the memory cut. Round 3 removed 12 round-1 changes. Round 4, a Fable 5.2 review, put back both gates and the retry counts. The table at the end of each section lists each removal.</li>
     </ol>
   </figure>
   </div>
@@ -273,7 +273,7 @@ main { max-width: 2200px; }
   <section id="intake-next">
     <h2>1. Intake: the same routes, with no recall</h2>
     <figure>
-      <figcaption>Intake reads only the issue, the repo and git; the recall tool and the vault's start text are cut.</figcaption>
+      <figcaption>Intake reads only the issue, the repo and git; the recall tool, AGENT.md's recall lines and the core lines are cut.</figcaption>
       <svg viewBox="0 0 1000 250" role="img" aria-label="Intake inputs: issue, repo files and git log go in; recall and vault start text are cut">
         <rect class="node" x="0" y="10" width="200" height="50" rx="6"/><text x="100" y="40" text-anchor="middle" class="t-title">Issue text</text>
         <rect class="node" x="0" y="80" width="200" height="50" rx="6"/><text x="100" y="110" text-anchor="middle" class="t-title">Repo files</text>
@@ -283,7 +283,7 @@ main { max-width: 2200px; }
         <path class="edge key" d="M 620 105 H 718"/><text x="669" y="96" text-anchor="middle">routes</text>
         <rect class="node ok" x="720" y="75" width="250" height="60" rx="6"/><text x="845" y="101" text-anchor="middle" class="t-title">build, close, done, ask</text><text x="845" y="121" text-anchor="middle" class="t-muted">as today</text>
         <rect class="node off" x="420" y="180" width="200" height="50" rx="6"/><text x="520" y="203" text-anchor="middle" class="t-title cut-t">memory recall</text><text x="520" y="221" text-anchor="middle" class="t-muted">cut</text>
-        <rect class="node off" x="420" y="0" width="200" height="50" rx="6"/><text x="520" y="23" text-anchor="middle" class="t-title cut-t">AGENT.md, core</text><text x="520" y="41" text-anchor="middle" class="t-muted">cut</text>
+        <rect class="node off" x="420" y="0" width="200" height="50" rx="6"/><text x="520" y="23" text-anchor="middle" class="t-title cut-t">recall lines, core</text><text x="520" y="41" text-anchor="middle" class="t-muted">cut</text>
       </svg>
     </figure>
     <table>
@@ -327,9 +327,9 @@ main { max-width: 2200px; }
     </figure>
   </section>
   <section id="dispatch-next">
-    <h2>2. Dispatch: eight gates, two cut</h2>
+    <h2>2. Dispatch: ten gates, no change</h2>
     <figure>
-      <figcaption>The credit gate and the busy-file gate go; the run-cap gate counts runs over the issue's life.</figcaption>
+      <figcaption>All ten gates stay, because round 4 found evidence for the credit and busy-file gates that round 3 missed.</figcaption>
       <table>
         <thead><tr><th>#</th><th>Gate</th><th>Proposal</th><th>Why</th></tr></thead>
         <tbody>
@@ -340,16 +340,20 @@ main { max-width: 2200px; }
           <tr><td class="num">5</td><td><code>after</code></td><td>no change</td><td></td></tr>
           <tr><td class="num">6</td><td><code>job</code></td><td>no change; close <code>job.10073</code> and <code>job.9126</code> by hand</td><td>A sweep on "no process" closes live reviews: <code>processState</code> returns <code>none</code> for every review</td></tr>
           <tr><td class="num">7</td><td><code>full</code></td><td>no change</td><td></td></tr>
-          <tr><td class="num cut">8</td><td class="cut"><code>file</code></td><td><span class="chip risk">remove</span></td><td>No record shows a hold that prevented a conflict; 615 holds, 231 h of waits. Vote 2 to 2</td></tr>
-          <tr><td class="num cut">9</td><td class="cut"><code>credit</code></td><td><span class="chip risk">remove</span></td><td>Fired 0 times in a month; gate 2 binds first on the same error. Vote 4 to 0</td></tr>
-          <tr><td class="num">10</td><td><code>ask</code></td><td><span class="chip idea">proposal</span> The run cap counts the issue's whole life, section 5</td><td>Today: 3 runs in any 60 min, so 3203 reran 7 times across hours</td></tr>
+          <tr><td class="num">8</td><td><code>file</code></td><td>no change</td><td>Conflicts per land fell from 19.6% to 11.5% after it landed, a correlation only</td></tr>
+          <tr><td class="num">9</td><td><code>credit</code></td><td>no change</td><td>It landed on 11-05 after 46 builds died on a 402; a 1-token probe passes that 402, so without it the loop returns</td></tr>
+          <tr><td class="num">10</td><td><code>ask</code></td><td>no change</td><td>3 runs in any 60 min; section 5</td></tr>
         </tbody>
       </table>
-      <ol class="notes">
-        <li>Removing gate 8 sends more land conflicts to the merge run. Nobody sized that cost.</li>
-        <li>The credit matcher <code>/API Error: 402/</code> may miss real 402s from OpenRouter (11-05), so gate 2 may miss them too. Not verified.</li>
-      </ol>
     </figure>
+    <table>
+      <thead><tr><th>Change</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="cut">Remove the busy-file gate</td><td><span class="chip risk">removed, round 4</span> the "231 h of waits" was idle time from intake to build; the gate held about 64 h</td></tr>
+        <tr><td class="cut">Remove the credit gate</td><td><span class="chip risk">removed, round 4</span> "fired 0 times" is because no credit error came after it landed</td></tr>
+        <tr><td class="cut">Run cap over the issue's life</td><td><span class="chip risk">removed, round 4</span> section 5</td></tr>
+      </tbody>
+    </table>
   </section>
   </div>
 
@@ -425,7 +429,7 @@ main { max-width: 2200px; }
       <thead><tr><th>Change</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td>The keep-gate reports base-passing tests to the reviewer</td><td><span class="chip ok">landed</span> <code>a796c8e4</code></td></tr>
-        <tr><td>Doc claims becomes a note to the reviewer, not a return</td><td><span class="chip idea">proposal</span> it parses the worker's transcript, against PRINCIPLES.md rule 9. Vote 3 to 1</td></tr>
+        <tr><td>Doc claims becomes a note to the reviewer, not a return</td><td><span class="chip idea">proposal</span> today a doc-claims stop costs a recheck (<code>jobs/lib/transitions/continuation.ts:173</code>); it parses the transcript, against PRINCIPLES.md rule 9</td></tr>
         <tr><td>The worker brief drops the <code>aleph memory recall --episodes</code> line</td><td><span class="chip idea">proposal</span> <code>jobs/lib/transitions/continuation.ts:92</code></td></tr>
         <tr><td>The reviewer hold and its 2 fix rounds stay</td><td>no change; 244 of 251 landed after a round, which is the intended path</td></tr>
         <tr><td class="cut">Score each hold right or wrong</td><td><span class="chip risk">removed, round 3</span> nobody reads the score</td></tr>
@@ -544,41 +548,42 @@ main { max-width: 2200px; }
     </table>
   </section>
   <section id="ask-next">
-    <h2>5. Rescue and Asks: the run cap is the one count</h2>
+    <h2>5. Rescue and Asks: the retry counts stay</h2>
     <figure>
-      <figcaption>Every agent run of an issue counts against one cap over the issue's life, so the once-marks go and an Always rerun can no longer loop.</figcaption>
-      <svg viewBox="0 0 1000 300" role="img" aria-label="Five retry paths each start an agent run; every start counts against one lifetime run cap; at the cap an Ask; restart kills skip the count">
-        <text x="0" y="14" class="t-muted">Paths that start a run: no change</text>
-        <rect class="node" x="0" y="24" width="230" height="40" rx="6"/><text x="16" y="49" class="t-title">Fix round</text>
-        <rect class="node" x="0" y="74" width="230" height="40" rx="6"/><text x="16" y="99" class="t-title">Rescue rerun</text>
-        <rect class="node" x="0" y="124" width="230" height="40" rx="6"/><text x="16" y="149" class="t-title">Recheck</text>
-        <rect class="node" x="0" y="174" width="230" height="40" rx="6"/><text x="16" y="199" class="t-title">Director rerun</text>
-        <rect class="node" x="0" y="224" width="230" height="40" rx="6"/><text x="16" y="249" class="t-title">Always Rerun</text>
-        <path class="edge" style="marker-end:none" d="M 230 44 H 300 V 244 H 230 M 230 94 H 300 M 230 144 H 300 M 230 194 H 300"/><path class="edge" d="M 300 144 H 378"/><text x="339" y="135" text-anchor="middle">starts</text>
-
-        <rect class="node idea" x="380" y="104" width="240" height="80" rx="6"/><text x="500" y="130" text-anchor="middle" class="t-title">Run cap</text><text x="500" y="151" text-anchor="middle" class="t-muted">agent runs, issue's life</text><text x="500" y="170" text-anchor="middle" class="t-mono">RUN_CAP</text>
-        <path class="edge key" d="M 620 144 H 758"/><text x="689" y="135" text-anchor="middle">cap reached</text>
-        <rect class="node risk" x="760" y="116" width="220" height="56" rx="6"/><text x="870" y="140" text-anchor="middle" class="t-title t-risk">Ask</text><text x="870" y="160" text-anchor="middle" class="t-mono">run-cap</text>
-
-        <rect class="node off" x="380" y="220" width="240" height="56" rx="6"/><text x="500" y="244" text-anchor="middle" class="t-title">host restart kill</text><text x="500" y="264" text-anchor="middle" class="t-muted">not counted, as today</text>
-        <rect class="node off" x="380" y="10" width="240" height="56" rx="6"/><text x="500" y="34" text-anchor="middle" class="t-title cut-t">once-marks</text><text x="500" y="54" text-anchor="middle" class="t-muted">rescue, director: cut</text>
-        <g class="co"><path class="lead" d="M 620 38 H 646"/><circle cx="656" cy="38" r="10"/><text x="656" y="38">1</text></g>
-        <g class="co"><path class="lead" d="M 230 244 H 256"/><circle cx="266" cy="244" r="10"/><text x="266" y="244">2</text></g>
+      <figcaption>Today's three counts bound every retry path, so the revised design keeps them and adds no cap.</figcaption>
+      <svg viewBox="0 0 1000 300" role="img" aria-label="Retry paths and the count that bounds each: dispatch reruns by the hourly run cap, rescue by markRescued, director reruns by ONCE_PER_ISSUE; fix and merge rounds by their own limit of 2">
+        <text x="0" y="14" class="t-muted">Path</text><text x="380" y="14" class="t-muted">Count that bounds it</text><text x="760" y="14" class="t-muted">At the limit</text>
+        <rect class="node" x="0" y="24" width="300" height="40" rx="6"/><text x="16" y="49" class="t-title">Rerun through dispatch</text>
+        <rect class="node key" x="380" y="24" width="300" height="40" rx="6"/><text x="396" y="49" class="t-mono">RUN_CAP: 3 in 60 min</text>
+        <rect class="node risk" x="760" y="24" width="220" height="40" rx="6"/><text x="776" y="49" class="t-title">run-cap Ask</text>
+        <rect class="node" x="0" y="84" width="300" height="40" rx="6"/><text x="16" y="109" class="t-title">Rescue: land again, recheck</text>
+        <rect class="node" x="380" y="84" width="300" height="40" rx="6"/><text x="396" y="109" class="t-mono">markRescued: once</text>
+        <rect class="node risk" x="760" y="84" width="220" height="40" rx="6"/><text x="776" y="109" class="t-title">rescue Ask</text>
+        <rect class="node" x="0" y="144" width="300" height="40" rx="6"/><text x="16" y="169" class="t-title">Director rerun</text>
+        <rect class="node" x="380" y="144" width="300" height="40" rx="6"/><text x="396" y="169" class="t-mono">ONCE_PER_ISSUE</text>
+        <rect class="node risk" x="760" y="144" width="220" height="40" rx="6"/><text x="776" y="169" class="t-title">second Ask: Chris</text>
+        <rect class="node" x="0" y="204" width="300" height="40" rx="6"/><text x="16" y="229" class="t-title">Fix round, merge run</text>
+        <rect class="node" x="380" y="204" width="300" height="40" rx="6"/><text x="396" y="229" class="t-mono">≤2 rounds each</text>
+        <rect class="node risk" x="760" y="204" width="220" height="40" rx="6"/><text x="776" y="229" class="t-title">Ask</text>
+        <path class="edge key" d="M 300 44 H 378"/><path class="edge" d="M 300 104 H 378"/><path class="edge" d="M 300 164 H 378"/><path class="edge" d="M 300 224 H 378"/>
+        <path class="edge key" d="M 680 44 H 758"/><path class="edge" d="M 680 104 H 758"/><path class="edge" d="M 680 164 H 758"/><path class="edge" d="M 680 224 H 758"/>
+        <rect class="node off" x="0" y="256" width="300" height="40" rx="6"/><text x="16" y="281" class="t-title">host restart kill</text><text x="396" y="281" class="t-muted">no count, as today</text>
       </svg>
       <ol class="notes">
-        <li>The cap replaces <code>markRescued</code> (<code>jobs/lib/transitions/continuation.ts:286</code>) and <code>ONCE_PER_ISSUE</code> (<code>jobs/lib/roles/director.ts:56</code>). The gate already counts every start "whatever the trigger" (<code>jobs/lib/infra/settings.ts:76</code>); only its 60 min window changes.</li>
-        <li>The Always Rerun branch stays, so your standing grants keep working. Its reruns now count, so 3203's 7 reruns stop at the cap.</li>
+        <li>The counter counts a job by its first build run, at dispatch only (<code>jobs/lib/gates/factory-status.ts:250</code>). A lifetime count never falls, so each run past it needs an Ask, and only <code>ONCE_PER_ISSUE</code> (<code>jobs/lib/roles/director.ts:203</code>) stops repeat director reruns.</li>
+        <li>Open: a slow loop passes the hourly cap. Issue 2955 reran six times, 30 min apart. Nobody counted how often this happens.</li>
+        <li>No Ask times out: the <code>timeouts</code> setting is <code>{}</code>, so all 111 escalations in 15 days waited for Chris.</li>
       </ol>
     </figure>
     <table>
       <thead><tr><th>Change</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td>Run cap counts agent runs over the issue's life; cut both once-marks</td><td><span class="chip idea">proposal</span> <span class="inferred">inferred</span>. The cap's value is open: about 5 jobs per landed issue today</td></tr>
-        <tr><td>The director reads no <code>needs-you-log.md</code></td><td><span class="chip idea">proposal</span> section 6</td></tr>
-        <tr><td>Always <code>held-path</code> = <code>approve</code>: lands held globs, keeps security paths and <code>bun.lock</code> with Chris</td><td><span class="chip">your setting</span> 55 of 125 Asks were held-path; no code</td></tr>
-        <tr><td class="cut">Delete the Always Rerun branch</td><td><span class="chip risk">removed, round 3</span> <code>director.ts:679</code> serves every Always reason</td></tr>
-        <tr><td class="cut">A sixth retry counter beside the five caps</td><td><span class="chip risk">removed, round 3</span> replaced by the run cap above</td></tr>
-        <tr><td class="cut">Held-path to Chris by a <code>user</code> rule</td><td><span class="chip risk">removed, round 3</span> sends 55 Asks per 15 days to Chris</td></tr>
+        <tr><td>The director reads no <code>needs-you-log.md</code> and no vault decisions</td><td><span class="chip idea">proposal</span> section 6</td></tr>
+        <tr><td>Held-path Asks stay with Chris</td><td>no change: all held globs are security paths or <code>bun.lock</code>, and code sends those to Chris</td></tr>
+        <tr><td class="cut">Run cap over the issue's life; cut both once-marks</td><td><span class="chip risk">removed, round 4</span> no stop point but dispatch, no value (1.86 agent runs per landed issue), and "land again" loses its bound</td></tr>
+        <tr><td class="cut">Always <code>held-path</code> = <code>approve</code></td><td><span class="chip risk">removed, round 4</span> it approves nothing: 77 of 78 held-path stops named a security path</td></tr>
+        <tr><td class="cut">Delete the Always Rerun branch</td><td><span class="chip risk">removed, round 3</span> <code>jobs/lib/land/rescue.ts:345</code> serves the <code>rescue</code> grant</td></tr>
+        <tr><td class="cut">A sixth retry counter beside the five caps</td><td><span class="chip risk">removed, round 3</span></td></tr>
         <tr><td class="cut">An answered Ask acts at once</td><td><span class="chip risk">removed, round 3</span> a second path for a 2 min wait</td></tr>
       </tbody>
     </table>
@@ -615,23 +620,26 @@ main { max-width: 2200px; }
   <section id="memory-next">
     <h2>6. Memory: disconnected from factory agents</h2>
     <figure>
-      <figcaption>Five paths carry vault text into a factory agent today; each is cut, so an agent sees only its role prompt and its role skill.</figcaption>
+      <figcaption>Six paths carry vault text into a factory agent today; one is already closed and five are cut, so an agent sees its role prompt, its role skill and the rules in AGENT.md.</figcaption>
       <table>
         <thead><tr><th>Path</th><th>Where</th><th>Proposal</th></tr></thead>
         <tbody>
-          <tr><td>Start context: <code>identity/AGENT.md</code> and the vault's core lines</td><td><code>hooks/vault-context.ts:24</code></td><td><span class="chip risk">cut</span> no output when <code>ALEPH_AGENT</code> is set</td></tr>
-          <tr><td>Prompt recall: matching vault notes on each prompt</td><td><code>hooks/vault-recall.ts</code>; no <code>ALEPH_AGENT</code> check</td><td><span class="chip risk">cut</span> no output when <code>ALEPH_AGENT</code> is set</td></tr>
+          <tr><td>Start context: the recall paragraph of <code>identity/AGENT.md</code> and the vault's core lines</td><td><code>hooks/vault-context.ts:24</code>; <code>identity/AGENT.md</code> lines 15 to 19</td><td><span class="chip risk">cut</span> those lines only; the rest of AGENT.md stays</td></tr>
+          <tr><td>Prompt recall on each prompt</td><td><code>hooks/vault-recall.ts:64</code></td><td><span class="chip ok">on main</span> <code>2940eb23</code> skips agents</td></tr>
           <tr><td>Episode recall in the worker brief</td><td><code>jobs/lib/transitions/continuation.ts:92</code></td><td><span class="chip risk">cut</span></td></tr>
-          <tr><td>Recall tool in role allowlists</td><td><code>intake.ts:493</code>, <code>dedupe.ts:18</code>, <code>alias.ts:25</code>, <code>recheck.ts:33</code></td><td><span class="chip risk">cut</span></td></tr>
-          <tr><td>The director's <code>needs-you-log.md</code></td><td><code>jobs/lib/infra/settings.ts:129</code></td><td><span class="chip risk">cut</span></td></tr>
-          <tr><td>Role prompts; role skills <code>write-code</code>, <code>code-review</code> as text</td><td><code>jobs/lib/roles/role-skill.ts:4</code></td><td>stay: fixed prompts</td></tr>
+          <tr><td>Recall tool in the intake allowlist</td><td><code>jobs/lib/roles/intake.ts:493</code></td><td><span class="chip risk">cut</span></td></tr>
+          <tr><td>The director's vault decisions and <code>needs-you-log.md</code></td><td><code>jobs/lib/roles/director.ts:283</code>, <code>jobs/lib/roles/director.ts:695</code>, <code>jobs/lib/infra/settings.ts:129</code></td><td><span class="chip risk">cut</span> the prompt line, the <code>--add-dir</code> and the log</td></tr>
+          <tr><td>Approved correction lessons written into files agents load (CLAUDE.md, AGENT.md, role skills)</td><td><code>jobs/lib/learning/corrections.ts:37</code></td><td><span class="chip risk">cut</span> no lesson lands in those files <span class="inferred">inferred</span></td></tr>
+          <tr><td><code>memory</code> in the start hook's command list</td><td><code>cli/commands.ts:393</code></td><td>stay: a command name, no vault text</td></tr>
+          <tr><td>Role prompts; role skills <code>write-code</code>, <code>code-review</code></td><td><code>jobs/lib/roles/role-skill.ts:4</code></td><td>stay: fixed prompts</td></tr>
           <tr><td>Always rules</td><td><code>settings.always</code></td><td>stay: Chris's settings, not learning</td></tr>
-          <tr><td>Correction lessons, the maintainer</td><td><code>jobs/lib/learning/</code></td><td>stay running; they write the vault, and no factory agent reads it</td></tr>
+          <tr><td>The maintainer: dedupe, alias, recheck</td><td><code>jobs/lib/roles/maintainer.ts:122</code></td><td>stay with recall: it keeps the vault current, and it is not a factory role</td></tr>
         </tbody>
       </table>
       <ol class="notes">
-        <li>The two hook cuts need one check of <code>ALEPH_AGENT</code> each. AGENT.md also carries non-memory rules (worktree, reporting fields), so those lines move into the role prompts.</li>
-        <li>Adding memory back means undoing these five cuts; the maintainer keeps the vault current meanwhile.</li>
+        <li>Workers keep full Bash, so a worker can still run <code>aleph memory recall</code> by choice. With the AGENT.md lines gone, no prompt names the command.</li>
+        <li>The harness cuts the start context today: 1158 of 1666 agent sessions since 11-12 got a 2.3 KB preview that ends at AGENT.md line 42 (round 4, not verified by me).</li>
+        <li>Adding memory back means undoing these five cuts.</li>
       </ol>
     </figure>
   </section>
@@ -672,6 +680,7 @@ main { max-width: 2200px; }
           <tr><td>132 parked follow-ups</td><td>no change: the housekeeper grooms them (decision of 11-12)</td></tr>
           <tr><td>129 flake notes on 1156</td><td>no change: flake follow-ups stay paused</td></tr>
           <tr><td>24 quiet test-only closes</td><td>no change</td></tr>
+          <tr><td>Issues of repos without <code>sandbox: true</code> stay <code>new</code></td><td>no change; noted in round 4 (<code>jobs/lib/transitions/dispatch.ts:74</code>), not verified by me</td></tr>
           <tr><td>2 ghost running rows</td><td>close <code>job.10073</code> and <code>job.9126</code> by hand</td></tr>
           <tr><td class="cut">Close parked at 14 days; file a bug at 3 flakes; sweep closes rows with no process</td><td><span class="chip risk">removed, round 3</span> the first closes real work, the second goes against the pause, the third closes live reviews</td></tr>
         </tbody>
@@ -722,18 +731,23 @@ main { max-width: 2200px; }
         <tr><td>Busy file at 3 conflicts; director once per issue</td><td><code>jobs/lib/gates/factory-status.ts:146</code>, <code>jobs/lib/roles/director.ts:56</code></td></tr>
         <tr><td>Rebase: 123 tries, 123 conflicts, 0 successes; deleted</td><td>Report finding 17; commit <code>70d0e57d</code></td></tr>
         <tr><td>Keep-gate reports to the reviewer, not as a return</td><td>Commit <code>a796c8e4</code></td></tr>
-        <tr><td>Memory paths into factory agents: start context, prompt recall, episode recall, recall allowlists, needs-you log</td><td><code>hooks/vault-context.ts:24</code>, <code>hooks/hooks.json</code> (vault-recall on UserPromptSubmit), <code>jobs/lib/transitions/continuation.ts:92</code>, <code>jobs/lib/roles/intake.ts:493</code>, <code>dedupe.ts:18</code>, <code>alias.ts:25</code>, <code>recheck.ts:33</code>, <code>jobs/lib/infra/settings.ts:129</code></td></tr>
-        <tr><td>Prompt recall fires for factory agents</td><td><span class="inferred">inferred</span>: <code>hooks/vault-recall.ts</code> has no <code>ALEPH_AGENT</code> check; not seen in a trace</td></tr>
-        <tr><td>Credit gate fired 0 times; gate 2 binds first on the same error</td><td>Report finding 21; round 3, all four reviewers</td></tr>
-        <tr><td>Credit matcher <code>/API Error: 402/</code></td><td><code>jobs/lib/roles/agent-call.ts:66</code>; the miss on 11-05 is round 3 reliability, not verified</td></tr>
-        <tr><td>Busy-file gate: 615 holds, 231 h; no record of a prevented conflict</td><td>Report finding 20; round 3 vote 2 to 2</td></tr>
+        <tr><td>Memory paths into factory agents: start context, prompt recall, episode recall, recall allowlists, needs-you log</td><td><code>hooks/vault-context.ts:24</code>, <code>hooks/hooks.json</code> (vault-recall on UserPromptSubmit), <code>jobs/lib/transitions/continuation.ts:92</code>, <code>jobs/lib/roles/intake.ts:493</code>, <code>jobs/lib/roles/director.ts:695</code>, <code>cli/commands.ts:393</code>, <code>jobs/lib/infra/settings.ts:129</code></td></tr>
+        <tr><td>Prompt recall skips factory agents</td><td>Wrong in round 3: <code>hooks/vault-recall.ts:64</code> is <code>if (isAgent()) return;</code> since <code>2940eb23</code> (11-16)</td></tr>
+        <tr><td>Credit gate landed 11-05; no credit error since, and the 11-05 errors match its matcher</td><td>Round 4, finding 5; <code>jobs/lib/gates/factory-status.ts:243</code></td></tr>
+        <tr><td>Credit matcher <code>/API Error: 402/</code></td><td><code>jobs/lib/roles/agent-call.ts:66</code>; round 4: the 11-05 errors start "API Error: 402", so it matches them</td></tr>
+        <tr><td>Busy-file gate: about 64 h binding hold on 117 issues; conflicts per land 19.6% before it, 11.5% after (correlation)</td><td>Round 4; the round-3 "231 h" was all idle time from intake to build</td></tr>
         <tr><td><code>processState</code> returns <code>none</code> for every review</td><td><code>jobs/lib/infra/process.ts:47</code></td></tr>
-        <tr><td>Always branch serves every first-verb reason</td><td><code>jobs/lib/roles/director.ts:679</code></td></tr>
+        <tr><td>Always branch serves six first-verb reasons; <code>rescue</code> has its own branch</td><td><code>jobs/lib/roles/director.ts:58</code>, <code>jobs/lib/roles/director.ts:679</code>, <code>jobs/lib/land/rescue.ts:345</code></td></tr>
         <tr><td>Run cap: 3 agent runs per issue in any 60 min, whatever the trigger</td><td><code>jobs/lib/infra/settings.ts:76</code>, <code>jobs/lib/gates/issue-decision.ts:20</code></td></tr>
         <tr><td>Once-marks: <code>markRescued</code>, <code>ONCE_PER_ISSUE</code>; killed runs carry no mark</td><td><code>jobs/lib/transitions/continuation.ts:286</code>, <code>jobs/lib/roles/director.ts:56</code>, <code>jobs/lib/land/rescue.ts:206</code></td></tr>
-        <tr><td>Run cap over the issue's life replaces both marks</td><td><span class="inferred">inferred</span>, this page; not checked against every caller</td></tr>
-        <tr><td>3203 reran 7 times, 2955 6 times</td><td>Report finding 1 (verified)</td></tr>
-        <tr><td>About 5 jobs per landed issue</td><td>Report finding 24 (reported)</td></tr>
+        <tr><td>Run cap counts jobs by first build run, at dispatch only; the second run-cap Ask goes to Chris</td><td><code>jobs/lib/gates/factory-status.ts:250</code>, <code>jobs/lib/roles/director.ts:203</code></td></tr>
+        <tr><td>3203: the cap fired 3 times and Chris released it; 2955: six reruns 30 min apart never reach 3 in 60 min</td><td>Round 4, finding 13 (events of both issues)</td></tr>
+        <tr><td>Per landed issue: 1.19 job starts, 1.86 agent runs (864 issues); round 3's "about 5" counted every job kind</td><td>Round 4, finding 4</td></tr>
+        <tr><td>No Ask times out: <code>timeouts</code> is <code>{}</code></td><td><code>settings</code> in <code>~/.aleph/aleph.db</code>; <code>jobs/lib/asks/timeout.ts:104</code></td></tr>
+        <tr><td>Held globs are security paths or <code>bun.lock</code></td><td><code>~/.aleph/items/projects/3/project.md</code>, <code>jobs/lib/gates/gate.ts:154</code></td></tr>
+        <tr><td>Dedupe, alias and recheck are maintainer passes</td><td><code>jobs/lib/roles/dedupe.ts:13</code>, <code>jobs/lib/roles/maintainer.ts:122</code></td></tr>
+        <tr><td>The director reads vault decisions</td><td><code>jobs/lib/roles/director.ts:283</code>, <code>jobs/lib/roles/director.ts:695</code></td></tr>
+        <tr><td>Approved lessons write files that workers load</td><td>Round 4, finding 12; <code>jobs/lib/learning/corrections.ts:37</code> (<span class="inferred">inferred</span>, not opened by me)</td></tr>
         <tr><td>125 Asks in 15 days; 55 held-path; 111 escalations</td><td>Round 3 self-management, <code>events</code> in <code>~/.aleph/aleph.db</code></td></tr>
         <tr><td>Land failures: 103, of which 101 conflict, 0 moved</td><td>Round 3 reliability, <code>~/.aleph/aleph.db</code></td></tr>
         <tr><td>Land skips the rerun on an unchanged base</td><td><code>jobs/lib/land/landing.ts:241</code></td></tr>
