@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aleph: an issue from filing to main</title>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* The aleph UI's tokens (ui/app.css), light and dark. */
+:root {
+  --bg: #F4F3FA; --surface: #FFFFFF; --sunk: #ECEAF6; --ink: #292D3E; --ink-2: #4A4F6A; --muted: #62688A; --rule: #DCD9EC;
+  --accent: #3B5FC8; --accent-bg: #EBEFFA; --ok: #437018; --ok-bg: #EDF2E8; --risk: #C0304C; --risk-bg: #F9EAED;
+  --warn: #8A5A00; --warn-bg: #F3EEE6; --hot: #C2521F; --idea: #6D3FB0; --idea-bg: #F1EBFA;
+  --display: Merriweather, Georgia, serif; --sans: "Work Sans", system-ui, sans-serif; --mono: "Hack Nerd Font", Hack, ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202331; --surface: #292D3E; --sunk: #191C28; --ink: #EEF1F8; --ink-2: #BFC7D5; --muted: #8E96BA; --rule: #3A3F58;
+    --accent: #82AAFF; --accent-bg: #353E59; --ok: #A9C77D; --ok-bg: #3B4347; --risk: #F07178; --risk-bg: #3D2C39;
+    --warn: #FFCB6B; --warn-bg: #474344; --hot: #F78C6C; --idea: #C792EA; --idea-bg: #3B3450;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); }
+main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 64px; display: grid; gap: 40px; }
+h1, h2 { font-family: var(--display); font-weight: 700; line-height: 1.25; margin: 0; }
+h1 { font-size: 30px; }
+h2 { font-size: 21px; }
+p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+.answer { font-size: 19px; color: var(--ink); }
+.kicker { font: 500 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 14px; }
+code, .mono { font: 14px var(--mono); }
+code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+pre { margin: 0; padding: 12px 14px; background: var(--sunk); border-radius: 8px; overflow-x: auto; font: 13px/1.5 var(--mono); }
+
+/* A figure: one claim, stated in its caption. */
+figure { margin: 0; padding: 20px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; display: grid; gap: 12px; }
+figcaption { font-weight: 500; color: var(--ink); }
+figure svg { width: 100%; height: auto; display: block; overflow: visible; }
+.notes { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; }
+
+/* SVG parts. */
+svg text { font: 14px var(--sans); fill: var(--ink); }
+svg .t-mono { font: 13px var(--mono); }
+svg .t-muted { fill: var(--muted); font-size: 13px; }
+svg .t-title { font-weight: 600; }
+.node { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5; }
+.node.sunk { fill: var(--sunk); }
+.node.key { stroke: var(--accent); stroke-width: 2.5; fill: var(--accent-bg); }
+.node.ok { stroke: var(--ok); fill: var(--ok-bg); }
+.node.risk { stroke: var(--risk); fill: var(--risk-bg); }
+.node.warn { stroke: var(--warn); fill: var(--warn-bg); }
+.node.idea { stroke: var(--idea); fill: var(--idea-bg); stroke-dasharray: 6 4; }
+.node.off { stroke-dasharray: 6 4; fill: none; }
+.edge { fill: none; stroke: var(--muted); stroke-width: 1.5; marker-end: url(#arrow); }
+.edge.async { stroke-dasharray: 6 4; }
+.edge.key { stroke: var(--accent); stroke-width: 3; marker-end: url(#arrow-key); }
+.edge.risk { stroke: var(--risk); stroke-dasharray: 4 4; marker-end: url(#arrow-risk); }
+.bnd { fill: none; stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 8 5; }
+.bnd-t { font-size: 12px; fill: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.dim { stroke: var(--muted); stroke-width: 1; fill: none; }
+.dim.key { stroke: var(--accent); }
+.co circle { fill: var(--accent); }
+.co text { fill: var(--surface); font-size: 12px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.lead { stroke: var(--accent); stroke-width: 1; fill: none; }
+
+/* Cards, chips, tables. */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; display: grid; gap: 8px; align-content: start; }
+.chip { display: inline-block; font: 500 12px var(--sans); padding: 1px 8px; border-radius: 10px; background: var(--sunk); color: var(--ink-2); white-space: nowrap; }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.risk { background: var(--risk-bg); color: var(--risk); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.run { background: var(--accent-bg); color: var(--accent); }
+.chip.idea { background: var(--idea-bg); color: var(--idea); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.inferred { color: var(--warn); font-style: italic; }
+
+/* A stepper: a figure with [data-steps]; an element with data-s="N" shows from step N on, and data-only="N" only at step N. */
+.steps { display: flex; gap: 8px; align-items: center; }
+.steps button { font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 3px 12px; cursor: pointer; }
+.steps button:disabled { opacity: .4; cursor: default; }
+.steps output { color: var(--ink-2); font-size: 14px; }
+[data-steps] [data-s], [data-steps] [data-only] { transition: opacity .25s; }
+.hide { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.lane { fill: var(--sunk); }
+.guide { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; fill: none; }
+.dot { fill: var(--muted); }
+.dot.warn { fill: var(--warn); }
+.dot.risk { fill: var(--risk); }
+svg .t-sm { font-size: 13px; fill: var(--ink-2); }
+svg .t-risk { fill: var(--risk); }
+.edge.warn { stroke: var(--warn); stroke-dasharray: 4 4; marker-end: url(#arrow); }
+.stub { fill: none; stroke-width: 1.5; stroke-dasharray: 4 4; }
+.stub.warn { stroke: var(--warn); }
+section > table { margin-top: 4px; }
+.mem { fill: none; stroke: var(--idea); stroke-width: 2.5; stroke-dasharray: 3 3; }
+.chip.mem { background: var(--idea-bg); color: var(--idea); }
+.key-mem { color: var(--idea); font-weight: 600; }
+#memory td, #memory th { overflow-wrap: anywhere; }
+#memory .chip { white-space: normal; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker>
+    <marker id="arrow-key" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker>
+    <marker id="arrow-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--risk)"/></marker>
+  </defs>
+</svg>
+<main>
+  <header>
+    <p class="kicker">aleph factory · issue lifecycle</p>
+    <h1>Every failure on the way to main has one fixed place to go</h1>
+    <p class="answer">A failed check or a reviewer hold goes back to the worker for at most 2 fix rounds. What is left goes to the rescue once, then to an Ask that the director tries before Chris.</p>
+  </header>
+
+  <figure class="f1">
+    <figcaption>Eight steps take an issue to main, and each failure leaves a step for one of five fixed places.</figcaption>
+    <svg viewBox="0 0 1200 420" role="img" aria-label="The eight steps from filing to main, with a lane for each kind of exit and a dot where a step can exit to it">
+      <rect class="lane" x="0" y="96" width="1190" height="62"/>
+      <rect class="lane" x="0" y="220" width="1190" height="62"/>
+      <rect class="lane" x="0" y="344" width="1190" height="62"/>
+      <text x="10" y="122" class="t-title">Again</text><text x="10" y="142" class="t-muted">step or its worker</text>
+      <text x="10" y="184" class="t-title">Skip</text><text x="10" y="204" class="t-muted">next dispatch asks</text>
+      <text x="10" y="246" class="t-title">Rescue</text><text x="10" y="266" class="t-muted">one safe action</text>
+      <text x="10" y="308" class="t-title t-risk">Ask</text><text x="10" y="328" class="t-muted">director, then Chris</text>
+      <text x="10" y="370" class="t-title">Closed</text><text x="10" y="390" class="t-muted">dropped or done</text>
+
+      <g class="guides">
+        <path class="guide" d="M 254 70 V 406"/><path class="guide" d="M 378 70 V 406"/><path class="guide" d="M 502 70 V 406"/>
+        <path class="guide" d="M 626 70 V 406"/><path class="guide" d="M 750 70 V 406"/><path class="guide" d="M 874 70 V 406"/>
+        <path class="guide" d="M 998 70 V 406"/>
+      </g>
+
+      <rect class="node" x="200" y="10" width="108" height="60" rx="6"/><text x="254" y="36" text-anchor="middle" class="t-title">Filed</text><text x="254" y="56" text-anchor="middle" class="t-muted">issue add</text>
+      <rect class="node" x="324" y="10" width="108" height="60" rx="6"/><text x="378" y="36" text-anchor="middle" class="t-title">Intake</text><text x="378" y="56" text-anchor="middle" class="t-muted">Opus</text>
+      <rect class="node" x="448" y="10" width="108" height="60" rx="6"/><text x="502" y="36" text-anchor="middle" class="t-title">Dispatch</text><text x="502" y="56" text-anchor="middle" class="t-muted">10 gates</text>
+      <rect class="node" x="572" y="10" width="108" height="60" rx="6"/><text x="626" y="36" text-anchor="middle" class="t-title">Worker</text><text x="626" y="56" text-anchor="middle" class="t-muted">sized model</text>
+      <rect class="node" x="696" y="10" width="108" height="60" rx="6"/><text x="750" y="36" text-anchor="middle" class="t-title">Verify</text><text x="750" y="56" text-anchor="middle" class="t-muted">5 checks</text>
+      <rect class="node" x="820" y="10" width="108" height="60" rx="6"/><text x="874" y="36" text-anchor="middle" class="t-title">Review</text><text x="874" y="56" text-anchor="middle" class="t-muted">Opus</text>
+      <rect class="node" x="944" y="10" width="108" height="60" rx="6"/><text x="998" y="36" text-anchor="middle" class="t-title">Land</text><text x="998" y="56" text-anchor="middle" class="t-muted">squash push</text>
+      <rect class="mem" x="319" y="5" width="118" height="70" rx="9"/><rect class="mem" x="567" y="5" width="118" height="70" rx="9"/><rect class="mem" x="815" y="5" width="118" height="70" rx="9"/>
+      <path class="node ok" d="M 1068 18 a 54 8 0 0 0 108 0 a 54 8 0 0 0 -108 0 V 62 a 54 8 0 0 0 108 0 V 18"/>
+      <text x="1122" y="44" text-anchor="middle" class="t-title">main</text><text x="1122" y="62" text-anchor="middle" class="t-muted">done</text>
+      <path class="edge key" d="M 308 40 H 322"/><path class="edge key" d="M 432 40 H 446"/><path class="edge key" d="M 556 40 H 570"/>
+      <path class="edge key" d="M 680 40 H 694"/><path class="edge key" d="M 804 40 H 818"/><path class="edge key" d="M 928 40 H 942"/>
+      <path class="edge key" d="M 1052 40 H 1066"/>
+
+      <!-- Filed -->
+      <circle class="dot" cx="254" cy="362" r="5"/><text x="254" y="382" text-anchor="middle" class="t-sm">flake: a note</text><text x="254" y="398" text-anchor="middle" class="t-sm">on main: done</text>
+      <!-- Intake -->
+      <circle class="dot warn" cx="378" cy="114" r="5"/><text x="378" y="134" text-anchor="middle" class="t-sm">bad spec: once</text><text x="378" y="150" text-anchor="middle" class="t-sm">no reply: retry</text>
+      <circle class="dot risk" cx="378" cy="300" r="5"/><text x="378" y="320" text-anchor="middle" class="t-sm">fails again</text><text x="378" y="336" text-anchor="middle" class="t-sm">route ask</text>
+      <circle class="dot" cx="378" cy="362" r="5"/><text x="378" y="382" text-anchor="middle" class="t-sm">route close</text><text x="378" y="398" text-anchor="middle" class="t-sm">route done</text>
+      <!-- Dispatch -->
+      <circle class="dot" cx="502" cy="176" r="5"/><text x="502" y="196" text-anchor="middle" class="t-sm">a gate binds</text><text x="502" y="212" text-anchor="middle" class="t-sm">(8 kinds)</text>
+      <circle class="dot risk" cx="502" cy="300" r="5"/><text x="502" y="320" text-anchor="middle" class="t-sm">no-commit</text><text x="502" y="336" text-anchor="middle" class="t-sm">run-cap</text>
+      <!-- Worker -->
+      <circle class="dot warn" cx="626" cy="238" r="5"/><text x="626" y="258" text-anchor="middle" class="t-sm">no commit, stall</text><text x="626" y="274" text-anchor="middle" class="t-sm">time box, lost</text>
+      <circle class="dot risk" cx="626" cy="300" r="5"/><text x="626" y="320" text-anchor="middle" class="t-sm">Oracle question</text>
+      <!-- Verify -->
+      <circle class="dot warn" cx="750" cy="114" r="5"/><text x="750" y="134" text-anchor="middle" class="t-sm">check fails</text><text x="750" y="150" text-anchor="middle" class="t-sm">fix round, ≤2</text>
+      <circle class="dot warn" cx="750" cy="238" r="5"/><text x="750" y="258" text-anchor="middle" class="t-sm">no verdict</text><text x="750" y="274" text-anchor="middle" class="t-sm">fails after 2</text>
+      <circle class="dot risk" cx="750" cy="300" r="5"/><text x="750" y="320" text-anchor="middle" class="t-sm">same fail twice</text>
+      <!-- Review -->
+      <circle class="dot warn" cx="874" cy="114" r="5"/><text x="874" y="134" text-anchor="middle" class="t-sm">hold</text><text x="874" y="150" text-anchor="middle" class="t-sm">fix round, ≤2</text>
+      <circle class="dot risk" cx="874" cy="300" r="5"/><text x="874" y="320" text-anchor="middle" class="t-sm">held after 2</text><text x="874" y="336" text-anchor="middle" class="t-sm">held path</text>
+      <!-- Land -->
+      <circle class="dot warn" cx="998" cy="114" r="5"/><text x="998" y="134" text-anchor="middle" class="t-sm">conflict: merge</text><text x="998" y="150" text-anchor="middle" class="t-sm">moved: ≤3</text>
+      <circle class="dot warn" cx="998" cy="238" r="5"/><text x="998" y="258" text-anchor="middle" class="t-sm">checks fail</text><text x="998" y="274" text-anchor="middle" class="t-sm">3rd conflict</text>
+    </svg>
+    <ol class="notes">
+      <li><b>Again</b> repeats the step, or sends the run back to its worker on the same branch with the failure quoted.</li>
+      <li><b>Skip</b> logs a <code>held</code> event and starts nothing. The next dispatch asks the gates again.</li>
+      <li><b>Rescue</b> takes one safe action per issue: rerun, recheck, land again, or split. A second rescue on the same issue sets a <code>rescue</code> Ask.</li>
+      <li><span class="key-mem">Violet dashed</span> marks a model step that memory steers: intake, the worker, the reviewer, and the director behind each Ask. Section 6 lists what memory sets.</li>
+      <li><b>Ask</b> goes to the director first. Chris sees it only when the director escalates it, or a rule sends it to him.</li>
+    </ol>
+  </figure>
+
+  <section id="intake">
+    <h2>1. Intake: one model run turns a request into a spec</h2>
+    <figure>
+      <figcaption>Intake gives one of four routes, and a spec with a gap goes back to the same session once before it becomes an Ask.</figcaption>
+      <svg viewBox="0 -44 1000 380" role="img" aria-label="Intake run fans out to four routes; the spec check loops back once; failures go to an Ask">
+        <rect class="node key" x="40" y="100" width="170" height="56" rx="6"/><rect class="mem" x="35" y="95" width="180" height="66" rx="9"/><text x="125" y="124" text-anchor="middle" class="t-title">Intake run</text><text x="125" y="144" text-anchor="middle" class="t-muted">Opus, read-only</text>
+        <path class="edge key" d="M 210 128 H 300 V 26 H 518"/><text x="410" y="17" text-anchor="middle" class="t-mono">build</text>
+        <path class="edge" d="M 300 128 H 518"/><text x="410" y="119" text-anchor="middle" class="t-mono">close</text>
+        <path class="edge" d="M 300 128 V 206 H 518"/><text x="410" y="197" text-anchor="middle" class="t-mono">done</text>
+        <path class="edge" d="M 300 128 V 286 H 518"/><text x="410" y="277" text-anchor="middle" class="t-mono">ask</text>
+
+        <rect class="node key" x="520" y="0" width="170" height="52" rx="6"/><text x="605" y="22" text-anchor="middle" class="t-title">Spec check</text><text x="605" y="41" text-anchor="middle" class="t-mono">problems()</text>
+        <path class="edge key" d="M 690 26 H 758"/><text x="724" y="17" text-anchor="middle">clean</text>
+        <rect class="node ok" x="760" y="0" width="200" height="52" rx="6"/><text x="860" y="22" text-anchor="middle" class="t-title">Queued</text><text x="860" y="41" text-anchor="middle" class="t-muted">spec, or 2–6 parts</text>
+        <rect class="node" x="520" y="100" width="140" height="52" rx="6"/><text x="590" y="122" text-anchor="middle" class="t-title">Dropped</text><text x="590" y="141" text-anchor="middle" class="t-muted">dup, stale</text>
+        <rect class="node ok" x="520" y="180" width="140" height="52" rx="6"/><text x="590" y="202" text-anchor="middle" class="t-title">Done</text><text x="590" y="221" text-anchor="middle" class="t-muted">commit on main</text>
+        <rect class="node risk" x="520" y="260" width="200" height="52" rx="6"/><text x="620" y="282" text-anchor="middle" class="t-title t-risk">Ask</text><text x="620" y="301" text-anchor="middle" class="t-mono">intake-failed</text>
+
+        <path class="edge risk" d="M 605 0 V -22 H 125 V 98"/><text x="365" y="-31" text-anchor="middle">gaps: back to the session, once</text>
+        <path class="edge risk" d="M 705 52 V 258"/><text x="713" y="160" class="t-risk">fails again</text>
+        <path class="edge risk" d="M 100 156 V 196 H 160 V 158"/><text x="130" y="216" text-anchor="middle">no reply: retry</text>
+        <path class="edge risk" d="M 60 156 V 300 H 518"/><text x="72" y="291">no reply after 2 tries</text>
+      </svg>
+      <ol class="notes">
+        <li>The spec check rejects an empty section, a placeholder, an Edit surface path not on main, an Oracle with no command or test, and 2–6 parts broken.</li>
+        <li>Before the run, code closes a <code>flake</code> issue as a tracker note, and the sweep closes an issue a commit on main names in an <code>Issue:</code> trailer.</li>
+        <li>A <code>close</code> or <code>done</code> route on a <code>red-main</code> issue while main is red becomes a <code>question</code> Ask. So does a <code>close</code> on an issue with no request.</li>
+      </ol>
+    </figure>
+  </section>
+
+  <section id="dispatch">
+    <h2>2. Dispatch: ten gates, first one that binds wins</h2>
+    <figure>
+      <figcaption>A gate that binds skips the issue for this dispatch only; two gates instead set an Ask.</figcaption>
+      <table>
+        <thead><tr><th>#</th><th>Gate</th><th>Binds when</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td><code>paused</code></td><td>The <code>paused</code> setting holds a time</td><td><span class="chip">skip</span> nothing starts</td></tr>
+          <tr><td class="num">2</td><td><code>waiting</code></td><td>The backend this run uses is held after an API credit error, until a probe succeeds</td><td><span class="chip">skip</span> <span class="chip warn">history</span></td></tr>
+          <tr><td class="num">3</td><td><code>red</code></td><td>The last suite on main failed. A <code>red-main</code> issue passes</td><td><span class="chip">skip</span> <span class="chip warn">history</span></td></tr>
+          <tr><td class="num">4</td><td><code>done</code></td><td>The issue is done</td><td><span class="chip">skip</span> no hold event</td></tr>
+          <tr><td class="num">5</td><td><code>after</code></td><td>An <code>after</code> ref of the issue or its parent is not done</td><td><span class="chip">skip</span></td></tr>
+          <tr><td class="num">6</td><td><code>job</code></td><td>The issue has an open job</td><td><span class="chip">skip</span></td></tr>
+          <tr><td class="num">7</td><td><code>full</code></td><td>The live cap is full (cores / 6, at least 1)</td><td><span class="chip">skip</span> or a tier with room</td></tr>
+          <tr><td class="num">8</td><td><code>file</code></td><td>Another open job shares a busy file of the Edit surface</td><td><span class="chip">skip</span> <span class="chip warn">history</span></td></tr>
+          <tr><td class="num">9</td><td><code>credit</code></td><td>The last run hit the API credit error less than 10 min ago</td><td><span class="chip">skip</span> <span class="chip warn">history</span></td></tr>
+          <tr><td class="num">10</td><td><code>ask</code></td><td>3 runs in a row made no commit, or 3 starts in 1 h</td><td><span class="chip risk">Ask</span> <code>no-commit</code> or <code>run-cap</code> <span class="chip warn">history</span></td></tr>
+          <tr><td></td><td><code>ready</code></td><td>No gate binds</td><td><span class="chip ok">start</span> size route, lock <code>issue-&lt;name&gt;</code>, worktree, brief</td></tr>
+        </tbody>
+      </table>
+      <ol class="notes">
+        <li>Each dispatch first starts kept steps, rescues failed runs, lands passed runs and closes finished parents. Then it asks the gates.</li>
+        <li><span class="chip warn">history</span> marks a fixed rule that reads past runs: the rule is code, and only its input changes. No gate reads memory.</li>
+        <li>Load admission is not a gate. A check, a worker or a land waits in a queue while the load average is high, and nothing fails.</li>
+      </ol>
+    </figure>
+  </section>
+
+  <section id="verify">
+    <h2>3. Worker, verify and review: fix rounds before anything else</h2>
+    <figure>
+      <figcaption>A failed check or a reviewer hold sends the run back to its worker up to 2 times; only after that does it reach the rescue or an Ask.</figcaption>
+      <svg viewBox="0 -40 1000 320" role="img" aria-label="Worker through held path, with a fix-round loop above and exits to rescue and Ask below">
+        <rect class="node key" x="0" y="40" width="100" height="56" rx="6"/><rect class="mem" x="-5" y="35" width="110" height="66" rx="9"/><text x="50" y="64" text-anchor="middle" class="t-title">Worker</text><text x="50" y="84" text-anchor="middle" class="t-muted">claude -p</text>
+        <rect class="node" x="112" y="40" width="100" height="56" rx="6"/><text x="162" y="64" text-anchor="middle" class="t-title">Output</text><text x="162" y="84" text-anchor="middle" class="t-muted">has commit</text>
+        <rect class="node" x="224" y="40" width="100" height="56" rx="6"/><text x="274" y="64" text-anchor="middle" class="t-title">Checks</text><text x="274" y="84" text-anchor="middle" class="t-muted">related tests</text>
+        <rect class="node" x="336" y="40" width="100" height="56" rx="6"/><text x="386" y="64" text-anchor="middle" class="t-title">Doc claims</text><text x="386" y="84" text-anchor="middle" class="t-muted">transcript</text>
+        <rect class="node off" x="448" y="40" width="100" height="56" rx="6"/><text x="498" y="64" text-anchor="middle" class="t-title">Keep-gate</text><text x="498" y="84" text-anchor="middle" class="t-muted">never fails</text>
+        <rect class="node" x="560" y="40" width="100" height="56" rx="6"/><text x="610" y="64" text-anchor="middle" class="t-title">Oracle</text><text x="610" y="84" text-anchor="middle" class="t-muted">pin, then run</text>
+        <rect class="node" x="672" y="40" width="100" height="56" rx="6"/><rect class="mem" x="667" y="35" width="110" height="66" rx="9"/><text x="722" y="64" text-anchor="middle" class="t-title">Reviewer</text><text x="722" y="84" text-anchor="middle" class="t-muted">Opus</text>
+        <rect class="node" x="784" y="40" width="100" height="56" rx="6"/><text x="834" y="64" text-anchor="middle" class="t-title">Held path</text><text x="834" y="84" text-anchor="middle" class="t-muted">globs</text>
+        <rect class="node ok" x="896" y="40" width="100" height="56" rx="6"/><text x="946" y="64" text-anchor="middle" class="t-title">Passed</text><text x="946" y="84" text-anchor="middle" class="t-muted">to land</text>
+        <path class="edge key" d="M 100 68 H 110"/><path class="edge key" d="M 212 68 H 222"/><path class="edge key" d="M 324 68 H 334"/><path class="edge key" d="M 436 68 H 446"/>
+        <path class="edge key" d="M 548 68 H 558"/><path class="edge key" d="M 660 68 H 670"/><path class="edge key" d="M 772 68 H 782"/><path class="edge key" d="M 884 68 H 894"/>
+
+        <path class="edge risk" d="M 722 40 V 8 H 50 V 38"/>
+        <path class="stub warn" d="M 274 40 V 8"/><path class="stub warn" d="M 386 40 V 8"/><path class="stub warn" d="M 610 40 V 8"/>
+        <text x="400" y="-1" text-anchor="middle">fails or holds: back to the worker, same branch, ≤2 rounds</text>
+
+        <path class="stub warn" d="M 162 96 V 160"/><path class="stub warn" d="M 386 96 V 160"/><path class="stub warn" d="M 610 96 V 160"/>
+        <path class="edge warn" d="M 162 160 H 610 M 200 160 V 208"/>
+        <path class="stub warn" d="M 250 96 V 160"/>
+        <rect class="node warn" x="100" y="210" width="220" height="52" rx="6"/><text x="210" y="232" text-anchor="middle" class="t-title">Rescue</text><text x="210" y="251" text-anchor="middle" class="t-muted">one safe action</text>
+
+        <path class="edge risk" d="M 298 96 V 236 H 598"/>
+        <path class="edge risk" d="M 722 96 V 208"/><path class="edge risk" d="M 834 96 V 208"/>
+        <rect class="node risk" x="600" y="210" width="260" height="52" rx="6"/><text x="730" y="232" text-anchor="middle" class="t-title t-risk">Ask</text><text x="730" y="251" text-anchor="middle" class="t-mono">question, review-held, held-path</text>
+
+        <g class="co"><path class="lead" d="M 162 130 H 140"/><circle cx="130" cy="130" r="10"/><text x="130" y="130">1</text></g>
+        <g class="co"><path class="lead" d="M 250 130 H 236"/><circle cx="226" cy="130" r="10"/><text x="226" y="130">2</text></g>
+        <g class="co"><path class="lead" d="M 298 190 H 312"/><circle cx="322" cy="190" r="10"/><text x="322" y="190">3</text></g>
+        <g class="co"><path class="lead" d="M 610 130 H 624"/><circle cx="634" cy="130" r="10"/><text x="634" y="130">4</text></g>
+        <g class="co"><path class="lead" d="M 722 150 H 736"/><circle cx="746" cy="150" r="10"/><text x="746" y="150">5</text></g>
+        <g class="co"><path class="lead" d="M 834 150 H 848"/><circle cx="858" cy="150" r="10"/><text x="858" y="150">6</text></g>
+      </svg>
+      <ol class="notes">
+        <li>The output gate fails a run with no structured result, no commit ahead of main, the 1800 s time box, or no output growth for 600 s. The rescue reruns a run with no commit, splits a time box, and asks on a stall.</li>
+        <li>A check with no verdict (1200 s clock, signal, setup) fails as <code>infra</code> and uses no fix round. The rescue rechecks the branch once. A check that still fails after 2 rounds goes to the rescue too.</li>
+        <li>When the same tests fail in two rounds in a row, no further round starts. A <code>question</code> Ask quotes the failure.</li>
+        <li><code>oracle-pin</code> fails a branch that edits a file the Oracle runs, outside the Edit surface. An Oracle command with no verdict fails as <code>infra</code>.</li>
+        <li>The reviewer holds: a fix round. After 2 rounds, or after two calls with no verdict, the run waits on a <code>review-held</code> Ask.</li>
+        <li>A pass on a diff that touches a held glob, a security path or <code>bun.lock</code> waits on a <code>held-path</code> Ask.</li>
+      </ol>
+    </figure>
+  </section>
+
+  <section id="land">
+    <h2>4. Land: one at a time per repo, retries before rescue</h2>
+    <figure>
+      <figcaption>A land retries a moved main 3 times and a conflict 2 times through a merge run; a failed land check goes to the rescue.</figcaption>
+      <svg viewBox="0 -44 1000 320" role="img" aria-label="Land steps from queue to main, with retry loops above and exits below">
+        <rect class="node key" x="0" y="40" width="120" height="56" rx="6"/><text x="60" y="64" text-anchor="middle" class="t-title">Queue</text><text x="60" y="84" text-anchor="middle" class="t-muted">batch ≤8</text>
+        <rect class="node" x="140" y="40" width="120" height="56" rx="6"/><text x="200" y="64" text-anchor="middle" class="t-title">Merge</text><text x="200" y="84" text-anchor="middle" class="t-mono">merge-tree</text>
+        <rect class="node" x="280" y="40" width="120" height="56" rx="6"/><text x="340" y="64" text-anchor="middle" class="t-title">Own list</text><text x="340" y="84" text-anchor="middle" class="t-muted">TODO refused</text>
+        <rect class="node" x="420" y="40" width="120" height="56" rx="6"/><text x="480" y="64" text-anchor="middle" class="t-title">Land checks</text><text x="480" y="84" text-anchor="middle" class="t-muted">related, critical</text>
+        <rect class="node" x="560" y="40" width="120" height="56" rx="6"/><text x="620" y="64" text-anchor="middle" class="t-title">Push</text><text x="620" y="84" text-anchor="middle" class="t-muted">squash commit</text>
+        <rect class="node" x="700" y="40" width="120" height="56" rx="6"/><text x="760" y="64" text-anchor="middle" class="t-title">Fast-forward</text><text x="760" y="84" text-anchor="middle" class="t-muted">main checkout</text>
+        <path class="node ok" d="M 840 48 a 60 8 0 0 0 120 0 a 60 8 0 0 0 -120 0 V 88 a 60 8 0 0 0 120 0 V 48"/>
+        <text x="900" y="72" text-anchor="middle" class="t-title">origin/main</text><text x="900" y="90" text-anchor="middle" class="t-mono">Issue: trailer</text>
+        <path class="edge key" d="M 120 68 H 138"/><path class="edge key" d="M 260 68 H 278"/><path class="edge key" d="M 400 68 H 418"/>
+        <path class="edge key" d="M 540 68 H 558"/><path class="edge key" d="M 680 68 H 698"/><path class="edge key" d="M 820 68 H 838"/>
+
+        <path class="edge warn" d="M 200 40 V 20 H 80 V 38"/><text x="140" y="11" text-anchor="middle">conflict, ≤2</text>
+        <path class="edge warn" d="M 620 40 V -6 H 40 V 38"/><text x="330" y="-15" text-anchor="middle">main moved: land again, ≤3</text>
+
+        <path class="edge warn" d="M 340 96 V 198"/><text x="348" y="150">edits the list</text>
+        <rect class="node warn" x="230" y="200" width="160" height="52" rx="6"/><text x="310" y="222" text-anchor="middle" class="t-title">Worker</text><text x="310" y="241" text-anchor="middle" class="t-muted">with a note</text>
+        <path class="edge warn" d="M 480 96 V 198"/><text x="488" y="150">checks fail</text>
+        <rect class="node warn" x="420" y="200" width="200" height="52" rx="6"/><text x="520" y="222" text-anchor="middle" class="t-title">Rescue</text><text x="520" y="241" text-anchor="middle" class="t-muted">rerun once from main</text>
+
+        <g class="co"><path class="lead" d="M 200 30 H 226"/><circle cx="236" cy="30" r="10"/><text x="236" y="30">1</text></g>
+        <g class="co"><path class="lead" d="M 540 120 H 560"/><circle cx="570" cy="120" r="10"/><text x="570" y="120">2</text></g>
+        <g class="co"><path class="lead" d="M 820 120 H 800"/><circle cx="790" cy="120" r="10"/><text x="790" y="120">3</text></g>
+      </svg>
+      <ol class="notes">
+        <li>A conflict tries a mechanical rebase first. If that conflicts too, a merge run (the small model, 600 s) merges <code>origin/main</code> into the branch, and the reviewer judges the merge commit. A third conflict goes to the rescue.</li>
+        <li>A land check with no verdict splits no batch: each run lands again once. A failed batch splits in half until it finds the run that fails.</li>
+        <li>The land does not run the full suite. <code>aleph suite</code> runs it on main each hour, and a red result closes the <code>red</code> gate.</li>
+      </ol>
+    </figure>
+  </section>
+
+  <section id="ask">
+    <h2>5. Rescue and Asks: the director answers before Chris</h2>
+    <figure>
+      <figcaption>The rescue acts once per issue; an Ask goes to a standing rule, then the director, and reaches Chris only on escalation.</figcaption>
+      <svg viewBox="0 -40 1000 270" role="img" aria-label="Ask flow: always rule, director, code check, applied, or escalate to Chris">
+        <rect class="node risk" x="0" y="60" width="140" height="56" rx="6"/><text x="70" y="84" text-anchor="middle" class="t-title t-risk">Ask</text><text x="70" y="104" text-anchor="middle" class="t-muted">reason, options</text>
+        <rect class="node" x="190" y="60" width="160" height="56" rx="6"/><rect class="mem" x="185" y="55" width="170" height="66" rx="9"/><text x="270" y="84" text-anchor="middle" class="t-title">Always rule?</text><text x="270" y="104" text-anchor="middle" class="t-mono">always</text>
+        <rect class="node key" x="400" y="60" width="160" height="56" rx="6"/><rect class="mem" x="395" y="55" width="170" height="66" rx="9"/><text x="480" y="84" text-anchor="middle" class="t-title">Director</text><text x="480" y="104" text-anchor="middle" class="t-muted">Opus, read-only</text>
+        <rect class="node" x="610" y="60" width="160" height="56" rx="6"/><text x="690" y="84" text-anchor="middle" class="t-title">Code check</text><text x="690" y="104" text-anchor="middle" class="t-muted">refuses 4 kinds</text>
+        <rect class="node ok" x="820" y="60" width="170" height="56" rx="6"/><text x="905" y="84" text-anchor="middle" class="t-title">Applied</text><text x="905" y="104" text-anchor="middle" class="t-muted">land, drop, rerun</text>
+        <rect class="node risk" x="400" y="180" width="160" height="52" rx="6"/><text x="480" y="202" text-anchor="middle" class="t-title">Chris</text><text x="480" y="221" text-anchor="middle" class="t-muted">Status page</text>
+        <path class="edge" d="M 140 88 H 188"/>
+        <path class="edge key" d="M 350 88 H 398"/><text x="374" y="79" text-anchor="middle">no</text>
+        <path class="edge key" d="M 560 88 H 608"/><text x="584" y="79" text-anchor="middle">acts</text>
+        <path class="edge key" d="M 770 88 H 818"/><text x="794" y="79" text-anchor="middle">ok</text>
+        <path class="edge" d="M 270 60 V 20 H 905 V 58"/><text x="587" y="11" text-anchor="middle">a rule grants the action</text>
+        <path class="edge risk" d="M 270 116 V 206 H 398"/><text x="330" y="197" text-anchor="middle">rule: user</text>
+        <path class="edge risk" d="M 480 116 V 178"/><text x="472" y="152" text-anchor="end">escalates</text>
+        <path class="edge risk" d="M 690 116 V 150 H 520 V 178"/><text x="610" y="141" text-anchor="middle">left open</text>
+        <path class="edge" d="M 560 206 H 905 V 118"/><text x="730" y="197" text-anchor="middle">answers, or timeout acts</text>
+      </svg>
+      <ol class="notes">
+        <li>Code refuses a director that closes an issue Chris filed, lands a security path or <code>bun.lock</code>, lands a held run before review, or answers a run that waits for a spec edit.</li>
+        <li>A <code>held-path</code> Ask never times out, so a timeout never lands a held change.</li>
+      </ol>
+    </figure>
+    <table>
+      <thead><tr><th>Rescue case</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>Killed by a host restart</td><td>A land lands again; a branch with commits is rechecked; else drop and rerun. No once-per-issue mark</td></tr>
+        <tr><td>Lost: process ended with no end record</td><td>The same actions, once per issue</td></tr>
+        <tr><td>No commit, and the issue is already done</td><td><span class="chip">closed</span> drop as a duplicate</td></tr>
+        <tr><td><code>already_met</code> claim</td><td>Green main: <span class="chip ok">done</span>. Red main: rerun with a note</td></tr>
+        <tr><td>No commit</td><td><span class="chip warn">rerun</span> drop and rerun</td></tr>
+        <tr><td><code>infra</code> (no verdict)</td><td><span class="chip warn">recheck</span> or land again, or rerun with no branch</td></tr>
+        <tr><td>Time box</td><td><span class="chip warn">split</span> set <code>plan</code>, intake splits it. A part or a split issue: <span class="chip risk">Ask</span></td></tr>
+        <tr><td>Land conflict after 2 bounces, land checks fail</td><td><span class="chip warn">rerun</span> once from current main</td></tr>
+        <tr><td>Stall, failed after fix rounds, any other cause</td><td><span class="chip risk">Ask</span> <code>rescue</code></td></tr>
+        <tr><td>A second rescue on the same issue</td><td><span class="chip risk">Ask</span> <code>rescue</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="memory">
+    <h2>6. What memory decides, and what code decides</h2>
+    <figure>
+      <figcaption>Memory reaches the workflow only as text in a model's prompt, plus the Always rules; every gate, check, retry and cap is a code path.</figcaption>
+      <table>
+        <thead><tr><th>Rule</th><th>Kind</th><th>Comes from</th><th>Acts at</th></tr></thead>
+        <tbody>
+          <tr><td>Past-work recall: <code>aleph memory recall --episodes</code></td><td><span class="chip mem">memory</span></td><td>Episode pages of finished issues</td><td>Intake prompt, worker brief</td></tr>
+          <tr><td><code>identity/AGENT.md</code> and the vault's core lines</td><td><span class="chip mem">memory</span></td><td>Lessons the maintainer lands, Chris's edits</td><td>Start context of every factory agent: intake, worker, reviewer, director</td></tr>
+          <tr><td>Role skills: <code>write-code</code>, <code>code-review</code></td><td><span class="chip mem">memory</span></td><td>Skill files; lessons can change them</td><td>Worker brief, reviewer prompt, as text</td></tr>
+          <tr><td>Correction lessons</td><td><span class="chip mem">memory</span></td><td>Chris's pushback, verify-gate denials, reviewer drop reasons, last 14 days</td><td>A <code>proposal-*</code> Ask. Approve opens an issue that the factory builds like any other</td></tr>
+          <tr><td>Always rules</td><td><span class="chip mem">memory</span></td><td>Chris's Always clicks: now <code>rescue</code>, <code>question</code>, <code>blocker-dropped</code> = <code>resolve</code></td><td>Ask handling, rescue reruns, intake questions</td></tr>
+          <tr><td>Busy file: 3 land conflicts on a file</td><td><span class="chip warn">history</span></td><td>Past land conflicts</td><td>Dispatch gate <code>file</code></td></tr>
+          <tr><td>Loop guard: 3 runs with no commit, 3 starts in 1 h</td><td><span class="chip warn">history</span></td><td>The issue's past runs</td><td>Dispatch gate <code>ask</code></td></tr>
+          <tr><td>Credit wait and backend hold</td><td><span class="chip warn">history</span></td><td>The last API credit error</td><td>Dispatch gates <code>credit</code>, <code>waiting</code></td></tr>
+          <tr><td>Red baseline</td><td><span class="chip warn">history</span></td><td>The last hourly suite on main</td><td>Dispatch gate <code>red</code></td></tr>
+          <tr><td>Director decides once per issue for <code>run-cap</code> and <code>rescue</code></td><td><span class="chip warn">history</span></td><td>The director's past decisions</td><td>Escalation to Chris</td></tr>
+          <tr><td>Everything else on this page</td><td><span class="chip">code</span></td><td>Constants and branches in <code>jobs/lib</code></td><td>Each gate, check, retry, cap and rescue case</td></tr>
+        </tbody>
+      </table>
+      <ol class="notes">
+        <li>A lesson never becomes a gate or a check on its own. A proposed check becomes code only after Chris or the director approves it and a worker builds it.</li>
+        <li>Memory steers what a model decides: the spec intake writes, the code the worker writes, a reviewer hold, a director action. Code still checks each of those results.</li>
+      </ol>
+    </figure>
+  </section>
+
+  <section id="sources">
+    <h2>Sources</h2>
+    <table>
+      <thead><tr><th>Claim</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>Eight steps: intake, dispatch, unit (worker, verify, review), land</td><td><code>docs/workflow.md:25</code>, <code>jobs/lib/transitions/</code></td></tr>
+        <tr><td>Intake routes are build, close, done, ask</td><td><code>jobs/lib/roles/intake.ts:45</code></td></tr>
+        <tr><td>A spec with problems goes back once; a second failure sets intake-failed</td><td><code>jobs/lib/roles/intake.ts:6</code>, <code>:227</code>, <code>:416</code></td></tr>
+        <tr><td>Intake gets 2 tries with no reply</td><td><code>jobs/lib/infra/settings.ts:82</code></td></tr>
+        <tr><td>Gate order paused, waiting, red, done, after, job, full, file, credit, ask</td><td><code>jobs/lib/gates/issue-decision.ts:20</code>, <code>:101</code></td></tr>
+        <tr><td>A red-main issue passes the red gate</td><td><code>jobs/lib/gates/issue-decision.ts:105</code></td></tr>
+        <tr><td>no-commit Ask after 3 runs with no commit; run-cap after 3 starts in 1 h</td><td><code>jobs/lib/gates/issue-decision.ts:17</code>, <code>jobs/lib/infra/settings.ts:77</code></td></tr>
+        <tr><td>Credit wait is 10 min</td><td><code>jobs/lib/records/outcome.ts:27</code></td></tr>
+        <tr><td>Live cap is cores / 6, at least 1</td><td><code>jobs/lib/infra/settings.ts:73</code></td></tr>
+        <tr><td>Time box 1800 s, stall 600 s, check clock 1200 s, review clock 600 s</td><td><code>jobs/lib/infra/settings.ts:90</code>, <code>:93</code>, <code>:94</code>, <code>:97</code></td></tr>
+        <tr><td>Verify order: checks, doc claims, keep-gate, Oracle (pin first), reviewer, held path</td><td><code>jobs/lib/gates/worker-verdict.ts:112</code></td></tr>
+        <tr><td>2 fix rounds; same failure twice sets a question Ask</td><td><code>jobs/lib/infra/settings.ts:99</code>, <code>jobs/lib/gates/worker-verdict.ts:120</code></td></tr>
+        <tr><td>No verdict from the Oracle is infra, not a fix round</td><td><code>jobs/lib/gates/worker-verdict.ts:131</code></td></tr>
+        <tr><td>Reviewer: a second miss, or a hold after the last round, sets review-held</td><td><code>jobs/lib/gates/worker-verdict.ts:150</code>, <code>:161</code></td></tr>
+        <tr><td>A pass on a security or held path waits on held-path</td><td><code>jobs/lib/gates/worker-verdict.ts:156</code></td></tr>
+        <tr><td>oracle-pin fails edits to Oracle files outside the Edit surface</td><td><code>jobs/lib/gates/worker-verdict.ts:286</code></td></tr>
+        <tr><td>Land merges with merge-tree, tries a mechanical rebase, refuses the TODO list</td><td><code>jobs/lib/land/landing.ts:219</code>, <code>:222</code>, <code>:242</code></td></tr>
+        <tr><td>Conflict bounces 2, moved relands 3, merge run 600 s on the cheapest size</td><td><code>jobs/lib/transitions/continuation.ts:153</code>, <code>:155</code>, <code>:162</code>, <code>:187</code></td></tr>
+        <tr><td>Land batch of 8</td><td><code>jobs/lib/infra/settings.ts:105</code></td></tr>
+        <tr><td>Batch split on failure; no-verdict lands again once; land checks scope</td><td><code>jobs/lib/land/landing.ts:3</code>, <code>:289</code></td></tr>
+        <tr><td>Rescue cases: duplicate, no-commit, claimed, timeout, infra, land-checks, land-conflict</td><td><code>jobs/lib/land/rescue.ts:193</code></td></tr>
+        <tr><td>Time box splits through plan; a part or a split issue asks</td><td><code>jobs/lib/land/rescue.ts:5</code>, <code>:418</code></td></tr>
+        <tr><td>A second rescue on an issue sets a rescue Ask</td><td><code>jobs/lib/land/rescue.ts:7</code></td></tr>
+        <tr><td>Reviewer, intake and director run on claude-opus-5-5</td><td><code>aleph models</code> output, 2026-11-18</td></tr>
+        <tr><td>Director refusals, Always rules, timeouts, held-path never times out</td><td><code>jobs/lib/roles/director.ts:197</code>, <code>:311</code>, <code>:551</code>, <code>jobs/lib/asks/timeout.ts:24</code></td></tr>
+        <tr><td>Each dispatch rescues and lands before it asks the gates</td><td><code>jobs/lib/transitions/dispatch.ts:43</code>, <code>:58</code>, <code>:60</code>, <code>:65</code></td></tr>
+        <tr><td>Intake and the worker brief run past-work recall</td><td><code>jobs/lib/transitions/continuation.ts:92</code>, <code>:105</code>, <code>jobs/lib/roles/intake.ts:310</code></td></tr>
+        <tr><td>Factory agents start with AGENT.md and the core lines</td><td><code>hooks/vault-context.ts:3</code>, <code>jobs/lib/routing/models.ts:55</code></td></tr>
+        <tr><td>The reviewer and worker get a skill as prompt text</td><td><code>jobs/lib/roles/role-skill.ts:4</code></td></tr>
+        <tr><td>Correction signals, 14 days, grouped into lessons</td><td><code>jobs/lib/learning/corrections.ts:2</code>, <code>:29</code></td></tr>
+        <tr><td>Approving a proposal only reopens its issue</td><td><code>jobs/lib/roles/director.ts:252</code></td></tr>
+        <tr><td>Always rules in force</td><td><code>settings.always</code> in <code>~/.aleph/aleph.db</code>, read 2026-11-19</td></tr>
+        <tr><td>Busy file at 3 conflicts; director once per issue</td><td><code>jobs/lib/gates/factory-status.ts:146</code>, <code>jobs/lib/roles/director.ts:56</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+<script>
+// The stepper: Back and Next in each figure[data-steps]; the step's caption comes from the shown [data-say] element.
+for (const fig of document.querySelectorAll("figure[data-steps]")) {
+  const max = Number(fig.dataset.steps);
+  let at = 1;
+  const bar = Object.assign(document.createElement("div"), { className: "steps", innerHTML: `<button type="button">Back</button><button type="button">Next</button><output></output>` });
+  fig.append(bar);
+  const [back, next] = bar.querySelectorAll("button"), out = bar.querySelector("output");
+  const show = () => {
+    for (const el of fig.querySelectorAll("[data-s]")) el.classList.toggle("hide", Number(el.dataset.s) > at);
+    for (const el of fig.querySelectorAll("[data-only]")) el.classList.toggle("hide", Number(el.dataset.only) !== at);
+    const say = fig.querySelector(`[data-say="${at}"]`);
+    out.textContent = `${at} / ${max}${say ? `: ${say.textContent}` : ""}`;
+    back.disabled = at === 1;
+    next.disabled = at === max;
+  };
+  back.onclick = () => { at--; show(); };
+  next.onclick = () => { at++; show(); };
+  show();
+}
+</script>
+</body>
+</html>
