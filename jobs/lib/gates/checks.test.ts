@@ -44,6 +44,19 @@ async function run(r: Repo, replies: Reply[], changed: string[] = []) {
   return { failed, calls, results, log: readSection(base, "checks") ?? "" };
 }
 
+/** bun's output for a `--parallel` run whose test worker crashed: it prints no `(fail)` line. */
+const CRASH = `a.test.ts:
+✗ a.test.ts (worker crashed: SIGABRT)
+
+error: a test worker process crashed with SIGABRT while running a.test.ts.
+This indicates a bug in Bun or in a native addon, not in the test itself. Aborting.
+
+ 1 pass
+ 1 fail
+ 1 expect() calls
+Ran 2 tests across 2 files. [28.99s]
+`;
+
 test("a check that passes runs once", async () => {
   const r = await run(repo("a"), [{ code: 0 }]);
   expect(r).toMatchObject({ failed: null, calls: ["a"] });
@@ -62,6 +75,12 @@ test("a pass on the second run is a flake that names the failed tests once each"
   expect(r.log).toContain("## a: exit 1, run again\nx.test.ts:");
   expect(r.log).toContain("## a: exit 0 (second run)\nfine\n");
   expect(flakes()).toMatchObject([{ repo: "r", check: "a", tests: ["suite > one", "three"] }]);
+});
+
+test("a pass on the second run after a crash is a flake that names the file bun was running", async () => {
+  const r = await run(repo("a"), [{ code: 134, print: CRASH }, { code: 0, print: "fine\n" }]);
+  expect(r).toMatchObject({ failed: null, calls: ["a", "a"], results: [{ name: "a", ok: true, rerun: true }] });
+  expect(flakes()).toMatchObject([{ repo: "r", check: "a", tests: ["a.test.ts"] }]);
 });
 
 test("a failure on both runs fails the check, records no flake and stops the loop", async () => {
@@ -300,4 +319,8 @@ test("failureLine gives one short line on why a check failed", () => {
   expect(failureLine("\x1b[31merror: Cannot find module 'x'\x1b[0m\nat y\n")).toBe("error: Cannot find module 'x'");
   expect(failureLine("lint ran\nbad thing")).toBe("bad thing");
   expect(failureLine("error: " + "x".repeat(200))).toHaveLength(80);
+});
+
+test("failureLine names the file bun was running when its worker crashed", () => {
+  expect(failureLine(CRASH)).toBe("1 crash (a.test.ts)");
 });

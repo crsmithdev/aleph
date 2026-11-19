@@ -38,10 +38,14 @@ export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
 export const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
 
-/** One line, at most 80 characters, on why a check failed: bun's failed tests, else the first error line, else the last line. */
+/** The test files on bun's worker-crash lines, each one once: a run whose worker crashed prints no `(fail)` line. */
+const crashedFiles = (log: string): string[] => [...new Set(log.matchAll(/^✗ (.+?) \(worker crashed: .+\)$/gm).map((m) => m[1]))];
+
+/** One line, at most 80 characters, on why a check failed: bun's failed tests, else its crashed files, else the first error line, else the last line. */
 export function failureLine(log: string): string {
-  const text = log.replace(/\x1b\[[0-9;]*m/g, ""), fails = failedTests(text);
+  const text = log.replace(/\x1b\[[0-9;]*m/g, ""), fails = failedTests(text), crashed = crashedFiles(text);
   const line = fails.length ? `${fails.length} fail (${fails[0]})`
+    : crashed.length ? `${crashed.length} crash (${crashed[0]})`
     : text.split("\n").map((l) => l.trim()).find((l) => /error|fail/i.test(l)) ?? text.trimEnd().split("\n").at(-1)?.trim() ?? "";
   return line.length > 80 ? `${line.slice(0, 79)}…` : line;
 }
@@ -107,7 +111,7 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
     const rerun = first !== undefined && ok;
     const failedFirst = rerun ? failedTests(first!) : [];
     if (rerun) {
-      const tests = failedFirst;
+      const tests = failedFirst.length ? failedFirst : crashedFiles(first!);
       const row = { repo: t.repo.key, check: check.name, run: /^\d+$/.test(basename(t.folder)) ? jobOfFolder(t.folder) : basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
       recordFlake(row);
     }
