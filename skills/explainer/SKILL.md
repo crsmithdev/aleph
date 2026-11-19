@@ -30,7 +30,8 @@ coleam00/excalidraw-diagram-skill (shape follows meaning, render and look).
    screenshots it prints and fix what a reader would trip on: a crowded figure, a first screen that is not the
    answer, a label too small. Fix with small edits and run the check again. Done when the check prints no `✗` and
    the first-screen screenshot shows the headline, the answer and the start of the first figure.
-6. **Reply** with the page's path and the answer sentence.
+6. **Shelf.** Follow [SHELF](../SHELF.md) for the page: kind `explainer`, no wait.
+7. **Reply** with the page's path and the answer sentence.
 
 ## Figures
 

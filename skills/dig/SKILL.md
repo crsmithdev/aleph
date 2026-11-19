@@ -70,3 +70,5 @@ Report these parts, each in full:
 6. **Decisions.** Each open question you decided, with its reason and the vault note.
 
 Not verified: state any claim you did not check against data or a run.
+
+Then follow [SHELF](../SHELF.md): the parts above, as a `dig-<symptom>.md` file in the scratchpad, kind `report`, no wait.

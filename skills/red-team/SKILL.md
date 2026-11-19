@@ -125,6 +125,11 @@ End by listing the live agent IDs so the user can `SendMessage` back to any
 reviewer to push back on a finding, ask for depth, or re-evaluate after a
 revision. Do not auto-dismiss them.
 
+### 6. Put the report on the shelf
+
+Follow [SHELF](../SHELF.md): the verdict and the ranked findings, with the agent IDs, as a
+`red-team-<artifact>.md` file in the scratchpad, kind `report`. Wait: its notes pick which flaws to fix.
+
 ## Tone
 
 The reviewers are adversarial: their job is to surface flaws, not validate.

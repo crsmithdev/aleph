@@ -79,3 +79,7 @@ Each step is done when its check passes:
 - **Update**: every resolved term is in the glossary before you reply to the next message.
 - **Model block**: every entity discussed has all five lines. Each code fact cites a `path:line` that you read, and each unresolved two-answer case is marked `(conflict: ...)`.
 - **Decisions**: each decision is an ADR in `docs/adr/` (with the old ADR marked superseded where it replaces one), or it fails one of the three tests and you can name which. Each term from a decision names its ADR number.
+
+## At the end
+
+Follow [SHELF](../SHELF.md): the terms, model blocks and ADRs changed this session, as a `domain-<project>.md` file in the scratchpad, kind `doc`, no wait.

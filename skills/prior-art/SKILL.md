@@ -157,6 +157,9 @@ came from a README.
 
 Give the survey a title naming the comparison, not the topic.
 
+Then follow [SHELF](../SHELF.md): the matrix and the three sections, as `report.md` in the anchor's
+`~/.aleph/prior-art/<anchor>/` directory, kind `report`, no wait.
+
 ## Calibration
 
 - **Prefer the mechanism to the feature.** "Runs the evidence test against
