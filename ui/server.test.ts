@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { kit } from "./kit.ts";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
@@ -92,11 +92,10 @@ test("/vendor/echarts.min.js is the vendored ECharts, served as JavaScript", asy
   expect(Buffer.from(await res.arrayBuffer()).equals(want)).toBe(true);
 });
 
-test("guard: /vendor/kit/<name>.js is the aleph-tools file, not a vendored copy", async () => {
-  const kit = dirname(fileURLToPath(import.meta.resolve("aleph-tools/package.json")));
+test.skipIf(!kit)("guard: /vendor/kit/<name>.js is the aleph-tools file, not a vendored copy", async () => {
   const annotate = await at("/vendor/kit/annotate.js");
   expect(annotate.status).toBe(200);
-  expect(Buffer.from(await annotate.arrayBuffer()).equals(readFileSync(join(kit, "annotate.js")))).toBe(true);
+  expect(Buffer.from(await annotate.arrayBuffer()).equals(readFileSync(kit.kitFile("annotate.js")))).toBe(true);
   for (const name of ["chat.js", "shelf.js"]) {
     const res = await at(`/vendor/kit/${name}`);
     expect(res.status, name).toBe(200);
@@ -104,6 +103,18 @@ test("guard: /vendor/kit/<name>.js is the aleph-tools file, not a vendored copy"
   }
   expect((await at("/vendor/kit/nope.js")).status).toBe(404);
 });
+
+test("without aleph-tools the server starts, the page loads, and the kit and the shelf answer 404", async () => {
+  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env: { ...process.env, ALEPH_TOOLS: join(base, "no-such-dir") }, stdout: "pipe", stderr: "inherit" });
+  try {
+    const out = await proc.stdout.getReader().read();
+    const url = new TextDecoder().decode(out.value).trim();
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
+    expect((await fetch(url)).status).toBe(200);
+    expect((await fetch(`${url}vendor/kit/annotate.js`)).status).toBe(404);
+    expect((await fetch(`${url}shelf/`)).status).toBe(404);
+  } finally { proc.kill(); }
+}, 30_000);
 
 test("every module a view imports is served", async () => {
   const dir = join(import.meta.dir, "views");
@@ -223,7 +234,7 @@ test("a JSON answer over 1024 bytes is gzipped when the request accepts gzip, an
   expect(await small.text()).toBe(JSON.stringify("x".repeat(1022)));
 });
 
-test("the shelf routes are served, and a send lands in the test's own store", async () => {
+test.skipIf(!kit)("the shelf routes are served, and a send lands in the test's own store", async () => {
   expect(await (await at("/shelf/ping")).text()).toBe("shelf");
   const home = await at("/shelf/");
   expect(home.status).toBe(200);
@@ -235,6 +246,5 @@ test("the shelf routes are served, and a send lands in the test's own store", as
 
   const shelfDir = process.env.SHELF_DIR!;
   expect(shelfDir.startsWith(tmpdir())).toBe(true);
-  expect(existsSync(join(shelfDir, "inbox", "events.jsonl"))).toBe(true);
-  expect(await (await at("/shelf/wait")).text()).toContain(markdown);
+  expect(readFileSync(join(shelfDir, "inbox", "events.jsonl"), "utf8")).toContain(markdown);
 });

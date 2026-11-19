@@ -57,12 +57,12 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">import { start } from "/views/lib/router.js"; start();</script>
-<!-- The font picker, the annotations, the chat and the shelf dock button: the aleph-tools package, served at /vendor/kit/. The picker stays; only Chris decides when it goes. -->
+<!-- The font picker, the annotations, the chat and the shelf dock button: the aleph-tools widgets, served at /vendor/kit/. One script each, so a missing file loses that widget only. The picker stays; only Chris decides when it goes. -->
 <script type="module">
+  import { dock } from "/vendor/kit/dock.js";
   import { fontPicker, SANS, SERIF, MONO } from "/vendor/kit/font-picker.js";
-  import { annotate, remote } from "/vendor/kit/annotate.js";
-  import { chat } from "/vendor/kit/chat.js";
-  import { shelf } from "/vendor/kit/shelf.js";
+  // The dock is made by the first widget: set its phone row layout before that.
+  dock({ rowBelow: 720 });
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
   fontPicker({
     key: "aleph-fonts",
@@ -78,6 +78,9 @@
       role("chart", "Charts", [...SANS, ...MONO], "", "system-ui, sans-serif", ["size", "weight"]),
     ],
   });
+</script>
+<script type="module">
+  import { annotate, remote } from "/vendor/kit/annotate.js";
   // Notes live on the server, where `aleph annotation` lets an agent read, answer and add them. The page hears of a
   // change from the router's stream; a tab shown again loads them too.
   // `send` hands a note to a waiting agent through the shelf, which marks it sent.
@@ -88,7 +91,13 @@
     }),
     send: (b) => fetch("/shelf/send", { method: "POST", headers: { "content-type": "application/json", "X-Aleph-UI": "1" }, body: JSON.stringify({ ...b, url: location.href }) }).then((r) => { if (!r.ok) throw r.status; return r.json(); }),
   });
+</script>
+<script type="module">
+  import { shelf } from "/vendor/kit/shelf.js";
   shelf({ url: "/shelf/" });
+</script>
+<script type="module">
+  import { chat } from "/vendor/kit/chat.js";
   // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page, and
   // the notes its @ button points at.
   // On an idea page it keeps a session of its own under chat:idea:<slug> and sends the slug as `idea`.

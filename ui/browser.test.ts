@@ -2,11 +2,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } fro
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
+import { kit } from "./kit.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./browser.testkit.ts";
 
 /** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
 let last = { ok: true };
 const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name, async () => { const run = { ok: false }; last = run; await fn(); run.ok = true; }, timeout);
+/** A test of a kit widget: it skips when aleph-tools is not on this machine (ui/kit.ts). */
+const kitTest = (name: string, fn: () => unknown, timeout?: number) => (kit ? test : bunTest.skip)(name, fn, timeout);
 
 /** Log one director answer whose detail is a long note of `word` repeated, into the rig database at `db`. */
 const logTo = (db: string, time: string, word: string) =>
@@ -71,7 +74,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors.slice(before)).toEqual([]);
   }, 30_000);
 
-  test("the font picker changes the --display font of the page, with no page error", async () => {
+  kitTest("the font picker changes the --display font of the page, with no page error", async () => {
     await page.go("#/");
     const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
     expect(await root()).toContain("Merriweather");
@@ -856,13 +859,13 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
-  test("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
+  kitTest("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
     await page.width(1200);
     await page.go("#/");
     expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate", "kit-shelf", "kit-chat"]);
   });
 
-  test("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
+  kitTest("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
     await page.width(1200);
     await page.go("#/");
     const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
@@ -875,7 +878,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("");
   });
 
-  test("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
+  kitTest("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
     await page.width(1200);
     await page.go("#/");
     // A click in pick mode opens a note instead of following the link; the saved note shows a pin and the Markdown names it.
@@ -939,7 +942,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     return { chat, note, say, navNote, done };
   };
 
-  test("the chat sends a chosen note of the page with the next message only", async () => {
+  kitTest("the chat sends a chosen note of the page with the next message only", async () => {
     const { chat, say, navNote, done } = await chatRig();
     const old = await navNote();
     await page.ev(`${chat}.querySelector(".fab").click()`);
@@ -955,7 +958,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  test("a note picked from the chat comes back as the chip and goes with the next message", async () => {
+  kitTest("a note picked from the chat comes back as the chip and goes with the next message", async () => {
     const { chat, note, say, navNote, done } = await chatRig();
     const old = await navNote();
     await page.ev(`${chat}.querySelector(".fab").click()`);
@@ -974,7 +977,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  test("a cancelled pick attaches nothing", async () => {
+  kitTest("a cancelled pick attaches nothing", async () => {
     const { chat, done } = await chatRig();
     await page.ev(`${chat}.querySelector(".fab").click()`);
     await page.ev(`${chat}.querySelector(".point").click()`);
@@ -985,7 +988,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  test("without the annotate tool the chat hides its point button and still sends", async () => {
+  kitTest("without the annotate tool the chat hides its point button and still sends", async () => {
     const { chat, note, say, done } = await chatRig();
     await page.ev(`${note}.id = "kit-annotate-off"`);
     await page.ev(`${chat}.querySelector(".fab").click()`);
@@ -995,7 +998,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  test("the chat keeps a session per idea page and returns to the general one", async () => {
+  kitTest("the chat keeps a session per idea page and returns to the general one", async () => {
     await page.width(1200);
     await page.go("#/");
     const chat = 'document.getElementById("kit-chat").shadowRoot';

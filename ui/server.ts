@@ -5,9 +5,8 @@
  * `KEYED` come from the updater (ui/updater.ts), which builds them in its Worker; every other route runs here.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { announce, shelf } from "aleph-tools/shelf.ts";
+import { join } from "node:path";
+import { kit } from "./kit.ts";
 import { skipFetches } from "../lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
 import { startPoller } from "./usage.ts";
@@ -22,8 +21,6 @@ export interface Route { method: string; path: string; pattern: RegExp; names: s
 
 /** The page and its modules are revalidated on every load, so a reload after a land gets the new code. */
 const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-cache" };
-/** The kit widgets, served at /vendor/kit/. */
-const KIT = dirname(fileURLToPath(import.meta.resolve("aleph-tools/package.json")));
 /** This process's start time: part of the version, so a restart changes it. */
 const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
@@ -111,7 +108,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
     // Bun closes a request after 10 s by default; /api/memory and /api/sessions take longer.
     idleTimeout: 120,
     async fetch(req) {
-      const shelved = await shelf(req);
+      const shelved = await kit?.shelf(req);
       if (shelved) return shelved;
       const url = new URL(req.url);
       const path = url.pathname;
@@ -144,8 +141,10 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       if (path === "/app.css") return new Response(Bun.file(join(dir, "app.css")), { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "no-cache" } });
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
       if (path === "/vendor/idiomorph.js") return new Response(Bun.file(join(dir, "vendor", "idiomorph.js")), { headers: JS });
-      const kit = path.match(/^\/vendor\/kit\/([a-z-]+\.js)$/);
-      if (kit && existsSync(join(KIT, kit[1]))) return new Response(Bun.file(join(KIT, kit[1])), { headers: JS });
+      // The kit widgets, served from the aleph-tools checkout.
+      const widget = path.match(/^\/vendor\/kit\/([a-z-]+\.js)$/);
+      const widgetFile = widget && kit?.kitFile(widget[1]);
+      if (widgetFile) return new Response(Bun.file(widgetFile), { headers: JS });
       if (SHARED.has(path)) {
         const file = join(dir, SHARED.get(path)!);
         return new Response(file.endsWith(".ts") ? TS.transformSync(readFileSync(file, "utf8")) : Bun.file(file), { headers: JS });
@@ -172,6 +171,6 @@ if (import.meta.main) {
   }
   const server = await serve(port);
   // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it.
-  if (String(server.port) === uiPort()) announce(`http://127.0.0.1:${server.port}`);
+  if (String(server.port) === uiPort()) await kit?.announce(`http://127.0.0.1:${server.port}`);
   console.log(`http://127.0.0.1:${server.port}/`);
 }

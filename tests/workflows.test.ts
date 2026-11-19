@@ -30,14 +30,14 @@ test("ci.yml bails the test step after three failures, and no script bails", () 
   expect(scripts["test:all"]).not.toContain("--bail");
 });
 
-test("guard: ci.yml loads the aleph-tools deploy key in a step before the install step", () => {
+test("guard: ci.yml loads the aleph-tools deploy key before the step that clones it at ALEPH_TOOLS_REF and sets ALEPH_TOOLS", () => {
   const ci = Bun.YAML.parse(readFileSync(join(DIR, "ci.yml"), "utf8")) as {
     jobs: { test: { steps: { run?: string }[] } };
   };
   const steps = ci.jobs.test.steps;
   const key = steps.findIndex((step) => JSON.stringify(step).includes("secrets.ALEPH_TOOLS_DEPLOY_KEY"));
-  const install = steps.findIndex((step) => step.run === "bun install --frozen-lockfile");
-  expect(install).toBeGreaterThan(-1);
+  const clone = steps.findIndex((step) => step.run?.includes("crsmithdev/aleph-tools") && step.run.includes("ALEPH_TOOLS_REF") && step.run.includes("ALEPH_TOOLS="));
+  expect(clone).toBeGreaterThan(-1);
   expect(key).toBeGreaterThan(-1);
-  expect(key).toBeLessThan(install);
+  expect(key).toBeLessThan(clone);
 });

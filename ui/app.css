@@ -1223,5 +1223,4 @@ html { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
 
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 
-/* The kit dock (inline style in aleph-tools dock.js) sits in a row at the bottom on a phone, so it covers no column of text. */
-@media (max-width: 720px) { #kit-dock { flex-direction: row-reverse !important; right: var(--sp-8) !important; bottom: var(--sp-8) !important; } table.tbl td.wide { min-width: 10ch; } }
+@media (max-width: 720px) { table.tbl td.wide { min-width: 10ch; } }
