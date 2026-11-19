@@ -183,7 +183,7 @@ A diff over `ALEPH_REVIEW_DIFF_MAX` (200,000 characters) goes in as the `--stat`
 
 Lands of one repo go one at a time, in the order they became ready (`landing.ts`).
 
-1. Merge the branch onto `origin/main` in memory (`git merge-tree`). On a conflict, try a mechanical rebase.
+1. Merge the branch onto `origin/main` in memory (`git merge-tree`).
 2. Refuse a change to the repo's own to-do list (cause `other`): the worker gets it back with a note.
 3. Run the land checks: the test files the change reaches, the repo's `critical` globs, and every check that is not a test. A change to a file that is not a module runs every test. When `origin/main` has not moved since the run's checks, only the critical tests run.
 4. Push one squash commit with the trailers `Issue: <repo>-<n>` and `Job: <job>`, and `Held-by:` for a held land.

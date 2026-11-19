@@ -166,23 +166,6 @@ function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
   return out;
 }
 
-/**
- * The commits of `fork..tip` replayed one by one onto `onto`, in memory, as a land's mechanical rebase:
- * the commit it ends on, or null when one conflicts or the range holds a merge, whose resolution a replay would lose.
- */
-function rebased(repo: Repo, onto: string, fork: string, tip: string): string | null {
-  if (git(repo.path, "rev-list", "--merges", "--count", `${fork}..${tip}`).out !== "0") return null;
-  let cur = onto;
-  for (const c of git(repo.path, "rev-list", "--reverse", `${fork}..${tip}`).out.split("\n").filter(Boolean)) {
-    const merged = git(repo.path, "merge-tree", "--write-tree", `--merge-base=${c}^`, cur, c);
-    if (!merged.ok) return null;
-    const made = git(repo.path, "commit-tree", merged.out, "-p", cur, "-m", git(repo.path, "log", "-1", "--format=%s", c).out);
-    if (!made.ok) return null;
-    cur = made.out;
-  }
-  return cur;
-}
-
 /** A member's verdict, and the step to run once the land is over. */
 type Outcome = Landing & { after?: () => void };
 
@@ -215,17 +198,8 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
   const items: Pending[] = [];
   let cur = from;
   for (const m of list) {
-    let tip = tips.get(m)!;
-    let merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
-    if (!merged.ok) {
-      const replayed = rebased(repo, cur, git(repo.path, "merge-base", cur, tip).out, tip);
-      m.log(`mechanical rebase: ${replayed ? "ok" : "conflicts"}`);
-      if (replayed) {
-        tip = replayed;
-        tips.set(m, tip);
-        merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
-      }
-    }
+    const tip = tips.get(m)!;
+    const merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
     if (!merged.ok) {
       const conflicts = conflictsOf(merged.out);
       m.log("conflicts", conflicts.join("\n"));
@@ -302,7 +276,6 @@ async function settle(ctx: Attempt, items: Pending[], base: string, known: Check
 /**
  * Land a job, and the land runs queued behind it. Each run's branch merges onto
  * origin/<main> in memory, in order, as one squash commit with its own trailers.
- * A merge that conflicts tries a mechanical rebase first, so the worker wakes only when that conflicts too.
  * The checks run once on the last commit; when they fail the batch splits in
  * half, until the run that fails is found. That run fails, the others land, and
  * one plain push takes all their commits. A conflict takes only its run out. A

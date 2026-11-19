@@ -1,4 +1,4 @@
-// A land's merge and push: a rebase, no net change, a refused branch, a lost push race, a job already on main, and what happens after a failed land.
+// A land's merge and push: no net change, a refused branch, a lost push race, a job already on main, and what happens after a failed land.
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,16 +14,6 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
 useLandingFixture();
-
-test("a conflict that a mechanical rebase clears lands", async () => {
-  moveMain("step.txt", "start\n");
-  const e = job("rebase", [["step.txt", "theirs\n"], ["step.txt", "mine\n"]]);
-  moveMain("step.txt", "theirs\n");
-  const r = await land(e, repo, ports());
-  expect(r.outcome.state).toBe("landed");
-  expect(landLog(e)).toContain("mechanical rebase: ok");
-  expect(remote("show", "main:step.txt")).toBe("mine");
-});
 
 test("a change main already has ends done with no net change and takes the branch", async () => {
   const e = job("twin", [["twin.txt", "same\n"]]);
