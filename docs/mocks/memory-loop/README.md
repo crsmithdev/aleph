@@ -23,6 +23,7 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 | `policy-due.html` | Round 4: Review › Due, aleph-1203 at its check date: 8 misses before, 59 after |
 | `r5-status.html` | Round 5: the live Status page, with a wider Herald, Events and Detail tabs, and policy alerts that link to Automation |
 | `r5-automation.html` | Round 5: Automation with Review, Checks due and Decided without you above the round 3 knobs |
+| `r6-self.html` | Round 6, hypothetical: Status of a self-managed factory |
 | [lessons-proposal.md](lessons-proposal.md), [memory-proposal.md](memory-proposal.md) | The decisions, the data changes and what was not verified |
 
 ## Decisions
@@ -64,3 +65,15 @@ Chris asked on 2026-11-18 to keep Status to what needs him, and to merge Review 
 - The chart is the live page's canvas, drawn again at 330px wide.
 
 Not verified: the before and after counts of the lessons, carried from round 3. Whether the Detail tab fits the drill-in proposal, which this mock does not draw.
+
+## Round 6 decisions (hypothetical)
+
+Chris asked on 2026-11-19 for the Status page of a self-managed factory.
+
+- The scorecard shows a target under each number, because a factory that steers itself needs a goal to steer to. The targets are made up.
+- Self-changes is the first card. Each change runs 14 days, then its measure keeps or reverts it. The 6 lessons and their counts are real. The reverts are what that rule would have done.
+- Guardrails list what the factory may not change: its gate, roles, hooks and identity, the trial count, spend, the live cap and the revert limit. A change inside the boundary goes to Chris, because the factory may not judge a change to its own judge.
+- The Herald shows one escalation, a3302, and the factory's own acts as events.
+- Agent Time and Active Issues share a row, and Pipeline stays full width.
+
+Not verified: every target and limit, which are made up for the mock.
