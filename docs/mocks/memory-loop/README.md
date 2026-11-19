@@ -18,6 +18,9 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 | `split-loop.html` | Round 3: Memory › Loop, with signals by source, monitor findings and every lesson |
 | `split-log.html` | Round 3: Memory › Log, one log for writes, decisions and rule acts |
 | `split-automation.html` | Round 3: Automation as knobs only: schedules, Always rules, controls, held paths |
+| `policy-status.html` | Round 4: Status with Asks and Policy changes side by side, and decisions made without Chris split by kind |
+| `policy-review.html` | Round 4: Review › Waiting, issue.3302 in five steps: change, readers, why, outcome and check date, decide |
+| `policy-due.html` | Round 4: Review › Due, aleph-1203 at its check date: 8 misses before, 59 after |
 | [lessons-proposal.md](lessons-proposal.md), [memory-proposal.md](memory-proposal.md) | The decisions, the data changes and what was not verified |
 
 ## Decisions
@@ -27,3 +30,19 @@ Open `index.html`. Each page is self-contained: it inlines `ui/app.css` and draw
 - Show four numbers, each with the action it drives, after the datavis skill.
 - Draw with the Kit helpers and `ui/app.css` tokens, after `docs/design.md`.
 - Add no store: the page reads the `corrections` row and the events table, after Principle 5.
+
+## Round 4 decisions
+
+Chris proposed two kinds of decision on 2026-11-18: an ask changes one run, and a policy change alters future runs.
+
+- Classify by scope, not origin, because a diff to a SECURITY_PATH (`jobs/lib/gates/gate.ts:154`) changes future runs. held-path:aleph landed 17 such diffs in 7 days.
+- Give a policy change no Always button, because a standing grant is itself a policy change. This contradicts the vault rule "Every Needs-You Item Gets An Always Button", which needs an exception.
+- Review a policy change in five steps: the change and where it lands, who reads it, why, the outcome and a check date, and the decision. Devin and Warp gate agent-made memory and skill edits per change, by a person.
+- Give each approval a check date, and bring the item back as Due on that date. GitHub Copilot memory expires after 90 days without validation, and feature-flag practice requires an owner and an expiry date.
+- Offer Shadow before Approve, because OPA Gatekeeper rolls out a policy as dryrun, then warn, then deny.
+- Keep the gate on a path the change cannot edit, because the Darwin Gödel Machine edited its own workflow to bypass its hallucination check.
+- Split Decided without you by kind, so policy rows read "should be 0".
+
+Sources: https://docs.devin.ai/use-cases/gallery/scheduled-knowledge-maintenance, https://claude.com/blog/how-warp-builds-self-improving-agents-on-claude, https://docs.github.com/en/copilot/concepts/agents/copilot-memory, https://cloud.google.com/anthos-config-management/docs/how-to/auditing-constraints, https://earthly.dev/lunar/guardrails/feature-flags/, https://arxiv.org/html/2505.22954v3.
+
+Not verified: the 53 decisions and their split by reason, carried from round 3, whose header said 52. The before and after counts of the Watched lessons, carried from round 3. The 65 review runs, from the 11/17 monitor.
