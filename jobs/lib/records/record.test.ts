@@ -192,11 +192,6 @@ const runs = (xs: Partial<Run>[]): record.RunRecord[] => xs.map((x, i) => ({ ...
 const nx = (xs: Partial<Run>[], live?: record.Live) => record.next(runs(xs), live);
 const job = (xs: Partial<Run>[]): Entry[] => runs(xs).map((r) => ({ id: r.id, folder: `/jobs/${r.id}`, run: r }));
 
-test("next: an Ask waits for Chris before anything else", () => {
-  expect(nx([{ state: "passed" }], { ask: ASK }).step).toBe("ask");
-  expect(nx([{ state: "waiting" }]).step).toBe("ask");
-});
-
 test("next: each run state gives its step", () => {
   const cases: [Partial<Run>[], record.Step["step"]][] = [
     [[{ state: "running" }], "run"],
@@ -213,12 +208,17 @@ test("next: each run state gives its step", () => {
     [[{ state: "failed", reason: "no commit" }, { role: "director", state: "done" }], "rescue"],
     [[{ state: "passed", next: "land" }, { role: "director", state: "passed" }], "land"],
     [[{ state: "passed" }, { role: "review", state: "done" }], "wait"],
+    [[{ state: "waiting" }], "ask"],
+    // A failed run the factory asked Chris about waits; a land asked about while live (a slow land) and failed later goes to the rescue.
+    [[{ state: "failed", asked: { at: AT, question: "q" } }], "wait"],
+    [[{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z", asked: { at: AT, question: "slow land" } }], "rescue"],
+    [[{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z", asked: { at: AT, question: "slow land" } }], "wait"],
   ];
   for (const [xs, step] of cases) expect([xs, nx(xs).step]).toEqual([xs, step]);
   expect(nx([{ state: "failed", cause: "no-commit", reason: "no commit" }, { role: "director", state: "done" }]).sub).toBe("no-commit");
 });
 
-test("next: each case gives its step as event words", () => {
+test("next: each case gives its step as event words, and an Ask comes before anything else", () => {
   expect(nx([{ state: "passed" }], { ask: ASK })).toEqual({ step: "ask", action: "waiting", to: "human" });
   expect(nx([{ state: "running" }])).toEqual({ step: "run", action: "running", on: ["job.1"] });
   expect(nx([{ state: "returned", failed: "check", cause: "check", next: "worker" }])).toEqual({ step: "worker", action: "returned", sub: "check", count: `1 / ${fixRounds()}` });
@@ -231,20 +231,6 @@ test("next: each case gives its step as event words", () => {
 test("next: no step keeps the why sentence", () => {
   const cases: Partial<Run>[][] = [[], [{ state: "running" }], [{ state: "waiting" }], [{ state: "returned", cause: "check", next: "worker" }], [{ state: "passed", next: "land" }], [{ state: "passed" }], [{ state: "failed", cause: "review" }]];
   for (const xs of cases) expect("why" in nx(xs)).toBe(false);
-});
-
-test("next: a failed run the factory asked Chris about waits", () => {
-  expect(nx([{ state: "failed", asked: { at: AT, question: "q" } }]).step).toBe("wait");
-});
-
-test("next: a land asked about while it was live (a slow land) and failed later goes to the rescue", () => {
-  const asked = { at: AT, question: "slow land" };
-  expect(nx([{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z", asked }]).step).toBe("rescue");
-  expect(nx([{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z", asked }]).step).toBe("wait");
-});
-
-test("next: an issue with no run starts", () => {
-  expect(nx([]).step).toBe("start");
 });
 
 test("endRun writes the end and its next in one write: no reader sees the ended run with no next", () => {

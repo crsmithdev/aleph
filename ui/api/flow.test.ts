@@ -784,7 +784,9 @@ test("every Status card with a second value has a qualifier, Lost time too, and 
 });
 
 test("speed: a build on an unchanged store spawns one git process and reads the same filing times and titles", () => {
-  const store = join(base, "issues");
+  // A store of its own: its registry would replace the alpha, beta and pc of the shared one.
+  const store = join(base, "speed-issues");
+  const off = withEnv({ ALEPH_ITEMS: store });
   mkdirSync(join(store, "issues/7"), { recursive: true });
   writeRepos({ tt: {} }, store);
   writeFileSync(join(store, "issues/7/issue.md"), "---\nproject: project.1\ntitle: Seven\n---\n");
@@ -801,6 +803,7 @@ test("speed: a build on an unchanged store spawns one git process and reads the 
     expect(read()).toEqual(first);
   } finally {
     Bun.spawnSync = spawn;
+    off();
   }
   expect(calls.filter((c) => c[0] === "git").length).toBeLessThanOrEqual(1);
 });

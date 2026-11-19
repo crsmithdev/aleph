@@ -16,9 +16,10 @@ import { reseed, seed } from "../../job.testkit.ts";
 import * as locks from "../../../lib/locks.ts";
 import { held } from "../../../lib/locks.ts";
 import { startJob } from "./transitions.ts";
-import { startKept } from "./kept.ts";
+import { start, startKept } from "./kept.ts";
+import { readSections } from "../records/run-files.ts";
 import * as issues from "../../../lib/todo.ts";
-import { change, ctx, dispatch, fakes, newIssue, mk, setup, teardown } from "./factory.testkit.ts";
+import { change, ctx, dispatch, fakes, newIssue, mk, setup, sh, teardown } from "./factory.testkit.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
 import { runNowOf } from "../../../ui/api/issues.ts";
@@ -134,6 +135,25 @@ test("the first dispatch after the resume starts a next step the pause kept, onc
   expect(go).toEqual(["issue.1 worker"]);
   expect(existsSync(join(kept.folder, "paused-next"))).toBe(false);
   expect(await startKept(step)).toEqual([]);
+});
+
+test("a dropped job starts no next step, logs why and clears its next", async () => {
+  const kept = mk("drop-1", "build", "failed", { failed: "test", next: "worker" });
+  mk("drop-1", "build", "dropped", { job: kept.job });
+  await start(kept.folder, allRuns().find((e) => e.folder === kept.folder)!.run, "worker");
+  expect(readSections(kept.folder).get("dispatch")).toBe("dropped: no worker started\n");
+  expect(allRuns().find((e) => e.folder === kept.folder)!.run.next).toBeUndefined();
+});
+
+test("a job whose item landed on main starts no next step, logs the commit and clears its next", async () => {
+  const id = newIssue();
+  const repo = join(ctx.base, "repo");
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: issue.${id}`);
+  sh(repo, "git", "push", "-q", "origin", "main");
+  const kept = mk(`land-${id}`, "build", "failed", { failed: "test", next: "worker" });
+  await start(kept.folder, allRuns().find((e) => e.folder === kept.folder)!.run, "worker");
+  expect(readSections(kept.folder).get("dispatch")).toMatch(/^item landed as [0-9a-f]{7}: no worker started\n$/);
+  expect(allRuns().find((e) => e.folder === kept.folder)!.run.next).toBeUndefined();
 });
 
 test("with one live local-backend run a second local run is held by the local cap, a Claude run still starts, and the live cap leaves the local run out", () => {

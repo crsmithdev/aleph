@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { GATES, issueDecision, refDone, type IssueFacts } from "./issue-decision.ts";
 import { factoryGates } from "./factory-status.ts";
 import { holdBackend } from "./holds.ts";
+import { withEnv } from "../../../ui/server.testkit.ts";
 
 const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknown as IssueFacts["item"];
 const facts = (f: Partial<IssueFacts> = {}): IssueFacts => ({ name: "fac-9", item: item(), done: () => false, ...f });
@@ -100,11 +101,9 @@ test("a factory gate gives the dispatch its why and Chris its text", () => {
 });
 
 test("an issue whose run is on the held backend gets the hold decision, not a start", async () => {
-  const was = process.env.ALEPH_FACTORY_DIR, url = process.env.SIDETONE_TELL_URL, db = process.env.ALEPH_DB, dir = mkdtempSync(join(tmpdir(), "hold-"));
-  process.env.ALEPH_FACTORY_DIR = dir;
+  const dir = mkdtempSync(join(tmpdir(), "hold-"));
   // Its own aleph.db: the live jobs an earlier file of the process left running would bind the live cap.
-  process.env.ALEPH_DB = join(dir, "aleph.db");
-  process.env.SIDETONE_TELL_URL = "http://127.0.0.1:1/tell";
+  const off = withEnv({ ALEPH_FACTORY_DIR: dir, ALEPH_DB: join(dir, "aleph.db"), SIDETONE_TELL_URL: "http://127.0.0.1:1/tell" });
   try {
     await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
     expect(issueDecision(facts({ ...factoryGates(undefined, { model: "deepseek-v4.1-flash" }) }))).toEqual({
@@ -116,9 +115,7 @@ test("an issue whose run is on the held backend gets the hold decision, not a st
     expect(issueDecision(facts({ ...factoryGates(undefined, { model: "haiku" }) })).kind).toBe("ready");
   } finally {
     putJson("state", "backend-hold", null);
-    if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
-    if (url === undefined) delete process.env.SIDETONE_TELL_URL; else process.env.SIDETONE_TELL_URL = url;
-    process.env.ALEPH_DB = db;
+    off();
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -133,8 +130,8 @@ test("refDone: an item absent from a read list is done; a list not read blocks",
 });
 
 test("the run cap is the stored cap: 5 lets 4 starts through and binds at 5; unset, 3 binds", () => {
-  const was = process.env.ALEPH_FACTORY_DIR, dir = mkdtempSync(join(tmpdir(), "caps-"));
-  process.env.ALEPH_FACTORY_DIR = dir;
+  const dir = mkdtempSync(join(tmpdir(), "caps-"));
+  const off = withEnv({ ALEPH_FACTORY_DIR: dir });
   try {
     expect(kind({ startsInHour: 3 })).toBe("ask");
     putJson("settings", "caps", { run: 5 });
@@ -142,7 +139,7 @@ test("the run cap is the stored cap: 5 lets 4 starts through and binds at 5; uns
     expect(issueDecision(facts({ startsInHour: 5 }))).toMatchObject({ kind: "ask", ask: "run-cap", starts: 5, facts: "5 starts in 1h" });
   } finally {
     conn().run("DELETE FROM settings WHERE key = 'caps'");
-    if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
+    off();
     rmSync(dir, { recursive: true, force: true });
   }
 });

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,6 @@ import { add, setStatus } from "../lib/todo.ts";
 import { routes, transcript } from "./api/jobs.ts";
 import { withEnv } from "./server.testkit.ts";
 // @ts-ignore the module is plain JS, shared with the page
-import * as lib from "./views/lib/html.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
@@ -372,15 +371,8 @@ describe("render", () => {
     expect(h).not.toContain("<it>");
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
   });
-  test("the head is pageHead with the title and the nav links as aside", () => {
-    const aside = '<a class="act" href="http://lf/sessions/s">Trace</a>';
-    const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
-    mock.module("./views/lib/html.js", () => ({ ...real, pageHead: tagged }));
-    try {
-      expect(v.renderJob(job)).toContain(tagged("Fix <it>", { aside }));
-    } finally {
-      mock.module("./views/lib/html.js", () => real);
-    }
+  test("the head shows the escaped title and the nav links as aside", () => {
+    expect(v.renderJob(job)).toContain('<header class="ph"><h1>Fix &lt;it&gt;</h1><div class="aside"><a class="act" href="http://lf/sessions/s">Trace</a></div></header>');
   });
   test("the head of a job with no item title is its short id, not its full name", () => {
     setCodes({ fac: "f" });

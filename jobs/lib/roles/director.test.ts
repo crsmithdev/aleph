@@ -366,17 +366,6 @@ test("a review Ask on a run that changes a path the repo holds is Chris's, as th
   expect(landed).toEqual([]);
 });
 
-test("a review-held grant does not land a run that changes bun.lock: the refused approve goes to Chris", async () => {
-  fresh([{ title: "lock", specced: true }]);
-  branch(`lock${n}`, "bun.lock");
-  run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
-  expect(grant(`review-held:${key}`, "approve")).toBeNull();
-  const [d] = await direct();
-  expect(landed).toEqual([]);
-  expect(directorRuns()).toHaveLength(0);
-  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("it changes held path bun.lock") });
-});
-
 test("a held-path grant lands a run that changes only the repo's held paths, with no director run", async () => {
   fresh([{ title: "held", specced: true }]);
   writeRepos({ [key]: { path: repoPath(), sandbox: true, autoland: false, held: ["docs/**"] } });
@@ -389,26 +378,19 @@ test("a held-path grant lands a run that changes only the repo's held paths, wit
   expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "landed", object: "issue.1" }));
 });
 
-test("a held-path grant does not land a run that changes bun.lock: the refused approve goes to Chris", async () => {
-  fresh([{ title: "lock", specced: true }]);
-  branch(`hlock${n}`, "bun.lock");
-  run({ name: "issue.1", target: "issue.1", ask: HELD, branch: `hlock${n}` });
-  expect(grant(`held-path:${key}`, "approve")).toBeNull();
+test.each([
+  ["review-held", "bun.lock"],
+  ["held-path", "bun.lock"],
+  ["held-path", "jobs/lib/gates/gate.ts"],
+] as const)("a %s grant does not land a run that changes %s: the refused approve goes to Chris", async (reason, path) => {
+  fresh([{ title: "refused", specced: true }]);
+  branch(`refused${n}`, path);
+  run({ name: "issue.1", target: "issue.1", ask: reason === "held-path" ? HELD : { reason, question: "Land?", options: [], why: [] }, branch: `refused${n}` });
+  expect(grant(`${reason}:${key}`, "approve")).toBeNull();
   const [d] = await direct();
   expect(landed).toEqual([]);
   expect(directorRuns()).toHaveLength(0);
-  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("bun.lock") });
-});
-
-test("a held-path grant does not land a run that changes a security path: the refused approve goes to Chris", async () => {
-  fresh([{ title: "gate", specced: true }]);
-  branch(`hgate${n}`, "jobs/lib/gates/gate.ts");
-  run({ name: "issue.1", target: "issue.1", ask: HELD, branch: `hgate${n}` });
-  expect(grant(`held-path:${key}`, "approve")).toBeNull();
-  const [d] = await direct();
-  expect(landed).toEqual([]);
-  expect(directorRuns()).toHaveLength(0);
-  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining("jobs/lib/gates/gate.ts") });
+  expect(d).toMatchObject({ outcome: "escalated", why: expect.stringContaining(`held path ${path}`) });
 });
 
 test("a no-commit grant for the issue's project clears the Ask with no director run", async () => {

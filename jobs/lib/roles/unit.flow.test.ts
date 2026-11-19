@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, branchExists, fakeLog, section, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.testkit";
+import { base, branchExists, fakeLog, section, jobsDir, repo, sh, state, told, when, worktree, setup, teardown } from "../../cli.testkit";
+import { lock } from "../../../lib/locks.ts";
 import { actionJob, drop, dropAs, job, jobView, run } from "../../flow.testkit.ts";
 import { seed } from "../../job.testkit.ts";
 
@@ -18,6 +19,27 @@ describe("job", () => {
     expect(r.stderr).toContain("demo, auto, other, fac");
     expect(readdirSync(jobsDir)).toEqual(before);
   });
+
+  test("a unit waits for the repo's setup lock before it adds its worktree, then runs", async () => {
+    // The units take their locks under base/run (cli.testkit env); a waiting lock keeps a `<name>.new.<pid>.<id>` entry there.
+    const runDir = join(base, "run", "aleph");
+    const saved = process.env.XDG_RUNTIME_DIR;
+    process.env.XDG_RUNTIME_DIR = join(base, "run");
+    const release = await lock("setup-demo", 1000);
+    process.env.XDG_RUNTIME_DIR = saved;
+    expect(release).not.toBeNull();
+    const started = actionJob("locked", "commit locked.txt");
+    const waiting = () => existsSync(runDir) && readdirSync(runDir).some((f) => f.startsWith("setup-demo.new."));
+    await when(() => waiting() || existsSync(worktree("locked")), base);
+    expect(existsSync(worktree("locked"))).toBe(false);
+    expect(waiting()).toBe(true);
+    release!();
+    const r = await started;
+    expect(r.code).toBe(0);
+    expect(state(r.json.run).state).toBe("passed");
+    expect(existsSync(worktree("locked"))).toBe(true);
+    await drop("locked");
+  }, 30_000);
 
   // Each test opens a job of its own name, so no test sees another's runs.
   describe("with a job open", () => {

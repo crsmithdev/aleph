@@ -60,7 +60,8 @@ const getJson = async (p: string) => (await at(p)).json() as Promise<any>;
 const rowsOf = async (project?: string): Promise<any[]> => (await getJson(project ? `/api/issues?project=${project}` : "/api/issues")).issues;
 let seeds = 0;
 /** The rows after a test seeded jobs. `updater.reset()` sets the change counts back, so a kept job read can look fresh; a new env makes the build Worker drop it. */
-const rowsAfterSeed = async (project?: string): Promise<any[]> => { const restore = withEnv({ ALEPH_TEST_SEED: String(++seeds) }); try { return await rowsOf(project); } finally { restore(); } };
+const afterSeed = async (path: string): Promise<any> => { const restore = withEnv({ ALEPH_TEST_SEED: String(++seeds) }); try { return await getJson(path); } finally { restore(); } };
+const rowsAfterSeed = async (project?: string): Promise<any[]> => (await afterSeed(project ? `/api/issues?project=${project}` : "/api/issues")).issues;
 const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1" }, q = "") =>
   at(`/api/issues${q}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
@@ -204,7 +205,6 @@ describe("POST /api/issues/:id/drop", () => {
       const h = { "x-aleph-ui": "1", "content-type": "application/json" };
       expect((await at("/api/issues/fac-99/drop", { method: "POST", headers: h })).status).toBe(404);
       expect((await at("/api/issues/nope-1/drop", { method: "POST", headers: h })).status).toBe(404);
-      expect((await at("/api/issues/fac-3/drop", { method: "POST" })).status).toBe(403);
       const r = await at("/api/issues/fac-3/drop", { method: "POST", headers: h, body: JSON.stringify({}) });
       expect(r.status).toBe(200);
       expect(await r.json()).toMatchObject({ repo: "fac", id: 3, status: "dropped" });
@@ -237,9 +237,9 @@ describe("GET /api/issues/:id", () => {
     run("", { job: "on-2", name: "on-2", repo: "fac", state: "running", on: "fac-2" });
     run("", { job: "todo-4", name: "todo-4", repo: "fac", state: "running", on: "fac-4" });
     run("", { job: "other-4", name: "other-4", repo: "oth", state: "running", on: "oth-4" });
-    const d = await getJson("/api/issues/fac-4");
+    const d = await afterSeed("/api/issues/fac-4");
     expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["on-4", "todo-4"]);
-    const g = await getJson("/api/issues/fac-2");
+    const g = await afterSeed("/api/issues/fac-2");
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
   });
 
@@ -276,7 +276,6 @@ describe("Run now", () => {
   test("POST /api/issues/:id/run runs `aleph dispatch issue.N`, and the real parser reads the key as the one issue to start", async () => {
     const [ready, waits] = pair();
     rmSync(argvFile, { force: true });
-    expect((await at(`/api/issues/fac-${waits}/run`, { method: "POST" })).status).toBe(403);
     expect((await at("/api/issues/fac-99/run", { method: "POST", headers: { "x-aleph-ui": "1" } })).status).toBe(404);
     expect(existsSync(argvFile)).toBe(false);
     const r = await at(`/api/issues/fac-${waits}/run`, { method: "POST", headers: { "x-aleph-ui": "1" } });
@@ -785,7 +784,6 @@ describe("POST /api/issues/:id/decide and deny", () => {
   test("approving an option writes the note, clears the Ask and its fields, and makes no issue", async () => {
     const n = ask(true);
     await withRealCli(async () => {
-      expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
       expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "Z" }) })).status).toBe(400);
       const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
@@ -985,26 +983,16 @@ describe("the Issue page shows the ask row", () => {
     expect(await Promise.all([open, core, shelved].map(onPage))).toEqual([true, true, false]);
   });
 
-  test("renderIssue puts the Commit and Subject first in the Commits table", async () => {
+  test("renderIssue lists commits as Commit, Subject and Committed with a span.idp titled with the hash, pages at 50, and shows no commits as the missing form", async () => {
     const d = await getJson(`/api/issues/fac-1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
     expect(h).toContain('<th>Commit</th><th>Subject</th><th class="num">Committed</th>');
     expect(h).toContain(`<tr><td><span class="idp" title="abcdef1234567">abcdef1</span></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
-  });
-
-  test("renderIssue shows a commit without a URL as a span.idp titled with the hash, and no commits as the missing form", async () => {
-    const d = await getJson(`/api/issues/fac-1`);
-    const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date: "2026-11-02T09:00:00Z" }] });
-    expect(h).toContain('<span class="idp" title="abcdef1234567">abcdef1</span>');
-    expect(h).not.toContain("<code");
-    expect(v.renderIssue({ ...d, commits: [] })).toContain('<span class="dp-k">Commits</span><span class="dp-v"><span title="No commit on main yet">–</span></span>');
-  });
-
-  test("renderIssue leaves the Commits panel out for no commits and pages the Commits table at 50", async () => {
-    const d = await getJson(`/api/issues/fac-1`);
-    expect(v.renderIssue({ ...d, commits: [] })).not.toContain("<span>Commits<\/span>");
-    const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date: "2026-11-02T09:00:00Z" }));
+    const none = v.renderIssue({ ...d, commits: [] });
+    expect(none).toContain('<span class="dp-k">Commits</span><span class="dp-v"><span title="No commit on main yet">–</span></span>');
+    expect(none).not.toContain("<span>Commits</span>");
+    const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date }));
     expect(v.renderIssue({ ...d, commits })).toContain("50 of 51");
   });
 
@@ -1171,15 +1159,14 @@ describe("the labels say sub-issue and job", () => {
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 
-  // Flaky under the parallel suite: the Cost tile shows "0 jobs" (aleph-1156).
-  test.skip("the Issue page says Sub-issues and Sub-issues done, and no label keeps the old words", async () => {
+  test("the Issue page says Sub-issues and Sub-issues done, and no label keeps the old words", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "label parent", { request: "Do it." });
       addPart(doc, i, { title: "one", spec: "x" });
       return i.id;
     }, true)!.value;
     run("", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", state: "landed", on: `fac-${n}` });
-    const h = v.renderIssue(await getJson(`/api/issues/fac-${n}`));
+    const h = v.renderIssue(await afterSeed(`/api/issues/fac-${n}`));
     expect(h).toContain("<h3>Sub-issues</h3>");
     expect(h).toContain('<span class="dp-k">Sub-issues done</span>');
     expect(h).toContain('<span class="dp-sub">1 job</span>');

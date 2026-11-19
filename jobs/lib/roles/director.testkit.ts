@@ -14,6 +14,7 @@ import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
 import { issueKey } from "../../../lib/naming.ts";
+import { keepEnv } from "../../../tests/env.testkit.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;
@@ -101,6 +102,7 @@ export const ports = (): Ports => ({
 
 /** Registers the hooks: the store, the repo, the fake and the tell server for the file, and clean fakes for each test. */
 export function useDirectorFixture(): void {
+  keepEnv();
   beforeAll(() => {
     setSystemTime(new Date(NOW));
     base = mkdtempSync(join(tmpdir(), "aleph-director-"));

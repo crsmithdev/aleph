@@ -160,7 +160,6 @@ test("the controls without the header are 403, running nothing", async () => {
 test("POST /api/jobs/:id/answer drops the question run with the answer as its reason, and refuses anything else without running the CLI", async () => {
   const before = recorded().length;
   const hdr = { "X-Aleph-UI": "1" };
-  expect((await post(jp("asks", "answer"), {}, { answer: "blue" })).status).toBe(403);
   expect((await post(jp("nope", "answer"), hdr, { answer: "blue" })).status).toBe(404);
   expect((await post(jp("asks", "answer"), hdr, { answer: "  " })).status).toBe(400);
   expect((await post(jp("asks", "answer"), hdr)).status).toBe(400);

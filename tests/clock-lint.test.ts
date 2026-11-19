@@ -27,6 +27,7 @@ const RULES: [string, RegExp][] = [
   ["sleep: in a shell command", /\bsleep\s+[\d.$]/],
   ["timeout as a wait: AbortSignal.timeout", /\bAbortSignal\.timeout\(/],
   ["timeout as a wait: a poll until a deadline (waitFor, until)", /\b(?:waitFor|until)\(/],
+  ["busy wait: a loop with an empty body", /^\s*while\s*\((?:[^;=]|[=!<>]=)*\)\s*;|\bfor\s*\([^;()]*;[^;]*;[^;()]*\)\s*;/],
   ["timeout as a wait: a time limit of 1 s or less", /_TIMEOUT["']?\s*[:=]\s*["']?(?:0(?:\.\d+)?|1)["']?\s*[,;})]/],
 ];
 

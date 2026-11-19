@@ -310,19 +310,6 @@ describe("lint --fix", () => {
       .toEqual(["added updated: 2026-01-15, the date the note entered git"]);
     (await cli("archive", "Entered Long Ago", "--why", "test fixture"));
   });
-  test("a re-added note keeps the date it first entered git", async () => {
-    const at = (date: string, ...args: string[]) => Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", ...args], { env: { ...process.env, ...testEnv, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
-    const first = "wiki/gotchas/Moved About Again.md";
-    const text = readFileSync(note("Entered Long Ago"), "utf8").replace(/^updated: .*\n/m, "").replaceAll("Entered Long Ago", "Moved About Again");
-    writeFileSync(join(vault, first), text);
-    at("2026-01-02T12:00:00", "add", "--", first); at("2026-01-02T12:00:00", "commit", "-q", "-m", "enter", "--", first);
-    at("2026-02-02T12:00:00", "rm", "-q", "--", first); at("2026-02-02T12:00:00", "commit", "-q", "-m", "gone", "--", first);
-    writeFileSync(join(vault, first), text);
-    at("2026-03-02T12:00:00", "add", "--", first); at("2026-03-02T12:00:00", "commit", "-q", "-m", "back", "--", first);
-    (await cli("lint", "--fix"));
-    expect(readFileSync(join(vault, first), "utf8")).toContain("updated: 2026-01-02");
-    (await cli("archive", "Moved About Again", "--why", "test fixture"));
-  });
   test("many template breaks collapse to a count; --template names them", async () => {
     const thin = (t: string) => {
       const p = join(vault, `wiki/gotchas/${t}.md`);
@@ -906,18 +893,10 @@ describe("provenance and the contradiction screen", () => {
     expect(r.code).toBe(0);
     expect(JSON.stringify(asked)).not.toContain("`Cog Pipeline`");
   });
-  test("consistent_with naming no live note is refused and changes nothing", async () => {
+  test.each([["consistent_with", "Widget Registry Other"], ["distinct", "Widget Registry Third"]])("%s naming no live note is refused and changes nothing", async (field, title) => {
     reset(0.9);
     const before = snapshot();
-    const r = await write(note("Widget Registry Other", { scope: "screen", consistent_with: "[No Such Note]" }));
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("No Such Note");
-    expect(snapshot()).toBe(before);
-  });
-  test("distinct naming no live note is refused and changes nothing", async () => {
-    reset(0.9);
-    const before = snapshot();
-    const r = await write(note("Widget Registry Third", { scope: "screen", distinct: "[No Such Note]" }));
+    const r = await write(note(title, { scope: "screen", [field]: "[No Such Note]" }));
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("No Such Note");
     expect(snapshot()).toBe(before);

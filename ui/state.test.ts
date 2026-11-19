@@ -151,13 +151,15 @@ describe("a land that found the job lock busy", () => {
 
 describe("a dropped issue", () => {
   test("holds no ask and no errored entry", () => {
-    expect(runAsks(state(now)).map((a) => a.id)).toEqual(["fac-1"]);
-    const setAll = (to: "dropped" | "open") => writeList({ key: "fac" }, to, (doc) => { for (const i of doc.items) if (i.id === 1 || i.id === 3) setStatus(i, to); return true; }, true);
-    setAll("dropped");
-    const s = state(now);
-    setAll("open");
-    expect(s.asks.filter((a) => a.id === "fac-1" || a.on === "fac-1")).toEqual([]);
-    expect(s.errored).toEqual([]);
+    // Issues of its own: a drop and a reopen of fac-1 would change the held run the other tests read.
+    const id: number[] = [];
+    writeList({ key: "fac" }, "drop pair", (doc) => { for (const t of ["dropped held", "dropped failed"]) id.push(add(doc, t).id); return true; }, true);
+    run("20261027-000100-a", { job: `fac-${id[0]}`, name: `fac-${id[0]}`, state: "waiting", ask: HELD, on: `fac-${id[0]}` });
+    run("20261027-000101-a", { job: `fac-${id[1]}`, name: `fac-${id[1]}`, state: "failed", reason: "a check failed", on: `fac-${id[1]}` });
+    const ours = (s: ReturnType<typeof state>) => [s.asks.filter((a) => a.id === `fac-${id[0]}`).length, s.errored.filter((j) => j.name === `fac-${id[1]}`).length];
+    expect(ours(state(now))).toEqual([1, 1]);
+    writeList({ key: "fac" }, "dropped", (doc) => { for (const i of doc.items) if (id.includes(i.id)) setStatus(i, "dropped"); return true; }, true);
+    expect(ours(state(now))).toEqual([0, 0]);
   });
 });
 

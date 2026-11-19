@@ -59,4 +59,12 @@ describe("fate from git", () => {
     expect(await listed("waiting")).toMatchObject({ state: "passed", fate: "unlanded" });
     await drop("waiting");
   });
+
+  test("a job whose branch is deleted but whose worktree is left reads as unlanded, not gone", async () => {
+    await actionJob("kept-wt", "commit kept-wt.txt");
+    sh(worktree("kept-wt"), "git", "checkout", "-q", "--detach");
+    sh(repo, "git", "branch", "-D", "job/kept-wt");
+    expect(await listed("kept-wt")).toMatchObject({ state: "passed", fate: "unlanded" });
+    await drop("kept-wt");
+  });
 });

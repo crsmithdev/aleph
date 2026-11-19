@@ -157,3 +157,17 @@ test("the reviewer call carries the new tests that pass on the base, and the run
   expect(r.outcome.state).toBe("passed");
   expect(readSection(folder, "checks")).toContain("## keep-gate: new tests that pass on the base commit\n- x.test.ts > adds");
 });
+
+test("a keep-gate that could not run is recorded as a check with no verdict, and the run is not stopped by it", async () => {
+  git(repo.path, "switch", "-q", "work");
+  commit(repo.path, "x.test.ts", `test("adds", () => {});\n`, "a new test");
+  git(repo.path, "switch", "-q", "main");
+  const runner: Runner = async (_r, _s, command) => {
+    if (!command.includes(".keep-gate.xml")) { report(command, PASS); return { code: 0, output: "" }; }
+    return { code: 124, output: "timed out after 1200 s", infra: true };
+  };
+  const r = await verdict(runner);
+  expect(r.outcome.state).toBe("passed");
+  expect(getRun(id)!.checks!.find((c) => c.name === "keep-gate")).toEqual({ name: "keep-gate", ok: false, seconds: 0, noVerdict: true });
+  expect(readSection(folder, "checks")).toContain("## keep-gate: no verdict\nNo verdict: the new tests did not run on the head:\ntimed out after 1200 s");
+});

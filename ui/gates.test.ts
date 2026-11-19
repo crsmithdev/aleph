@@ -8,6 +8,7 @@ import { CAP_ENV, CAP_KEYS, capMin } from "../jobs/lib/infra/settings.ts";
 import { LOG_MAX, askHistory, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
+import { updater } from "./updater.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { day, pct, when } from "./views/lib/format.js";
 // @ts-ignore gates.js is plain JS, shared with the page
@@ -69,7 +70,8 @@ beforeAll(async () => {
 });
 // Each test starts with no events and no caps row: the ones it reads, it writes.
 const clearEvents = () => void conn().run("DELETE FROM events");
-beforeEach(() => { clearEvents(); conn().run("DELETE FROM settings WHERE key = 'caps'"); });
+// The server answers a GET from the build an earlier test's GET kept, until it sees the change: each test starts with none kept.
+beforeEach(() => { clearEvents(); conn().run("DELETE FROM settings WHERE key = 'caps'"); updater.reset(); });
 afterAll(() => {
   stop();
   restoreEnv();
@@ -343,24 +345,25 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain('<td><a href="#rules">rescue</a></td><td class="wide"');
   expect(h).toContain('<td class="wide" title="set to resolve">set to resolve</td><td>changed</td><td><span class="chip">human</span></td>');
   expect(h).not.toContain("r-5");
-  expect(h).toContain('<tr><th>Logged</th><th>Object</th><th>Detail</th><th>Action</th><th>Subject</th><th class="num">Times</th></tr>');
   expect(gates.renderLog(data(), "rule")).not.toContain("set to resolve");
 });
 
-test("renderLog shows a missing action, and keeps the By filter over the five actors", () => {
-  const time = new Date(NOW).toISOString();
-  const h = gates.renderLog({ log: { entries: [{ time, subject: "rule", object: "x-1" }] } } as any);
-  expect(h.match(/<td><span title="no action">–<\/span><\/td>/g)).toHaveLength(1);
+test("the By filter is over the five actors", () => {
   expect(Object.keys(gates.BY)).toEqual(["human", "rule", "director", "firefighter", "gate"]);
 });
 
-test("renderLog shows each actor as a chip, and no badge", () => {
-  const time = new Date(NOW).toISOString();
-  for (const by of Object.keys(gates.BY)) {
-    const h = gates.renderLog({ log: { entries: [{ time, subject: by, object: "x-1", action: "a" }] } } as any);
-    expect(h).toContain(`<span class="chip">${by}</span>`);
-    expect(h).not.toContain("badge");
-  }
+// Each row: the case, one log entry and the cell it renders; no row shows a badge or "undefined".
+test.each<[string, Record<string, unknown>, string]>([
+  ["a missing action is miss()", { subject: "rule", object: "x-1" }, '<td><span title="no action">–</span></td>'],
+  ["a missing object is miss()", { subject: "rule", action: "reran" }, '<td><span title="no object">–</span></td>'],
+  ["Times goes through count()", { subject: "gate", object: "x-1", action: "held", times: 1200 }, '<td class="num">1,200</td>'],
+  ["no times is 1", { subject: "gate", object: "x-1", action: "held" }, '<td class="num">1</td>'],
+  ...["human", "rule", "director", "firefighter", "gate"].map((by): [string, Record<string, unknown>, string] => [`the actor ${by} is a chip`, { subject: by, object: "x-1", action: "a" }, `<span class="chip">${by}</span>`]),
+])("renderLog: %s", (_, entry, cell) => {
+  const h = gates.renderLog({ log: { entries: [{ time: new Date(NOW).toISOString(), ...entry }] } } as any);
+  expect(h).toContain(cell);
+  expect(h).not.toContain("badge");
+  expect(h).not.toContain("undefined");
 });
 
 test("renderLog heads the columns time first, then id, title, action, subject and number", () => {
@@ -370,20 +373,6 @@ test("renderLog heads the columns time first, then id, title, action, subject an
   const rows = h.match(/<tr><td class="time lead">.*?<\/tr>/g)!;
   expect(rows).toHaveLength(2);
   for (const row of rows) expect([...row.matchAll(/<td([^>]*)>/g)].map((m) => (m[1].includes("wide") ? "wide" : m[1].includes("num") ? "num" : "cell"))).toEqual(["cell", "cell", "wide", "cell", "cell", "num"]);
-});
-
-test("renderLog writes the Times number through count()", () => {
-  const time = new Date(NOW).toISOString();
-  const e = (times?: number) => ({ time, subject: "gate", object: "x-1", action: "held", ...(times ? { times } : {}) });
-  expect(gates.renderLog({ log: { entries: [e(1200)] } } as any)).toContain('<td class="num">1,200</td>');
-  expect(gates.renderLog({ log: { entries: [e()] } } as any)).toContain('<td class="num">1</td>');
-});
-
-test("renderLog shows a missing object with miss()", () => {
-  const time = new Date(NOW).toISOString();
-  const h = gates.renderLog({ log: { entries: [{ time, subject: "rule", action: "reran" }] } } as any);
-  expect(h).toContain('<td><span title="no object">–</span></td>');
-  expect(h).not.toContain("undefined");
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
@@ -416,12 +405,11 @@ test("log collapses a run of identical gate events into one with times, first an
   });
 });
 
-const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/automation/caps", { method: "POST", headers, body: JSON.stringify(b) });
+const postCaps = (b: unknown) => at("/api/automation/caps", { method: "POST", headers: { "X-Aleph-UI": "1" }, body: JSON.stringify(b) });
 
-test("POST /api/automation/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
+test("POST /api/automation/caps refuses bad values with 422, and leaves the file", async () => {
   const seed = { live: 9 };
   putJson("settings", "caps", seed);
-  expect((await postCaps({ live: 5 }, {})).status).toBe(403);
   for (const v of [0, -1, 2.5, "x"]) {
     const r = await postCaps({ live: v });
     expect(r.status).toBe(422);

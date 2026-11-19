@@ -392,14 +392,10 @@ test("the Roles card has no first-pass aside: the Success card shows it", () => 
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
 const one = { role: "worker", size: "small", model: "haiku", runs: 1234, succeeded: 1, failed: 0, error: 0, ended: 1, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
 
-test("the Roles headers are in Title Case, and every number header has num", () => {
-  const heads = th(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } }));
-  expect(heads.filter(([, n]) => n).map(([h]) => h)).toEqual(["Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output"]);
-});
-
-test("the Roles table heads Agent to Output, with no Failed jobs link, Pass share or worker only cell", () => {
+test("the Roles table heads Agent to Output in Title Case, each number head with num, and no Failed jobs link, Pass share or worker only cell", () => {
   const h = page([full("worker", "haiku", { size: "small" }), full("reviewer", "opus", { pass: 24, fail: 6 }), full("intake", "opus")]);
-  expect(th(h).map(([t]) => t)).toEqual(["Agent", "Model", "Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output", "Output"]);
+  const num = new Set(["Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output"]);
+  expect(th(h)).toEqual(["Agent", "Model", "Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output", "Output"].map((t) => [t, num.has(t)]));
   expect(h).not.toMatch(/Failed jobs|failed-jobs|Pass share|worker only/);
   expect(readFileSync(new URL("../app.css", import.meta.url), "utf8")).not.toContain("failed-jobs");
 });

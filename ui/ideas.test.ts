@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../cli/commands.ts";
@@ -84,7 +84,13 @@ test("POST refuses an unknown lens or idea, else starts the lens and answers at 
   try {
     process.env.FAKE_COST = "0.1";
     expect((await post("/api/ideas/4/lenses/prior-art")).status).toBe(200);
-    for (let i = 0; i < 5000 && !((await json("/api/ideas/4")).lenses?.length > 0); i++); // the checkout follow rewrites idea.md, so a read can miss it for a moment
+    // The lens runs in a detached child: each write to the idea's folder is a chance to read its result, and the
+    // checkout follow rewrites idea.md, so one read can miss it.
+    const ready = async () => (await json("/api/ideas/4")).lenses?.length > 0;
+    await new Promise<void>((done) => {
+      const w = watch(join(base, "issues", "ideas", "4"), { recursive: true }, async () => { if (await ready()) { w.close(); done(); } });
+      ready().then((ok) => { if (ok) { w.close(); done(); } });
+    });
     expect((await json("/api/ideas/4")).lenses).toHaveLength(1);
   } finally { rmSync(join(base, "issues", "ideas", "4"), { recursive: true, force: true }); }
 }, 30000);

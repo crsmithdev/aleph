@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, issueKeyOf, loadRegistry, repoOf, runsByIssue, type Entry, type Run } from "./ledger.ts";
+import { admit, issueKeyOf, loadRegistry, readEnvFile, repoOf, runsByIssue, type Entry, type Run } from "./ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 import { writeRepos, type Repos } from "../../../tests/projects.testkit.ts";
@@ -100,5 +100,23 @@ describe("the issue of a run", () => {
   test("runsByIssue groups by the issue key", () => {
     const ids = (m: Map<string, Entry[]>) => Object.fromEntries([...m].map(([k, es]) => [k, es.map((e) => e.id)]));
     expect(ids(runsByIssue([...entries, entry("f", "issue.7")]))).toEqual({ "issue.7": ["a", "f"], "issue.12": ["b"] });
+  });
+});
+
+describe("readEnvFile", () => {
+  const read = (text: string) => { const f = join(base, "worker.env"); writeFileSync(f, text); return readEnvFile(f); };
+
+  test("reads KEY=VALUE lines, skips comments and blank lines, and strips one pair of quotes", () => {
+    const env = read(`# a comment\n\nA=1\n  export B="two words"\nC='x'\n#D=hidden\nnot a pair\n9X=bad\n`);
+    expect(env).toEqual({ A: "1", B: "two words", C: "x" });
+  });
+
+  test("keeps an = inside a value and a quote that has no match", () => {
+    expect(read(`URL=https://h/p?a=b&c=d\nQ="open\nE=\n`)).toEqual({ URL: "https://h/p?a=b&c=d", Q: '"open', E: "" });
+  });
+
+  test("is empty for no file or a missing file", () => {
+    expect(readEnvFile(undefined)).toEqual({});
+    expect(readEnvFile(join(base, "none.env"))).toEqual({});
   });
 });

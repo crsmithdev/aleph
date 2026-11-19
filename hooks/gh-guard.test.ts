@@ -33,53 +33,26 @@ function decide(command: string, cwd = join(root, "mine")): string {
   return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "";
 }
 
-test("a write to another owner's repo named with -R asks", () => {
-  expect(decide("gh issue comment 5 -R suebtwist/btcx-files --body hi")).toBe("ask");
-  expect(decide("gh pr create --repo suebtwist/btcx-files --fill")).toBe("ask");
-});
-
-test("a write to another owner's repo named by URL asks", () => {
-  expect(decide("gh issue comment https://github.com/suebtwist/btcx-files/issues/5 -b hi")).toBe("ask");
-  expect(decide("gh repo fork suebtwist/btcx-files")).toBe("ask");
-});
-
-test("a write with no named repo goes to the cwd's origin", () => {
-  expect(decide("gh issue create -t x -b y", join(root, "theirs"))).toBe("ask");
-  expect(decide("gh issue create -t x -b y", join(root, "mine"))).toBe("");
-});
-
-test("a write after a cd, with no named repo, asks", () => {
-  expect(decide("cd ../theirs && gh issue create -t x -b y")).toBe("ask");
-});
-
-test("a write after a cd to a path with a variable asks", () => {
-  expect(decide("cd $DIR && gh pr create --fill")).toBe("ask");
-});
-
-test("a write to the user's own repo goes through", () => {
-  expect(decide("gh pr create -R crsmithdev/btcx-tools --fill", join(root, "theirs"))).toBe("");
-});
-
-test("reads go through anywhere", () => {
-  expect(decide("gh issue view 5 -R suebtwist/btcx-files --comments")).toBe("");
-  expect(decide("gh pr list -R suebtwist/btcx-files")).toBe("");
-  expect(decide("gh api repos/suebtwist/btcx-files/issues -q '.[].title'")).toBe("");
-  expect(decide("gh api -X GET search/issues -f q=btcx")).toBe("");
-});
-
-test("gh api writes to another owner ask", () => {
-  expect(decide("gh api repos/suebtwist/btcx-files/issues/5/comments -f body=hi")).toBe("ask");
-  expect(decide("gh api --method PATCH repos/suebtwist/btcx-files/issues/5 -f state=closed")).toBe("ask");
-  expect(decide("gh api repos/crsmithdev/btcx-tools/issues -f title=x")).toBe("");
-  expect(decide("gh api graphql -f query='mutation { addComment(input:{}) { clientMutationId } }'")).toBe("ask");
-});
-
-test("a write in a later part of a compound command asks", () => {
-  expect(decide("gh issue list -R crsmithdev/btcx-tools; gh issue comment 5 -R suebtwist/btcx-files -b hi")).toBe("ask");
-});
-
-test("a command without gh goes through", () => {
-  expect(decide("git push origin main")).toBe("");
+// Each row: the behaviour, then each command with its decision ("" goes through) and its folder under root, mine when not given.
+test.each<[string, [string, string, string?][]]>([
+  ["a write to another owner's repo named with -R asks", [["gh issue comment 5 -R suebtwist/btcx-files --body hi", "ask"], ["gh pr create --repo suebtwist/btcx-files --fill", "ask"]]],
+  ["a write to another owner's repo named by URL asks", [["gh issue comment https://github.com/suebtwist/btcx-files/issues/5 -b hi", "ask"], ["gh repo fork suebtwist/btcx-files", "ask"]]],
+  ["a write with no named repo goes to the cwd's origin", [["gh issue create -t x -b y", "ask", "theirs"], ["gh issue create -t x -b y", "", "mine"]]],
+  ["a write after a cd, with no named repo, asks", [["cd ../theirs && gh issue create -t x -b y", "ask"]]],
+  ["a write after a cd to a path with a variable asks", [["cd $DIR && gh pr create --fill", "ask"]]],
+  ["a write to the user's own repo goes through", [["gh pr create -R crsmithdev/btcx-tools --fill", "", "theirs"]]],
+  ["reads go through anywhere", [
+    ["gh issue view 5 -R suebtwist/btcx-files --comments", ""], ["gh pr list -R suebtwist/btcx-files", ""],
+    ["gh api repos/suebtwist/btcx-files/issues -q '.[].title'", ""], ["gh api -X GET search/issues -f q=btcx", ""],
+  ]],
+  ["gh api writes to another owner ask", [
+    ["gh api repos/suebtwist/btcx-files/issues/5/comments -f body=hi", "ask"], ["gh api --method PATCH repos/suebtwist/btcx-files/issues/5 -f state=closed", "ask"],
+    ["gh api repos/crsmithdev/btcx-tools/issues -f title=x", ""], ["gh api graphql -f query='mutation { addComment(input:{}) { clientMutationId } }'", "ask"],
+  ]],
+  ["a write in a later part of a compound command asks", [["gh issue list -R crsmithdev/btcx-tools; gh issue comment 5 -R suebtwist/btcx-files -b hi", "ask"]]],
+  ["a command without gh goes through", [["git push origin main", ""]]],
+])("%s", (_, cases) => {
+  expect(cases.map(([cmd, , dir]) => decide(cmd, join(root, dir ?? "mine")))).toEqual(cases.map(([, want]) => want));
 });
 
 /** The decision for a write to the user's own repo with no ALEPH_GH_USER, where a fake login lookup prints `login` and notes each call in `calls`. */

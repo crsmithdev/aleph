@@ -11,8 +11,7 @@ test("a stated cause wins over the sentence, so a drop does not change it", () =
   expect(failedCheckOf(run({ cause: "check", checkName: "tests", state: "dropped", reason: "not needed" }))).toBe("tests");
 });
 
-test("causeOf gives the stored cause, and none for a run with only a sentence: the word migration stated it", () => {
-  expect(causeOf(run({ cause: "timeout", reason: "time box" }))).toBe("timeout");
+test("a run with only a sentence has no cause and no check: the word migration stated them", () => {
   expect(causeOf(run({ reason: "time box" }))).toBeUndefined();
   expect(failedCheckOf(run({ reason: "tests failed" }))).toBeUndefined();
 });

@@ -89,12 +89,12 @@ export function job(name: string, commits: [string, string][], extra: Partial<Ru
 }
 
 /** A land run that counts as live, queued behind a leader. */
-export function queued(e: Entry): Entry {
+export async function queued(e: Entry): Promise<Entry> {
   // bash blocks on its own stdin: no child to orphan, and it exits when the test process dies.
-  const s = Bun.spawn(["bash", "-c", "read", e.folder], { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+  const s = Bun.spawn(["bash", "-c", "echo; read", e.folder], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   sleepers.push(s);
-  // Until bash execs, /proc/<pid>/cmdline is the parent's: isLive reads it as lost. A spin, as the lint bars a sleep.
-  while (!readFileSync(`/proc/${s.pid}/cmdline`, "utf8").includes(e.folder));
+  // Until bash execs, /proc/<pid>/cmdline is the parent's: isLive reads it as lost. Its first line says it runs.
+  await s.stdout.getReader().read();
   writeFileSync(join(e.folder, "pid"), String(s.pid));
   return e;
 }

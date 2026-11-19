@@ -122,37 +122,34 @@ test("a lost run is marked failed and the issue reruns once; a second lost run o
   expect(f.calls).toEqual([`drop issue.${id}`, `start issue.${id}`]);
 });
 
-test("a lost land is marked failed and lands again, and the issue does not start over", async () => {
-  const id = newIssue();
-  const first = mk(`fac-${id}`, "build", "passed", { branch: "b" });
-  const l = lostRun(`fac-${id}`, "land", { job: first.job, branch: "b" });
+/** The dispatch fails the land run `l` with `reason` and lands issue `id` again, with no drop. */
+async function landsAgain(id: number, l: { folder: string }, reason: string): Promise<void> {
   const f = fakes();
   await dispatch(f);
   expect(f.calls[0]).toBe(`land issue.${id}`);
   expect(f.calls).not.toContain(`drop issue.${id}`);
-  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
+  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason });
+}
+
+test("a lost land is marked failed and lands again, and the issue does not start over", async () => {
+  const id = newIssue();
+  const first = mk(`fac-${id}`, "build", "passed", { branch: "b" });
+  const l = lostRun(`fac-${id}`, "land", { job: first.job, branch: "b" });
+  await landsAgain(id, l, "lost: its process ended with no end written");
 });
 
 test("a running land that wrote no pid in two minutes is lost, fails and lands again", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b" });
   const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", made: Date.parse(BEFORE_BOOT) }, {});
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls[0]).toBe(`land issue.${id}`);
-  expect(f.calls).not.toContain(`drop issue.${id}`);
-  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "lost: its process ended with no end written" });
+  await landsAgain(id, l, "lost: its process ended with no end written");
 });
 
 test("a land killed by a host restart fails and lands again, and the issue does not start over", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
   const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", started: BEFORE_BOOT, made: Date.parse(BEFORE_BOOT) }, { pid: "999999999" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls[0]).toBe(`land issue.${id}`);
-  expect(f.calls).not.toContain(`drop issue.${id}`);
-  expect(getRun(jobOfFolder(l.folder))).toMatchObject({ state: "failed", reason: "host restart" });
+  await landsAgain(id, l, "host restart");
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
 });
 

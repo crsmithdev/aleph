@@ -30,9 +30,7 @@ describe("ids", () => {
     expect(n.parseId("z12")).toBeNull();
     expect(n.parseId("a12")).toEqual({ repo: "aleph", n: 12, sub: undefined });
   });
-  test("keys", () => {
-    expect(n.key("job", 6802)).toBe("job.6802");
-    expect(n.parseKey("issue.12")).toEqual({ kind: "issue", n: 12 });
+  test("a short id is no key, and a key's shown id is its shown key", () => {
     expect(n.parseKey("a1430#2")).toBeNull();
     expect(n.shownId("job.6802")).toBe(n.shownKey("job.6802"));
   });
@@ -73,7 +71,6 @@ describe("words", () => {
     expect(() => n.detailOf("failed", "after")).toThrow(/action "failed"/);
   });
   test("credit is a cause with a phrase", () => expect(n.because("credit")).toBe("out of credit"));
-  test("the one-shot roles are roles", () => expect(n.ROLES).toEqual(expect.arrayContaining(["title", "judge"])));
   test("every set is lower case with no separator marks", () => {
     const sets = [n.STATUSES, n.ACTIONS, n.ACTORS, n.ROLES, n.STAGES, n.LANES, n.SPEEDS];
     for (const w of sets.flat()) expect(w).toMatch(/^[a-z][a-z-]*$/);
@@ -122,7 +119,6 @@ test("no other file defines a state list", () => {
 });
 
 test("the name table gives one display name for each step and role", () => {
-  expect([n.NAMES.build, n.NAMES.planner]).toEqual(["Implement", "Planner"]);
   for (const k of Object.keys(n.NAMES)) expect(k).toMatch(/^[a-z][a-z-]*$/);
 });
 

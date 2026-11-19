@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "../records/ledger.ts";
@@ -61,8 +61,11 @@ test("checksAt hands each check's process to onSpawn, so a drop can kill a runni
     folder: base, repo, changed: [], phase: () => {},
     onSpawn: (p) => {
       spawned.push(p);
-      while (!existsSync(pids) || !readFileSync(pids, "utf8").endsWith("\n"));
-      process.kill(-p.pid, "SIGKILL");
+      // Kill once the check wrote both pids: the kill then reaches its tail too.
+      const written = () => existsSync(pids) && readFileSync(pids, "utf8").endsWith("\n");
+      const kill = () => { if (!written()) return; w.close(); process.kill(-p.pid, "SIGKILL"); };
+      const w = watch(base, kill);
+      kill();
     },
   }, sha, process.env);
   // A killed check does not run again here.

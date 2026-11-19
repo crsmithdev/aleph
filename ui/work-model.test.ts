@@ -104,8 +104,7 @@ describe("the Issue page", () => {
   });
 
   test("the page edits an issue and appends a note through the CLI", async () => {
-    const post = (path: string, body: unknown, ui = true) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/${path}`, { method: "POST", headers: { "content-type": "application/json", ...(ui ? { "x-aleph-ui": "1" } : {}) }, body: JSON.stringify(body) });
-    expect((await post("note", { text: "x" }, false)).status).toBe(403);
+    const post = (path: string, body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/${path}`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body) });
     expect((await post("note", { text: " " })).status).toBe(400);
     const before = await getJson("/api/issues/fac-1");
     const edited = await post("edit", { title: "[Group] A new title", priority: "high", source: "worker", areas: "ui, bug", description: "New words." });

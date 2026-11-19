@@ -26,6 +26,9 @@ import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 import { ciStep } from "../gates/ci.ts";
 import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
+import { keepEnv } from "../../../tests/env.testkit.ts";
+
+keepEnv();
 
 // The test's clock: the run that holds the live slot is `starting` against it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -320,6 +323,8 @@ test("a tick where an episode page fails to write records the episodes result as
   // A specced issue that landed on main, with a run: its page is due.
   const id = writeList({ key }, "add", (doc) => issues.add(doc, "ship it", { spec: "## Goal\nShip it." }).id, true)!.value;
   const dir = join(base, "repo");
+  // Each test's issue numbers start at 1 in the shared repo: put main back after, or issue.1 reads as landed for the rest.
+  const start = git(dir, "rev-parse", "HEAD").out;
   writeFileSync(join(dir, `${key}.txt`), "x\n");
   git(dir, "add", ".");
   git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: issue.${id}`);
@@ -330,7 +335,11 @@ test("a tick where an episode page fails to write records the episodes result as
   const episodes = join(process.env.ALEPH_FACTORY_DIR!, "episodes");
   mkdirSync(episodes, { recursive: true });
   chmodSync(episodes, 0o555);
-  try { await runTick(NOW, quiet()); } finally { chmodSync(episodes, 0o755); }
+  try { await runTick(NOW, quiet()); } finally {
+    chmodSync(episodes, 0o755);
+    git(dir, "reset", "-q", "--hard", start);
+    git(dir, "push", "-q", "--force", "origin", "main");
+  }
   expect(tickRows().episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
 });
 

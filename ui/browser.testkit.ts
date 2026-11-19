@@ -3,7 +3,7 @@
  * only a DOM can run. The sandbox of Chrome is off: it loads only this fixture, and CI runners refuse it.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -99,14 +99,14 @@ export async function launchChrome(base: string): Promise<Chrome> {
 
 /**
  * The tests that start Chrome run only with ALEPH_BROWSER_TESTS=1: `bun run test:all`, CI and the factory's checks
- * set it, and a plain `bun run test` skips them. CI must have one:
- * there a missing Chrome fails, and does not skip.
+ * set it, and a plain `bun run test` skips them. With it set, a missing or broken Chrome fails, and does not skip.
  */
-export const chromeUsable = process.env.ALEPH_BROWSER_TESTS === "1" && (process.env.CI === "true" || (existsSync(CHROME) && Bun.spawnSync([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--dump-dom", "about:blank"], { stdout: "ignore", stderr: "ignore", timeout: 20_000, env: { ...process.env, HOME: tmpdir() } }).exitCode === 0));
+export const chromeUsable = process.env.ALEPH_BROWSER_TESTS === "1";
 
 export interface Page {
   errors: string[];
-  ev<T = any>(expression: string): Promise<T>;
+  /** Evaluates `expression` in the page; `limit` is the ms Chrome has to answer, ANSWER_LIMIT when not given. */
+  ev<T = any>(expression: string, limit?: number): Promise<T>;
   /** Waits until the expression is true: the page checks it on each frame, and again after a reload. */
   when(expression: string): Promise<void>;
   /** Goes to a hash in the page already open, the way a link does. */
@@ -163,8 +163,8 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
     await cdp.send("Runtime.enable", {}, sessionId);
     /** `limit` 0 waits without end: the wait of `when` outlives the limit of a call a test makes. */
     const evaluate = (expression: string, limit?: number) => cdp.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId, limit);
-    const ev = <T>(expression: string): Promise<T> => {
-      const p = evaluate(expression).then((r) => {
+    const ev = <T>(expression: string, limit?: number): Promise<T> => {
+      const p = evaluate(expression, limit).then((r) => {
         if (r.exceptionDetails) throw new Error(`${expression}: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`);
         return r.result.value;
       });

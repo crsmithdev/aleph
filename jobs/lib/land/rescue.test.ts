@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { putJson } from "../../../lib/db.ts";
 import { close, readList, writeList } from "../../../lib/store.ts";
 import * as issues from "../../../lib/todo.ts";
 import { dispatchIssues } from "../transitions/dispatch.ts";
@@ -210,4 +211,15 @@ test("hasWork: a branch whose only change is result.md is not work to rescue, as
   killed(gone, "build", { branch: "gone" });
   const r = await rescue();
   expect([notes, code, gone].map((id) => r.calls.find((c) => c.endsWith(`issue.${id}`)))).toEqual([`drop issue.${notes}`, `recheck issue.${code}`, `drop issue.${gone}`]);
+});
+
+test("a standing rescue whose drop fails logs the failure and falls through to an Ask, with no always note", async () => {
+  putJson("settings", "always", { rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } });
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { reason: "tests failed after 2 fix rounds" });
+  const f = fakes();
+  await dispatchIssues(f.start, undefined, { ...f.rescue, drop: async () => "no such job" });
+  expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "gate", object: `issue.${id}`, action: "failed", detail: "always Rerun failed (no such job)" }));
+  expect(ask(id)).toMatchObject({ reason: "rescue" });
+  expect(notes(id)).not.toContain("always: Rerun");
 });

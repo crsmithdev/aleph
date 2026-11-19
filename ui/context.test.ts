@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -304,13 +304,17 @@ test("a session and then one of its calls read the transcript once, and a write 
 });
 
 test("GET /api/context/:id/calls/:call returns one call, and 404 for an unknown call or session", async () => {
-  writeFileSync(join(base, "-p", "drill.jsonl"), drill);
-  expect(await at("/api/context/drill/calls/u2").then((r) => r.json())).toEqual({ tool: "Bash", input: { command: "ls" }, text: "x".repeat(400) });
-  expect(await Promise.all(["/api/context/drill/calls/nope", "/api/context/nope/calls/u2"].map(async (u) => (await at(u)).status))).toEqual([404, 404]);
+  const file = join(base, "-p", "drill.jsonl");
+  writeFileSync(file, drill);
+  try {
+    expect(await at("/api/context/drill/calls/u2").then((r) => r.json())).toEqual({ tool: "Bash", input: { command: "ls" }, text: "x".repeat(400) });
+    expect(await Promise.all(["/api/context/drill/calls/nope", "/api/context/nope/calls/u2"].map(async (u) => (await at(u)).status))).toEqual([404, 404]);
+  } finally { rmSync(file); }
 });
 
 test("GET /api/context/:id counts the fixed parts with count_tokens when the dotenv has the key", async () => {
-  writeFileSync(join(base, "-p", "model.jsonl"), transcript.replaceAll('"usage"', '"model":"claude-test-1","usage"'));
+  const file = join(base, "-p", "model.jsonl");
+  writeFileSync(file, transcript.replaceAll('"usage"', '"model":"claude-test-1","usage"'));
   writeFileSync(join(base, "env"), "ANTHROPIC_API_KEY=sk-test\n");
   const restore = withEnv({ ALEPH_ENV_FILE: join(base, "env") });
   const real = globalThis.fetch, models: string[] = [];
@@ -323,7 +327,7 @@ test("GET /api/context/:id counts the fixed parts with count_tokens when the dot
     const one: any = await at("/api/context/model").then((r) => r.json());
     expect(one.requests[0].parts.slice(0, 4).map((p: any) => [p.tokens, p.how])).toEqual(Array(4).fill([5, "exact"]));
     expect(models).toEqual(Array(4).fill("claude-test-1"));
-  } finally { globalThis.fetch = real; restore(); }
+  } finally { globalThis.fetch = real; restore(); rmSync(file); }
 });
 
 describe("parseExact", () => {
@@ -336,6 +340,7 @@ describe("parseExact", () => {
     bodies.push(JSON.parse(init.body as string));
     return Response.json({ input_tokens: tokens.find(([t]) => (init.body as string).includes(t))![1] });
   }) as unknown as typeof fetch;
+  beforeEach(() => { bodies.length = 0; });
 
   test("counts each fixed part with the session's model and marks it exact, without the key reaching process.env", async () => {
     const restore = withEnv({ ALEPH_ENV_FILE: envFile("ANTHROPIC_API_KEY=sk-test\n") });

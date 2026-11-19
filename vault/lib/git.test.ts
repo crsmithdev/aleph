@@ -23,11 +23,21 @@ test("a renamed note keeps the date it first entered git", () => {
   expect(addedDate(dir, join(dir, "New.md"))).toBe("2026-01-10");
 });
 
+test("a re-added note keeps the date it first entered git", () => {
+  writeFileSync(join(dir, "Back.md"), head + "A note that left and came back.\n");
+  commit("2026-01-02T12:00:00", "enter");
+  g("2026-02-02T12:00:00", "rm", "-q", "Back.md");
+  commit("2026-02-02T12:00:00", "gone");
+  writeFileSync(join(dir, "Back.md"), head + "A note that left and came back.\n");
+  commit("2026-03-02T12:00:00", "back");
+  expect(addedDate(dir, join(dir, "Back.md"))).toBe("2026-01-02");
+});
+
 test("commitPaths still commits the note when another named path is gone and was never tracked", () => {
   writeFileSync(join(dir, "Draft.md"), head + "A decision.\n");
   // The superseded draft was unlinked and never tracked; git add would fail on it whole.
   const sha = commitPaths(dir, "write: Draft", [join(dir, "Draft.md"), join(dir, "Gone.md")]);
-  expect(sha).toBeTruthy();
+  expect(sha).toBe(g("", "rev-parse", "--short", "HEAD").stdout.toString().trim());
   expect(tracked(dir, join(dir, "Draft.md"))).toBe(true);
 });
 

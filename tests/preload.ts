@@ -78,12 +78,15 @@ for (const name of ["spawn", "spawnSync"] as const) {
 // own. The live tests (ALEPH_LIVE=1) keep them.
 if (process.env.ALEPH_LIVE !== "1") {
   const nowhere = "http://127.0.0.1:1";
-  Object.assign(process.env, {
+  const net = {
     ALEPH_ENV_FILE: join(dir, ".env"), ALEPH_UI_PORT: "1",
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: nowhere,
     OPENROUTER_API_KEY: "", ALEPH_JEV_URL: `${nowhere}/jev`, ALEPH_USAGE_URL: `${nowhere}/usage`,
     SIDETONE_TELL_URL: `${nowhere}/tell`, GH_CONFIG_DIR: join(dir, "gh"),
-  });
+  };
+  Object.assign(process.env, net);
+  // A deleted one would send every later test in the process to the live service (ui/usage.test.ts deleted ALEPH_USAGE_URL).
+  afterEach(() => { for (const [k, v] of Object.entries(net)) process.env[k] ??= v; });
   for (const k of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) delete process.env[k];
 }
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));

@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL, MERGE_SECONDS } from "../transitions/continuation.ts";
+import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL } from "../transitions/continuation.ts";
 import { land, landTerms } from "./landing.ts";
 import { type Run } from "../records/ledger.ts";
 import { seed, reseed } from "../../job.testkit.ts";
@@ -116,7 +116,6 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   expect(text).toContain("origin/main");
   expect(text).not.toContain("SPEC-SECRET");
   expect(text).not.toContain("## Spec");
-  expect(MERGE_SECONDS).toBe(600);
   expect(isMergeBounce({ ...e.run, ...r.outcome } as Run)).toBe(true);
   expect(isMergeBounce({ ...e.run, cause: "other", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
 });

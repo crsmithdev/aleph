@@ -143,34 +143,18 @@ test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours
   expect(gainSince([], 5 * 3600_000)).toBeNull();
 });
 
-test("a 429 without Retry-After logs the status alone", async () => {
-  reply = () => new Response("slow down", { status: 429 });
+// Each row: the case, its setup, a text its one error line holds and a text it must not hold.
+test.each<[string, () => void, string, string]>([
+  ["a 429 without Retry-After logs the status alone", () => { reply = () => new Response("slow down", { status: 429 }); }, "429", "Retry-After"],
+  ["a credentials file with no token logs one line", () => { writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: {} })); }, "no token", TOKEN],
+  ["a body that is not JSON logs one line and not the body", () => { reply = () => new Response("<html>secret-page-text</html>", { status: 200 }); }, "not valid JSON", "secret-page-text"],
+  ["a JSON body with no usage numbers logs one line", () => { reply = () => Response.json({ five_hour: { utilization: 5 }, seven_day: null }); }, "no usage numbers", TOKEN],
+])("%s", async (_, given, has, hasNot) => {
+  given();
   const lines = await errors(() => pollOnce());
   expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("429");
-  expect(lines[0]).not.toContain("Retry-After");
-});
-
-test("a credentials file with no token logs one line", async () => {
-  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: {} }));
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("no token");
-});
-
-test("a body that is not JSON logs one line and not the body", async () => {
-  reply = () => new Response("<html>secret-page-text</html>", { status: 200 });
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("not valid JSON");
-  expect(lines[0]).not.toContain("secret-page-text");
-});
-
-test("a JSON body with no usage numbers logs one line", async () => {
-  reply = () => Response.json({ five_hour: { utilization: 5 }, seven_day: null });
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("no usage numbers");
+  expect(lines[0]).toContain(has);
+  expect(lines[0]).not.toContain(hasNot);
 });
 
 test("a reply's five_hour is not stored: the snapshot and the stored row have only the seven-day fields", async () => {

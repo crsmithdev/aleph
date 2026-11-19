@@ -1,19 +1,19 @@
 /**
  * The test files that depend on a set of files, read from the tree of one commit. A test depends on a file when it
- * reaches the file through quoted paths: imports, path strings such as "cli/cli.ts" that a test spawns, and paths
- * that `join(import.meta.dir, ...)` writes in parts. Also the build run's choice of the test files to run.
+ * reaches the file through quoted paths: imports, path strings such as "cli/cli.ts" that a test spawns or "docs/a.md"
+ * that it reads, and paths that `join(import.meta.dir, ...)` writes in parts. Also the build run's choice of the test files to run.
  */
 import { dirname, join, normalize } from "node:path";
 import { git } from "../../../lib/git.ts";
 import type { Check, Repo } from "../records/ledger.ts";
 
 const MODULE = /\.(?:tsx?|m?js|cjs)$/;
-const QUOTED = /["'`]((?:\.{1,2}\/)[^"'`\s]+|[\w@./-]+\.(?:tsx?|m?js|cjs))["'`]/g;
+const QUOTED = /["'`]((?:\.{1,2}\/)[^"'`\s]+|[\w@./-]+\.\w+)["'`]/g;
 /** `join(import.meta.dir, "..", "cli", "cli.ts")`: the quoted parts after the folder. */
 const JOINED = /import\.meta\.dir\s*,\s*((?:["'][^"'\s]+["']\s*,?\s*)+)\)/g;
 const ENDINGS = ["", ".ts", ".tsx", ".js", "/index.ts", "/index.js"];
 
-/** The module files in `files` that `spec`, written in `from`, names. */
+/** The files in `files` that `spec`, written in `from`, names. */
 function resolve(spec: string, from: string, files: Set<string>): string[] {
   const roots = spec.startsWith(".") ? [dirname(from)] : [dirname(from), ""];
   const out: string[] = [];
@@ -25,12 +25,12 @@ function resolve(spec: string, from: string, files: Set<string>): string[] {
   return out;
 }
 
-/** What the tree of one commit names: its module files, for each file the files that name it, and bun's preload files. */
+/** What the tree of one commit names: its files, for each file the modules that name it, and bun's preload files. */
 export interface ImportMap { files: Set<string>; dependents: Map<string, Set<string>>; preload: string[] }
 
 /** The import map of `commit` in the repo at `repoPath`. */
 export function importMap(repoPath: string, commit: string): ImportMap {
-  const files = new Set(git(repoPath, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter((f) => MODULE.test(f)));
+  const files = new Set(git(repoPath, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean));
   const grep = git(repoPath, "grep", "-I", "-E", "[\"'`]", commit, "--", "*.ts", "*.tsx", "*.js", "*.mjs", "*.cjs");
   const dependents = new Map<string, Set<string>>();
   for (const line of grep.out.split("\n")) {
@@ -56,12 +56,11 @@ export function importMap(repoPath: string, commit: string): ImportMap {
 }
 
 /**
- * The test files in `map` that match `globs` and depend on any of `targets`, sorted. Null when a target is not a
- * module, because a test can read such a file in ways that no quoted path shows, or when a target is gone from the
- * tree: no file is left to start from, though tests can still name it.
+ * The test files in `map` that match `globs` and depend on any of `targets`, sorted. Null when a target is gone from
+ * the tree: no file is left to start from, though tests can still name it.
  */
 export function testsOf(map: ImportMap, targets: string[], globs: string[]): string[] | null {
-  if (targets.some((f) => !MODULE.test(f) || !map.files.has(f))) return null;
+  if (targets.some((f) => !map.files.has(f))) return null;
   const seen = new Set(targets);
   const queue = [...seen];
   while (queue.length) for (const d of map.dependents.get(queue.pop()!) ?? []) if (!seen.has(d)) { seen.add(d); queue.push(d); }
@@ -74,15 +73,16 @@ const BUN_TESTS = ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/*_{test,spec}.{ts,tsx
 
 /**
  * The test files that a build run's change reaches: each changed test file and each test that depends on a changed
- * file. A test file that the change removes drops out. A change of only files that are not modules reaches no test.
- * "full" when the change mixes a module with a file that is not a module, or holds bunfig.toml (it sets the preload),
- * or when `testsOf` gives null, or when a preload file depends on a changed file: a preload runs before every test.
+ * file. A test file that the change removes drops out. A change of only files that are not modules reaches the tests
+ * that name them. "full" when the change mixes a module with a file that is not a module, because a module can read
+ * such a file in ways that no quoted path shows, or holds bunfig.toml (it sets the preload), or when `testsOf` gives
+ * null, or when a preload file depends on a changed file: a preload runs before every test.
  */
 export function buildTests(changed: string[], map: ImportMap, globs: string[]): string[] | "full" {
   const isTest = (f: string) => globs.some((g) => new Bun.Glob(g).match(f));
   const targets = changed.filter((f) => map.files.has(f) || !isTest(f));
   const other = targets.filter((f) => !MODULE.test(f));
-  if (other.length) return other.length === targets.length && !other.includes("bunfig.toml") ? [] : "full";
+  if (other.length && (other.length < targets.length || other.includes("bunfig.toml"))) return "full";
   const tests = testsOf(map, targets, [...globs, ...map.preload]);
   if (!tests || tests.some((f) => map.preload.includes(f))) return "full";
   return tests;

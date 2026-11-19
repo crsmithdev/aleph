@@ -10,9 +10,9 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..");
 const SKIPPED = /^(node_modules|vendor|\.worktrees|acceptance)\/|\.test\.ts$/;
 
-/** Source files under `dirs` whose text matches `re`, except `owners`. */
-function offenders(re: RegExp, owners: string[], dirs = ["**"]): string[] {
-  return dirs.flatMap((d) => [...new Glob(`${d}/*.ts`).scanSync(ROOT)])
+/** Source files under `dirs` with extension `ext` whose text matches `re`, except `owners`. */
+function offenders(re: RegExp, owners: string[], dirs = ["**"], ext = "ts"): string[] {
+  return dirs.flatMap((d) => [...new Glob(`${d}/*.${ext}`).scanSync(ROOT)])
     .filter((f) => !SKIPPED.test(f) && !owners.includes(f) && re.test(readFileSync(join(ROOT, f), "utf8")))
     .sort();
 }
@@ -65,3 +65,93 @@ test("only lib/frontmatter.ts splits a file's frontmatter by a regex", () => {
 test("only lib/git.ts and skills/refit-code/ spawn git directly", () => {
   expect(offenders(/spawnSync\(\["git"/, ["lib/git.ts"]).filter((f) => !f.startsWith("skills/refit-code/"))).toEqual([]);
 });
+
+// Each owner below keeps one rule for its job; a copy elsewhere skips that rule.
+
+test("only jobs/lib/learning/episode.ts calls episodesDir(): it keeps the file-name rule and the KEEP_DAYS prune", () => {
+  // ui/updater.ts watches the folder as a whole and lists no page.
+  expect(offenders(/\bepisodesDir\(/, ["jobs/lib/learning/episode.ts", "ui/updater.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
+});
+
+test("only lib/errtext.ts writes an error's text, and no file types a catch as any", () => {
+  expect(offenders(/\?\.message \?\? String\(|catch \(\w+: any\)/, ["lib/errtext.ts"], ["{jobs,ui,vault,hooks,lib,issues,herdr}/**"])).toEqual([]);
+});
+
+test("only lib/layout.ts defines factoryDir or names dispatch.log", () => {
+  expect(offenders(/export (?:const|function) factoryDir\b|["'`]dispatch\.log["'`]/, ["lib/layout.ts", "jobs/cli.testkit.ts"], ["{jobs,ui,vault,hooks,lib,issues}/**"])).toEqual([]);
+});
+
+test("only lib/naming.ts builds an issue key", () => {
+  expect(offenders(/`issue\.\$\{/, ["lib/naming.ts", "lib/todo.ts"], ["{jobs,ui,vault,issues,hooks,lib}/**"])).toEqual([]);
+});
+
+test("no file commits into the items repo but through the store", () => {
+  expect(offenders(/commitPaths\(\s*itemsDir\(\)/, [], ["{jobs,ui,vault,hooks,lib,ideas}/**"])).toEqual([]);
+});
+
+test("only lib/store.ts calls itemsDir(), and the files that need the folder itself", () => {
+  // The idea files beside the issues, the media folder a run reads, and the guard that protects the checkout.
+  const reads = ["ideas/ideas.ts", "jobs/lib/roles/intake.ts", "hooks/git-guard.ts"];
+  expect(offenders(/\bitemsDir\(\)/, ["lib/store.ts", ...reads], ["{jobs,ui,vault,hooks,lib,ideas}/**"])).toEqual([]);
+});
+
+test("only lib/jsonl.ts parses a transcript line by line", () => {
+  expect(offenders(/for \(const \w+ of [^)]*split\("\\n"\)\)[\s\S]{0,120}JSON\.parse\(/, [], ["{hooks,skills}/**"])).toEqual([]);
+});
+
+test("only lib/json.ts parses a JSON file it reads: a copy that catches the parse turns a corrupt file into the default", () => {
+  expect(offenders(/JSON\.parse\(\s*readFileSync\(/, ["jobs/lib/land/landing.testkit.ts"], ["{jobs,ui,vault,hooks}/**"])).toEqual([]);
+});
+
+test("no file writes a fixed `${file}.tmp` for a rename: two writers would collide, so writeJson names it by pid", () => {
+  expect(offenders(/\$\{\w+\}\.tmp/, [], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
+});
+
+test("only jobs/lib/infra/process.ts signals a process group: a copy that signals the pid only on a throw leaves a child behind", () => {
+  expect(offenders(/process\.kill\(-/, ["jobs/lib/infra/process.ts"], ["{jobs,ui,vault,hooks}/**"])).toEqual([]);
+});
+
+test("only the store and the issue verbs read or write an issue's fm field: a caller skips the store's rules for that field", () => {
+  expect(offenders(/\b(item|issue|i)\.fm[.[]/, ["lib/store.ts", "lib/todo.ts", "ui/fixtures/review/build.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
+});
+
+test("only jobs/lib/infra/settings.ts reads or writes the settings table; lib/db.ts defines it and lib/jev.ts keeps the judge row", () => {
+  expect(offenders(/\b(get|put)Json(<[^>]*>)?\(\s*"settings"/, ["jobs/lib/infra/settings.ts", "lib/db.ts", "lib/jev.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
+});
+
+test("only jobs/lib/records/status.ts writes or greps a Job: or Issue: trailer", () => {
+  expect(offenders(/[`"'](?:Job|Issue): /, ["jobs/lib/records/status.ts"], ["{jobs,ui,vault,hooks,lib,issues}/**"])).toEqual([]);
+});
+
+test("only lib/usage.ts runs SQL on the usage or openrouter table; lib/db.ts holds their schema", () => {
+  expect(offenders(/\b(FROM|INTO|UPDATE)\s+(usage|openrouter)\b/i, ["lib/usage.ts", "lib/db.ts"], ["{jobs,ui,vault,hooks,lib,ideas,issues}/**"])).toEqual([]);
+});
+
+test("no file filters loadVault to the wiki: it reads archive and daily files it drops", () => {
+  expect(offenders(/wikiNotes\(\s*await loadVault\(/, [])).toEqual([]);
+});
+
+test("vault/lib/index.ts exports recall and not the index handle, which a caller could leak", () => {
+  const text = readFileSync(join(ROOT, "vault/lib/index.ts"), "utf8");
+  expect(text).toMatch(/export function recall\(/);
+  expect(text).not.toMatch(/export function (openIndex|rankNotes)\b/);
+});
+
+test("no view's arrow redirect builds its own address but through moved()", () => {
+  expect(offenders(/export const redirect = \(hash\) =>(?! moved\()/, [], ["ui/views"], "js")).toEqual([]);
+});
+
+test("no ui/views/*.js imports a sibling view, and no ui/views/lib/*.js imports a view", () => {
+  expect(offenders(/from "\.\/(?!lib\/)[^"]+"/, [], ["ui/views"], "js")).toEqual([]);
+  expect(offenders(/from "\.\.\/[\w-]+\.js"/, [], ["ui/views/lib"], "js")).toEqual([]);
+});
+
+for (const [name, re] of Object.entries({
+  closed: /\["done",\s*"dropped"/,
+  priorities: /"low",\s*"medium",\s*"high",\s*"critical"|"critical",\s*"high",\s*"medium",\s*"low"/,
+  sources: /"chris",\s*"worker",\s*"deps",\s*"memory",\s*"agent"/,
+})) {
+  test(`only lib/naming.ts writes out the ${name} list`, () => {
+    expect(offenders(re, [], ["{jobs,ui,issues,hooks}/**"], "{ts,js}")).toEqual([]);
+  });
+}

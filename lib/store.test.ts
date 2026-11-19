@@ -416,6 +416,30 @@ describe("the number of an issue", () => {
   });
 });
 
+describe("writeFiles when two writers race", () => {
+  const origin = () => join(base, "items.git");
+  /** A pre-receive hook that refuses the first `refusals` pushes: the pushes that lose to another writer. */
+  const refuseFirst = (refusals: number) => {
+    const hook = join(origin(), "hooks", "pre-receive");
+    const count = join(base, `refused-${++n}`);
+    writeFileSync(count, "");
+    writeFileSync(hook, `#!/bin/sh\nprintf x >> ${count}\n[ "$(wc -c < ${count})" -le ${refusals} ] && exit 1\nexit 0\n`, { mode: 0o755 });
+    return () => rmSync(hook);
+  };
+
+  test("a push refused four times is retried and the fifth lands the file", () => {
+    const undo = refuseFirst(4);
+    try { store.writeFiles("raced", { "ideas/9001/idea.md": "kept\n" }); } finally { undo(); }
+    expect(sh(base, "git", "--git-dir", origin(), "show", "main:ideas/9001/idea.md")).toBe("kept");
+  });
+
+  test("a push refused five times throws and lands nothing", () => {
+    const undo = refuseFirst(5);
+    try { expect(() => store.writeFiles("lost", { "ideas/9002/idea.md": "lost\n" })).toThrow("push refused 5 times"); } finally { undo(); }
+    expect(Bun.spawnSync(["git", "--git-dir", origin(), "cat-file", "-e", "main:ideas/9002/idea.md"]).exitCode).not.toBe(0);
+  });
+});
+
 describe("every close is logged", () => {
   const closedSince = (before: number) => readEvents().slice(before).filter((e) => e.action === "done" || e.action === "dropped").map((e) => [e.subject, e.action, e.object, e.detail]);
 

@@ -90,17 +90,6 @@ describe("issue verbs without argv", () => {
     expect(issueOps.list(r, { kind: "task" }).map((i) => i.id)).toEqual([r.ids[0]]);
   });
 
-  test("edit parks with the reason as a note and no closed_as, unparks, and add can file parked", async () => {
-    const r = repo([{ title: "a" }]);
-    const [id] = r.ids;
-    expect(issueOps.edit(r, id, { status: "parked" }, "needs more investigation").result.status).toBe("parked");
-    expect(item(r, id).fm.closed_as).toBeUndefined();
-    expect(item(r, id).notes.at(-1)).toContain("needs more investigation");
-    expect(issueOps.edit(r, id, { status: "open" }).result.status).toBe("open");
-    const a = await issueOps.add(r, "filed parked", { status: "parked" }, quiet);
-    expect(issues.status(item(r, a.result.added))).toBe("parked");
-  });
-
   test("the filed event names who filed: Chris, a Claude Code session or a factory agent", async () => {
     const saved = { agent: process.env.ALEPH_AGENT, code: process.env.CLAUDECODE };
     const by = async (env: Record<string, string | undefined>) => {

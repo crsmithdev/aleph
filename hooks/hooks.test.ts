@@ -6,6 +6,9 @@ import { attrs, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "../l
 import { classifyEnvironment, loadDotenv } from "../lib/env.ts";
 import { parseRating } from "./lib/rating.ts";
 import { scanDiff, scanLine } from "./lib/scan.ts";
+import { keepEnv } from "../tests/env.testkit.ts";
+
+keepEnv();
 
 const HOOKS = import.meta.dir;
 

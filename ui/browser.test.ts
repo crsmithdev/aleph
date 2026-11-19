@@ -856,10 +856,15 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
-  test("the font picker, the annotations and the chat mount in the dock and work", async () => {
+  test("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
     await page.width(1200);
     await page.go("#/");
     expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate", "kit-shelf", "kit-chat"]);
+  });
+
+  test("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
+    await page.width(1200);
+    await page.go("#/");
     const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
     await pick("sans", "Inter");
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("'Inter', system-ui, sans-serif");
@@ -868,6 +873,11 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev('document.documentElement.style.getPropertyValue("--chart-scale")')).toBe("1.08");
     await page.ev('document.getElementById("kit-fonts").shadowRoot.querySelector(".reset").click()');
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("");
+  });
+
+  test("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
+    await page.width(1200);
+    await page.go("#/");
     // A click in pick mode opens a note instead of following the link; the saved note shows a pin and the Markdown names it.
     await page.ev('document.getElementById("kit-annotate").shadowRoot.querySelector(".pick").click()');
     const before = await page.ev<string>("location.hash");
@@ -878,10 +888,14 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin").length')).toBe(1);
     await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
     // The note went to the server through `aleph annotation put`, by you.
-    // The server answers once the CLI wrote the file and the updater rebuilt the key; the test waits frames, not time.
+    // The server answers once the CLI wrote the file and the updater rebuilt the key: each change signal is a read.
     const server = () => page.ev<{ id: string; note: string; by: string }[]>('fetch("/api/annotations").then((r) => r.json())');
-    let saved = await server();
-    for (let i = 0; i < 600 && !saved.length; i++) { await page.ev("new Promise((r) => requestAnimationFrame(r))"); saved = await server(); }
+    const saved = await page.ev<{ note: string; by: string }[]>(`new Promise((done) => {
+      const es = new EventSource("/api/events");
+      const read = () => fetch("/api/annotations").then((r) => r.json()).then((n) => { if (n.length) { es.close(); done(n); } });
+      es.onopen = read;
+      es.addEventListener("change", read);
+    })`);
     expect(saved.map((n) => [n.note, n.by])).toEqual([["rename this", "you"]]);
     // An agent's note, added with the CLI, reaches the open page through the change signal, with its own pin.
     const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
@@ -1047,6 +1061,8 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   }, 60_000);
 
   test("Issue: in edit mode the title input fills the width of its heading", async () => {
+    await page.go(await page.ev<string>('fetch("/api/issues").then((r) => r.json()).then((d) => (d.issues ?? d)[0].href)'));
+    await page.when('document.querySelector(".issue-page [data-editor=start]")');
     await page.ev(`document.querySelector(".issue-page [data-editor=start]").click()`);
     await page.when(`document.querySelector(".issue-page.editing .title-edit")?.offsetWidth > 0`);
     const [input, h1] = await page.ev<number[]>(`[document.querySelector(".issue-page .title-edit").offsetWidth, document.querySelector(".issue-page .ph h1").clientWidth]`);
@@ -1078,6 +1094,8 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       return [root.querySelector("#herald .run-now:not([data-job]) .run-title").textContent, ...root.querySelector("#herald .run-now[data-job] .run-dot").getAnimations().filter((a) => a.playState === "running").map((a) => a.animationName)];
     })`);
     expect(ghost).toEqual(["first job", "breathe"]);
+    // The morph drew made-up jobs into #view: leave Status, so the next visit draws its own data.
+    await page.go("#/issues");
   }, 60_000);
 
   /**
@@ -1191,6 +1209,7 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
   afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
   test("the list shows an idea after Jobs in the nav, and the idea page shows its tabs and the newest prior art", async () => {
+    await page.go("#/ideas");
     await page.when('document.querySelector("#view tbody tr")');
     expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historyexploringnew project");
     
@@ -1238,7 +1257,11 @@ describe.skipIf(!chromeUsable)("Ideas", () => {
       await page.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
       await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Renamed idea")');
       expect(await page.ev('document.querySelector("#view tbody tr") === window.row')).toBe(true);
-    } finally { writeFileSync(file, before); }
+    } finally {
+      writeFileSync(file, before);
+      await page.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
+      await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Issue history")');
+    }
     expect(page.errors).toEqual([]);
   }, 60_000);
 
@@ -1336,7 +1359,7 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
 
 describe.skipIf(!chromeUsable)("Explore and Sessions redraw", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/explore"); }, 150_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/explore"); await page.ev(sessions); }, 150_000);
   afterAll(() => rig?.stop());
 
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
@@ -1345,7 +1368,6 @@ describe.skipIf(!chromeUsable)("Explore and Sessions redraw", () => {
     window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
 
   test("a redraw keeps a marked element connected on Explore and on Sessions", async () => {
-    await page.ev(sessions);
     for (const [hash, sel] of [["#/explore", "#eff .tiles"], ["#/sessions", "#ag-live"]]) {
       await page.go(hash);
       await page.when(`document.querySelector("#view ${sel}")`);
@@ -1429,7 +1451,7 @@ describe.skipIf(!chromeUsable)("Resetting the page", () => {
 
   test("a call Chrome never answers fails with the name of the method, and the reset gives a clean page", async () => {
     // Not `expect().rejects`: when its promise never settles, Bun hangs past the test timeout.
-    expect(await page.ev("for (;;) {}").then(() => "", (e: Error) => e.message)).toContain("Runtime.evaluate");
+    expect(await page.ev("for (;;) {}", 500).then(() => "", (e: Error) => e.message)).toContain("Runtime.evaluate");
     await clean();
   }, 30_000);
 });

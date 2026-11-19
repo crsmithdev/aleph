@@ -12,8 +12,9 @@ import { gpuSlot } from "../gates/gpu.ts";
 import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
-beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
-afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; rmSync(dir, { recursive: true, force: true }); });
+// Each test its own database: the models row that setModel writes would reach the next test.
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; process.env.ALEPH_DB = join(dir, "aleph.db"); });
+afterEach(() => { delete process.env.ALEPH_FACTORY_DIR; delete process.env.ALEPH_DB; rmSync(dir, { recursive: true, force: true }); });
 
 test("no setting gives small, medium and large on haiku, sonnet and Opus, and each role model on its default, each enabled", () => {
   expect(readModels()).toEqual({

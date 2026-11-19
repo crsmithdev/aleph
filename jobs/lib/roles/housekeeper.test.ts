@@ -158,7 +158,7 @@ test("a held lock stops both triggers, and a reply with no actions list applies 
   } finally { release(); }
   writeFileSync(join(base, "reply.json"), "not json");
   const [o] = (await housekeep(NOW))!;
-  expect(o.error).toBeDefined();
+  expect(o.error).toBe("the reply has no actions list");
   expect(o.applied).toEqual([]);
   expect(runs().at(-1)!.run.reason).toStartWith("failed:");
 });

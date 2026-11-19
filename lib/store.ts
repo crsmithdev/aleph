@@ -7,7 +7,7 @@
  *
  * It is the Issues module: the predicates (`isBuildable`, `isSorted`, `awaitsChris`), one read of a project's list
  * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`, `writeFiles` for the idea files). Every new issue but the flake tracker
- * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/store-lint.test.ts) or name a path.
+ * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/seams-lint.test.ts) or name a path.
  */
 import * as record from "../jobs/lib/records/record.ts";
 import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "./git.ts";

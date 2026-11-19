@@ -17,6 +17,9 @@ import { newItems } from "../../../tests/projects.testkit.ts";
 import { factoryRepos } from "../../../tests/git.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { decider } from "../gates/decider.ts";
+import { keepEnv } from "../../../tests/env.testkit.ts";
+
+keepEnv();
 
 // The test's clock: the counts and the fixtures read it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

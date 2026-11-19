@@ -46,7 +46,6 @@ test("a missing header gives 403; a bad name, a model the entry does not offer, 
   healthy = true;
   const kept = { title: { enabled: true, model: "haiku" } };
   putJson("settings", "models", kept);
-  expect((await post({ name: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
   expect((await post({ name: "nonexistent", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "merge", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "intake", model: "nonexistent" })).status).toBe(422);

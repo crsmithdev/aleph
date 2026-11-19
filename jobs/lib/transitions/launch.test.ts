@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
-import { CLI, detached } from "./launch.ts";
+import { CLI, detached, runLogged } from "./launch.ts";
 
 async function withFakeSystemdRun(exit: number, body: (dir: string, argvLog: string) => void | Promise<void>) {
   const savedPath = process.env.PATH, savedFg = process.env.ALEPH_JOB_FOREGROUND;
@@ -62,5 +62,29 @@ test("detached logs a failed systemd-run with its stderr", async () => {
   } finally {
     if (savedDir === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = savedDir;
     rmSync(fac, { recursive: true, force: true });
+  }
+});
+
+test("runLogged waits for the verb, appends its output to the log and returns its exit code", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aleph-launch-"));
+  try {
+    const log = join(dir, "logs", "dispatch.log");
+    expect(await runLogged(["help"], log)).toBe(0);
+    expect(await runLogged(["nosuchverb"], log)).toBe(1);
+    const text = readFileSync(log, "utf8");
+    expect(text).toContain("aleph job <repo> <name>");
+    expect(text).toContain("usage: aleph <job|");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runLogged returns null when its log cannot be opened, so the caller can say the dispatch did not start", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "aleph-launch-"));
+  try {
+    writeFileSync(join(dir, "file"), "");
+    expect(await runLogged(["help"], join(dir, "file", "dispatch.log"))).toBeNull();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

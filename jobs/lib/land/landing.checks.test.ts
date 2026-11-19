@@ -53,7 +53,7 @@ test("a land whose change no test reaches runs no test", async () => {
   expect(p.only).toEqual([[TYPES]]);
 });
 
-test("a land whose change is not a module runs no test, or only the critical tests", async () => {
+test("a land whose change is a file no test names runs no test, or only the critical tests", async () => {
   seedTree();
   const { p } = await landed("prose", [["notes.md", "run\n"]], [["b.ts", "export const b = 4;\n"]]);
   expect(p.only).toEqual([[TYPES]]);

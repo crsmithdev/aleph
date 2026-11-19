@@ -6,6 +6,7 @@ import { buildReviewFixture } from "./build.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { askOf } from "../../../jobs/lib/asks/ask.ts";
 import { state } from "../../state.ts";
+import { withEnv } from "../../server.testkit.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT"];
 let saved: Record<string, string | undefined>;
@@ -36,9 +37,8 @@ test("the fixture's tools-34 is stored as an Ask and shows on Status as an escal
 test("the fixture's run events go to its own aleph.db, not to the caller's", () => {
   process.env.ALEPH_FACTORY_DIR = join(dir, "outside");
   buildReviewFixture(join(dir, "fx"));
-  const was = process.env.ALEPH_DB;
   expect(existsSync(join(dir, "fx", "aleph.db"))).toBe(true);
-  process.env.ALEPH_DB = join(dir, "fx", "aleph.db");
-  try { expect(readEvents().some((e) => e.object === "issue.27" && e.action === "question")).toBe(true); } finally { process.env.ALEPH_DB = was; }
+  const off = withEnv({ ALEPH_DB: join(dir, "fx", "aleph.db") });
+  try { expect(readEvents().some((e) => e.object === "issue.27" && e.action === "question")).toBe(true); } finally { off(); }
   expect(process.env.ALEPH_FACTORY_DIR).toBe(join(dir, "outside"));
 });

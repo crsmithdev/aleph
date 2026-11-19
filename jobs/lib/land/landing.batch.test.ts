@@ -44,7 +44,7 @@ test("a land of an issue a red CI started leaves it open and keeps the land's co
 });
 
 test("a batch of three: one check call, one push, three commits, each with its own Job and Issue trailers", async () => {
-  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]], { target: "issue.11" }), queued(job("t2", [["t2.txt", "2\n"]], { target: "issue.12" })), queued(job("t3", [["t3.txt", "3\n"]], { target: "issue.13" }))];
+  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]], { target: "issue.11" }), await queued(job("t2", [["t2.txt", "2\n"]], { target: "issue.12" })), await queued(job("t3", [["t3.txt", "3\n"]], { target: "issue.13" }))];
   const p = ports();
   const r = await land(a, repo, p);
   expect(r).toMatchObject({ code: 0, outcome: { state: "landed" } });
@@ -70,7 +70,7 @@ test("a queued land with a batch verdict in its folder returns that verdict", as
 
 test("a queued land whose job can no longer land stays out of the batch", async () => {
   const leader = job("lead", [["lead.txt", "l\n"]]);
-  const out = queued(job("gone", [["gone.txt", "g\n"]], {}, { state: "failed" }));
+  const out = await queued(job("gone", [["gone.txt", "g\n"]], {}, { state: "failed" }));
   const p = ports();
   await land(leader, repo, p);
   expect(p.calls).toEqual([["lead"]]);
@@ -81,7 +81,7 @@ test("the land asks for as many runs as the batch has room for, and for none whe
   process.env.ALEPH_LAND_BATCH = "3";
   const room: number[] = [];
   const a = job("r1", [["r1.txt", "1\n"]]);
-  const b = queued(job("r2", [["r2.txt", "2\n"]]));
+  const b = await queued(job("r2", [["r2.txt", "2\n"]]));
   await land(a, repo, ports({ room }));
   expect(room).toEqual([1]);
   // The queued run ends when it reads its verdict; a live older land would hold the next one back.
@@ -93,7 +93,7 @@ test("the land asks for as many runs as the batch has room for, and for none whe
 });
 
 test("a run that breaks the check fails with the check's reason; the others land; at most 1 + 2 + 2 checks", async () => {
-  const [a, bad, c] = [job("a", [["a.txt", "a\n"]]), queued(job("bad", [["bad.txt", "b\n"]])), queued(job("c", [["c.txt", "c\n"]]))];
+  const [a, bad, c] = [job("a", [["a.txt", "a\n"]]), await queued(job("bad", [["bad.txt", "b\n"]])), await queued(job("c", [["c.txt", "c\n"]]))];
   const p = ports({ bad: both("a.txt", "bad.txt") });
   const r = await land(a, repo, p);
   expect(r.outcome.state).toBe("landed");
@@ -108,7 +108,7 @@ test("a run that breaks the check fails with the check's reason; the others land
 });
 
 test("a member that failed its checks in attempt 1 is not in the retry after main moved", async () => {
-  const [a, bad, c] = [job("ra", [["ra.txt", "a\n"]]), queued(job("rbad", [["rbad.txt", "b\n"]])), queued(job("rr", [["rr.txt", "r\n"]]))];
+  const [a, bad, c] = [job("ra", [["ra.txt", "a\n"]]), await queued(job("rbad", [["rbad.txt", "b\n"]])), await queued(job("rr", [["rr.txt", "r\n"]]))];
   const p = ports({ bad: both("ra.txt", "rbad.txt"), races: 1 });
   await land(a, repo, p);
   expect(given(bad).verdict.state).toBe("failed");
@@ -121,7 +121,7 @@ test("a member that failed its checks in attempt 1 is not in the retry after mai
 
 test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
   const names = ["tla", "tlbad", "tlr"];
-  const [lead, bad, ...rest] = names.map((n, i) => { const e = job(n, [[`${n}.txt`, "x\n"]]); return i ? queued(e) : e; });
+  const [lead, bad, ...rest] = await Promise.all(names.map((n, i) => { const e = job(n, [[`${n}.txt`, "x\n"]]); return i ? queued(e) : e; }));
   const r = await land(lead, repo, ports({ bad: both(`${names[0]}.txt`, `${names[1]}.txt`), races: 2, raceOn: (n) => n[0] === names[0] && !n.includes(names[1]) }));
   expect(r.outcome.state).toBe("landed");
   expect(given(bad).verdict.state).toBe("failed");
@@ -132,7 +132,7 @@ test("a member that failed in attempt 1 does not take the leader out when main m
 });
 
 test("a batch whose checks give no verdict does not split: each run fails as infra and nothing is pushed", async () => {
-  const [a, b] = [job("n1", [["n1.txt", "1\n"]]), queued(job("n2", [["n2.txt", "2\n"]]))];
+  const [a, b] = [job("n1", [["n1.txt", "1\n"]]), await queued(job("n2", [["n2.txt", "2\n"]]))];
   const p = ports({ stop: { cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out", timedOut: true } });
   const r = await land(a, repo, p);
   expect(r.outcome).toEqual({ state: "failed", cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out" });

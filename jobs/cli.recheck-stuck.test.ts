@@ -43,5 +43,16 @@ describe("a factory run", () => {
       expect(state(l.json.run).state).toBe("landed");
     }, 60_000);
 
+    test("a job whose branch conflicts with main fails the recheck, names the files and leaves the worker's commit", async () => {
+      red();
+      const r = await fjob("rc2", "commit rc2.txt", NOFIX);
+      expect(state(r.json.run).state).toBe("failed");
+      const worker = sh(repo, "git", "rev-parse", "factory/rc2");
+      mend(["rc2.txt", "from main\n"]);
+      const c = await aleph(["recheck", "rc2"], NOFIX);
+      expect(c.code).not.toBe(0);
+      expect(state(c.json.run)).toMatchObject({ role: "recheck", state: "failed", cause: "conflict", reason: "merge conflict: rc2.txt", conflicts: ["rc2.txt"] });
+      expect(sh(repo, "git", "rev-parse", "factory/rc2")).toBe(worker);
+    }, 60_000);
   });
 });

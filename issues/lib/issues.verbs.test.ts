@@ -109,7 +109,7 @@ test("add takes a body of several lines", async () => {
   expect(remoteItem(4)).toContain("---\n\n# Request\n\nWhy it matters.\n\nDone when the gate counts.");
 });
 
-test("park: the reason is a note, closed_as stays unset, list shows parked and --status parked filters", async () => {
+test("park: the reason is a note, closed_as stays unset, list shows parked, --status parked filters, open unparks and add files parked", async () => {
   await add("Needs a look");
   const p = await code(() => verbs.edit(proj(), 4, { status: "parked" }, "needs more investigation"));
   expect(p.code).toBe(0);
@@ -119,6 +119,9 @@ test("park: the reason is a note, closed_as stays unset, list shows parked and -
   const ids = (o: { status?: string } = {}) => list(o).map((r: any) => r.id);
   expect(ids()).toEqual([3, 4]);
   expect(ids({ status: "parked" })).toEqual([4]);
+  expect(verbs.edit(proj(), 4, { status: "open" }).result.status).toBe("open");
+  const a = await add("Filed parked", { status: "parked" });
+  expect(show(a.result.added).status).toBe("parked");
 });
 
 test("lint refuses a labels field and a waiting_on field and names the item", async () => {

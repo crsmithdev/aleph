@@ -25,6 +25,7 @@ function seed(dir: string): void {
     "lib/c.ts": "export {};\n",
     "lib/c.test.ts": `import "./c.ts";\n`,
     "fixture.json": "{}\n",
+    "lib/fixture.test.ts": `readFileSync("fixture.json");\n`,
     "tools/run.ts": "export {};\n",
     "lib/joined.test.ts": `Bun.spawn(["bun", join(import.meta.dir, "..", "tools", "run.ts")]);\n`,
     "bunfig.toml": `[test]\npreload = ["./tests/preload.ts"]\n`,
@@ -54,8 +55,8 @@ test("a test file that is a target is related to itself", () => {
   expect(testsOf(importMap(dir, commit), ["lib/c.test.ts"], TESTS)).toEqual(["lib/c.test.ts"]);
 });
 
-test("a target that is not a module, or is not in the tree, gives null", () => {
-  expect(testsOf(importMap(dir, commit), ["fixture.json"], TESTS)).toBeNull();
+test("a file that is not a module reaches the tests that name it, and a target not in the tree gives null", () => {
+  expect(testsOf(importMap(dir, commit), ["fixture.json"], TESTS)).toEqual(["lib/fixture.test.ts"]);
   expect(testsOf(importMap(dir, commit), ["lib/gone.ts"], TESTS)).toBeNull();
 });
 
@@ -64,10 +65,10 @@ test("a path that join(import.meta.dir, ...) writes in parts is a dependency, an
   expect(importMap(dir, commit).preload).toEqual(["tests/preload.ts"]);
 });
 
-/** a.ts <- b.ts <- b.test.ts; c.ts <- c.test.ts; p.ts <- preload.ts. */
+/** a.ts <- b.ts <- b.test.ts; c.ts <- c.test.ts; notes.md <- c.test.ts; p.ts <- preload.ts. */
 const MAP: ImportMap = {
-  files: new Set(["a.ts", "b.ts", "b.test.ts", "c.ts", "c.test.ts", "p.ts", "preload.ts", "lone.ts"]),
-  dependents: new Map([["a.ts", new Set(["b.ts"])], ["b.ts", new Set(["b.test.ts"])], ["c.ts", new Set(["c.test.ts"])], ["p.ts", new Set(["preload.ts"])]]),
+  files: new Set(["a.ts", "b.ts", "b.test.ts", "c.ts", "c.test.ts", "p.ts", "preload.ts", "lone.ts", "notes.md", "readme.md"]),
+  dependents: new Map([["a.ts", new Set(["b.ts"])], ["b.ts", new Set(["b.test.ts"])], ["c.ts", new Set(["c.test.ts"])], ["notes.md", new Set(["c.test.ts"])], ["p.ts", new Set(["preload.ts"])]]),
   preload: ["preload.ts"],
 };
 
@@ -76,7 +77,9 @@ test.each([
   ["a changed test file is in the list", ["c.test.ts", "a.ts"], ["b.test.ts", "c.test.ts"]],
   ["a removed test file drops out", ["gone.test.ts", "c.ts"], ["c.test.ts"]],
   ["a module that no test reaches gives no tests", ["lone.ts"], []],
-  ["a change of only files that are not modules gives no tests", ["notes.md"], []],
+  ["a change of only files that are not modules gives the tests that name them", ["notes.md"], ["c.test.ts"]],
+  ["a file that is not a module and that no test names gives no tests", ["readme.md"], []],
+  ["a removed file that is not a module gives the full suite", ["gone.md"], "full"],
   ["a file that is not a module beside a module gives the full suite", ["a.ts", "package.json"], "full"],
   ["bunfig.toml gives the full suite", ["bunfig.toml"], "full"],
   ["a removed module gives the full suite", ["gone.ts"], "full"],
@@ -91,7 +94,7 @@ test("buildChecks narrows only a bun test check, drops it when no test is reache
   const narrow = buildChecks(repo, commit, ["lib/c.ts"]);
   expect(narrow.checks.map((c) => c.run)).toEqual(["bun run test './lib/c.test.ts'", "bun test app", "bunx tsc"]);
   expect([...narrow.tests]).toEqual([["tests", ["lib/c.test.ts"]]]);
-  expect(buildChecks(repo, commit, ["tools/none.md"]).checks.map((c) => c.run)).toEqual(["bun test app", "bunx tsc"]);
+  expect(buildChecks(repo, commit, ["fixture.json"]).checks.map((c) => c.run)).toEqual(["bun run test './lib/fixture.test.ts'", "bun test app", "bunx tsc"]);
   expect(buildChecks(repo, commit, ["lib/p.ts"]).checks.map((c) => c.run)).toEqual(["bun run test", "bun test app", "bunx tsc"]);
   const none = buildChecks({ ...repo, checks: [{ name: "tests", run: "bun test" }] } as Repo, commit, ["lib/lone.ts"]);
   expect(none.checks).toEqual([]);
@@ -102,5 +105,5 @@ test("buildChecks adds the critical test files, also to a check that no test of 
   const repo = { path: dir, checks: [{ name: "tests", run: "bun test" }] } as unknown as Repo;
   expect(buildChecks(repo, commit, ["lib/c.ts"], ["ui/*.test.ts"]).checks.map((c) => c.run)).toEqual(["bun test './lib/c.test.ts' './ui/cli.test.ts'"]);
   expect([...buildChecks(repo, commit, ["lib/lone.ts"], ["ui/*.test.ts"]).tests]).toEqual([["tests", ["ui/cli.test.ts"]]]);
-  expect(buildChecks(repo, commit, ["fixture.json"], ["ui/*.test.ts"]).checks.map((c) => c.run)).toEqual(["bun test './ui/cli.test.ts'"]);
+  expect(buildChecks(repo, commit, ["fixture.json"], ["ui/*.test.ts"]).checks.map((c) => c.run)).toEqual(["bun test './lib/fixture.test.ts' './ui/cli.test.ts'"]);
 });
