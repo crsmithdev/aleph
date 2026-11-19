@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asks, stuckBlocker } from "./asks.ts";
+import { asks, errorBlocker } from "./asks.ts";
 import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Lesson } from "../jobs/lib/learning/corrections.ts";
 import { withEnv } from "./server.testkit.ts";
@@ -202,24 +202,24 @@ describe("asks", () => {
   });
 });
 
-describe("stuck rows", () => {
-  const stuck = run("held-path", { state: "failed", reason: "no commit" });
+describe("errored rows", () => {
+  const errored = run("held-path", { state: "failed", reason: "no commit" });
   const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
   test("an item waiting on an open issue gets its id and title", () => {
-    const b = stuckBlocker(stuck, "aleph-12", open);
+    const b = errorBlocker(errored, "aleph-12", open);
     expect(b).toEqual({ id: "aleph-12", title: "Land the base", href: "#/issues/aleph/12" });
   });
   test("a last run that names an open issue is the blocker", () => {
-    expect(stuckBlocker({ ...stuck, reason: "needs aleph-12 to land first" }, undefined, open)?.id).toBe("aleph-12");
+    expect(errorBlocker({ ...errored, reason: "needs aleph-12 to land first" }, undefined, open)?.id).toBe("aleph-12");
   });
   test("no open blocker gives null", () => {
-    expect(stuckBlocker(stuck, "aleph-99", open)).toBeNull();
-    expect(stuckBlocker({ ...stuck, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
+    expect(errorBlocker(errored, "aleph-99", open)).toBeNull();
+    expect(errorBlocker({ ...errored, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
   });
   test("a reason that names an open issue's sub-issue is the blocker; one that holds only a sha is not", () => {
     const part = new Map([["aleph-12.3", { title: "Land the base", href: "#/issues/aleph/12.3" }]]);
-    expect(stuckBlocker({ ...stuck, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
-    expect(stuckBlocker({ ...stuck, reason: "the fix is in a143077" }, undefined, part)).toBeNull();
+    expect(errorBlocker({ ...errored, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
+    expect(errorBlocker({ ...errored, reason: "the fix is in a143077" }, undefined, part)).toBeNull();
   });
 });
 

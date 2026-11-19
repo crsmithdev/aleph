@@ -13,7 +13,7 @@ import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clock } from "./lib/format.js";
 
-const calm = { ...withFactory({}), asks: [], stuck: [] };
+const calm = { ...withFactory({}), asks: [], errored: [] };
 test("the Pipeline card shows the 6 stages in order, each a ring of runs per issue in its health tone with its p90 time, and no other role", () => {
   const rows = [
     { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10 },
@@ -64,7 +64,7 @@ test("a Pipeline stage with an unusable run links its failed share to the unusab
 
 test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
-  const h = view.renderHerald({ ...calm, asks: [ask], stuck: [], running: [], runningIssues: [], done: [], queued: [] });
+  const h = view.renderHerald({ ...calm, asks: [ask], errored: [], running: [], runningIssues: [], done: [], queued: [] });
   expect(h).toContain('<h2 id="h-herald">Herald</h2>');
   expect(h).toContain('<span class="badge need">Not OK</span>');
   expect(h).toContain('id="awaiting"');

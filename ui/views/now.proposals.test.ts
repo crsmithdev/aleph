@@ -22,7 +22,7 @@ import { writeRepos } from "../../tests/projects.testkit.ts";
 test("the lede says proposals need your attention", () => {
   // A proposal reaches Chris once the director wrote its case text.
   const sent = { ...prop, situation: "The memory proposes a check." };
-  const s = { ...state, asks: asksOf([], [], [sent]), stuck: [], factory: { ...state.factory, health: [] } };
+  const s = { ...state, asks: asksOf([], [], [sent]), errored: [], factory: { ...state.factory, health: [] } };
   expect(view.renderLede(s)).toContain("<a href=\"#awaiting\">Attention is needed</a>.");
   expect(view.renderLede(s)).not.toMatch(/\byour?\b/i);
   expect(view.renderLede({ ...s, asks: asksOf([], [], [sent, sent]) })).toContain("Attention is needed");

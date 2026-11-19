@@ -229,10 +229,10 @@ main { min-width: 0; }
 .rows { display: grid; gap: var(--sp-8); }
 .issue-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-14); padding: var(--sp-8) var(--sp-12); border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--surface); }
 .issue-row.held, .issue-row.decide { border-color: var(--need); }
-.issue-row.stuck, .issue-row.error { border-color: var(--error); }
+.issue-row.error { border-color: var(--error); }
 .issue-row .verb { font-weight: var(--fw-strong); }
 .issue-row.held .verb, .issue-row.decide .verb { color: var(--need); }
-.issue-row.stuck .verb, .issue-row.error .verb { color: var(--error); }
+.issue-row.error .verb { color: var(--error); }
 .issue-row .id { font: var(--fw-mid) var(--fs-xs) var(--mono); color: var(--muted); }
 .issue-row .actions { margin-top: 0; align-items: center; }
 .issue-row .decision { flex: 1 1 100%; font-size: var(--fs-sm); max-width: var(--measure); }

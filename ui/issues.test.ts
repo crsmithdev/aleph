@@ -874,7 +874,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
 
 describe("POST /api/issues/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "stuck triage", { request: "x" }); setAsk(refIn(i), { reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
+  const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "errored triage", { request: "x" }); setAsk(refIn(i), { reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
   for (const [verb, argv] of [["retriage", ["issue", "note", "--", "fac", "N", "Chris: run intake again"]], ["rerun", ["issue", "decide", "--", "fac", "N", "Chris: run it again"]]] as const) {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {

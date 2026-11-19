@@ -9,7 +9,7 @@ import { asksOf, withAttn, issue, full, rows, problem, prop } from "../now.testk
 afterEach(() => setCodes({}));
 
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
-  const s = { ...full, asks: [], stuck: [], factory: { ...full.factory, health: [], paused: false } };
+  const s = { ...full, asks: [], errored: [], factory: { ...full.factory, health: [], paused: false } };
   expect(rows(withAttn(s)).length).toBe(0);
   expect(view.renderLede(s)).not.toContain("Awaiting");
   expect(view.renderLede(s)).not.toContain("triage");
@@ -17,7 +17,7 @@ test("issues that wait for triage are not rows and not in the status line: triag
 
 test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Drop the issue", () => {
   const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, ask: { reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, ask: { reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]), errored: [], issues: [], factory: { ...state.factory, health: [] } };
   const [row] = rows(withAttn(s));
   expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
@@ -48,17 +48,17 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
 test("the deny and answer inputs render hidden", () => {
   for (const reason of ["question"]) {
     const sm = sample(reason);
-    const row = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: attend(sm, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
+    const row = withAttn({ ...state, errored: [], factory: { ...state.factory, health: [] }, asks: attend(sm, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
     const inputs = row.match(/<input [^>]*>/g) ?? [];
     expect(inputs.length).toBeGreaterThan(0);
     for (const i of inputs) expect(i).toMatch(/\shidden/);
   }
 });
 
-/** The one stuck card of a state whose only stuck job is `j`. */
-const stuckCard = (j: object): string => {
-  const s = { ...state, asks: [], stuck: [job(j)], factory: { ...state.factory, health: [] } };
-  return withAttn(s).match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
+/** The one errored card of a state whose only errored job is `j`. */
+const errorCard = (j: object): string => {
+  const s = { ...state, asks: [], errored: [job(j)], factory: { ...state.factory, health: [] } };
+  return withAttn(s).match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
 };
 /** The card's HTML outside its one Details fold, and that fold. */
 const outsideDetails = (card: string): [string, string] => {
@@ -67,38 +67,38 @@ const outsideDetails = (card: string): [string, string] => {
 };
 
 test("a failed job's situation line is a sentence of its cause, and its reason sentence moves into Details", () => {
-  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "timeout", limit: 2400, reason: "The worker timed out. Last message: hi" });
+  const card = errorCard({ name: "aleph-30", state: "failed", cause: "timeout", limit: 2400, reason: "The worker timed out. Last message: hi" });
   expect(problem(card)).toBe("The worker ran past its 40-minute time box and was stopped.");
-  expect(problem(stuckCard({ name: "aleph-31", state: "failed", cause: "stalled", limit: 600, reason: "stalled" }))).toBe("The worker gave no output for 10 minutes and was stopped.");
+  expect(problem(errorCard({ name: "aleph-31", state: "failed", cause: "stalled", limit: 600, reason: "stalled" }))).toBe("The worker gave no output for 10 minutes and was stopped.");
   expect(card).not.toContain("Failed with");
   const [, inside] = outsideDetails(card);
   expect(inside).toContain("Last message: hi");
 });
 
-test("a stuck job whose cause is a failed check names that check in its situation line, as the news lines do", () => {
-  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "check", checkName: "tests", reason: "tests failed" });
+test("an errored job whose cause is a failed check names that check in its situation line, as the news lines do", () => {
+  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", checkName: "tests", reason: "tests failed" });
   expect(problem(card)).toBe("The check tests failed.");
   // No name on the run: the line says a check failed.
-  expect(problem(stuckCard({ name: "aleph-31", state: "failed", cause: "check", reason: "a check failed" }))).toBe("A check failed.");
+  expect(problem(errorCard({ name: "aleph-31", state: "failed", cause: "check", reason: "a check failed" }))).toBe("A check failed.");
 });
 
-test("every stuck card's situation line is a sentence, not the bare state and cause words", () => {
-  const line = (cause?: string) => problem(stuckCard({ name: "aleph-30", state: "failed", cause, reason: "worker exited 1" }));
+test("every errored card's situation line is a sentence, not the bare state and cause words", () => {
+  const line = (cause?: string) => problem(errorCard({ name: "aleph-30", state: "failed", cause, reason: "worker exited 1" }));
   expect(line("no-commit")).toBe("The worker made no commit.");
   expect(line("conflict")).toBe("The branch has a merge conflict with main.");
   expect(line("other")).toBe("The run failed.");
   expect(line()).toBe("The run failed.");
 });
 
-test("a stuck job with no blocker shows the Re-check hint that says it runs the checks and starts no worker", () => {
-  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed" });
+test("an errored job with no blocker shows the Re-check hint that says it runs the checks and starts no worker", () => {
+  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed" });
   expect(card).toContain("Runs the job&#39;s checks again; starts no worker.");
   expect(card).not.toContain("Runs the job again.");
 });
 
-test("a stuck job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
+test("an errored job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
   setCodes({ aleph: "a" });
-  const card = stuckCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },
+  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },
     blocker: { id: "aleph-9", title: "Old work", href: "#/issues/aleph/9" } });
   expect(problem(card)).toBe("after a9");
   expect(card).not.toContain("Waits on");
@@ -107,11 +107,12 @@ test("a stuck job with a blocker shows the hold action and the blocker id, and t
   expect(inside).toContain("Old work");
 });
 
-test("an ask and a stuck run are one Alerts section, and the stuck card has the Ask card structure in the red tone", () => {
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), stuck: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
+test("an ask and an errored run are one Alerts section, and the errored card has the Ask card structure in the red tone", () => {
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), errored: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
   const h = withAttn(s);
-  expect(h).not.toContain("Stuck or failed");
-  const stuck = h.match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
-  expect(stuck).toContain('data-card="unstick"');
-  expect(stuck).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
+  expect(h).not.toContain("Errored or failed");
+  const errored = h.match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
+  expect(errored).toContain('<b class="ask-kind">Error:</b>');
+  expect(errored).toContain('data-card="unstick"');
+  expect(errored).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
 });

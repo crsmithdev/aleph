@@ -68,7 +68,7 @@ export function data(s: State, d: Flow) {
     pipeline: pipeline(d),
     active: (d.active ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, running: b.running, landed: b.landed })),
     asks: (s.asks ?? []).map((a) => ({ label: a.label, id: shownId(a.id, a.repo), title: shortText(a.headline || a.title) })),
-    stuck: (s.stuck ?? []).map((j) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
+    errored: (s.errored ?? []).map((j) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
     running: [
       ...(s.runningIssues ?? []).map((i) => ({ at: clock(i.at ?? i.since) || when(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
       ...(s.running ?? []).map((j) => {
@@ -103,7 +103,7 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
 
   head("Herald");
   for (const a of s.asks ?? []) line(`${a.label} ${shownId(a.id, a.repo)} ${shortText(a.headline || a.title)}`);
-  for (const j of s.stuck ?? []) line(`Stuck ${shownId(j.name)} ${j.item?.title || j.name}`);
+  for (const j of s.errored ?? []) line(`Error ${shownId(j.name)} ${j.item?.title || j.name}`);
   for (const i of s.runningIssues ?? []) line(`${clock(i.at ?? i.since) || when(i.at ?? i.since)} ${i.stage} ${shownId(i.id)} ${i.title}`);
   for (const j of s.running ?? []) {
     const run = j.run ?? { kind: "build", started: j.started };

@@ -18,7 +18,7 @@ import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
 import { chats, type Chat } from "./api/chat.ts";
 import type { Context as HeraldContext } from "./herald.ts";
-import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
+import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
 import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/todo.ts";
 import { summary, type Wk } from "./usage.ts";
@@ -106,7 +106,7 @@ export interface Job {
   stat?: string;
   /** A live run exists for this job: a next run or a rerun. */
   agent?: boolean;
-  /** Running, stuck: the part this job works on, "n/m" of its parent. */
+  /** Running, errored: the part this job works on, "n/m" of its parent. */
   part?: Part;
   /** Awaiting: what the run asks of Chris, and why. */
   ask?: Ask;
@@ -121,13 +121,13 @@ export interface Job {
   trailers?: { key: string; value: string }[];
   /** An intake or triage run: its verdict as `build`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
   outcome?: string;
-  /** Stuck: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
+  /** Error: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
   blocker?: Blocker;
-  /** Stuck or failed: why its last run stopped, the sub word the card shows beside its state. */
+  /** Errored or failed: why its last run stopped, the sub word the card shows beside its state. */
   cause?: Cause;
-  /** Stuck or failed: the check that stopped its last run, when a check did; the card's line names it after the cause. */
+  /** Errored or failed: the check that stopped its last run, when a check did; the card's line names it after the cause. */
   checkName?: string;
-  /** Stuck or failed by a time box or a stall: its length in seconds. */
+  /** Errored or failed by a time box or a stall: its length in seconds. */
   limit?: number;
 }
 
@@ -191,7 +191,7 @@ export interface State {
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
     monitor: ReturnType<typeof monitorPanel>;
   };
-  stuck: Job[]; running: Job[];
+  errored: Job[]; running: Job[];
   /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its card and reason. */
   asks: AskItem[];
   /** Queued and blocked issues (and old items): the Queued lane. */
@@ -282,7 +282,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "model", "size", "checkName"] as const) if (v[k] !== undefined) job[k] = v[k];
-    // A stuck or failed job's card shows the word of what stopped its last run, and the failed check's name.
+    // An errored or failed job's card shows the word of what stopped its last run, and the failed check's name.
     if (v.cause) job.cause = v.cause;
     if (v.limit !== undefined) job.limit = v.limit;
     if (v.cost !== undefined) job.cost = v.cost;
@@ -329,9 +329,9 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
 
 type Projector = ReturnType<typeof jobProjector>;
 
-/** The needs, stuck and running job cards: one pass over the jobs, then the dropped issues' cards, the live agents, the blockers and the parts. */
+/** The needs, errored and running job cards: one pass over the jobs, then the dropped issues' cards, the live agents, the blockers and the parts. */
 function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }: Projector, partOf: Map<string, Part>) {
-  const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
+  const needs: Job[] = [], errored: Job[] = [], running: Job[] = [];
   const issueStatus = (j: Job) => { const it = j.item !== null ? lists.item(j.repo, j.item.id) : undefined; return it && status(it); };
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
   for (const runs of jobs) {
@@ -349,8 +349,8 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
     if (isOpen(runs)) {
       const real = counting(runs).run;
       if (isWaiting(real.state)) needs.push(toJob(runs));
-      // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not stuck.
-      else if (isError(real)) stuck.push(toJob(runs));
+      // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not errored.
+      else if (isError(real)) errored.push(toJob(runs));
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);
@@ -364,11 +364,11 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
     }
   }
 
-  // A dropped issue holds no Ask and no stuck run.
+  // A dropped issue holds no Ask and no errored run.
   const droppedJob = (j: Job) => issueStatus(j) === "dropped";
-  for (const list of [needs, stuck]) list.splice(0, list.length, ...list.filter((j) => !droppedJob(j)));
+  for (const list of [needs, errored]) list.splice(0, list.length, ...list.filter((j) => !droppedJob(j)));
 
-  for (const j of [...needs, ...stuck]) {
+  for (const j of [...needs, ...errored]) {
     const todo = j.item?.id;
     j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}-${todo}`));
   }
@@ -383,12 +383,12 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
       if (after.length) waitsOf.set(id, after[0]);
     }
   }
-  for (const j of stuck) {
-    const b = stuckBlocker(j, j.item ? waitsOf.get(`${j.repo}-${j.item.id}`) : undefined, openById);
+  for (const j of errored) {
+    const b = errorBlocker(j, j.item ? waitsOf.get(`${j.repo}-${j.item.id}`) : undefined, openById);
     if (b) j.blocker = b;
   }
-  for (const j of [...running, ...stuck, ...needs]) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
-  return { needs, stuck, running };
+  for (const j of [...running, ...errored, ...needs]) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
+  return { needs, errored, running };
 }
 
 /** The part of each part: "n/m" and its parent, by `repo-ref`. */
@@ -481,7 +481,7 @@ export function state(now = new Date(), withChats = true): State {
   const jobs = allJobs();
   const projector = jobProjector(registry, jobs);
   const partOf = partsByKey(registry, projector);
-  const { needs, stuck, running } = jobCards(jobs, registry, projector, partOf);
+  const { needs, errored, running } = jobCards(jobs, registry, projector, partOf);
   const slots = slotsOf(registry, projector, partOf), picks = pickups(jobs);
   const awaitingItems = awaitingOf(slots, picks);
   const { done, doneStamps } = doneOf(slots, picks, projector);
@@ -489,7 +489,7 @@ export function state(now = new Date(), withChats = true): State {
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingItems });
   const timers = tickTimer();
-  const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, stuck, asks: att.items, usage: summary(now.getTime()) });
+  const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, errored, asks: att.items, usage: summary(now.getTime()) });
   recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const events = heraldEvents(now.getTime());
   return {
@@ -497,7 +497,7 @@ export function state(now = new Date(), withChats = true): State {
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
     herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists), chats: withChats ? chats(now.getTime() - 86_400_000) : [] },
     asks: att.items, done, doneStamps,
-    stuck, running, runningIssues: runningIssuesOf(slots, picks),
+    errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),
   };
 }

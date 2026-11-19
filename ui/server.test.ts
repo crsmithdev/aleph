@@ -45,7 +45,7 @@ test("/api/factory?project= keeps only that project's jobs", async () => {
   expect(all.running.map((j: any) => j.name).sort()).toEqual(["issue.1", "issue.2"]);
   const other: any = await (await at("/api/factory?project=other")).json();
   expect(other.running.map((j: any) => j.name)).toEqual(["issue.2"]);
-  for (const k of ["stuck", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
+  for (const k of ["errored", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
 });
 
 test("/api/factory carries the asks and no Done count; /api/automation carries no asks and no factory block", async () => {

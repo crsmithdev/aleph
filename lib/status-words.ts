@@ -36,7 +36,7 @@ const ALERTS = [
   ["red-ci", "GitHub CI is broken"],
   ["red-main", "the build is failing on main"],
   ["tick", TICK_STOPPED],
-  // No line says this one: a stuck job adds it. It is here for its rank.
+  // No line says this one: an errored job adds it. It is here for its rank.
   ["jobs", JOBS_UNHEALTHY],
   ["lands-stalled", "lands are stalled"],
   ["queue-stalled", "queued jobs are not starting"],
@@ -48,7 +48,7 @@ const rank = (t: string) => { const k = ALERTS.findIndex(([, said]) => said === 
 export interface Facts {
   now: string;
   factory: { paused: boolean; nextTick?: string | null; tickInProgress?: boolean; health?: { text: string; kind: string; key?: string }[] };
-  stuck: unknown[];
+  errored: unknown[];
   /** An Ask with `escalated: false` is still with the director. */
   asks?: { escalated?: boolean }[];
   usage?: { now?: { seven_day?: number } | null } | null;
@@ -93,10 +93,10 @@ function errorLines(s: Facts): ErrorLine[] {
 export function verdict(s: Facts, stale = false): Verdict {
   const f = s.factory, errors = errorLines(s);
   const alerts = new Set(errors.map((l) => ALERTS.find(([key]) => key === l.key)?.[1] ?? l.text.replace(/\.$/, "")));
-  if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
+  if (s.errored.length) alerts.add(JOBS_UNHEALTHY);
   // Last, so it sorts after the factory's alerts.
   if (s.flow?.error) alerts.add(FLOW_FAILED);
-  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-stuck" : t === FLOW_FAILED ? "" : "#awaiting" }));
+  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-error" : t === FLOW_FAILED ? "" : "#awaiting" }));
   // An Ask still with the director does not need Chris yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#awaiting" });

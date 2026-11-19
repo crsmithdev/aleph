@@ -158,14 +158,14 @@ export function renderHerald(s, st = page) {
   const cur = verdict(s, st.stale);
   // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks).map((i) => askCard(i, s.now));
-  const stuck = (s.stuck ?? []).map(stuckRow(s));
+  const errored = (s.errored ?? []).map(errorRow(s));
   const errors = cur.errors.length;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
-  const sticky = asks.length + stuck.length > 0
+  const sticky = asks.length + errored.length > 0
     ? `<section id="needs" class="needs herald-sticky" aria-label="Alerts">` +
         group("awaiting", asks.length, asks.join(""), list) +
-        group("jobs-stuck", stuck.length, stuck.join(""), list) +
+        group("jobs-error", errored.length, errored.join(""), list) +
       `</section>`
     : "";
 
@@ -192,8 +192,8 @@ export function renderHerald(s, st = page) {
   const rows = [...status, ...chats, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
-  // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
-  const badgeHtml = asks.length + stuck.length + errors > 0 ? tag("Not OK", tone(stuck.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
+  // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
+  const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
 
   return card("Herald", `${sticky}${runNow(s)}<div class="herald-show">${["work", "factory"].map((k) => `<label><input type="checkbox" name="show" value="${k}"${show[k] ? " checked" : ""}> ${k === "work" ? "Work" : "Factory"}</label>`).join("")}</div><div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }
@@ -285,7 +285,7 @@ const list = (html) => `<div class="list">${html}</div>`;
 /** The one folded "Technical details" of an Issues row; `key` keeps it open across refreshes. */
 const more = (key, body) => fold("Technical details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${key}` });
 
-/** The details of a held or stuck job: everything the row's one sentence leaves out. */
+/** The details of a held or errored job: everything the row's one sentence leaves out. */
 function details(s, j, extra = "") {
   const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
     facts([["Started", esc(when(j.started, new Date(s.now)))], ["Phase", esc(j.phase)], ["Cost", j.cost !== undefined && costHtml(j.cost, j.wk)], ["Model", j.model && esc(shortModel(j.model))], ...checkFacts(j)]) +
@@ -303,19 +303,19 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
 
 
-/** The agent line of a held or stuck job: a live run exists for it. */
+/** The agent line of a held or errored job: a live run exists for it. */
 const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
 /** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Technical details behind it. */
-/** The one Technical details behind a stuck row: the blocker, the whole reason, then the job's details. */
+/** The one Technical details behind an errored row: the blocker, the whole reason, then the job's details. */
 const jobDetails = (s, j) => details(s, j,
   (j.blocker ? `<p class="quiet q">Blocker ${idLink(j.blocker.id, j.blocker.href)}: ${esc(j.blocker.title)}</p>` : "") +
   (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
 
-/** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
-const alertCard = (kind, key, meta, title, problem, body = "") =>
-  askShell(kind, `data-annotate="${esc(shortId(key))}" data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
-/** One plain sentence of what went wrong for a stuck job, from its cause; a time box or a stall takes its length from `limit`, in seconds. */
-const stuckSentence = (j) => {
+/** An error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
+const alertCard = (key, meta, title, problem, body = "") =>
+  askShell("error", `data-annotate="${esc(shortId(key))}" data-kind="error" data-card="unstick"`, key, meta, "Error", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
+/** One plain sentence of what went wrong for an errored job, from its cause; a time box or a stall takes its length from `limit`, in seconds. */
+const errorSentence = (j) => {
   const span = j.limit ? (j.limit % 60 === 0 ? [j.limit / 60, "minute"] : [j.limit, "second"]) : null;
   const check = j.checkName ? `The check ${j.checkName}` : "A check";
   return {
@@ -332,16 +332,16 @@ const stuckSentence = (j) => {
     unanswered: "The agent ended without an answer.",
   }[j.cause] ?? (j.state === "failed" ? "The run failed." : "The run stopped.");
 };
-const stuckRow = (s) => (j) => {
+const errorRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && shortText(b.id);
-  const hold = b ? holdLine({ action: "after", detail: b.id }) : stuckSentence(j);
+  const hold = b ? holdLine({ action: "after", detail: b.id }) : errorSentence(j);
   const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j.id), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
-  return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job's checks again; starts no worker.")}${opt(actButton("Drop", { act: "drop", name: j.name, path: job("drop"), confirm: "1", label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+  return alertCard(j.name, meta, j.item?.title || j.name, hold,
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the errored job; nothing starts until ${blocker} lands.` : "Runs the job's checks again; starts no worker.")}${opt(actButton("Drop", { act: "drop", name: j.name, path: job("drop"), confirm: "1", label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     agentLine(j) + jobDetails(s, j));
 };
 

@@ -143,7 +143,7 @@ test("the outcome bar sits between the scorecard and the panels and fills once m
 
 test("the Status page titles a sub-issue link, with no goal and no Part", () => {
   const part = { n: 2, m: 3, parent: "Issue 1", href: "#/issues/aleph/1.2" };
-  const page = view.view.render({ ...full, usage: USAGE, stuck: full.stuck.map((j: any) => ({ ...j, part })) }, {}, new URLSearchParams()) as string;
+  const page = view.view.render({ ...full, usage: USAGE, errored: full.errored.map((j: any) => ({ ...j, part })) }, {}, new URLSearchParams()) as string;
   expect(page).toContain('title="Sub-issue 2 of 3 of Issue 1"');
   expect(page).toContain("Discards the job&#39;s branch; the issue stays open.");
   const text = page.replace(/<[^>]*>/g, "");
@@ -167,8 +167,8 @@ test("a failed flow load shows error() in the Agent Time card", () => {
   expect(bad.slice(bad.indexOf('id="outcome"'), bad.indexOf('id="pipeline"'))).toContain(error("x"));
 });
 
-test("a stuck job's fold reads Technical details, and its blocker is an idLink", () => {
-  const h = view.renderHerald({ ...full, asks: [], stuck: [job({ name: "aleph-30", state: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
+test("an errored job's fold reads Technical details, and its blocker is an idLink", () => {
+  const h = view.renderHerald({ ...full, asks: [], errored: [job({ name: "aleph-30", state: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
   expect(h).toContain("<summary>Technical details</summary>");
   expect(h).not.toContain("<summary>Details</summary>");
   expect(h).toContain('Blocker <a class="idl" href="#/issues/aleph/7">aleph-7</a>: Open work');

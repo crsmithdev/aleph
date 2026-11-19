@@ -136,9 +136,9 @@ test("an Ask still with the director shows its title and fixed text, and no butt
   expect(row).not.toContain("<button");
 });
 
-test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of a stuck card", () => {
-  const stuck = withAttn({ asks: [], running: [], runningIssues: [], stuck: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
-  for (const row of [askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
+test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of an errored card", () => {
+  const errored = withAttn({ asks: [], running: [], runningIssues: [], errored: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
+  for (const row of [askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), errored]) {
     const [before, box] = row.split('<div class="ask-box">');
     expect(before).not.toContain('class="ih"');
     const head = box.slice(0, box.indexOf("<details"));
@@ -176,7 +176,7 @@ test("the reason box is an inputBox() with its attributes and the reason kept in
 });
 
 test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {
-  const [a, b] = four(), s = { ...withFactory({}), asks: [a, b], stuck: [] };
+  const [a, b] = four(), s = { ...withFactory({}), asks: [a, b], errored: [] };
   const draw = (state: object, at = 2) => { startDraw(); const h = view.renderHerald(state); endDraw(at); return h; };
   decided.set(a.id, 1);
   const h = draw(s);

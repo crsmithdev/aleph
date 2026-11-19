@@ -72,7 +72,7 @@ beforeAll(() => {
   // The fixture has one live run; the default cap (cores / 6) is 1 on a 4-core runner, which would read a queued issue as live-capped.
   restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ALEPH_LIVE_CAP: "5", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    for (const t of ["needs item", "waiting issue", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting issue" ? { spec: "Do it." } : {});
+    for (const t of ["needs item", "waiting issue", "errored item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting issue" ? { spec: "Do it." } : {});
     add(doc, "urgent issue", { spec: "Do it first.", priority: "critical" });
     return true;
   }, true);
@@ -135,12 +135,12 @@ describe("state", () => {
 });
 
 describe("a land that found the job lock busy", () => {
-  test("does not make the job stuck, in the UI or in the facts", () => {
+  test("does not make the job errored, in the UI or in the facts", () => {
     run("20261027-000040-a", { job: "fac-7", name: "fac-7", state: "passed", on: "fac-2", started: ago(3) });
     run("20261027-000041-a", { role: "land", job: "fac-7", name: "fac-7", state: "failed", cause: "locked", reason: "job lock busy", on: "fac-2", started: ago(2) });
     const s = state(now);
-    expect(s.stuck.map((j) => j.name)).not.toContain("fac-7");
-    expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
+    expect(s.errored.map((j) => j.name)).not.toContain("fac-7");
+    expect(s.errored.map((j) => j.name)).toEqual(["fac-3"]);
     const card = s.running.find((j) => j.name === "fac-7")!;
     expect(card.state).toBe("passed");
     expect(card.reason).not.toBe("job lock busy");
@@ -150,14 +150,14 @@ describe("a land that found the job lock busy", () => {
 });
 
 describe("a dropped issue", () => {
-  test("holds no ask and no stuck entry", () => {
+  test("holds no ask and no errored entry", () => {
     expect(runAsks(state(now)).map((a) => a.id)).toEqual(["fac-1"]);
     const setAll = (to: "dropped" | "open") => writeList({ key: "fac" }, to, (doc) => { for (const i of doc.items) if (i.id === 1 || i.id === 3) setStatus(i, to); return true; }, true);
     setAll("dropped");
     const s = state(now);
     setAll("open");
     expect(s.asks.filter((a) => a.id === "fac-1" || a.on === "fac-1")).toEqual([]);
-    expect(s.stuck).toEqual([]);
+    expect(s.errored).toEqual([]);
   });
 });
 
@@ -168,7 +168,7 @@ describe("an intake run", () => {
     let s = state(now);
     expect(s.running.map((j) => j.name)).toContain("intake-fac-2");
     expect(runAsks(s).map((a) => a.id)).toEqual(["fac-1"]);
-    expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
+    expect(s.errored.map((j) => j.name)).toEqual(["fac-3"]);
     run(ids[0], { role: "intake", job: "intake-fac-2", name: "intake-fac-2", state: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
@@ -196,7 +196,7 @@ describe("an issue that acceptance failed twice", () => {
       expect(a).toBeDefined();
       expect(a!.details).toEqual({ note: "held path held/x.ts", stat: " held/x.ts | 1 +", review: { call: "passed" } });
       // The Now card renders it.
-      const card = rows(withAttn({ ...fixture, stuck: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
+      const card = rows(withAttn({ ...fixture, errored: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
       expect(card).toContain("Reviewer: passed");
     } finally {
     }
@@ -317,28 +317,28 @@ describe("the Herald's attempts and chats", () => {
 });
 
 describe("a returned run with its rework queued", () => {
-  test("is running, not stuck, so the Herald does not call it unhealthy; one with no next stays stuck", () => {
+  test("is running, not errored, so the Herald does not call it unhealthy; one with no next stays errored", () => {
     run("20261027-000080-a", { job: "fac-80", name: "fac-80", state: "returned", failed: "review", next: "worker", on: "fac-80" });
     const names = (l: { name: string }[]) => l.map((j) => j.name);
-    // fac-3 is the fixture's only stuck job: dropping it isolates fac-80 in the status sentence.
+    // fac-3 is the fixture's only errored job: dropping it isolates fac-80 in the status sentence.
     const drop3 = (to: "dropped" | "open") => writeList({ key: "fac" }, `fac-3 ${to}`, (doc) => { setStatus(doc.items.find((i) => i.id === 3)!, to); return true; }, true);
     try {
       drop3("dropped");
       const s = state(now);
-      expect(names(s.stuck)).not.toContain("fac-80");
+      expect(names(s.errored)).not.toContain("fac-80");
       expect(names(s.running)).toContain("fac-80");
       expect(s.herald!.history[0].text.toLowerCase()).not.toContain("jobs are unhealthy");
     } finally { drop3("open"); }
     run("20261027-000081-a", { job: "fac-81", name: "fac-81", state: "returned", reason: "a check failed", on: "fac-81" });
-    expect(names(state(now).stuck)).toContain("fac-81");
+    expect(names(state(now).errored)).toContain("fac-81");
   });
 });
 
-describe("a stuck job whose last run failed a check", () => {
+describe("an errored job whose last run failed a check", () => {
   test("carries the failed check's name, so its card line can name the check", () => {
     run("20261027-000070-a", { job: "fac-70", name: "fac-70", state: "failed", cause: "check", checkName: "tests", reason: "tests failed", started: ago(2) });
     try {
-      const j = state(now).stuck.find((x) => x.name === "fac-70")!;
+      const j = state(now).errored.find((x) => x.name === "fac-70")!;
       expect(j.cause).toBe("check");
       expect(j.checkName).toBe("tests");
     } finally {
@@ -347,10 +347,10 @@ describe("a stuck job whose last run failed a check", () => {
 });
 
 describe("a returned run whose rework is queued", () => {
-  test("is not stuck, so the status does not flash an alert before the rework starts", () => {
+  test("is not errored, so the status does not flash an alert before the rework starts", () => {
     run("20261027-000071-a", { job: "fac-71", name: "fac-71", state: "returned", cause: "check", next: "worker", started: ago(2) });
     try {
-      expect(state(now).stuck.some((x) => x.name === "fac-71")).toBe(false);
+      expect(state(now).errored.some((x) => x.name === "fac-71")).toBe(false);
     } finally {
     }
   });

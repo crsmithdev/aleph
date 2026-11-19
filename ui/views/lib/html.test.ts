@@ -99,7 +99,7 @@ test("a Herald group open before a newer event for its subject is open after it,
   const g = globalThis as any, writes: string[] = [];
   g.localStorage = { getItem: () => null, setItem: (k: string) => void writes.push(k) };
   const ev = (at: string, n: number) => (row({ at, by: "gate", subject: "aleph-77", action: "done", on: [`aleph-77#${n}`] }));
-  const herald = (events: any[]) => renderHerald({ ...withFactory({}), now: "2026-11-09T12:00:00Z", asks: [], stuck: [], herald: heraldOf(events) });
+  const herald = (events: any[]) => renderHerald({ ...withFactory({}), now: "2026-11-09T12:00:00Z", asks: [], errored: [], herald: heraldOf(events) });
   const old = [ev("2026-11-10T10:00:00Z", 1), ev("2026-11-10T10:01:00Z", 2)];
   const before = fakeRoot(herald(old));
   before.details[0].open = true;

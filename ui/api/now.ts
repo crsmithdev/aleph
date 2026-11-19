@@ -20,7 +20,7 @@ export function forProject(s: State, project: string | null): State {
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
   const herald = s.herald && { ...s.herald, events: mineOf(s.herald.events, project), chats: [] };
-  return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
+  return { ...s, errored: mine(s.errored), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
 /** The Herald's rows for one project (null for all) as of now, with the `seq` of the newest event: what the `ev` stream sends when an event is added. */
@@ -33,7 +33,7 @@ export function heraldNow(project: string | null) {
 async function build(project: string | null) {
   const { doneStamps, herald, ...s } = forProject(state(new Date(), !project), project);
   const fit = await currentFit();
-  annotate([...s.stuck, ...s.running], fit);
+  annotate([...s.errored, ...s.running], fit);
   return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
 }
 

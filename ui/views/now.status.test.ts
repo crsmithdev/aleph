@@ -9,7 +9,7 @@ import { asksOf, heraldOf, issue, withAttn, withFactory } from "../now.testkit.t
 import { pageHead } from "./lib/html.js";
 import { labelOf, verdict } from "../../lib/status-words.ts";
 
-const calmState = { ...withFactory({}), asks: [], stuck: [] };
+const calmState = { ...withFactory({}), asks: [], errored: [] };
 
 const said = (o: object, top: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } }).replace(/<[^>]*>/g, "");
 
@@ -58,10 +58,10 @@ test("the page and the status sentence show a health line's issue id in its shor
   }
 });
 
-test("stuck and failed jobs are one alert that links to their cards", () => {
-  const stuck = [job({ name: "aleph-1", state: "failed" }), job({ name: "aleph-2", state: "failed" })];
-  const h = view.renderLede({ ...calmState, stuck });
-  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">Jobs are unhealthy</a>.</span>');
+test("errored and failed jobs are one alert that links to their cards", () => {
+  const errored = [job({ name: "aleph-1", state: "failed" }), job({ name: "aleph-2", state: "failed" })];
+  const h = view.renderLede({ ...calmState, errored });
+  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-error">Jobs are unhealthy</a>.</span>');
 });
 
 test("a red main or CI of a repo other than aleph is a warning, not an alert", () => {
@@ -78,8 +78,8 @@ test("a red-main alert is ranked by its key, not by its text", () => {
 });
 
 test("the sentence says at most three parts, the most serious first", () => {
-  const stuck = [job({ name: "aleph-1", state: "failed" })];
-  expect(said({ health: [alert("health: something new broke."), mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
+  const errored = [job({ name: "aleph-1", state: "failed" })];
+  expect(said({ health: [alert("health: something new broke."), mainRed, ciRed] }, { errored })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
 });
 
 test("what asks for you leads the status sentence, in the warning colour", () => {
@@ -113,7 +113,8 @@ test("a full suite over its budget is a warning part, not an alert and not a car
   expect(said({ health: [slow] })).toBe("Everything is fine; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [slow] } })).toContain('class="say warning"');
   expect(said({ health: [mainRed, slow] })).toBe("Alert: The build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
-  expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
+  // The one error card is the fixture's failed job: the warning adds none.
+  expect(view.view.render(withFactory({ health: [slow] })).match(/data-kind="error"/g)).toHaveLength(1);
 });
 
 test("the page has no banner and the status line holds the alert", () => {
@@ -141,7 +142,7 @@ test("the page has one head, built by pageHead: the time, the status sentence, t
 });
 
 test("the status line says attention is needed when the Issues section has an item", () => {
-  const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
+  const calm = { ...state, asks: [], errored: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
   for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
     expect(h).toMatch(/attention is needed/i);
@@ -150,7 +151,7 @@ test("the status line says attention is needed when the Issues section has an it
 });
 
 test("a held run asks for your attention once the director escalates it, and not while the director holds it", () => {
-  const calm = { ...state, stuck: [], factory: { ...state.factory, health: [] } };
+  const calm = { ...state, errored: [], factory: { ...state.factory, health: [] } };
   const withDirector = attend({ runs: [held], issues: [] }, []).items;
   expect(view.renderLede({ ...calm, asks: withDirector })).not.toMatch(/attention is needed/i);
   const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }, []).items;
@@ -172,8 +173,8 @@ const OOD = "Alert: This status is out of date.";
 const strip = (h: string) => h.replace(/<[^>]*>/g, "");
 
 test("the out-of-date part comes first and survives MAX_SAID", () => {
-  const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{}, {}], stuck: [{}] };
-  const base = said({}, { stuck: [{}], asks: [{}, {}] });
+  const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{}, {}], errored: [{}] };
+  const base = said({}, { errored: [{}], asks: [{}, {}] });
   const h = strip(view.renderLede(s, true));
   expect(h.startsWith(OOD.slice(0, -1) + "; ")).toBe(true);
   expect(h.split("; ").length).toBe(base.split("; ").length + 1);
@@ -191,11 +192,11 @@ test("a dead factory tick says the alert, in red", () => {
 });
 
 test("the status-line links point at anchors in the rendered Alerts section", () => {
-  const stuck = [job({ name: "aleph-1", state: "failed" })];
-  const lede = view.renderLede({ ...calmState, stuck, asks: [{}] });
-  const alerts = withAttn({ ...calmState, stuck, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
+  const errored = [job({ name: "aleph-1", state: "failed" })];
+  const lede = view.renderLede({ ...calmState, errored, asks: [{}] });
+  const alerts = withAttn({ ...calmState, errored, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
   const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
-  expect(ids).toContain("jobs-stuck");
+  expect(ids).toContain("jobs-error");
   for (const id of ids) expect(alerts).toContain(`id="${id}"`);
 });
 

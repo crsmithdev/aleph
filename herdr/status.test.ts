@@ -14,7 +14,7 @@ const state: any = {
   now: "2026-10-27T17:00:00Z",
   factory: { paused: false, liveCap: 1, liveRuns: 1, runCap: 1, runStarts: 0, health: [{ text: "judge is down", kind: "alert" }] },
   asks: [{ id: "aleph-27", repo: "aleph", label: "Decide", title: "Digest head and tail", headline: "Digest head and tail" }],
-  stuck: [{ name: "aleph-30", repo: "aleph", state: "failed", item: { id: 30, title: "Route tiers" } }],
+  errored: [{ name: "aleph-30", repo: "aleph", state: "failed", item: { id: 30, title: "Route tiers" } }],
   running: [{ name: "aleph-36", repo: "aleph", started: "2026-10-27T16:00:00Z", item: { id: 36, title: "Run now" } }],
   runningIssues: [], queued: [{ id: 9 }],
   usage: { now: { seven_day: 40, seven_day_resets_at: "2026-10-30T17:00:00Z" } },
@@ -53,10 +53,10 @@ test("the scorecard has its five labels, and the alerts and running jobs come be
   const card = text.slice(text.indexOf("Scorecard"), text.indexOf("Agent Time"));
   for (const label of ["Lost time", "Completion", "Landed", "Jobs", "Usage"]) expect(card.some((l) => l.startsWith(label))).toBe(true);
   expect(card.find((l) => l.startsWith("Lost time"))).toContain("▲");
-  const herald = text.indexOf("Herald"), ask = text.findIndex((l) => l.includes("aleph-27")), stuck = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
+  const herald = text.indexOf("Herald"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
   expect(herald).toBeLessThan(ask);
-  expect(ask).toBeLessThan(stuck);
-  expect(stuck).toBeLessThan(run);
+  expect(ask).toBeLessThan(errored);
+  expect(errored).toBeLessThan(run);
   expect(run).toBeLessThan(first(text));
 });
 

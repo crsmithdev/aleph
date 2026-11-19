@@ -274,9 +274,9 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[]
 /** The asks alone. */
 export const asks = (s: { runs: Job[]; issues: NewIssue[] }, lessons?: Lesson[]): AskItem[] => attend(s, lessons).items;
 
-/** The open issue a stuck job cannot succeed before: the part's own first `after`, else one its last run's reason names. */
+/** The open issue an errored job cannot succeed before: the part's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }
-export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
+export function errorBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
   const own = j.item ? `${j.repo}-${j.item.id}` : "";
   const hit = (id: string): Blocker | null => (id !== own && open.has(id) ? { id, ...open.get(id)! } : null);
   const w = after?.trim();

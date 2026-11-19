@@ -81,7 +81,7 @@ test("a memory item is in its own project, and a global or unscoped one is in ev
 
 test("the Status answer for a project keeps its Herald events and the ones of no issue", () => {
   const events = ["alpha-1", "alpha-ui-2", "protected"].map((object) => ({ time: "2026-11-04T12:00:00Z", subject: "rule", object, action: "changed" }));
-  const s: any = { stuck: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events, titles: {} } };
+  const s: any = { errored: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events, titles: {} } };
   expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual(["alpha-1", "protected"]);
 });
 
@@ -90,7 +90,7 @@ test("an event of a factory-wide job, with no project, is in the Herald of no pr
   const own = seed({ role: "build", repo: "alpha", name: "issue.1", state: "running" }).id;
   const before = readEvents().length;
   for (const job of [id, own]) logEvent({ subject: job, action: "running", object: job });
-  const s: any = { stuck: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events: readEvents().slice(before), titles: {}, runs: {}, attempts: {}, chats: [{ id: "c", start: "x", last: "x", title: "t" }] } };
+  const s: any = { errored: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events: readEvents().slice(before), titles: {}, runs: {}, attempts: {}, chats: [{ id: "c", start: "x", last: "x", title: "t" }] } };
   expect(forProject(s, null).herald!.events.map((e) => e.object)).toEqual([id, own]);
   expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual([own]);
   expect(forProject(s, "alpha").herald!.chats).toEqual([]);
