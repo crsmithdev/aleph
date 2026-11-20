@@ -42,7 +42,7 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `GET /api/factory` | The Status page: the factory, the asks, the live jobs, the queue, the Done lane |
 | `GET /api/status` | The tone of the status sentence (`alert`, `warning`, `ask` or `fine`), for the sidebar |
 | `POST /api/factory/pause`, `/resume` | Pauses or resumes the factory |
-| `GET /api/flow` | The Explore page and the Jobs page charts, for `?window=` |
+| `GET /api/flow` | The Status, Agents and Jobs pages, for `?window=` |
 | `GET /api/automation` | The Automation page: the rules, the caps' settings, held paths and the decision log |
 | `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
 | `GET /api/issues` | The Issues page rows, with stage, job count and cost |

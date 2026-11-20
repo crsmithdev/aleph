@@ -10,10 +10,10 @@ import { full, heraldOf, row, section, withAttn } from "../now.testkit.ts";
 afterEach(() => setCodes({}));
 
 const WEEK = {
-  window: "week", done: 7, flaky: 2, kinds: { land: { count: 9 } },
+  window: "week", done: 7, kinds: { land: { count: 9 } },
   phases: { lead: { count: 7, p50: 1570, p90: 16560, hist: [], worst: 20000 } },
   buckets: [{ at: "2026-10-27T00:00:00", lead: 1000 }, { at: "2026-10-28T00:00:00", lead: null }],
-  issues: { landed: 7, firstPass: 0.91, fixRounds: 0, week: 0.02 }, lost: { hours: 6, share: 0.38 },
+  issues: { landed: 7, firstPass: 0.91, fixRounds: 0 }, lost: { hours: 6, share: 0.38 },
   classes: [
     { key: "landed", lost: false, hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "returned", lost: false, hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
     { key: "failed", lost: true, hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
@@ -91,24 +91,18 @@ test("an ask keeps its action buttons on the page", () => {
 });
 
 test("the sidebar links and the routes exist", async () => {
-  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["efficiency", "/explore", "#/status/efficiency"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
+  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
     const m = await import(`./${f}.js`);
     expect(m.view.path).toBe(path);
     expect(m.redirect(old)).toBe(`#${path}`);
     expect(m.redirect(`#${path}`)).toBeNull();
   }
-  // @ts-ignore plain JS, shared with the page
-  const eff = await import("./efficiency.js");
-  expect(eff.redirect("#/factory/efficiency")).toBe("#/explore");
-  expect(eff.redirect("#/flow")).toBe("#/explore");
-  expect(eff.redirect("#/flow?window=day")).toBe("#/explore?window=day");
 });
 
-test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs, Explore in that order", async () => {
-  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs", "efficiency"].map((f) => import(`./${f}.js`)));
+test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs in that order", async () => {
+  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs"].map((f) => import(`./${f}.js`)));
   const sorted = views.map((m) => m.view).sort((a, b) => a.order - b.order);
-  expect(sorted.map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs", "Explore"]);
-  expect(views[5].view.icon).toBe("magnifying-glass-chart");
+  expect(sorted.map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs"]);
 });
 
 test("more loads the window of the address", async () => {

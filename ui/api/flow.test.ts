@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
-import { recordFlake } from "../../jobs/lib/gates/tables.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +13,7 @@ import { CLASSES, classify } from "../flow/classes.ts";
 import { buckets } from "../../lib/windows.ts";
 import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { bar, statusCards, usageCard } from "../views/lib/flow-parts.js";
+import { statusCards, usageCard } from "../views/lib/flow-parts.js";
 // @ts-ignore plain JS shared with the page
 import { pct, xLabel } from "../views/lib/format.js";
 // @ts-ignore plain JS shared with the page
@@ -271,7 +270,6 @@ test("classify: one run of each class, with its cause", () => {
   expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.filter((c) => c.lost).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
   const d = speed("day", now);
   expect(d.classes.map((c) => c.key)).toEqual([...CLASSES]);
-  expect(d.issues.week).toBeNull();
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -378,18 +376,6 @@ test("runs read their issue from target: an issue run counts under its number", 
   const seen: string[] = [];
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(new Set(seen)).toEqual(new Set(["aleph-1430", "aleph-1359"]));
-
-  const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), role: "land", state: "landed" });
-  for (const r of [a("p", { target: "issue.1430" }), a("q", { target: "issue.1430" }), land("p", { target: "issue.1430" }), land("q", { target: "issue.1430" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
-  const fit = { fable: 0.1, rest: 0.1, pooled: true, hours: 24 };
-  const w = speed("week", now, fit);
-  expect(w.issues.week).toBe(0.2); // the runs under the one key aleph-1430
-  expect(w.issues.usage).toEqual([{ issue: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
-  expect(speed("week", now).issues.usage).toEqual([]);
-  run({ ...a("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { target: "issue.1359" }), started: at(1, 9), ended: at(1, 10) });
-  const w2 = speed("week", now, fit);
-  expect(w2.issues.week).toBe(0.1); // aleph-1359 counts too: median of 0.2 and 0.1
-  expect(w2.issues.usage).toEqual([{ issue: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }, { issue: "aleph-1359", href: "#/issues/aleph/1359", week: 0.1, runs: 1 }]);
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {
@@ -629,18 +615,6 @@ test("the shared formats", () => {
   expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "Oct 28"]);
 });
 
-test("the outcome bar with no hours names a job, not a run", () => {
-  const h = bar({ window: "week", classes: [], figures: { kept: null, hours: null } }, "all");
-  expect(h).not.toMatch(/\bruns?\b/i);
-  expect(h).toContain('<div class="empty"><p>No data</p></div>');
-});
-
-test("the outcome bar's legend share has no brackets", () => {
-  const h = bar({ window: "week", classes: [{ key: "landed", hours: 3, text: "t" }], figures: { kept: 3, hours: 0 } }, "all");
-  expect(h).toContain("landed <em>3.0h 100%</em>");
-  expect(h).not.toContain("(");
-});
-
 test("activeEnd pulls ended back to the last worker activity", () => {
   const { utimesSync } = require("node:fs");
   const dir = mkdtempSync(join(tmpdir(), "aleph-active-"));
@@ -658,18 +632,6 @@ test("activeEnd pulls ended back to the last worker activity", () => {
   // no activity files: keeps ended
   expect(Date.parse(activeEnd(mk("c", { exit: 180 })).ended!)).toBe(t0 + 180 * min);
   rmSync(dir, { recursive: true, force: true });
-});
-
-test("flakes count each test name; a row without tests counts under its check", async () => {
-  const row = (check: string, tests?: string[]) => ({ repo: "r", check, run: "x", at: at(1, 9), ...(tests ? { tests } : {}) });
-  for (const r of [row("tests", ["a.test.ts > one", "b.test.ts > two"]), row("tests", ["a.test.ts > one"]), row("tests"), row("types")]) recordFlake(r);
-  try {
-      const d = await speed("week", now);
-    expect(d.flaky).toBe(4);
-    expect(d.flakes).toEqual([{ name: "a.test.ts > one", count: 2 }, { name: "b.test.ts > two", count: 1 }, { name: "tests", count: 1 }, { name: "types", count: 1 }]);
-  } finally {
-    conn().run("DELETE FROM flaky");
-    }
 });
 
 test("the day baseline in one read equals the baseline of seven spans each read alone", async () => {
@@ -798,7 +760,7 @@ test("speed: a build on an unchanged store spawns one git process and reads the 
   for (const a of [["init", "-q"], ["add", "."], ["commit", "-qm", "tt: add"], ["update-ref", "refs/remotes/origin/main", "HEAD"]]) Bun.spawnSync(["git", "-C", store, ...a], { env: { ...process.env, ...who } });
   run({ role: "build", state: "passed", repo: "tt", target: "issue.7", cost: 1, ...secs(0, 9, 600) });
   run({ role: "land", state: "landed", repo: "tt", target: "issue.7", ...secs(0, 9, 40) });
-  const read = () => { const d = speed("week", now, { fable: 0.1, rest: 0.1, pooled: true, hours: 24 }); return [d.times.map((x) => x.filed), d.issues.usage.map((u) => u.title)]; };
+  const read = () => { const d = speed("week", now, { fable: 0.1, rest: 0.1, pooled: true, hours: 24 }); return [d.times.map((x) => x.filed), d.stages.issues.build.map((u) => u.title)]; };
   const first = read();
   expect(first[1]).toContain("Seven");
   const spawn = Bun.spawnSync, calls: string[][] = [];

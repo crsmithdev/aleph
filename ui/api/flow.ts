@@ -5,7 +5,7 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  * The phases also read when each issue file first came into the work store's git history.
  */
-import { flakeNames, flakes } from "../../jobs/lib/gates/tables.ts";
+import { flakes } from "../../jobs/lib/gates/tables.ts";
 import { decisions, roundsByJob, allRuns } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
 import { isAgentRun, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
@@ -14,7 +14,7 @@ import { type StageRow, stageRows, stageRuns } from "../../jobs/lib/learning/mon
 import type { Routes } from "../server.ts";
 import { everyFetched, filed, headOnMain, reader, type Filed } from "../../lib/store.ts";
 import { status, sourceOf } from "../../lib/todo.ts";
-import { currentFit, runShare, type Fit } from "../usage.ts";
+import { currentFit, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 // @ts-ignore plain JS, shared with the page
 import { MIN_LANDED, shortModel } from "../views/lib/format.js";
@@ -61,9 +61,6 @@ export interface Speed {
   stages: { rows: StageRow[]; issues: Record<(typeof PIPELINE)[number], StageIssue[]> };
   /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
-  flaky: number;
-  /** The reruns by check, most first. */
-  flakes: { name: string; count: number }[];
   /** Landed issues (one per issue that landed in the window) and what they cost to get there. */
   issues: {
     landed: number;
@@ -71,10 +68,6 @@ export interface Speed {
     firstPass: number | null;
     /** Median fix rounds per landed issue; null with none landed. */
     fixRounds: number | null;
-    /** Median over landed issues of the week share their agent runs took, 2 decimals; null with no fit or none landed. */
-    week: number | null;
-    /** The landed issues that used the most of the weekly limit, largest first, at most 8: `week` is the share of the week their agent runs took (2 decimals), `runs` how many agent runs that sums. Empty with no fit or none landed. */
-    usage: { issue: string; title?: string; href?: string; week: number; runs: number }[];
   };
   classes: ClassStat[];
   notCounted: { runs: number; issues: number; hours: number };
@@ -133,23 +126,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     landed: issuesLanded,
     firstPass: issuesLanded ? round(perIssue.filter((rs) => rs.every((r) => !rounds.get(r.job))).length / issuesLanded, 4) : null,
     fixRounds: quantile(fixes, 0.5),
-    week: null,
-    usage: [],
   };
-  if (fit) {
-    const weekOf = new Map<string, number>();
-    const keyOf = issueOf;
-    for (const r of all) if (isAgentRun(r.role) && keyOf(r)) weekOf.set(keyOf(r)!, (weekOf.get(keyOf(r)!) ?? 0) + (runShare(fit, r)?.pct ?? 0));
-    const keys = [...new Set(landed.map(keyOf).filter((k) => k !== undefined))];
-    const per = keys.map((g) => weekOf.get(g) ?? 0);
-    const nRuns = new Map<string, number>();
-    for (const r of all) if (isAgentRun(r.role) && keyOf(r)) nRuns.set(keyOf(r)!, (nRuns.get(keyOf(r)!) ?? 0) + 1);
-    issues.usage = keys.map((g) => {
-      const [repo, n] = splitId(g);
-      return { issue: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
-    }).sort((a, b) => b.week - a.week).slice(0, 8);
-    issues.week = per.length ? round(quantile(per, 0.5)!, 2) : null;
-  }
   const statusOf = (ref: string): string | undefined => {
     const [repo, n] = splitId(ref);
     const item = repo ? lists.item(repo, n) : undefined;
@@ -160,7 +137,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()), issues: stageIssues(entries, ended.issues, since.getTime(), now.getTime()) };
-  for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage, ...Object.values(stages.issues).flat()]) {
+  for (const t of [...cls.classes.flatMap((c) => c.top), ...Object.values(stages.issues).flat()]) {
     const [repo, n] = splitId(t.issue);
     const item = lists.item(repo, n);
     t.title = item?.title;
@@ -179,7 +156,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const inBucket = xs.filter((x) => b.slotOf(x.at) === i).map((x) => x.secs);
     return inBucket.length ? round(quantile(inBucket, q)!) : null;
   };
-  const recent = inp.flakes.filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
   const started = Array.from({ length: n }, () => 0);
   const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
   const tokens = Array.from({ length: n }, () => ({} as Record<string, number>));
@@ -220,8 +196,6 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     lost: cls.lost,
     agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
     filed: { followups: filings.filter(followup).length, all: filings.length },
-    flaky: recent.length,
-    flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
 }
 

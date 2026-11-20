@@ -59,13 +59,13 @@ function redrawHerald(root) {
   moved();
 }
 
-const EFFICIENCY = "#/explore", PERFORMANCE = "#/factory/jobs";
+const PERFORMANCE = "#/factory/jobs";
 /** A link to another page that keeps the window; week is the default and stays out of the address. */
 const withWindow = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 
 /** The scorecard: lost time, completion, landed, queue wait, usage. `d` is /api/flow for the window `win` with its baseline, or null while it loads. */
 export function renderTiles(s, d, win = d?.window ?? "week") {
-  return statusCards(s, d, { efficiency: withWindow(EFFICIENCY, win), performance: withWindow(PERFORMANCE, win) });
+  return statusCards(s, d, { performance: withWindow(PERFORMANCE, win) });
 }
 
 /** The Agent Time card: the kept share, its bar and its legend, with the kept hours of all in the aside. `d` is null while it loads, `{ error }` on a failed load. */

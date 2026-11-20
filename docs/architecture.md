@@ -123,7 +123,7 @@ The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYE
 | Locks | Directories under `$XDG_RUNTIME_DIR/aleph/` with an owner pid; a reboot clears them |
 | Load | A check, a worker and a land start only under `ALEPH_LOAD_LIMIT` |
 | Clocks | `jobs/lib/infra/clock.ts`; `tests/clock-lint.test.ts` denies a raw `Date.now()` outside the listed files |
-| Cost | Each run records its cost; the Efficiency page and the monitor read it |
+| Cost | Each run records its cost; the Agents page and the monitor read it |
 | Secrets | `~/.aleph/.env`, read by `lib/env.ts`; `secret-scan` denies a commit that adds one |
 | Tests | `bun run test` in parallel; each test makes its own temp stores through the `ALEPH_*` path variables |
 | Flakes | A failing check reruns once; a pass on the rerun goes to the `flaky` table and the flake tracker |

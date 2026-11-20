@@ -1,4 +1,4 @@
-// What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
+// What the Status pages share: formats, the /api/flow load, tiles and the usage pace.
 import { get } from "./router.js";
 import { scope } from "./address.js";
 import { cardPct, count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
@@ -28,17 +28,6 @@ export async function flowOf(window, q, baseline = false) {
 /** A usable /api/flow answer, or null. */
 export const usable = (d) => (d && !d.error ? d : null);
 
-/** The causes of all lost time: one row per name, largest first. */
-export function mergeCauses(d) {
-  const by = new Map();
-  for (const c of d.classes.filter((x) => x.lost)) for (const x of c.causes) {
-    const m = by.get(x.name) ?? { name: x.name, hours: 0, runs: 0 };
-    m.hours += x.hours; m.runs += x.runs;
-    by.set(x.name, m);
-  }
-  return [...by.values()].sort((a, b) => b.hours - a.hours);
-}
-
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 /** The share of the usage week that is gone, 0 to 100; null with no reset time. */
 export function weekGone(resetsAt, now) {
@@ -61,14 +50,14 @@ export function windowTrend(d, figure, value, o) {
 }
 
 /** The props of the five cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
-export function cardList(s, d, { efficiency, performance }) {
+export function cardList(s, d, { performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null, loading = !d, failed = d?.error ?? "";
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   return [
-    { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency },
+    { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }) },
     { k: "Completion", loading, failed, ...(f ? { v: dur(f.leadP50), v2: dur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance },
-    { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency },
+    { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }) },
     { k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" },
     usageProps(s),
   ];
@@ -101,19 +90,4 @@ export function share(d) {
   return `<div class="ohead"><b class="num">${esc(cardPct(kept / total))}</b><span>reached main</span></div>` +
     `<div class="obar thin" role="img" aria-label="${esc(cs.map((c) => `${c.key} ${hours(c.hours)}`).join(", "))}">${good.map(seg).join("")}${gap}${lost.map(seg).join("")}</div>` +
     `<div class="oledger num">${col(good)}${col(lost)}</div>`;
-}
-
-/** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/flow for the window. */
-export function bar(d, key) {
-  const { kept, hours: lostH } = d.figures;
-  if (lostH === null) return empty();
-  const total = kept + lostH, cs = d.classes.filter((c) => c.hours > 0);
-  const said = (c) => `${hours(c.hours)} ${cardPct(c.hours / total)}`;
-  // Flex grows are shares that sum to 1 in each row: grows summing under 1 leave the row part empty.
-  const seg = (c, of) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours / of}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.key} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
-  const group = (xs) => { const h = xs.reduce((a, c) => a + c.hours, 0); return xs.length ? `<div class="osegs" style="flex:${h / total}">${xs.map((c) => seg(c, h)).join("")}</div>` : ""; };
-  const good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost);
-  const sep = good.length && lost.length ? `<i class="osep" role="separator" title="Left of the line reached main; right of it did not"></i>` : "";
-  const legend = [...good, ...lost].map((c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)} <em>${esc(said(c))}</em></span>`).join("");
-  return `<div class="obar" role="group" aria-label="Agent time">${group(good)}${sep}${group(lost)}</div><div class="olegend">${legend}</div>`;
 }

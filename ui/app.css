@@ -34,7 +34,7 @@
   --approve: #2D5BC4; --approve-bg: #EAF0FB; --approve-ring: #C9D6F3;
   --decide: #6D3FB0; --decide-bg: #F1EBFA; --decide-ring: #DCCDF2;
   --unstick: #B42F3A; --unstick-bg: #FBEBEC; --unstick-ring: #F0CDD0;
-  /* Outcomes in the Efficiency bar: dark enough for white text in both themes. */
+  /* Outcomes in the Agent Time bar: dark enough for white text in both themes. */
   --seg-landed: #3B4A36; --seg-returned: #5C7052; --seg-failed: #9A6347; --seg-reran: #BC5252; --seg-dropped: #8A4F7A;
   /* Timeline bar fills: one value in both themes, because the dark theme's fills are too light for --on-fill text. */
   --fill-run: #3B5FC8;
@@ -1565,15 +1565,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
   .dp-ev > .dp-evt { grid-column: 1 / -1; }
 }
 .obar { display: flex; }
-.osegs { display: flex; gap: var(--sp-2); }
-.osegs > * { min-width: 4px; height: calc(2 * var(--sp-14)); padding: 0; border: 0; }
-.osegs > :first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
-.osegs > :last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
-.osep { flex: none; width: 2px; margin: 0 var(--sp-8); background: var(--ink-2); }
-.olegend { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-16); margin-top: var(--sp-8); font-size: var(--fs-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.olegend span { display: inline-flex; align-items: center; gap: var(--sp-6); white-space: nowrap; }
-.olegend i { width: 10px; height: 10px; border-radius: var(--r-hair); }
-.olegend em { font-style: normal; color: var(--muted); }
 /* The Status Agent Time card: the kept share as the figure, a 10px bar with a gap between kept and lost, and a two-column legend. */
 .ohead { display: flex; align-items: baseline; gap: var(--sp-8); margin-bottom: var(--sp-10); color: var(--muted); font-size: var(--fs-sm); }
 .ohead b { color: var(--ink); font: var(--fw-strong) 32px/1 var(--num); letter-spacing: -0.02em; }
@@ -1593,8 +1584,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 .oline { all: unset; position: absolute; inset: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-4)); grid-column: 1 / -1; z-index: calc(-1 * var(--z-rowlink)); cursor: pointer; border-radius: var(--r-hair); }
 .oline:hover { background: var(--sunk); }
 .oline:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.obar button { cursor: pointer; }
-.obar button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
 .seg-landed { background: var(--seg-landed); }
 .seg-returned { background: var(--seg-returned); }
 .seg-failed { background: var(--seg-failed); }
@@ -1603,10 +1592,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 @media (max-width: 1100px) { .browse, .split, .trio, .quad { grid-template-columns: minmax(0, 1fr); } .trio > .wide { grid-column: auto; } .ins { position: static; max-height: none; } }
 @media (max-width: 720px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .obar:not(.thin) { flex-direction: column; }
-  .osep { width: auto; height: 2px; margin: var(--sp-8) 0; }
-  .osegs { flex-wrap: wrap; }
-  .osegs > * { border-radius: 0; }
 }
 ul.logs { list-style: none; padding: 0; }
 ul.logs .logbody { margin: var(--sp-6) 0 var(--sp-12); max-height: 70vh; overflow: auto; }

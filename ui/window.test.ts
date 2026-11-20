@@ -2,8 +2,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { parseHash, remember, scope, wireScope } from "./views/lib/address.js";
 // @ts-ignore plain JS shared with the page
-import * as eff from "./views/efficiency.js";
-// @ts-ignore plain JS shared with the page
 import * as agents from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import * as fjobs from "./views/factory-jobs.js";
@@ -20,8 +18,8 @@ const WINDOWS = ["hour", "day", "week", "month"] as const;
 
 const P = (n: number) => ({ count: n, p50: 60, p90: 120, hist: [0, 1, 0, 0, 0, 0, 0], worst: 300 });
 const speed = (window: string): any => ({
-  window, flaky: 1, lost: { hours: 1, share: 0.1 }, notCounted: { runs: 0, hours: 0 },
-  issues: { landed: 1, firstPass: 0.5, fixRounds: 0, week: null, usage: [] }, classes: [],
+  window, lost: { hours: 1, share: 0.1 }, notCounted: { runs: 0, hours: 0 },
+  issues: { landed: 1, firstPass: 0.5, fixRounds: 0 }, classes: [],
   figures: { lost: null, hours: null, leadP50: 60, leadP90: 120, asks: null, landed: null, firstPass: 0.5 },
   phases: { lead: P(1), intake: P(1), queue: P(1), implement: P(1), land: P(1) }, buckets: [{ at: new Date(2026, 9, 28).toISOString(), lead: 1 }],
   checks: [], times: [], builds: [], wait: { count: 0, p50: null }, agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], outcomes: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
@@ -30,7 +28,6 @@ const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
-  efficiency: { path: "#/explore", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
@@ -66,7 +63,7 @@ test("picking an option on each page asks for that window and the page marks it"
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    expect(url).toBe(`/api/flow?window=${w}${name === "efficiency" || name === "status" || name === "agents" || name === "jobs" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/flow?window=${w}${name === "status" || name === "agents" || name === "jobs" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(`data-value="${w}" aria-pressed="true"`);
     expect(html).toBeTruthy();
@@ -75,7 +72,7 @@ test("picking an option on each page asks for that window and the page marks it"
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   remember("window", "month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency || p === PAGES.status || p === PAGES.agents || p === PAGES.jobs ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.status || p === PAGES.agents || p === PAGES.jobs ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour&baseline=1");
   expect(scope(new URLSearchParams("window=nope")).window).toBe("month");
 });
@@ -127,7 +124,7 @@ test("a chosen project is in the address, in each request, and on the next page"
 
 test("scope wire keeps the window and the project in storage and in the address; week and All stay out of it", () => {
   const root = { querySelector: () => null };
-  g.location.hash = "#/explore?window=day&project=alpha";
+  g.location.hash = "#/factory/agents?window=day&project=alpha";
   scope().wire(root);
   g.location.hash = "#/factory/jobs";
   const s = scope();
@@ -136,9 +133,9 @@ test("scope wire keeps the window and the project in storage and in the address;
   expect(g.location.hash).toBe("#/factory/jobs?window=day&project=alpha");
   remember("window", "week");
   remember("project", "");
-  g.location.hash = "#/explore";
+  g.location.hash = "#/factory/agents";
   scope().wire(root);
-  expect(g.location.hash).toBe("#/explore");
+  expect(g.location.hash).toBe("#/factory/agents");
   expect(scope().url("/api/factory")).toBe("/api/factory");
 });
 

@@ -76,7 +76,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 |---|---|---|---|
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #169A69, #C28000, #DC5F92 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #A079DC, #2398B8 | extra series |
-| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | outcome bar, under white text |
+| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | the Status Agent Time bar, under white text |
 | `--fill-run`, `--fill-error`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not set again | timeline bar fills, under white text |
 
 | Do | Don't |
@@ -524,7 +524,7 @@ A pair puts two cards side by side.
 
 | Helper | Reference |
 |---|---|
-| `.pair` around two `card()` calls | `ui/views/efficiency.js` |
+| `.pair` around two `card()` calls | `ui/views/gates.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -789,30 +789,6 @@ A meter shows one share of a whole, or the segments of a whole.
 |---|---|
 | `meter(42, "42% used")` | a meter with no label and no value next to it |
 | `barRow(…, { top: true })` on the largest row | `--hot` set by hand |
-
-#### Outcome bar
-
-The outcome bar shows how the agent time of a window ended, by class.
-
-**Use:** once on the Status page. **Not for:** other data; use a meter or a chart panel.
-
-| Helper | Reference |
-|---|---|
-| `bar(d, key)` in `ui/views/lib/flow-parts.js`, from `/api/flow` | `ui/views/lib/flow-parts.js` |
-
-| # | Part | Holds | Optional | Style |
-|---|---|---|---|---|
-| 1 | Segment | The hours of one class | | its `--seg-*` token; 28px high; the ends radius `--r-ctl` |
-| 2 | Separator | The line between work that reached main and work that did not | | `--ink-2`, 2px |
-| 3 | Legend | The class, its hours and its share | | `--fs-xs` tabular, `--ink-2`; numbers `--muted` |
-
-- Put the classes that reached main at the left of the separator.
-- Each segment selects its detail under the bar, with `aria-pressed`.
-- On a phone, the groups stack.
-
-| Do | Don't |
-|---|---|
-| `--seg-landed` on the landed segment | a tone token on a segment |
 
 #### Timeline
 
@@ -1593,7 +1569,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/lib/flow-parts.js`, `ui/views/session.js` | allowed |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
-| The outcome bar shows `empty()` with no card | `bar()` in `ui/views/lib/flow-parts.js` | follow-up |
 | The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |

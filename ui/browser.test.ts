@@ -709,55 +709,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   afterAll(() => rig?.stop());
   afterEach(async () => { if (!last.ok) page = await rig.reset(); });
 
-  for (const w of [1100, 420]) {
-    test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
-      await page.width(w);
-      await page.go("#/");
-      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/lib/flow-parts.js").then((v) => {
-        const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours], i) => ({ key, lost: i > 1, hours, text: key }));
-        const host = document.createElement("div");
-        host.id = "obar-probe";
-        document.querySelector("#view").prepend(host);
-        host.innerHTML = v.bar({ classes, figures: { kept: 60, hours: 19.6 } }, "");
-        const segs = [...host.querySelectorAll(".osegs > *")];
-        return {
-          clip: segs.flatMap((s) => [...s.querySelectorAll("b, span")].map((e) => e.scrollWidth > e.clientWidth)),
-          widths: segs.map((s) => s.getBoundingClientRect().width),
-          page: document.documentElement.scrollWidth,
-        };
-      })`);
-      expect(m.clip).not.toContain(true);
-      expect(m.widths[0]!).toBeGreaterThan(m.widths[2]!);
-      expect(m.page).toBeLessThanOrEqual(w);
-      await page.ev('document.querySelector("#obar-probe")?.remove()');
-    }, 30_000);
-  }
-
-  test("the outcome bar mark is as tall as the segments", async () => {
-    await page.width(1100);
-    await page.go("#/");
-    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/views/lib/flow-parts.js").then((v) => {
-      const host = document.createElement("div");
-      host.id = "obar-probe";
-      document.querySelector("#view").prepend(host);
-      host.innerHTML = v.bar({ classes: [{ key: "landed", lost: false, hours: 5, text: "" }, { key: "dropped", lost: true, hours: 3, text: "" }], figures: { kept: 5, hours: 3 } }, "");
-      const r = (e) => e.getBoundingClientRect();
-      const at = () => { const sep = r(host.querySelector(".osep")); return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) }; };
-      const out = [at()];
-      // A bigger label font grows the label line box, so a fixed offset shows here as a gap of 10px.
-      document.documentElement.style.setProperty("--fs-xs", "20px");
-      out.push(at());
-      document.documentElement.style.removeProperty("--fs-xs");
-      return out;
-    })`);
-    for (const { sep, segs } of m) {
-      for (const [top, bottom] of segs) {
-        expect(Math.abs(sep[0]! - top!)).toBeLessThanOrEqual(0.1);
-        expect(Math.abs(sep[1]! - bottom!)).toBeLessThanOrEqual(0.1);
-      }
-    }
-    await page.ev('document.querySelector("#obar-probe")?.remove()');
-  }, 30_000);
 
   test("a metric card keeps its second value at phone width", async () => {
     await page.width(400);
@@ -1191,9 +1142,9 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   }, 60_000);
 });
 
-describe.skipIf(!chromeUsable)("Explore and Sessions redraw", () => {
+describe.skipIf(!chromeUsable)("Sessions redraw", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/explore"); await page.ev(sessions); }, 150_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open(); await page.ev(sessions); }, 150_000);
   afterAll(() => rig?.stop());
 
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
@@ -1201,14 +1152,12 @@ describe.skipIf(!chromeUsable)("Explore and Sessions redraw", () => {
   const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at });
     window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
 
-  test("a redraw keeps a marked element connected on Explore and on Sessions", async () => {
-    for (const [hash, sel] of [["#/explore", "#eff .tiles"], ["#/sessions", "#ag-live"]]) {
-      await page.go(hash);
-      await page.when(`document.querySelector("#view ${sel}")`);
-      await page.ev(`window.mark = document.querySelector("#view ${sel}"); window.mark.old = 1`);
-      await redraws();
-      expect(await page.ev(`[document.querySelector("#view ${sel}") === window.mark, window.mark.isConnected]`)).toEqual([true, true]);
-    }
+  test("a redraw keeps a marked element connected on Sessions", async () => {
+    await page.go("#/sessions");
+    await page.when('document.querySelector("#view #ag-live")');
+    await page.ev('window.mark = document.querySelector("#view #ag-live"); window.mark.old = 1');
+    await redraws();
+    expect(await page.ev('[document.querySelector("#view #ag-live") === window.mark, window.mark.isConnected]')).toEqual([true, true]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 

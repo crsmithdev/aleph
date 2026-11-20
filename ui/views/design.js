@@ -11,7 +11,6 @@ import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
 import { askCard } from "./lib/ask-cards.js";
 import { eventRow, findingsList } from "./lib/feed.js";
-import { bar } from "./lib/flow-parts.js";
 import { needs } from "./lib/memory-health.js";
 
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();
@@ -116,7 +115,6 @@ const FEED = [
   { key: "design 1", at: "2026-11-10T16:58:00Z", by: "job.1", word: "landed", id: [{ id: "i1700", to: "#/design" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
   { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
 ];
-const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }], figures: { kept: 52, hours: 9 } };
 
 const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
   ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
@@ -195,7 +193,6 @@ function renderDesign(d) {
     spec("chart-empty", "Chart panel, no data", panelOf("design/none", FRAMES.none), "", "") +
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
-    spec("outcome", "Outcome bar", bar(FLOW, "landed")) +
     spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting the user", "t-chris"]])) +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
 
