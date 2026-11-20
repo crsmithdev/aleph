@@ -8,9 +8,9 @@
 import { flakeNames, flakes } from "../../jobs/lib/gates/tables.ts";
 import { decisions, roundsByJob, allRuns } from "../../jobs/lib/records/record.ts";
 import { askHistory, type AskSpan } from "./gates.ts";
-import { isAgentRun, type Run } from "../../jobs/lib/records/ledger.ts";
+import { isAgentRun, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, duration } from "../../jobs/lib/infra/process.ts";
-import { type StageRow, stageRows } from "../../jobs/lib/learning/monitor-table.ts";
+import { type StageRow, stageRows, stageRuns } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
 import { everyFetched, filed, headOnMain, reader, type Filed } from "../../lib/store.ts";
 import { status, sourceOf } from "../../lib/todo.ts";
@@ -57,8 +57,8 @@ export interface Speed {
   /** Every build run that started in the window, in start order. `issue` is its issue key, null for a run on no issue; `model` is the short name; `secs` its time; `landed` says its issue landed in the window. */
   builds: { issue: string | null; model: string; size: string | null; secs: number; landed: boolean }[];
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
-  /** The stages of the window, as the monitor counts them. */
-  stages: { rows: StageRow[] };
+  /** The stages of the window, as the monitor counts them, and each Pipeline stage's issues: failed first, then most seconds. */
+  stages: { rows: StageRow[]; issues: Record<(typeof PIPELINE)[number], StageIssue[]> };
   /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
   flaky: number;
@@ -158,15 +158,15 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     return repo && lists.list(repo) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
-  const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()) };
-  for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage]) {
+  const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
+  const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()), issues: stageIssues(entries, ended.issues, since.getTime(), now.getTime()) };
+  for (const t of [...cls.classes.flatMap((c) => c.top), ...issues.usage, ...Object.values(stages.issues).flat()]) {
     const [repo, n] = splitId(t.issue);
     const item = lists.item(repo, n);
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
     if (!item && lists.list(repo)) delete t.href;
   }
-  const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   // The size of an issue is the size of its last build run, in all the records.
   const sizeOf = new Map<string, { at: number; size: string | null }>();
   for (const r of all) {
@@ -223,6 +223,25 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     flaky: recent.length,
     flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
+}
+
+/** The Pipeline's stages. Queue is the wait before an issue's first agent run, so its rows have no runs. */
+const PIPELINE = ["intake", "queue", "build", "review", "recheck", "land"] as const;
+/** One issue in one stage: `secs` sums its runs' seconds there (a Queue row's is its wait); `failed` says a run gave nothing usable. */
+type StageIssue = { issue: string; title?: string; href?: string; runs: number; secs: number; failed: boolean };
+
+/** Each Pipeline stage's issues in `since`..`now`, failed first, then most seconds. A run on no issue is in no row. */
+function stageIssues(entries: Entry[], times: IssueTimes[], since: number, now: number): Speed["stages"]["issues"] {
+  const by = new Map<string, Map<string, StageIssue>>(PIPELINE.map((k) => [k, new Map()]));
+  for (const x of stageRuns(entries, since, now)) {
+    const key = issueOf(x.run), rows = by.get(x.stage);
+    if (!key || !rows) continue;
+    const row = rows.get(key) ?? { issue: key, runs: 0, secs: 0, failed: false };
+    rows.set(key, { ...row, runs: row.runs + 1, secs: row.secs + (x.secs ?? 0), failed: row.failed || x.unusable });
+  }
+  for (const t of times) if (t.queue !== null) by.get("queue")!.set(t.id, { issue: t.id, runs: 0, secs: t.queue, failed: false });
+  const sorted = (rows: Map<string, StageIssue>) => [...rows.values()].map((r) => ({ ...r, secs: round(r.secs), href: issueHref(r.issue) })).sort((a, b) => Number(b.failed) - Number(a.failed) || b.secs - a.secs);
+  return Object.fromEntries(PIPELINE.map((k) => [k, sorted(by.get(k)!)])) as Speed["stages"]["issues"];
 }
 
 /** The number of an issue, from its key or its old `<repo>-<n>` ID. */

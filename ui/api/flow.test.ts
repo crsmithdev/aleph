@@ -85,6 +85,18 @@ test("done and issues.landed count landed issues, not land runs", () => {
   expect(d.issues.landed).toBe(3);
 });
 
+test("stages.issues lists a stage's failed issue first, then the rest by most seconds", () => {
+  // 50 days back, so no other test's window sees these runs.
+  run({ role: "build", state: "passed", repo: "alpha", on: "alpha-7", ...secs(50, 9, 900) });
+  run({ role: "build", state: "failed", repo: "alpha", on: "alpha-8", ...secs(50, 10, 100) });
+  run({ role: "build", state: "passed", repo: "alpha", on: "alpha-8", ...secs(50, 11, 200) });
+  const d = speed("day", new Date(2026, 8, 8, 15));
+  expect(d.stages.issues.build.map(({ issue, runs, secs, failed }) => ({ issue, runs, secs, failed }))).toEqual([
+    { issue: "alpha-8", runs: 2, secs: 300, failed: true },
+    { issue: "alpha-7", runs: 1, secs: 900, failed: false },
+  ]);
+});
+
 test("GET /api/flow takes a window (default week) and answers JSON", async () => {
   const get = async (q: string) => routes["GET /api/flow"](new Request(`http://x/api/flow${q}`), {}, new URL(`http://x/api/flow${q}`));
   expect((await (await get("?window=month")).json()).window).toBe("month");
