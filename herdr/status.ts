@@ -1,22 +1,23 @@
-// The Status page (ui/views/now.js) as plain terminal text for a herdr side panel, for the week window, or with
-// `--json` as data for the Herdr desktop app's mod.
+// The Status page (ui/views/now.js) as plain terminal text for a herdr side panel, or with `--json` as data for the
+// Herdr desktop app's mod, for the window of `--window` (hour, day, week or month; week by default).
 // It reads the data in-process, as the routes of ui/api/now.ts and ui/api/flow.ts do, and redraws every 10 s and on a resize.
 // `render` is the whole page as lines no wider than the pane; the rest of the file is the terminal loop.
-import { baseline, speed } from "../ui/api/flow.ts";
+import { baseline, openNow, speed } from "../ui/api/flow.ts";
 import { figures } from "../ui/flow/baseline.ts";
 import { stateBody } from "../ui/api/now.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
+import { FACTORY, type Window } from "../lib/windows.ts";
 import { clip, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
 import { plain, type Row } from "../ui/herald.ts";
 // @ts-ignore plain JS, shared with the page
-import { cardPct, clock, dur, hours, mean, when } from "../ui/views/lib/format.js";
+import { cardPct, clock, count, dur, hours, mean, when } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
 import { cardList } from "../ui/views/lib/flow-parts.js";
 import { errText } from "../lib/errtext.ts";
 
 type State = Awaited<ReturnType<typeof stateBody>>;
-type Flow = ReturnType<typeof speed> & { figures: ReturnType<typeof figures>; baseline: ReturnType<typeof baseline> };
+type Flow = ReturnType<typeof speed> & { figures: ReturnType<typeof figures>; baseline: ReturnType<typeof baseline>; open: ReturnType<typeof openNow> };
 
 const REFRESH_MS = 10_000;
 /** The colour of each tone of the status sentence: red, yellow or green. */
@@ -31,26 +32,34 @@ const scorecard = (s: State, d: Flow): { name: string; value: string; trend: str
   name: c.k, value: [c.v, c.v2].flat().filter((x) => x !== undefined).join(" / "), trend: trend(c.trend ?? ""), note: c.q?.join(" / ") ?? c.note ?? "",
 }));
 
-/** Agent Time: the hours of each outcome class, and the kept and total hours. */
-function agentTime(d: Flow) {
-  const classes = (d.classes ?? []).filter((c) => c.hours > 0).map((c) => ({ key: c.key, lost: c.lost, hours: c.hours }));
-  const sum = (cs: { hours: number }[]) => cs.reduce((a, c) => a + c.hours, 0);
-  return { classes, kept: sum(classes.filter((c) => !c.lost)), all: sum(classes) };
-}
-
 /** The health of a stage by its failed share, as on the page: under 10% fine, to 25% warning, above that alert. */
 const health = (share: number) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "alert");
 
-/** The Pipeline: each stage's runs per issue, p90 time and failed share, with its health. */
-function pipeline(d: Flow) {
+/** The Pipeline card: each stage's runs per issue, p90, failed share with its health, and agent hours with its share of the
+ * busiest stage's; Implement's hours split by outcome class, as the page's bar. Then the window's issue counts. */
+function pipeline(d: Flow, errored: number) {
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
-  return ["intake", "queue", "build", "review", "recheck", "land"].map((k) => {
+  const classes = (d.classes ?? []).filter((c) => c.hours > 0).map((c) => ({ key: c.key, lost: c.lost, hours: c.hours, text: hours(c.hours) }));
+  // Implement's hours are its outcome classes', so its bar and the legend add up; the other stages' are runs times minutes.
+  const agentH = (k: string) => (k === "build" ? classes.reduce((a, c) => a + c.hours, 0) : ((by.get(k)?.runs ?? 0) * (by.get(k)?.minutes ?? 0)) / 60);
+  const most = Math.max(...["intake", "build", "review", "recheck", "land"].map(agentH)) || 1;
+  const rows = ["intake", "queue", "build", "review", "recheck", "land"].map((k) => {
     const r = by.get(k), name = NAMES[k];
-    if (k === "queue") return { name, text: d.phases?.queue?.count > 0 ? `wait · p90 ${dur(d.phases.queue.p90)}` : "–", tone: "quiet" };
-    if (!r?.items) return { name, text: "–", tone: "quiet" };
+    if (k === "queue") return { key: k, name, runs: "", p90: d.phases?.queue?.count > 0 ? dur(d.phases.queue.p90) : "–", failed: "", tone: "quiet", hours: "", bar: 0 };
+    if (!r?.items) return { key: k, name, runs: "–", p90: "–", failed: "–", tone: "quiet", hours: "–", bar: 0 };
     const share = r.runs ? (r.unusable ?? 0) / r.runs : 0;
-    return { name, text: `${mean(r.runs / r.items)}/issue · p90 ${dur(r.p90)} · ${cardPct(share)} failed`, tone: health(share) };
+    return { key: k, name, runs: mean(r.runs / r.items), p90: dur(r.p90), failed: cardPct(share), tone: health(share), hours: hours(agentH(k)), bar: agentH(k) / most };
   });
+  const open = d.open ?? { open: 0, parked: 0 };
+  const counts = [
+    { name: "Filed", value: count(d.filed?.all ?? 0), tone: "" },
+    { name: "Intake", value: count(by.get("intake")?.items ?? 0), tone: "" },
+    { name: "Landed", value: count(d.done ?? 0), tone: "fine" },
+    { name: "Dropped", value: count(d.dropped ?? 0), tone: "" },
+    { name: "Open", value: `${count(open.open)}${open.parked ? ` +${count(open.parked)}` : ""}`, tone: "" },
+    { name: "Errored", value: count(errored), tone: errored ? "alert" : "" },
+  ];
+  return { rows, classes, counts };
 }
 
 const at = (t: string) => clock(t) || when(t);
@@ -59,65 +68,74 @@ const at = (t: string) => clock(t) || when(t);
 const heraldRows = (s: State) => (s.herald?.rows ?? []).map((r: Row) => ({ key: r.key, at: at(r.at), word: r.word, id: plain(r.id), title: plain(r.text),
   fold: r.lines.map((l) => ({ at: at(l.at), label: l.label, text: plain(l.text) })) }));
 
-/** The Status page as data for the Herdr desktop app's mod: the status sentence, the cards and the Herald. */
+/** The Status page as data for the Herdr desktop app's mod: the status sentence, the scorecard, the Pipeline and Issues
+ * cards, and the Herald with its pinned alerts, its badge and its Events, Active and Inspector tabs. */
 export function data(s: State, d: Flow) {
+  const v = verdict(s), asks = s.asks ?? [], errored = s.errored ?? [];
+  const alerts = asks.length + errored.length + v.errors.length;
+  const top = (xs: any[]) => xs.slice(0, 20).map((x) => ({ id: shownId(x.issue), title: x.title ?? "" }));
   return {
-    status: verdict(s),
+    window: d.window,
+    status: v,
+    // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
+    badge: alerts ? { text: "Not OK", tone: errored.length || v.errors.length ? "alert" : "ask" } : { text: "OK", tone: "fine" },
     scorecard: scorecard(s, d),
-    agentTime: agentTime(d),
-    pipeline: pipeline(d),
+    pipeline: pipeline(d, errored.length),
     active: (d.active ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, running: b.running, landed: b.landed })),
-    asks: (s.asks ?? []).map((a) => ({ label: a.label, id: shownId(a.id, a.repo), title: shortText(a.headline || a.title) })),
-    errored: (s.errored ?? []).map((j) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
+    speed: (d.buckets ?? []).map((b) => ({ at: b.at, intake: b.intake ?? 0, queue: b.queue ?? 0, implement: b.implement ?? 0, land: b.land ?? 0 })),
+    asks: asks.map((a) => ({ label: a.label, id: shownId(a.id, a.repo), title: shortText(a.headline || a.title) })),
+    errored: errored.map((j) => ({ id: shownId(j.name), title: j.item?.title || j.name })),
     running: [
-      ...(s.runningIssues ?? []).map((i) => ({ at: clock(i.at ?? i.since) || when(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
+      ...(s.runningIssues ?? []).map((i) => ({ at: at(i.at ?? i.since), word: i.stage, id: shownId(i.id), title: i.title, size: "" })),
       ...(s.running ?? []).map((j) => {
         const run = j.run ?? { kind: "build", started: j.started };
-        return { at: clock(run.started ?? j.started) || when(run.started ?? j.started), word: runWord(run.kind), id: shownId(j.id ?? j.name), title: j.item?.title || j.name, size: run.kind === "build" ? j.size ?? "" : "" };
+        return { at: at(run.started ?? j.started), word: runWord(run.kind), id: shownId(j.id ?? j.name), title: j.item?.title || j.name, size: run.kind === "build" ? j.size ?? "" : "" };
       }),
     ],
+    queued: (s.queued ?? []).map((q) => ({ id: shownId(`${q.repo}-${q.id}`), title: q.title ?? "" })),
     herald: heraldRows(s),
+    // The Inspector's lists: the window's failures, the issues of each stage and of each outcome class.
+    failures: (d.failures ?? []).slice(0, 20).map((x) => ({ id: shownId(x.issue), title: x.title ?? "", stage: NAMES[x.stage] ?? x.stage, at: when(x.at) })),
+    stageIssues: Object.fromEntries(Object.entries(d.stages?.issues ?? {}).map(([k, xs]) => [k, top(xs as any[])])),
+    classIssues: Object.fromEntries((d.classes ?? []).map((c) => [c.key, top(c.top ?? [])])),
   };
 }
 
 /** The Status page for the state `s` and the flow `d` (with its baseline) as lines of at most `width` columns, at most `height` of them. */
 export function render(s: State, d: Flow, { width, height }: { width: number; height: number }): string[] {
   const out: string[] = [], line = (t: string) => out.push(clip(t, width)), head = (t: string) => out.push(`\x1b[1m${clip(t, width)}\x1b[22m`);
-  const v = verdict(s);
-  out.push(paint(TONES[v.tone], clip(v.text, width)));
+  const p = data(s, d);
+  out.push(paint(TONES[p.status.tone], clip(p.status.text, width)));
 
   head("Scorecard");
-  for (const c of scorecard(s, d)) line(`${c.name} ${c.value} ${c.trend} ${c.note}`);
-
-  head("Agent Time");
-  const a = agentTime(d);
-  line(a.all > 0 ? `${cardPct(a.kept / a.all)} reached main · ${hours(a.kept)} of ${hours(a.all)}` : "No data");
+  for (const c of p.scorecard) line(`${c.name} ${c.value} ${c.trend} ${c.note}`);
 
   head("Pipeline");
-  for (const r of pipeline(d)) line(`${r.name} ${r.text}`);
+  for (const r of p.pipeline.rows) line([r.name, r.runs && `${r.runs}/issue`, `p90 ${r.p90}`, r.failed && `${r.failed} failed`, r.hours].filter(Boolean).join(" · "));
+  line(p.pipeline.counts.map((c) => `${c.name} ${c.value}`).join(" · "));
 
   // The newest bucket is the stage counts now.
-  head("Active Issues");
-  const now = d.active?.at(-1);
+  head("Issues");
+  const now = p.active.at(-1);
   line(now ? `${NAMES.intake} ${now.intake} · Queued ${now.queue} · Running ${now.running} · Landed ${now.landed}` : "No data");
 
-  head("Herald");
-  for (const a of s.asks ?? []) line(`${a.label} ${shownId(a.id, a.repo)} ${shortText(a.headline || a.title)}`);
-  for (const j of s.errored ?? []) line(`Error ${shownId(j.name)} ${j.item?.title || j.name}`);
-  for (const i of s.runningIssues ?? []) line(`${clock(i.at ?? i.since) || when(i.at ?? i.since)} ${i.stage} ${shownId(i.id)} ${i.title}`);
-  for (const j of s.running ?? []) {
-    const run = j.run ?? { kind: "build", started: j.started };
-    line(`${clock(run.started ?? j.started) || when(run.started ?? j.started)} ${runWord(run.kind)} ${shownId(j.id ?? j.name)} ${j.item?.title || j.name}`);
-  }
-  for (const r of heraldRows(s)) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
+  head(`Herald ${p.badge.text}`);
+  for (const a of p.asks) line(`${a.label} ${a.id} ${a.title}`);
+  for (const j of p.errored) line(`Error ${j.id} ${j.title}`);
+  for (const r of p.running) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
+  for (const r of p.herald) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
   // The newest events come first, so the cut at the pane's height drops the oldest.
   return out.slice(0, height);
 }
 
-/** The state and the week's flow, read as the routes do. */
+/** The window of `--window`, week when it is not given. */
+const win = (process.argv[process.argv.indexOf("--window") + 1] ?? "week") as Window;
+if (process.argv.includes("--window") && !FACTORY.includes(win)) throw new Error(`--window takes ${FACTORY.join(", ")}`);
+
+/** The state and the window's flow, read as the routes do. */
 async function load(): Promise<[State, Flow]> {
-  const now = new Date(), fit = await currentFit(), d = speed("week", now, fit);
-  return [await stateBody(null), { ...d, figures: figures(d), baseline: baseline("week", now, fit) }];
+  const now = new Date(), fit = await currentFit(), d = speed(win, now, fit);
+  return [await stateBody(null), { ...d, figures: figures(d), baseline: baseline(win, now, fit), open: openNow() }];
 }
 
 // `--json` prints the page once as data, for the Herdr desktop app's mod, and exits.

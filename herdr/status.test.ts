@@ -24,7 +24,7 @@ const flow: any = {
   figures: { lost: 0.38, hours: 6, leadP50: 1570, leadP90: 16560, landed: 7, firstPass: 0.91 },
   baseline: { base: { lost: 0.25, leadP50: 1200, firstPass: 0.8 }, prev: {}, basis: "the previous 7 days" },
   classes: [{ key: "landed", lost: false, hours: 8 }, { key: "failed", lost: true, hours: 2 }],
-  stages: { rows: ["intake", "build", "review", "recheck", "land"].map((stage) => ({ stage, runs: 3, items: 2, unusable: 1, p90: 300 })) },
+  stages: { rows: ["intake", "build", "review", "recheck", "land"].map((stage) => ({ stage, runs: 3, items: 2, unusable: 1, p90: 300, minutes: 1 })) },
   phases: { queue: { count: 2, p90: 90 } },
   active: [{ intake: 1, queue: 2, running: 3, landed: 4 }],
 };
@@ -43,17 +43,17 @@ test("the first line is the coloured status sentence and the sections follow in 
   expect(lines[0].startsWith("\x1b[31m")).toBe(true);
   const narrow = plain(render(state, flow, { width: 20, height: 60 }))[0];
   expect(narrow.endsWith("…") && verdict(state).text.startsWith(narrow.slice(0, -1))).toBe(true);
-  const at = ["Scorecard", "Agent Time", "Pipeline", "Active Issues", "Herald"].map((h) => text.indexOf(h));
+  const at = ["Scorecard", "Pipeline", "Issues", "Herald Not OK"].map((h) => text.indexOf(h));
   expect(at.every((i) => i > 0)).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
 });
 
 test("the scorecard has its five labels, and the alerts and running jobs come before the events", () => {
   const text = plain(render(state, flow, { width: 80, height: 60 }));
-  const card = text.slice(text.indexOf("Scorecard"), text.indexOf("Agent Time"));
+  const card = text.slice(text.indexOf("Scorecard"), text.indexOf("Pipeline"));
   for (const label of ["Efficiency", "Completion", "Issues", "Jobs", "Usage"]) expect(card.some((l) => l.startsWith(label))).toBe(true);
   expect(card.find((l) => l.startsWith("Efficiency"))).toContain("▼");
-  const herald = text.indexOf("Herald"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
+  const herald = text.indexOf("Herald Not OK"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
   expect(herald).toBeLessThan(ask);
   expect(ask).toBeLessThan(errored);
   expect(errored).toBeLessThan(run);
@@ -93,4 +93,14 @@ test("the data's Herald is one row per issue with its older events folded, and a
   expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["housekeeper j3", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"], ["judge j2", "ended", ""]]);
   expect(rows[0].fold.map((f: any) => [f.label, f.text])).toEqual([["retitled", "aleph-8 New name"]]);
   expect(rows[1].fold.map((f: any) => f.label)).toEqual(["filed"]);
+});
+
+test("the Pipeline splits Implement's hours by outcome class, and the badge takes the worst alert", () => {
+  const p = data(state, flow);
+  expect(p.pipeline.rows.map((r) => r.name)).toEqual(["Intake", "Queue", "Implement", "Review", "Recheck", "Land"]);
+  expect(p.pipeline.rows.find((r) => r.key === "build")).toMatchObject({ hours: "10h", bar: 1, failed: "33%", tone: "alert" });
+  expect(p.pipeline.classes.map((c) => [c.key, c.text])).toEqual([["landed", "8.0h"], ["failed", "2.0h"]]);
+  expect(p.pipeline.counts.find((c) => c.name === "Errored")).toEqual({ name: "Errored", value: "1", tone: "alert" });
+  expect(p.badge).toEqual({ text: "Not OK", tone: "alert" });
+  expect(data({ ...state, asks: [], errored: [], factory: { ...state.factory, health: [] } }, flow).badge).toEqual({ text: "OK", tone: "fine" });
 });
