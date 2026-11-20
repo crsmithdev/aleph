@@ -457,6 +457,12 @@ export function onTile(el, fn) {
 /** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. */
 export const card = (title, body, { count, aside, id, level, cls = "", label = title, lede } = {}) =>
   `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${sectionHead(title, { count, aside, id, level })}${lede ? `<p class="lede">${esc(lede)}</p>` : ""}${body}</section>`;
+/** A card split 3 : 1 by a rule: the head and `main` on the left, `side` on the right. */
+export const splitCard = (title, main, side, { aside, id, label = title } = {}) =>
+  `<section class="card duo"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}"><div class="duo-main">${sectionHead(title, { aside })}${main}</div><div class="duo-side">${side}</div></section>`;
+/** The side stats of a split card: each `{ k, v, note, state, title }` a key over a value; `state` colours the value by `tone(state)`; `title` is its tooltip. */
+export const sideStats = (items) =>
+  `<dl class="sstats">${items.map(({ k, v, note, state, title }) => `<div${title ? ` title="${esc(title)}"` : ""}><dt>${esc(k)}</dt><dd><b${state ? ` class="${tone(state)}"` : ""}>${esc(v)}</b>${note ? `<span>${esc(note)}</span>` : ""}</dd></div>`).join("")}</dl>`;
 /** The one table: `head` is the cells of the header row, or "" for none; `rows` the rows. */
 export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
   `<div class="tscroll"><table class="tbl${fit ? " fit" : ""}"${id ? ` id="${esc(id)}"` : ""}>${head ? `<thead><tr>${head}</tr></thead>` : ""}<tbody>${rows}</tbody></table></div>`;
@@ -482,8 +488,8 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 }
 /** The rows of a bar list on one grid, so their bars start and end together. */
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
-/** The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours. */
-export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
+/** The HTML legend: one `<li>` per `[label, cls, attrs]`; a `cls` gives the item a swatch that CSS colours; `attrs` (HTML attributes) makes the item a button. */
+export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls, attrs]) => { const in_ = `${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}`; return `<li>${attrs ? `<button type="button" class="lgo" ${attrs}>${in_}</button>` : in_}</li>`; }).join("")}</ul>`;
 /** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
 export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
 const param = (q, k) => (typeof q.get === "function" ? q.get(k) : q[k]);

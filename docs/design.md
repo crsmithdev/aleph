@@ -76,7 +76,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 |---|---|---|---|
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #169A69, #C28000, #DC5F92 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #A079DC, #2398B8 | extra series |
-| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | the Status Agent Time bar, under white text |
+| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `--seg-landed` in `ui/app.css` | not set again | the Status Pipeline's Implement bar and its legend |
 | `--fill-run`, `--fill-error`, `--fill-done`, `--fill-aux` | `--fill-run` in `ui/app.css` | not set again | timeline bar fills, under white text |
 
 | Do | Don't |
@@ -206,14 +206,14 @@ Weight 700 stays a literal on `.mark`.
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | dock widgets: font picker, annotations |
 
-A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
+A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring.
 
 #### Breakpoints and motion
 
 | Rule | Value |
 |---|---|
 | Breakpoints | 720px and 1100px, literal, as `@media` takes no tokens |
-| Container widths | two `@container` widths, literal: 560px (`pipeline`) and 420px (`.tile`, `.issue-row`) |
+| Container widths | two `@container` widths, literal: 560px (`.card.duo`) and 420px (`.tile`, `.issue-row`) |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
 
 ### The dock bridge
@@ -733,14 +733,17 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
 - Put two or three panels side by side in `.trio`, which has three columns. With two panels, give one the class `wide`: `panelOf(key, frame, "wide")`. Under 1100px, they stack.
 - Put four panels of equal width in one row in `.quad`. In `.quad`, each panel's form control sits under its title. Under 1100px, they stack.
+- For a chart that is one part of a card, such as a side of a split card, call `panelOf(key, frame, "", { bare: true })`. A bare chart has no card, no title and no form control: it opens in the frame's `form`, and its plot is 160px high minimum. Put its title in `subHead()` above it, unless the card's title names it.
+- Set `cap` on a columns frame when one bucket can flatten the rest, in the measure's unit. A column past the cap is cut there and labelled with its total in `--need`. Prefer a median to a cap for a slow tail: the cap is for a whole bucket that is slow.
 
 | Do | Don't |
 |---|---|
 | `color: "done"` in a frame's `by` | a hex colour in a series |
 | a legend on a stacked chart | a stacked chart with no legend |
 | `panelOf("agents/cost", frame)` | an ECharts instance made by the view |
+| `cap: 1800` on a frame of medians in seconds | a log axis, or an axis max set by the view |
 
-Two charts are allowed outside the chart panel: the Agent Time bar (`ui/views/lib/flow-parts.js`) and the session waterfall (`ui/views/session.js`).
+One chart is allowed outside the chart panel: the session waterfall (`ui/views/session.js`).
 
 #### Legend
 
@@ -750,15 +753,16 @@ A legend gives the colour of each series in a chart that is not a chart panel.
 
 | Helper | Reference |
 |---|---|
-| `legendHtml([[label, cls]])` | `ui/views/lib/timeline.js` |
+| `legendHtml([[label, cls, attrs]])` | `ui/views/lib/timeline.js`; `renderPipeline()` in `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Item | The name of one series | | `--fs-xs`, `--muted`; one row that wraps |
 | 2 | Swatch | The colour of the series | yes | its `t-*` class; 14px by 8px, radius `--r-hair`; a mark (`t-made`, `t-done`) is 2px by 12px |
 
-- Set `cls` to a timeline class: `t-build`, `t-bad`, `t-land`, `t-aux`, `t-wait`, `t-chris`, `t-made` or `t-done`. With no `cls`, the item has no swatch.
-- Put the legend in the aside of the panel that holds the chart.
+- Set `cls` to a timeline class: `t-build`, `t-bad`, `t-land`, `t-aux`, `t-wait`, `t-chris`, `t-made` or `t-done`; to an outcome class, `seg-landed` to `seg-dropped`; or, under a bare chart with no legend of its own, to the `c-*` class of each key's colour. With no `cls`, the item has no swatch.
+- Give `attrs` to make an item a button, such as `data-inspect` for the Herald's Inspector. The item underlines on hover.
+- Put the legend in the aside of the panel that holds the chart, or under a bare chart.
 
 | Do | Don't |
 |---|---|
@@ -792,6 +796,37 @@ A meter shows one share of a whole, or the segments of a whole.
 |---|---|
 | `meter(42, "42% used")` | a meter with no label and no value next to it |
 | `barRow(…, { top: true })` on the largest row | `--hot` set by hand |
+
+#### Split card
+
+A split card puts a main part and a side part in one card, split 3 : 1 by a rule.
+
+**Use:** for a card whose main part is a table or a chart, with a few related figures or a second small chart beside it. **Not for:** two sections of equal weight; use a pair of cards.
+
+| Helper | Reference |
+|---|---|
+| `splitCard(title, main, side, { aside, id, label })`; `sideStats([{ k, v, note, state, title }])` | `renderPipeline()` in `ui/views/now.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Box | The card | | the card box, a grid of 3fr and 1fr |
+| 2 | Main | The head (title and aside) and the main part | | `--sp-20` to the rule |
+| 3 | Rule | The split | | 1px `--rule`, `--sp-20` to the side |
+| 4 | Side | Side stats, or a bare chart under a `subHead()` | | centred in the card's height |
+| 5 | Side stat key `k` | The measure | | `--sans` `--fs-2xs` `--fw-strong`, capitals, `--muted` |
+| 6 | Side stat value `v` | The number | | `--metric` `--fs-2xl` `--fw-strong`, tabular, `--ink`; `state` colours it by `tone(state)` |
+| 7 | Side stat note | One or two words, such as `now` | yes | `--fs-2xs`, `--muted`; one line |
+
+- Give the side at most six stats. They sit in two columns.
+- Put the title on the main part. The side has no title of its own.
+- Set `state` only on a stat that is a state, such as `landed` or `failed`, so the value takes that state's tone.
+- Put a definition in the stat's `title`, not in its note.
+- In a container under 560px, the side goes under the main, behind a rule, and the stats sit in three columns.
+
+| Do | Don't |
+|---|---|
+| `{ k: "Errored", v: "1", note: "now", state: "failed" }` | `{ k: "Errored", v: "1", note: "jobs errored right now" }` |
+| `{ k: "Open", v: "12", note: "+6", title: "12 open issues, 6 parked issues" }` | `{ k: "Open", v: "12", note: "+6 parked" }` that overflows its column |
 
 #### Timeline
 
@@ -1565,14 +1600,14 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Jobs in `ui/views/lib/processes.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
-| Parts of the Status page written by hand, with no helper: the Pipeline's stage nodes (`div.pnode`) and the feed's rows (`div.event-row`, `div.event-brief`) | `renderPipeline()` in `ui/views/now.js`; `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
+| Parts of the Status page written by hand, with no helper: the feed's rows (`div.event-row`, `div.event-brief`) | `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
 | Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
-| Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/lib/flow-parts.js`, `ui/views/session.js` | allowed |
+| A chart outside the chart panel: the session waterfall | `ui/views/session.js` | allowed |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
-| The `@container` queries at 560px (`pipeline`) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
+| The `@container` queries at 560px (a split card) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |

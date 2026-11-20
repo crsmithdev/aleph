@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { FORMS, formOf, label, option, panel, title } from "./chart.js";
+import { FORMS, formOf, label, option, panel, panelOf, title } from "./chart.js";
+// @ts-ignore plain JS shared with the page
+import { empty } from "./html.js";
 
 const keys = [{ key: "a", name: "A", color: "series-1" }, { key: "b", name: "B" }, { key: "z", name: "Z" }];
 const at = (d: number) => new Date(2026, 9, d).toISOString();
@@ -128,4 +130,23 @@ test("a time row with a name is a step: its name is its axis label; on and dashe
   const o = option(f, "columns", { ink: "#i" });
   expect(o.xAxis.data).toEqual(["1", "2", "3"]);
   expect(o.series[0].data).toEqual([5, { value: 9, itemStyle: { color: "#i" } }, { value: 2, itemStyle: { borderColor: "#i", borderType: "dashed", borderWidth: 1 } }]);
+});
+
+test("a cap tops the value axis of columns once a column passes it, and labels that column's total at the cap", () => {
+  const f = { ...time, measure: { name: "Median Time", unit: "seconds", agg: "max" }, rows: [{ at: at(27), a: 100, b: 200 }, { at: at(28), a: 3000, b: 600 }], cap: 1800 };
+  const o: any = option(f, "columns", { ...T, need: "#n", surface: "#s" });
+  expect(o.yAxis.max).toBe(1800);
+  expect(o.series[0].markPoint.data).toEqual([{ coord: [1, 1800], value: 3600, label: { formatter: "1h 00m" } }]);
+  expect(o.series[1].markPoint).toBeUndefined();
+  // Under the cap, or in another form, the axis is free.
+  expect((option({ ...f, rows: [f.rows[0]] }, "columns", T) as any).yAxis.max).toBeUndefined();
+  expect((option(f, "lines", T) as any).yAxis.max).toBeUndefined();
+});
+
+test("a bare panel is the chart alone in its frame's form: no card, no title, no form control", () => {
+  const h = panelOf("x/y", time, "", { bare: true });
+  expect(h).toStartWith('<aleph-chart key="x/y" bare><div class="chartbox" role="img"');
+  expect(h).not.toContain("<section");
+  expect(h).not.toContain("data-form");
+  expect(panel({ ...time, rows: [] }, "area", true)).toBe(empty());
 });

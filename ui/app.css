@@ -1237,28 +1237,12 @@ pre.stat b { color: var(--need); }
 /* contain: size takes the card out of the row's height, so the row is as tall as .rail-main and the card stretches to it, never past the viewport. */
 .rail > .herald-card { position: sticky; top: var(--sp-16); align-self: stretch; contain: size; max-height: calc(100vh - 2 * var(--sp-16)); }
 @media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; contain: none; max-height: none; } .rail .herald-feed { max-height: 380px; } }
-/* Pipeline: each stage a ring on one track, a bold arrow between; the ring's colour is the stage's failed share. */
-#pipeline { container: pipeline / inline-size; }
-.pflow { display: flex; align-items: flex-start; gap: var(--sp-4); padding: var(--sp-4) 0; }
-.pnode { flex: none; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); width: 84px; text-align: center; }
-.ring { display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: var(--r-pill); background: var(--surface); box-shadow: inset 0 0 0 5px var(--rule); color: var(--ink-2); font: var(--fw-strong) var(--fs-lg)/1 var(--num); font-variant-numeric: tabular-nums; }
-.pnode.fine .ring { box-shadow: inset 0 0 0 5px var(--done); color: var(--done); }
-.pnode.warning .ring { box-shadow: inset 0 0 0 5px var(--need); color: var(--need); }
-.pnode.alert .ring { box-shadow: inset 0 0 0 5px var(--error); color: var(--error); }
-.pnode.wait .ring { font-size: var(--fs-xs); font-weight: var(--fw-text); color: var(--muted); }
-.pnode.idle .ring { background: var(--sunk); box-shadow: none; border: 2px dashed var(--rule); color: var(--muted); }
-.pgo { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); border-radius: var(--r-ctl); cursor: pointer; }
-.pgo:hover .ring { background: var(--rule-2); }
-.pgo:hover .pn { text-decoration: underline; }
+/* Pipeline: a stage's name opens it in the Herald's Inspector; its failed share links to the failed runs, coloured by its tone. */
+.pgo { all: unset; cursor: pointer; font-weight: var(--fw-strong); color: var(--ink); border-radius: var(--r-hair); }
+.pgo:hover { text-decoration: underline; }
 .pgo:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.pn { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--ink); }
-.pt, .pf { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pnode.warning .pf { color: var(--need); font-weight: var(--fw-strong); }
-.pnode.alert .pf { color: var(--error); font-weight: var(--fw-strong); }
-.parrow { flex: 1 1 0; min-width: 16px; height: 4px; margin-top: var(--sp-28); background: var(--rule); position: relative; }
-.parrow::after { content: ""; position: absolute; right: -2px; top: -8px; border-left: 14px solid var(--rule); border-top: 10px solid transparent; border-bottom: 10px solid transparent; }
-/* Under 560px the track wraps 3 stages a row. */
-@container pipeline (max-width: 560px) { .pflow { flex-wrap: wrap; justify-content: center; row-gap: var(--sp-12); } .parrow { flex: 0 0 16px; } }
+.pf.need { color: var(--need); font-weight: var(--fw-strong); }
+.pf.error { color: var(--error); font-weight: var(--fw-strong); }
 input:where(:not([type="checkbox"], [type="radio"])), select, textarea { font: var(--fs-sm) var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-4) var(--sp-8); }
 input[type="search"] { background: var(--sunk); }
 form.stack { display: grid; gap: var(--sp-8); max-width: 640px; margin-top: var(--sp-8); }
@@ -1391,11 +1375,26 @@ details.herald-group[open] .event-more { color: var(--ink); background: var(--ru
 .chartbox { width: 100%; height: 200px; min-width: 0; overflow: hidden; }
 /* A chart panel fills its grid cell; its chart takes the height the card leaves. The basis is 0, not the content:
    ECharts sizes its canvas to the box, so a box sized by its content grows each time the chart resizes. */
+/* A split card: the head and the main part on the left, a rule, and a side part a third of the main's width. In a container under 560px, the side goes under the main. */
+.card.duo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
+.duo-main { min-width: 0; padding-right: var(--sp-20); display: flex; flex-direction: column; }
+.duo-side { min-width: 0; padding-left: var(--sp-20); border-left: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: center; }
+.sstats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16) var(--sp-12); margin: 0; }
+.sstats dt { color: var(--muted); font: var(--fw-strong) var(--fs-2xs)/1.2 var(--sans); letter-spacing: var(--ls-caps); text-transform: uppercase; }
+.sstats dd { display: flex; align-items: baseline; gap: var(--sp-4); margin: var(--sp-2) 0 0; }
+.sstats b { color: var(--ink); font: var(--fw-strong) var(--fs-2xl)/1 var(--metric); font-variant-numeric: tabular-nums; }
+.sstats b.done { color: var(--done); } .sstats b.error { color: var(--error); }
+.sstats span { font-size: var(--fs-2xs); color: var(--muted); white-space: nowrap; }
+@container (max-width: 560px) { .card.duo { grid-template-columns: minmax(0, 1fr); } .duo-main { padding-right: 0; } .duo-side { padding: var(--sp-16) 0 0; margin-top: var(--sp-16); border-left: 0; border-top: 1px solid var(--rule); } .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.lgo { all: unset; display: inline-flex; align-items: center; gap: var(--sp-6); cursor: pointer; border-radius: var(--r-hair); }
+.lgo:hover { color: var(--ink); text-decoration: underline; }
+.lgo:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* A bare chart has no card of its own: it fills the part of the card that holds it. */
+aleph-chart[bare] { flex: 1 1 0; }
+aleph-chart[bare] .chartbox { min-height: 160px; }
 aleph-chart { display: flex; min-width: 0; }
 aleph-chart > .card { flex: 1; }
 aleph-chart .chartbox { flex: 1 1 0; height: auto; min-height: 200px; }
-/* Status: the Active Issues chart is as tall as the Pipeline card below it, 341px at its one-row width. */
-aleph-chart.active-issues { height: 341px; }
 /* Status: Active Jobs is as tall as the Agent Time card below it. */
 aleph-chart.active .chartbox { min-height: 0; height: 58px; flex: none; }
 .bars { display: grid; grid-template-columns: minmax(80px, 200px) minmax(40px, 1fr) max-content; column-gap: var(--sp-12); }
@@ -1568,26 +1567,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
   .dp-ev > :nth-child(2) { grid-column: 2; }
   .dp-ev > .dp-evt { grid-column: 1 / -1; }
 }
-.obar { display: flex; }
-/* The Status Agent Time card: the kept share as the figure, a 10px bar with a gap between kept and lost, and a two-column legend. */
-.ohead { display: flex; align-items: baseline; gap: var(--sp-8); margin-bottom: var(--sp-10); color: var(--muted); font-size: var(--fs-sm); }
-.ohead b { color: var(--ink); font: var(--fw-strong) 32px/1 var(--num); letter-spacing: -0.02em; }
-.obar.thin { gap: var(--sp-2); height: 10px; }
-.obar.thin > i { min-width: 4px; }
-.obar.thin > :first-child { border-radius: var(--r-pill) 0 0 var(--r-pill); }
-.obar.thin > :last-child { border-radius: 0 var(--r-pill) var(--r-pill) 0; }
-.obar.thin > .ogap { flex: none; width: var(--sp-4); min-width: 0; }
-.oledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-24); margin-top: var(--sp-12); font-size: var(--fs-xs); color: var(--ink-2); }
-.oledger > div { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-4) var(--sp-12); align-content: start; }
-.oledger span:nth-of-type(3n+1) { display: inline-flex; align-items: center; gap: var(--sp-6); }
-.oledger i { width: 10px; height: 10px; border-radius: var(--r-hair); }
-.oledger .m { color: var(--muted); }
-/* A ledger line's Herald Inspector button sits behind its row's cells, which pass their clicks to it. */
-.oledger > div { position: relative; isolation: isolate; }
-.oledger > div > span { pointer-events: none; }
-.oline { all: unset; position: absolute; inset: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-4)); grid-column: 1 / -1; z-index: calc(-1 * var(--z-rowlink)); cursor: pointer; border-radius: var(--r-hair); }
-.oline:hover { background: var(--sunk); }
-.oline:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .seg-landed { background: var(--seg-landed); }
 .seg-returned { background: var(--seg-returned); }
 .seg-failed { background: var(--seg-failed); }

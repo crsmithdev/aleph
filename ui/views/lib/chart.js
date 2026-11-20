@@ -14,6 +14,8 @@
 //     and `pick` (a click on its point makes the panel send a bubbling `chartpick` event whose detail is `pick`).
 //   form: the form the panel opens in, where its group offers it.
 //   legend: false hides the legend, for a frame of one key that the title already names.
+//   cap: a top for the value axis of a columns form, in the measure's unit. A column over it is cut there and labelled
+//     with its total, so one outlier does not flatten the others.
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
 import { keep, kept } from "./address.js";
@@ -79,7 +81,9 @@ export function option(frame, form, t, hidden = []) {
   const none = f.over.kind === "time" && form === "points" ? null : 0;
   // A share point with nothing to divide is a gap, not 0%. A row whose key is null has no value there: a gap, not 0.
   const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : r[k.key] === undefined ? none : r[k.key]));
-  const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt, hideOverlap: true } };
+  // A cap applies only to stacked columns over time, and only when a column passes it.
+  const cut = f.cap && form === "columns" && f.over.kind === "time" && Math.max(...sums) > f.cap;
+  const value = { type: "value", min: 0, ...(share ? { max: 100 } : cut ? { max: f.cap } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt, hideOverlap: true } };
   const base = (k) => ({ name: k.name, data: data(k), ...(k.color ? { color: t[k.color] } : {}) });
   // A hidden legend frees the top band it takes; 8 px keeps the top y label inside the box.
   const top = f.legend === false ? 8 : 28;
@@ -97,8 +101,8 @@ export function option(frame, form, t, hidden = []) {
       grid: { left: 40, right: 16, top, bottom: 20 },
       xAxis: { type: "category", boundaryGap: bars, data: dated, axisTick: { show: false }, axisLabel: { hideOverlap: true, formatter: perDay } },
       yAxis: value,
-      series: ks.map((k) => bars
-        ? { ...base(k), type: "bar", stack: "all", barMaxWidth: 64 }
+      series: ks.map((k, j) => bars
+        ? { ...base(k), type: "bar", stack: "all", barMaxWidth: 64, ...(cut && !j ? { markPoint: capMarks(f, sums, fmt, t) } : {}) }
         : points
           ? { ...base(k), type: "line", symbol: "circle", symbolSize: 9, lineStyle: { width: 0 } }
           : { ...base(k), type: "line", symbol: "none", ...(stack ? { stack: "all", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 } } : { lineStyle: { width: 2 }, connectNulls: true }) }),
@@ -116,18 +120,26 @@ export function option(frame, form, t, hidden = []) {
   };
 }
 
+/** The labels of the columns over the cap: each column's total, at the cap, inside its top. The bar is clipped there, so the label sits on the first series as a mark. */
+const capMarks = (f, sums, fmt, t) => ({
+  symbol: "rect", symbolSize: 0, silent: true,
+  label: { show: true, position: "bottom", color: t.need, fontWeight: 600, backgroundColor: t.surface, padding: [1, 2] },
+  data: sums.flatMap((v, i) => (v > f.cap ? [{ coord: [i, f.cap], value: v, label: { formatter: fmt(v) } }] : [])),
+});
+
 /** The panel's markup for frame `f` in `form`: the card, its form control and the chart box, or the empty line. */
-export function panel(f, form) {
+export function panel(f, form, bare = false) {
   const mark = f.error && f.since ? notice(markLine(title(f), f), true) : "";
-  if (!shown(f).length) return card(title(f), mark + empty());
+  if (!shown(f).length) return bare ? mark + empty() : card(title(f), mark + empty());
   const forms = seg("Chart form", FORMS[f.over.kind].map((x) => ({ label: x.label, icon: x.icon, on: x.key === form, attrs: ` data-form="${esc(x.key)}"` })));
   // The canvas has no keyboard path, so a linked row is also a link in a list that shows on focus.
   const links = f.rows.filter((r) => r.href).map((r) => `<li><a href="${esc(r.href)}">${esc(r.name ?? (f.over.kind === "time" ? `${day(new Date(r.at))} ${xLabel(r.at, f.over.window)}` : ""))}</a></li>`).join("");
-  return card(title(f), mark + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>` + (links ? `<ul class="chartlinks sr">${links}</ul>` : ""), { aside: forms });
+  const body = mark + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>` + (links ? `<ul class="chartlinks sr">${links}</ul>` : "");
+  return bare ? body : card(title(f), body, { aside: forms });
 }
 
-/** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. */
-export const panelOf = (key, f, cls = "") => `<aleph-chart key="${esc(key)}"${cls ? ` class="${esc(cls)}"` : ""}>${panel(f, formOf(f, kept(key, {}).form))}</aleph-chart>`;
+/** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. `bare` draws the chart alone, in its frame's form, for a part of a card. */
+export const panelOf = (key, f, cls = "", { bare = false } = {}) => `<aleph-chart key="${esc(key)}"${cls ? ` class="${esc(cls)}"` : ""}${bare ? " bare" : ""}>${panel(f, bare ? formOf(f) : formOf(f, kept(key, {}).form), bare)}</aleph-chart>`;
 
 if (globalThis.customElements && !customElements.get("aleph-chart")) {
   customElements.define("aleph-chart", class extends HTMLElement {
@@ -143,16 +155,17 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
 
     /** The panel's key: the frame and the kept state are its own. */
     get key() { return this.getAttribute("key"); }
+    get #bare() { return this.hasAttribute("bare"); }
     get #state() {
       const s = kept(this.key, {});
-      return { form: formOf(this.#frame, s.form), hidden: s.hidden ?? [] };
+      return { form: this.#bare ? formOf(this.#frame) : formOf(this.#frame, s.form), hidden: s.hidden ?? [] };
     }
 
     #render() {
       this.#chart?.dispose();
       this.#chart = null;
       const f = this.#frame, s = this.#state;
-      this.innerHTML = panel(f, s.form);
+      this.innerHTML = panel(f, s.form, this.#bare);
       const box = this.querySelector(".chartbox");
       if (!box || !globalThis.echarts) return;
       this.#chart = chart(box, option(f, s.form, readTokens(), s.hidden));

@@ -61,6 +61,8 @@ export interface Speed {
   stages: { rows: StageRow[]; issues: Record<(typeof PIPELINE)[number], StageIssue[]> };
   /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
+  /** Issues closed as dropped in the window: a `dropped` event on an issue key. A job's drop is not one. */
+  dropped: number;
   /** Landed issues (one per issue that landed in the window) and what they cost to get there. */
   issues: {
     landed: number;
@@ -168,7 +170,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const used = tokens[b.slotOf(t)];
     used[model] = (used[model] ?? 0) + (e.run.tokens ?? 0);
   }
-  const filings = readEvents(since.getTime()).filter((e) => e.action === "filed" && Date.parse(e.time) <= now.getTime() && eventIn(e.object, project, e.project));
+  const events = readEvents(since.getTime()).filter((e) => Date.parse(e.time) <= now.getTime() && eventIn(e.object, project, e.project));
+  const filings = events.filter((e) => e.action === "filed");
   // The filer is named in the subject only from NAMED_FILER on; before that the issue's source decides.
   let workers: Set<number> | undefined;
   const followup = (e: EventRow) => {
@@ -196,6 +199,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     lost: cls.lost,
     agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
     filed: { followups: filings.filter(followup).length, all: filings.length },
+    dropped: events.filter((e) => e.action === "dropped" && parseKey(e.object)?.kind === "issue").length,
   };
 }
 
@@ -227,6 +231,12 @@ function asksOf(inp: Inputs, project: string | undefined, since: number, now: nu
   return { count: asks.length, manual: asks.filter(escalated).length };
 }
 
+/** The open and parked issues now, of `project` or of all projects. */
+export function openNow(project?: string): { open: number; parked: number } {
+  const states = everyFetched().filter(({ repo }) => repoIn(repo, project)).map(({ item }) => status(item));
+  return { open: states.filter((x) => x === "open").length, parked: states.filter((x) => x === "parked").length };
+}
+
 /** The baseline in one read of its inputs: each span is computed from the same records and store. */
 export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Baseline {
   const b = BASELINE[window];
@@ -242,8 +252,8 @@ export const routes: Routes = {
     const w = sc.window as Window, project = sc.project ?? undefined;
     const fit = await currentFit(), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
-    // `figures`: what the Status cards show for the window, the same function the baseline's spans use.
-    const out = { ...d, figures: figures(d) };
+    // `figures`: what the Status cards show for the window, the same function the baseline's spans use. `open`: the counts now, for the Pipeline card.
+    const out = { ...d, figures: figures(d), open: openNow(project) };
     if (url.searchParams.get("baseline") !== "1") return Response.json(out);
     return Response.json({ ...out, baseline: baseline(w, now, fit, project, inp) });
   },

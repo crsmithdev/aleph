@@ -135,6 +135,17 @@ test("figures: the follow-ups are the agent subjects' filed events in the window
   conn().run("DELETE FROM events WHERE object LIKE '%-9001'");
 });
 
+test("dropped: the issues closed as dropped in the window; a job's drop and an earlier drop are not", () => {
+  const drop = (object: string, time: string) => conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, 'claude', 'dropped', ?)", [time, object]);
+  const now = new Date("2026-11-13T19:00:00Z");
+  drop("issue.9001", "2026-11-13T18:30:00Z");
+  drop("issue.9002", "2026-11-13T18:40:00Z");
+  drop("job.9003", "2026-11-13T18:40:00Z");
+  drop("issue.9004", "2026-11-12T10:00:00Z");
+  expect(speed("day", now).dropped).toBe(2);
+  conn().run("DELETE FROM events WHERE object IN ('issue.9001', 'issue.9002', 'job.9003', 'issue.9004')");
+});
+
 test("figures: before the filer is named, a filed event counts by the issue's source, not its subject", () => {
   const store = join(base, "sources");
   writeRepos({ alpha: {} }, store);

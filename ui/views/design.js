@@ -5,7 +5,7 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
@@ -44,6 +44,14 @@ const navMock = (n) => `<div class="navmock" data-v="${n}"><ul>` + [["Factory"],
 const row = (...xs) => `<div class="design-row">${xs.join("")}</div>`;
 
 const FRAMES = {
+  /** A flow of medians in seconds with one day past its cap of 30 minutes: the capped chart of a split card. */
+  capped: {
+    measure: { name: "Median Time", unit: "seconds", agg: "max" },
+    over: { kind: "time", window: "week" },
+    by: { name: "Phase", keys: [{ key: "intake", name: "Intake", color: "chart-6" }, { key: "queue", name: "Queue", color: "series-4" }, { key: "implement", name: "Implement", color: "run" }, { key: "land", name: "Land", color: "done" }] },
+    form: "columns", cap: 1800, legend: false,
+    rows: [20, 15, 4600, 25, 18].map((q, i) => ({ at: new Date(T0 + i * DAY).toISOString(), intake: 80, queue: q, implement: 540 + i * 60, land: 60 })),
+  },
   time: {
     measure: { name: "Agents Live", unit: "count", agg: "max" },
     over: { kind: "time", window: "week" },
@@ -70,6 +78,8 @@ const FRAMES = {
     rows: [],
   },
 };
+// The split card's left chart: the time frame again, under its own key, drawn bare.
+FRAMES.bare = FRAMES.time;
 
 const ISSUES = Array.from({ length: 8 }, (_, i) => ({
   at: new Date(T0 - i * 37e5).toISOString(), id: `a${1700 + i}`,
@@ -193,7 +203,13 @@ function renderDesign(d) {
     spec("chart-empty", "Chart panel, no data", panelOf("design/none", FRAMES.none), "", "") +
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
-    spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting the user", "t-chris"]])) +
+    spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting the user", "t-chris"]]) +
+      legendHtml([["landed 35h", "seg-landed", 'data-inspect="class" data-target="landed"'], ["reran 20h", "seg-reran", 'data-inspect="class" data-target="reran"']])) +
+    spec("split-card", "Split card", splitCard("Pipeline", dataTable(heads(["Stage", "Runs", "p90"], ["Runs", "p90"]), `<tr><td>Intake</td><td class="num">256</td><td class="num">2m 00s</td></tr><tr><td>Land</td><td class="num">314</td><td class="num">3m 26s</td></tr>`, { fit: true }),
+      sideStats([{ k: "Filed", v: count(540) }, { k: "Landed", v: count(295), state: "landed" }, { k: "Open", v: count(12), note: "+6", title: "12 open issues, 6 parked issues" }, { k: "Errored", v: count(1), note: "now", state: "failed" }]), { aside: legendHtml([["landed 35h", "seg-landed"], ["reran 20h", "seg-reran"]]) }) +
+      splitCard("Issues", panelOf("design/bare", FRAMES.time, "", { bare: true }), subHead("Median Time by Phase") + panelOf("design/capped", FRAMES.capped, "", { bare: true }) +
+        legendHtml([["Intake", "c-s6"], ["Queue", "c-s4"], ["Implement", "c-run"], ["Land", "c-done"]])),
+      "Side stats on the right of one; a bare chart on each side of the other, the right one capped at 30 minutes.") +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
 
     group("Lists of items") +

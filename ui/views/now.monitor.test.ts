@@ -12,45 +12,46 @@ import { seed } from "../../jobs/job.testkit.ts";
 import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clock } from "./lib/format.js";
-// @ts-ignore flow-parts.js is plain JS, shared with the page
-import { share } from "./lib/flow-parts.js";
 
 const calm = { ...withFactory({}), asks: [], errored: [] };
-test("the Pipeline card shows the 6 stages in order, each a ring of runs per issue in its health tone with its p90 time, and no other role", () => {
+/** The text of each body row of the Pipeline table, its cells joined by " | ". */
+const rowsOf = (h: string) => [...h.matchAll(/<tr>(.*?)<\/tr>/g)].slice(1).map((m) => [...m[1].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]*>/g, "")).join(" | "));
+const FIG = { kept: 3, hours: 1 }, CLASSES = [{ key: "landed", lost: false, hours: 3 }, { key: "reran", lost: true, hours: 1 }];
+
+test("the Pipeline card shows the 6 stages in order, each a row of runs per issue, p90, failed share and agent hours, and no other role", () => {
   const rows = [
-    { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10 },
-    { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 },
-    { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null },
-    { stage: "land", runs: 400, items: 100, unusable: 1, p90: 5 },
+    { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10, minutes: 1 },
+    { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804, minutes: 20 },
+    { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null, minutes: 2 },
+    { stage: "land", runs: 400, items: 100, unusable: 1, p90: 5, minutes: 0.3 },
   ];
-  const h = view.renderPipeline({ window: "week", stages: { rows }, phases: { queue: { count: 4, p90: 79 } } });
-  const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
-  expect(names).toEqual(["Intake", "Queue", "Implement", "Review", "Recheck", "Land"]);
-  // 2 of 9 build runs failed: 22%, amber; 0 of 3 intake runs: green.
-  expect(h).toContain('<div class="pnode warning"><button type="button" class="pgo" data-inspect="stage" data-target="build" title="Implement: 9 runs on 5 issues, 2 failed"><span class="ring">1.8</span><span class="pn">Implement</span><span class="pt">13m 24s</span></button><a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1">22% failed</a>');
-  expect(h).toContain('<div class="pnode fine"><button type="button" class="pgo" data-inspect="stage" data-target="intake" title="Intake: 3 runs on 3 issues"><span class="ring">1.0</span>');
-  expect(h).toContain('<span class="pn">Queue</span><span class="pt">1m 19s</span>');
-  // The failed share is pct()'s text: 1 of 400 is 0.3%, not a rounded 0%.
-  expect(h).toContain('>0.3% failed</a>');
-  expect(h.match(/class="pnode idle"/g)).toHaveLength(2);
-  // A stage with no run shows a "–" with its reason, not words; so does an empty queue.
-  expect(h).toContain('<span class="pt"><span title="Nothing ran in this window">–</span></span>');
-  expect(view.renderPipeline({ window: "week", stages: { rows }, phases: {} })).toContain('<span class="pt"><span title="Nothing waited in this window">–</span></span>');
-  expect(h).not.toMatch(/no run|no wait/);
-  // "p90" is said once, in the aside, not under each stage.
-  expect(h.match(/p90/g)).toHaveLength(1);
+  const h = view.renderPipeline({ window: "week", stages: { rows }, phases: { queue: { count: 4, p90: 79 } }, figures: FIG, classes: CLASSES });
+  // A stage with no run and the queue show a "–" with its reason, not words; Implement's hours are its classes' (3h + 1h).
+  expect(rowsOf(h)).toEqual([
+    "Intake | 1.0 | – | 0.0% |  | 0.1h",
+    "Queue | – | 1m 19s | – |  | –",
+    "Implement | 1.8 | 13m 24s | 22% |  | 4.0h",
+    "Review | – | – | – |  | –",
+    "Recheck | – | – | – |  | –",
+    "Land | 4.0 | 5s | 0.3% |  | 2.0h",
+  ]);
+  // 2 of 9 build runs failed: 22%, amber; 1 of 400 land runs is 0.3%, under 10%, so no tone.
+  expect(h).toContain('<a class="pf need" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1">22%</a>');
+  expect(h).toContain('<a class="pf" href="#/factory/jobs?stage=land&amp;unusable=1">0.3%</a>');
+  // Implement's bar is its outcome classes, on the scale of the largest stage; the others are one fill.
+  expect(h).toContain('<span class="meter" role="img" aria-label="landed 3.0h, reran 1.0h" title="landed 3.0h, reran 1.0h"><i class="seg-landed" style="width:75.0%"></i><i class="seg-reran" style="width:25.0%"></i></span>');
+  expect(h).toContain('<span class="meter" aria-hidden="true"><i style="width:50.0%"></i></span>');
+  expect(view.renderPipeline({ window: "week", stages: { rows }, phases: {}, figures: FIG, classes: CLASSES })).toContain('<span title="Nothing waited in this window">–</span>');
   expect(h).not.toContain(">monitor<");
   expect(view.renderPipeline(null)).toContain("Loading the pipeline…");
 });
 
-test("each Pipeline ring and each Agent Time line is an Inspector target that names its stage or class; an idle stage is none", () => {
-  const rows = [{ stage: "review", runs: 4, items: 4, unusable: 0, p90: 60 }, { stage: "recheck", runs: 2, items: 2, unusable: 1, p90: 30 }];
-  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: { queue: { count: 1, p90: 5 } } }, new URLSearchParams("window=day&project=aleph"));
-  expect([...h.matchAll(/data-inspect="stage" data-target="([^"]*)"/g)].map((m) => m[1])).toEqual(["queue", "review", "recheck"]);
-  expect(h.match(/class="pnode idle"/g)).toHaveLength(3);
+test("each Pipeline stage name and each outcome in its legend is an Inspector target that names its stage or class", () => {
+  const rows = [{ stage: "review", runs: 4, items: 4, unusable: 0, p90: 60, minutes: 1 }, { stage: "recheck", runs: 2, items: 2, unusable: 1, p90: 30, minutes: 1 }];
   const classes = [{ key: "landed", lost: false, hours: 2 }, { key: "returned", lost: true, hours: 1 }, { key: "dropped", lost: true, hours: 0 }];
-  const ledger = share({ figures: { kept: 2, hours: 1 }, classes });
-  expect([...ledger.matchAll(/<button type="button" class="oline" data-inspect="class" data-target="([^"]*)" aria-label="\1" style="grid-row:\d+ \/ span 1"><\/button>/g)].map((m) => m[1])).toEqual(["landed", "returned"]);
+  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: { queue: { count: 1, p90: 5 } }, figures: { kept: 2, hours: 1 }, classes }, new URLSearchParams("window=day&project=aleph"));
+  expect([...h.matchAll(/data-inspect="stage" data-target="([^"]*)"/g)].map((m) => m[1])).toEqual(["intake", "queue", "build", "review", "recheck", "land"]);
+  expect([...h.matchAll(/data-inspect="class" data-target="([^"]*)"/g)].map((m) => m[1])).toEqual(["landed", "returned"]);
 });
 
 /** The flow data of the Inspector tests: two build issues, the failed one first, and the returned class's issues, most hours first, as /api/flow sorts them. */
@@ -95,11 +96,11 @@ test("a kept Inspector tab on the returned class lists its issues with their hou
 });
 
 test("a Pipeline stage with an unusable run links its failed share to the unusable runs of the page's window and project; one with none keeps plain text", () => {
-  const rows = [{ stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 }, { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null }];
-  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: {} }, new URLSearchParams("window=day&project=aleph"));
-  expect(h).toContain('<a class="pf" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1&amp;window=day&amp;project=aleph">22% failed</a>');
-  expect(h).toContain('<span class="pf">0.0% failed</span>');
-  expect(h.match(/class="pf"/g)).toHaveLength(2);
+  const rows = [{ stage: "build", runs: 9, items: 5, unusable: 2, p90: 804, minutes: 20 }, { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null, minutes: 2 }];
+  const h = view.renderPipeline({ window: "day", stages: { rows }, phases: {}, figures: FIG, classes: CLASSES }, new URLSearchParams("window=day&project=aleph"));
+  expect(h).toContain('<a class="pf need" href="#/factory/jobs?stage=implement&amp;role=worker&amp;unusable=1&amp;window=day&amp;project=aleph">22%</a>');
+  expect(h).toContain('<td class="num">0.0%</td>');
+  expect(h.match(/class="pf/g)).toHaveLength(1);
 });
 
 test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {

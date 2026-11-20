@@ -4,11 +4,11 @@
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
-import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
+import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
-import { panelOf } from "./lib/chart.js";
+import { panelOf, title as chartTitle } from "./lib/chart.js";
 import { feedRow, heraldRow } from "./lib/feed.js";
-import { share, flowOf, statusCards, usable } from "./lib/flow-parts.js";
+import { flowOf, statusCards, usable } from "./lib/flow-parts.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./lib/ask-cards.js";
 import { verdict } from "../../lib/status-words.ts";
 import { needItems } from "./lib/memory-health.js";
@@ -24,7 +24,7 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline and `s.memory` the Memory page's data, which `more` adds; the page draws without them first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page, q)}</div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderPipeline(f, q, (s.errored ?? []).length)}${renderIssues(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page, q)}</div></div>`; },
   more: async (s, q) => { const [flow, memory] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q)]); return { ...s, flow, memory }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
@@ -38,7 +38,7 @@ export const view = {
       keep(WORD, b.matches(".ref-x") ? null : b.textContent);
       redrawHerald(root);
     };
-    if (usable(s.flow)) root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow);
+    if (usable(s.flow)) { root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow); root.querySelector('aleph-chart[key="status/speed"]').frame = speedFrame(s.flow); }
   },
   // The stream sends the Herald's rows when an event is added; the page draws them at once, until a state with a newer or equal `seq` replaces them.
   event: (root, live) => {
@@ -70,15 +70,6 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { performance: withWindow(PERFORMANCE, win) });
 }
 
-/** The Agent Time card: the kept share, its bar and its legend, with the kept hours of all in the aside. `d` is null while it loads, `{ error }` on a failed load. */
-function renderOutcome(d) {
-  const outcome = (body, aside = "") => card("Agent Time", body, { id: "outcome", label: "Agent time", aside });
-  if (!d) return outcome(loadingLine("the outcomes"));
-  if (d.error) return outcome(error(d.error));
-  const { kept, hours: lostH } = d.figures;
-  return outcome(share(d), lostH === null ? "" : `${esc(hours(kept))} of ${esc(hours(kept + lostH))}`);
-}
-
 /** The active-issues frame: per bucket, the issues in each stage (`d.active` of /api/flow), stacked. */
 export const activeFrame = (d) => ({
   measure: { name: "Active Issues", unit: "count", agg: "max" },
@@ -88,11 +79,29 @@ export const activeFrame = (d) => ({
   form: "area",
 });
 
-/** The Active Issues chart above the Pipeline card. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
-function renderActive(d) {
-  if (!d) return card("Active Issues", loadingLine("the active issues"), { id: "active-issues" });
-  if (d.error) return card("Active Issues", error(d.error), { id: "active-issues" });
-  return panelOf("status/active", activeFrame(d), "active-issues");
+/** The legend swatch class of each chart colour the speed chart uses. */
+const SWATCH = { "chart-6": "c-s6", "series-4": "c-s4", run: "c-run", done: "c-done" };
+/** The longest column the speed chart draws, in seconds: a slow bucket is cut there, so it does not flatten the rest. */
+const SPEED_CAP = 1800;
+/** The speed frame: per bucket, the median seconds of each phase that ended in it (`d.buckets` of /api/flow), stacked. The colours are Active Issues'. */
+export const speedFrame = (d) => ({
+  measure: { name: "Median Time", unit: "seconds", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { name: "Phase", keys: [{ key: "intake", name: NAMES.intake, color: "chart-6" }, { key: "queue", name: NAMES.queue, color: "series-4" }, { key: "implement", name: NAMES.build, color: "run" }, { key: "land", name: NAMES.land, color: "done" }] },
+  rows: (d.buckets ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, implement: b.implement, land: b.land })),
+  form: "columns",
+  cap: SPEED_CAP,
+  legend: false,
+});
+
+/** The Issues card: the active issues over the window on the left, the median time of each phase on the right. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
+function renderIssues(d) {
+  if (!d) return card("Issues", loadingLine("the issues"), { id: "issues" });
+  if (d.error) return card("Issues", error(d.error), { id: "issues" });
+  const speed = speedFrame(d);
+  // The speed chart is a quarter of the card wide, too narrow for the chart's own legend, so the legend is under it.
+  const keys = legendHtml(speed.by.keys.map((k) => [k.name, SWATCH[k.color]]));
+  return splitCard("Issues", panelOf("status/active", activeFrame(d), "", { bare: true }), subHead(chartTitle(speed)) + panelOf("status/speed", speed, "", { bare: true }) + keys, { id: "issues" });
 }
 
 /** /api/memory in the project of `q` with /api/memory/processes as `processes`, as the Memory page combines them; `{ error }` when a load fails. */
@@ -118,9 +127,8 @@ function renderMemory(m) {
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. Queue is the wait before the first build, not a run. */
 const PIPE = Object.fromEntries(["intake", "queue", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
-/** The health of a stage by its failed share: under 10% fine, to 25% warning, above that alert. */
-const health = (share) => (share < 0.1 ? "fine" : share <= 0.25 ? "warning" : "alert");
-/** The Pipeline card for the window: each stage a ring with its runs per issue, coloured by its failed share, and its p90 time under it. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
+/** The tone of a stage's failed share: under 10% none, to 25% need, above that error. */
+const health = (share) => (share < 0.1 ? "" : share <= 0.25 ? "need" : "error");
 /** The Jobs filter of each stage: its stage tile there and the role of its runs. Review and Recheck have no stage tile, so they filter by role alone; a recheck is a worker run. */
 const DRILL = { intake: { stage: "intake", role: "intake" }, queue: { stage: "queue" }, build: { stage: "implement", role: "worker" }, review: { role: "reviewer" }, recheck: { role: "worker" }, land: { stage: "land" } };
 /** The Jobs page for a stage, in the window and project of `q`. */
@@ -131,27 +139,46 @@ const drillHref = (k, q, extra = {}) => {
   return `#/factory/jobs?${out}`;
 };
 
-export function renderPipeline(d, q = new URLSearchParams()) {
-  const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
-  if (!d) return box(loadingLine("the pipeline"));
-  if (d.error) return box(error(d.error));
+/** The Pipeline card for the window: a row per stage with its runs per issue, p90 time, failed share and agent hours on one scale, where Implement's bar splits its hours by outcome; the issue counts of the window on the right. `d` is /api/flow for the window, null while it loads, or `{ error }`; `errored` is the errored jobs now. */
+export function renderPipeline(d, q = new URLSearchParams(), errored = 0) {
+  if (!d) return card("Pipeline", loadingLine("the pipeline"), { id: "pipeline" });
+  if (d.error) return card("Pipeline", error(d.error), { id: "pipeline" });
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
-  const queue = d.phases?.queue;
-  const go = (k, tip, body) => `<button type="button" class="pgo" data-inspect="stage" data-target="${esc(k)}" title="${esc(tip)}">${body}</button>`;
-  const node = ([k, name]) => {
-    if (k === "queue") {
-      const has = queue?.count > 0;
-      if (!has) return `<div class="pnode wait idle"><span class="ring">wait</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing waited in this window")}</span></div>`;
-      return `<div class="pnode wait">${go(k, `Queue: ${plural(queue.count, "wait")}`, `<span class="ring">wait</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(queue.p90))}</span>`)}</div>`;
-    }
-    const r = by.get(k), n = r?.items ? r.runs / r.items : null;
-    if (n === null) return `<div class="pnode idle"><span class="ring">–</span><span class="pn">${esc(name)}</span><span class="pt">${miss("Nothing ran in this window")}</span></div>`;
-    const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, tone = health(share);
-    const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
-    return `<div class="pnode ${tone}">${go(k, tip, `<span class="ring">${mean(n)}</span><span class="pn">${esc(name)}</span><span class="pt">${esc(dur(r.p90))}</span>`)}${r.unusable ? `<a class="pf" href="${esc(drillHref(k, q, { unusable: "1" }))}">${cardPct(share)} failed</a>` : `<span class="pf">${cardPct(share)} failed</span>`}</div>`;
+  const queue = d.phases?.queue, { kept, hours: lostH } = d.figures ?? {};
+  const classes = (d.classes ?? []).filter((c) => c.hours > 0);
+  // Implement's hours are its outcome classes', so its bar and the legend add up; the other stages' are runs times minutes.
+  const agentH = (k) => (k === "build" ? kept + (lostH ?? 0) : by.get(k) ? (by.get(k).runs * by.get(k).minutes) / 60 : 0);
+  const most = Math.max(...Object.keys(PIPE).filter((k) => k !== "queue").map(agentH));
+  const go = (k, name, tip) => `<td><button type="button" class="pgo" data-inspect="stage" data-target="${esc(k)}" title="${esc(tip)}">${esc(name)}</button></td>`;
+  const num = (html) => `<td class="num">${html}</td>`, wide = (html = "") => `<td class="wide">${html}</td>`;
+  const bar = (k) => {
+    if (k !== "build") return wide(meter(most ? (agentH(k) / most) * 100 : 0));
+    return wide(meter(classes.map((c) => ({ pct: (c.hours / most) * 100, cls: `seg-${c.key}` })), classes.map((c) => `${c.key} ${hours(c.hours)}`).join(", ")));
   };
-  const nodes = Object.entries(PIPE).map(node).join(`<span class="parrow" aria-hidden="true"></span>`);
-  return box(`<div class="pflow" role="group" aria-label="Stages">${nodes}</div>`, `<span class="asof">runs / issue in the ring · p90 time under it</span>`);
+  const line = ([k, name]) => {
+    if (k === "queue") {
+      const none = miss("A wait has no runs");
+      return row([go(k, name, `Queue: ${plural(queue?.count ?? 0, "wait")}`), num(none), num(queue?.count > 0 ? esc(dur(queue.p90)) : miss("Nothing waited in this window")), num(none), wide(), num(miss("A wait has no agent"))]);
+    }
+    const r = by.get(k);
+    if (!r?.items) return row([go(k, name, `${name}: no runs`), num(miss("Nothing ran in this window")), cell("–", { num: true }), cell("–", { num: true }), wide(), cell("–", { num: true })]);
+    const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, t = health(share);
+    const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
+    const failed = r.unusable ? num(`<a class="pf${t ? ` ${t}` : ""}" href="${esc(drillHref(k, q, { unusable: "1" }))}">${cardPct(share)}</a>`) : cell(cardPct(share), { num: true });
+    return row([go(k, name, tip), cell(mean(r.runs / r.items), { num: true }), cell(dur(r.p90), { num: true }), failed, bar(k), cell(hours(agentH(k)), { num: true })]);
+  };
+  const table = dataTable(heads(["Stage", "Runs / Issue", "p90", "Failed", "", "Agent"], ["Runs / Issue", "p90", "Failed", "Agent"]), Object.entries(PIPE).map(line).join(""), { fit: true });
+  const legend = legendHtml(classes.map((c) => [`${c.key} ${hours(c.hours)}`, `seg-${c.key}`, `data-inspect="class" data-target="${esc(c.key)}" title="${esc(c.text ?? c.key)}"`]));
+  const intake = by.get("intake")?.items ?? 0, open = d.open ?? { open: 0, parked: 0 };
+  const side = sideStats([
+    { k: "Filed", v: count(d.filed?.all ?? 0) },
+    { k: "Intake", v: count(intake) },
+    { k: "Landed", v: count(d.done ?? 0), state: "landed" },
+    { k: "Dropped", v: count(d.dropped ?? 0) },
+    { k: "Open", v: count(open.open), note: open.parked ? `+${count(open.parked)}` : "", title: `${plural(open.open, "open issue")}, ${plural(open.parked, "parked issue")}` },
+    { k: "Errored", v: count(errored), note: "now", state: errored ? "failed" : "" },
+  ]);
+  return splitCard("Pipeline", table, side, { id: "pipeline", aside: legend });
 }
 
 /** A Herald row's element id from its key, so a redraw by morph keeps the row's node and does not reuse it for another row. */

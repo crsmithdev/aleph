@@ -209,10 +209,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.ev('location.hash = "#/"');
     const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
     await page.when(`window.release && ${fold}`);
-    expect(await page.ev('!!document.querySelector("#outcome .obar")')).toBe(false);
+    expect(await page.ev('!!document.querySelector("#pipeline .sstats")')).toBe(false);
     await page.ev(`${fold}.open = true; document.querySelector("#view > *").dataset.mark = "1"`);
     await page.ev("window.release()");
-    await page.when('document.querySelector("#outcome .obar") && !document.querySelector("#view > *").dataset.mark');
+    await page.when('document.querySelector("#pipeline .sstats") && !document.querySelector("#view > *").dataset.mark');
     expect(await page.ev(`${fold}.open`)).toBe(true);
     await page.ev(`${fold}.open = false`);
     await page.reload(); // Takes the patched fetch away.
@@ -325,7 +325,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("Design: every specimen draws and the charts draw from fixtures", async () => {
     await page.width(1200);
     await page.go("#/design");
-    await page.when('document.querySelector(".design-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
+    await page.when('document.querySelector(".design-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 5');
     const r = await page.ev<any>(`({
       specimens: document.querySelectorAll('[data-annotate^="design/"]').length,
       swatches: document.querySelectorAll(".design-swatch").length,
@@ -335,7 +335,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       contrast: document.querySelectorAll('[data-tokens="contrast"] tbody tr').length,
       error: !!document.querySelector("#view > .page > .error"),
     })`);
-    expect(r).toMatchObject({ error: false, charts: 3 });
+    expect(r).toMatchObject({ error: false, charts: 5 });
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.
     expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, action"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
