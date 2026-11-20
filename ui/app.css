@@ -186,122 +186,515 @@
     --decide: #C792EA; --decide-bg: #3A3150; --decide-ring: #5B4A7A;
     --unstick: #F07178; --unstick-bg: #3D2C39; --unstick-ring: #65404D;
 }
-/* The palettes of the dock's theme picker (aleph-tools theme-picker.js sets data-palette on <html>). Each sets the
-   neutrals and the accent; the status and chart colours stay, so a state keeps its colour. No data-palette is the
-   default, Lavender, above. Dark comes twice, as above: by the system's scheme and by data-theme. */
-:root[data-palette="slate"] {
-  --bg: #F3F5F8;
+/* The palettes of the dock's theme picker (aleph-tools theme-picker.js sets data-palette on <html>), picked by Chris
+   from docs/mocks/theme-palettes. Each sets the neutrals and the accent; the status and chart colours stay, so a state
+   keeps its colour. No data-palette is the default, Lavender, above. Dark comes twice, as above: by the system's scheme
+   and by data-theme. Poimandres has no light variant of its own, and Nordfox's light is Nord Light's. */
+:root[data-palette="dracula"] {
+  --bg: #F5F1DE;
+  --surface: #FFFBEB;
+  --sunk: #ECE8D2;
+  --raised: #E5E1C9;
+  --ink: #1F1F1F;
+  --ink-2: #3D3D3D;
+  --muted: #6C664B;
+  --rule: #DEDAC2;
+  --rule-2: #ECE8D2;
+  --focus: #644AC9;
+}
+:root[data-palette="nord"] {
+  --bg: #E5E9F0;
+  --surface: #ECEFF4;
+  --sunk: #D8DEE9;
+  --raised: #D8DEE9;
+  --ink: #2E3440;
+  --ink-2: #3B4252;
+  --muted: #4C566A;
+  --rule: #D0D7E2;
+  --rule-2: #E0E5ED;
+  --focus: #5E81AC;
+}
+:root[data-palette="solarized"] {
+  --bg: #EEE8D5;
+  --surface: #FDF6E3;
+  --sunk: #E6DFCB;
+  --raised: #E6DFCB;
+  --ink: #566C73;
+  --ink-2: #657B83;
+  --muted: #586C70;
+  --rule: #DDD6C1;
+  --rule-2: #EAE4D1;
+  --focus: #268BD2;
+}
+:root[data-palette="one"] {
+  --bg: #EAEAEB;
+  --surface: #FAFAFA;
+  --sunk: #E5E5E6;
+  --raised: #E0E0E2;
+  --ink: #383A42;
+  --ink-2: #4F525D;
+  --muted: #666974;
+  --rule: #DBDBDC;
+  --rule-2: #E5E5E6;
+  --focus: #4078F2;
+}
+:root[data-palette="tokyo-night"] {
+  --bg: #D0D5E3;
+  --surface: #E1E2E7;
+  --sunk: #C4C8DA;
+  --raised: #C4C8DA;
+  --ink: #343B58;
+  --ink-2: #3760BF;
+  --muted: #4D5A8A;
+  --rule: #B4BAD3;
+  --rule-2: #C4C8DA;
+  --focus: #2E7DE9;
+}
+:root[data-palette="tomorrow"] {
+  --bg: #EFEFEF;
   --surface: #FFFFFF;
-  --sunk: #E9EDF2;
-  --raised: #E9EDF2;
-  --ink: #1F2933;
-  --ink-2: #3E4C59;
-  --muted: #5C6977;
-  --rule: #D9DFE7;
-  --rule-2: #E6EAF0;
-  --focus: #3B6FD9;
+  --sunk: #E5E5E5;
+  --raised: #D6D6D6;
+  --ink: #4D4D4C;
+  --ink-2: #5A5A59;
+  --muted: #6B6D6B;
+  --rule: #D6D6D6;
+  --rule-2: #EAEAEA;
+  --focus: #4271AE;
+}
+:root[data-palette="nightfox"] {
+  --bg: #EBE5DF;
+  --surface: #FAF4ED;
+  --sunk: #EBDFE4;
+  --raised: #EBDFE4;
+  --ink: #575279;
+  --ink-2: #625C87;
+  --muted: #686388;
+  --rule: #D0C7D4;
+  --rule-2: #EBE5DF;
+  --focus: #286983;
+}
+:root[data-palette="poimandres"] {
+  --bg: #E8ECF2;
+  --surface: #F7F9FC;
+  --sunk: #DDE3EC;
+  --raised: #DDE3EC;
+  --ink: #1B1E28;
+  --ink-2: #303340;
+  --muted: #5F6585;
+  --rule: #D2D8E3;
+  --rule-2: #E3E8EF;
+  --focus: #1F8A75;
+}
+:root[data-palette="iceberg"] {
+  --bg: #DCDFE7;
+  --surface: #E8E9EC;
+  --sunk: #CAD0DE;
+  --raised: #CAD0DE;
+  --ink: #33374C;
+  --ink-2: #444B71;
+  --muted: #5D627B;
+  --rule: #C6C8D1;
+  --rule-2: #DCDFE7;
+  --focus: #2D539E;
+}
+:root[data-palette="nord-light"] {
+  --bg: #E5E9F0;
+  --surface: #ECEFF4;
+  --sunk: #D8DEE9;
+  --raised: #D8DEE9;
+  --ink: #2E3440;
+  --ink-2: #3B4252;
+  --muted: #4C566A;
+  --rule: #D8DEE9;
+  --rule-2: #E5E9F0;
+  --focus: #3B5E85;
+}
+:root[data-palette="nord-aurora"] {
+  --bg: #E5E9F0;
+  --surface: #ECEFF4;
+  --sunk: #D8DEE9;
+  --raised: #D8DEE9;
+  --ink: #2E3440;
+  --ink-2: #3B4252;
+  --muted: #4C566A;
+  --rule: #D8DEE9;
+  --rule-2: #E5E9F0;
+  --focus: #865B7F;
+}
+:root[data-palette="nordfox"] {
+  --bg: #E5E9F0;
+  --surface: #ECEFF4;
+  --sunk: #D8DEE9;
+  --raised: #D8DEE9;
+  --ink: #2E3440;
+  --ink-2: #3B4252;
+  --muted: #4C566A;
+  --rule: #D8DEE9;
+  --rule-2: #E5E9F0;
+  --focus: #3B5E85;
+}
+:root[data-palette="palenight-mild"] {
+  --bg: #F4F3FA;
+  --surface: #FFFFFF;
+  --sunk: #ECEAF6;
+  --raised: #ECEAF6;
+  --ink: #292D3E;
+  --ink-2: #4A4F6A;
+  --muted: #62688A;
+  --rule: #DCD9EC;
+  --rule-2: #E8E6F3;
+  --focus: #7E57C2;
+}
+:root[data-palette="palenightfall"] {
+  --bg: #F4F3FA;
+  --surface: #FFFFFF;
+  --sunk: #ECEAF6;
+  --raised: #ECEAF6;
+  --ink: #292D3E;
+  --ink-2: #4A4F6A;
+  --muted: #62688A;
+  --rule: #DCD9EC;
+  --rule-2: #E8E6F3;
+  --focus: #4F6FD8;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-palette="slate"]:not([data-theme="light"]) {
-    --bg: #1B1F24;
-    --surface: #23282F;
-    --sunk: #15181C;
-    --raised: #2C323A;
-    --ink: #E8ECF1;
-    --ink-2: #C1C9D2;
-    --muted: #8C96A3;
-    --rule: #353C45;
-    --rule-2: #2A3038;
+  :root[data-palette="dracula"]:not([data-theme="light"]) {
+    --bg: #21222C;
+    --surface: #282A36;
+    --sunk: #191A21;
+    --raised: #44475A;
+    --ink: #F8F8F2;
+    --ink-2: #E2E2DC;
+    --muted: #8E9AC6;
+    --rule: #44475A;
+    --rule-2: #343746;
+    --focus: #BD93F9;
+  }
+  :root[data-palette="nord"]:not([data-theme="light"]) {
+    --bg: #2E3440;
+    --surface: #3B4252;
+    --sunk: #272C36;
+    --raised: #434C5E;
+    --ink: #ECEFF4;
+    --ink-2: #D8DEE9;
+    --muted: #A5AEC0;
+    --rule: #4C566A;
+    --rule-2: #434C5E;
+    --focus: #88C0D0;
+  }
+  :root[data-palette="solarized"]:not([data-theme="light"]) {
+    --bg: #00212B;
+    --surface: #002B36;
+    --sunk: #001A22;
+    --raised: #073642;
+    --ink: #93A1A1;
+    --ink-2: #839496;
+    --muted: #7A9195;
+    --rule: #0A4050;
+    --rule-2: #073642;
+    --focus: #268BD2;
+  }
+  :root[data-palette="one"]:not([data-theme="light"]) {
+    --bg: #21252B;
+    --surface: #282C34;
+    --sunk: #1B1E23;
+    --raised: #2C313A;
+    --ink: #D7DAE0;
+    --ink-2: #ABB2BF;
+    --muted: #8E949F;
+    --rule: #3E4451;
+    --rule-2: #2C313A;
+    --focus: #61AFEF;
+  }
+  :root[data-palette="tokyo-night"]:not([data-theme="light"]) {
+    --bg: #16161E;
+    --surface: #1A1B26;
+    --sunk: #13131A;
+    --raised: #24283B;
+    --ink: #C0CAF5;
+    --ink-2: #A9B1D6;
+    --muted: #7F86AA;
+    --rule: #292E42;
+    --rule-2: #1F2335;
     --focus: #7AA2F7;
   }
+  :root[data-palette="tomorrow"]:not([data-theme="light"]) {
+    --bg: #1D1F21;
+    --surface: #282A2E;
+    --sunk: #161719;
+    --raised: #373B41;
+    --ink: #C5C8C6;
+    --ink-2: #B4B7B4;
+    --muted: #969896;
+    --rule: #373B41;
+    --rule-2: #2E3034;
+    --focus: #81A2BE;
+  }
+  :root[data-palette="nightfox"]:not([data-theme="light"]) {
+    --bg: #131A24;
+    --surface: #192330;
+    --sunk: #0D131B;
+    --raised: #29394F;
+    --ink: #CDCECF;
+    --ink-2: #AEAFB0;
+    --muted: #8494AB;
+    --rule: #39506D;
+    --rule-2: #212E3F;
+    --focus: #719CD6;
+  }
+  :root[data-palette="poimandres"]:not([data-theme="light"]) {
+    --bg: #171922;
+    --surface: #1B1E28;
+    --sunk: #13151D;
+    --raised: #303340;
+    --ink: #E4F0FB;
+    --ink-2: #A6ACCD;
+    --muted: #8288A8;
+    --rule: #303340;
+    --rule-2: #252B37;
+    --focus: #5DE4C7;
+  }
+  :root[data-palette="iceberg"]:not([data-theme="light"]) {
+    --bg: #0F1117;
+    --surface: #161821;
+    --sunk: #0B0C11;
+    --raised: #1E2132;
+    --ink: #C6C8D1;
+    --ink-2: #B3B6C2;
+    --muted: #7F849D;
+    --rule: #2E3244;
+    --rule-2: #1E2132;
+    --focus: #84A0C6;
+  }
+  :root[data-palette="nord-light"]:not([data-theme="light"]) {
+    --bg: #2E3440;
+    --surface: #3B4252;
+    --sunk: #272C36;
+    --raised: #434C5E;
+    --ink: #ECEFF4;
+    --ink-2: #D8DEE9;
+    --muted: #A5AEC0;
+    --rule: #4C566A;
+    --rule-2: #434C5E;
+    --focus: #88C0D0;
+  }
+  :root[data-palette="nord-aurora"]:not([data-theme="light"]) {
+    --bg: #2E3440;
+    --surface: #3B4252;
+    --sunk: #272C36;
+    --raised: #434C5E;
+    --ink: #ECEFF4;
+    --ink-2: #D8DEE9;
+    --muted: #A5AEC0;
+    --rule: #4C566A;
+    --rule-2: #434C5E;
+    --focus: #B48EAD;
+  }
+  :root[data-palette="nordfox"]:not([data-theme="light"]) {
+    --bg: #232831;
+    --surface: #2E3440;
+    --sunk: #1D2129;
+    --raised: #39404F;
+    --ink: #CDCECF;
+    --ink-2: #ABB1BB;
+    --muted: #959CAA;
+    --rule: #444C5E;
+    --rule-2: #39404F;
+    --focus: #81A1C1;
+  }
+  :root[data-palette="palenight-mild"]:not([data-theme="light"]) {
+    --bg: #25293A;
+    --surface: #292D3E;
+    --sunk: #1F2232;
+    --raised: #313850;
+    --ink: #EEF1F8;
+    --ink-2: #BFC7D5;
+    --muted: #959DCB;
+    --rule: #2C2F40;
+    --rule-2: #2C2F40;
+    --focus: #C792EA;
+  }
+  :root[data-palette="palenightfall"]:not([data-theme="light"]) {
+    --bg: #232534;
+    --surface: #252837;
+    --sunk: #1D1F2B;
+    --raised: #343A51;
+    --ink: #D4D8EE;
+    --ink-2: #A6ACCD;
+    --muted: #8C93BC;
+    --rule: #2E2E41;
+    --rule-2: #2B2F40;
+    --focus: #82AAFF;
+  }
 }
-:root[data-palette="slate"][data-theme="dark"] {
-  --bg: #1B1F24;
-  --surface: #23282F;
-  --sunk: #15181C;
-  --raised: #2C323A;
-  --ink: #E8ECF1;
-  --ink-2: #C1C9D2;
-  --muted: #8C96A3;
-  --rule: #353C45;
-  --rule-2: #2A3038;
+:root[data-palette="dracula"][data-theme="dark"] {
+  --bg: #21222C;
+  --surface: #282A36;
+  --sunk: #191A21;
+  --raised: #44475A;
+  --ink: #F8F8F2;
+  --ink-2: #E2E2DC;
+  --muted: #8E9AC6;
+  --rule: #44475A;
+  --rule-2: #343746;
+  --focus: #BD93F9;
+}
+:root[data-palette="nord"][data-theme="dark"] {
+  --bg: #2E3440;
+  --surface: #3B4252;
+  --sunk: #272C36;
+  --raised: #434C5E;
+  --ink: #ECEFF4;
+  --ink-2: #D8DEE9;
+  --muted: #A5AEC0;
+  --rule: #4C566A;
+  --rule-2: #434C5E;
+  --focus: #88C0D0;
+}
+:root[data-palette="solarized"][data-theme="dark"] {
+  --bg: #00212B;
+  --surface: #002B36;
+  --sunk: #001A22;
+  --raised: #073642;
+  --ink: #93A1A1;
+  --ink-2: #839496;
+  --muted: #7A9195;
+  --rule: #0A4050;
+  --rule-2: #073642;
+  --focus: #268BD2;
+}
+:root[data-palette="one"][data-theme="dark"] {
+  --bg: #21252B;
+  --surface: #282C34;
+  --sunk: #1B1E23;
+  --raised: #2C313A;
+  --ink: #D7DAE0;
+  --ink-2: #ABB2BF;
+  --muted: #8E949F;
+  --rule: #3E4451;
+  --rule-2: #2C313A;
+  --focus: #61AFEF;
+}
+:root[data-palette="tokyo-night"][data-theme="dark"] {
+  --bg: #16161E;
+  --surface: #1A1B26;
+  --sunk: #13131A;
+  --raised: #24283B;
+  --ink: #C0CAF5;
+  --ink-2: #A9B1D6;
+  --muted: #7F86AA;
+  --rule: #292E42;
+  --rule-2: #1F2335;
   --focus: #7AA2F7;
 }
-:root[data-palette="sand"] {
-  --bg: #F7F4EF;
-  --surface: #FFFDF9;
-  --sunk: #EFEAE2;
-  --raised: #EFEAE2;
-  --ink: #2B2622;
-  --ink-2: #4D453E;
-  --muted: #716659;
-  --rule: #E2DBD0;
-  --rule-2: #EDE7DE;
-  --focus: #C2562F;
+:root[data-palette="tomorrow"][data-theme="dark"] {
+  --bg: #1D1F21;
+  --surface: #282A2E;
+  --sunk: #161719;
+  --raised: #373B41;
+  --ink: #C5C8C6;
+  --ink-2: #B4B7B4;
+  --muted: #969896;
+  --rule: #373B41;
+  --rule-2: #2E3034;
+  --focus: #81A2BE;
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-palette="sand"]:not([data-theme="light"]) {
-    --bg: #211D1A;
-    --surface: #2A2521;
-    --sunk: #1A1714;
-    --raised: #352F2A;
-    --ink: #F1ECE6;
-    --ink-2: #CFC6BC;
-    --muted: #A39689;
-    --rule: #3D3631;
-    --rule-2: #322C28;
-    --focus: #E08A5E;
-  }
+:root[data-palette="nightfox"][data-theme="dark"] {
+  --bg: #131A24;
+  --surface: #192330;
+  --sunk: #0D131B;
+  --raised: #29394F;
+  --ink: #CDCECF;
+  --ink-2: #AEAFB0;
+  --muted: #8494AB;
+  --rule: #39506D;
+  --rule-2: #212E3F;
+  --focus: #719CD6;
 }
-:root[data-palette="sand"][data-theme="dark"] {
-  --bg: #211D1A;
-  --surface: #2A2521;
-  --sunk: #1A1714;
-  --raised: #352F2A;
-  --ink: #F1ECE6;
-  --ink-2: #CFC6BC;
-  --muted: #A39689;
-  --rule: #3D3631;
-  --rule-2: #322C28;
-  --focus: #E08A5E;
+:root[data-palette="poimandres"][data-theme="dark"] {
+  --bg: #171922;
+  --surface: #1B1E28;
+  --sunk: #13151D;
+  --raised: #303340;
+  --ink: #E4F0FB;
+  --ink-2: #A6ACCD;
+  --muted: #8288A8;
+  --rule: #303340;
+  --rule-2: #252B37;
+  --focus: #5DE4C7;
 }
-:root[data-palette="forest"] {
-  --bg: #F2F5F2;
-  --surface: #FFFFFF;
-  --sunk: #E6ECE7;
-  --raised: #E6ECE7;
-  --ink: #1E2A23;
-  --ink-2: #3D4D43;
-  --muted: #5A6B61;
-  --rule: #D5DED7;
-  --rule-2: #E3E9E4;
-  --focus: #2F8F5B;
+:root[data-palette="iceberg"][data-theme="dark"] {
+  --bg: #0F1117;
+  --surface: #161821;
+  --sunk: #0B0C11;
+  --raised: #1E2132;
+  --ink: #C6C8D1;
+  --ink-2: #B3B6C2;
+  --muted: #7F849D;
+  --rule: #2E3244;
+  --rule-2: #1E2132;
+  --focus: #84A0C6;
 }
-@media (prefers-color-scheme: dark) {
-  :root[data-palette="forest"]:not([data-theme="light"]) {
-    --bg: #18201B;
-    --surface: #1F2923;
-    --sunk: #121814;
-    --raised: #28332C;
-    --ink: #E6EFE9;
-    --ink-2: #C0CEC5;
-    --muted: #8DA195;
-    --rule: #304036;
-    --rule-2: #26322B;
-    --focus: #6CC78F;
-  }
+:root[data-palette="nord-light"][data-theme="dark"] {
+  --bg: #2E3440;
+  --surface: #3B4252;
+  --sunk: #272C36;
+  --raised: #434C5E;
+  --ink: #ECEFF4;
+  --ink-2: #D8DEE9;
+  --muted: #A5AEC0;
+  --rule: #4C566A;
+  --rule-2: #434C5E;
+  --focus: #88C0D0;
 }
-:root[data-palette="forest"][data-theme="dark"] {
-  --bg: #18201B;
-  --surface: #1F2923;
-  --sunk: #121814;
-  --raised: #28332C;
-  --ink: #E6EFE9;
-  --ink-2: #C0CEC5;
-  --muted: #8DA195;
-  --rule: #304036;
-  --rule-2: #26322B;
-  --focus: #6CC78F;
+:root[data-palette="nord-aurora"][data-theme="dark"] {
+  --bg: #2E3440;
+  --surface: #3B4252;
+  --sunk: #272C36;
+  --raised: #434C5E;
+  --ink: #ECEFF4;
+  --ink-2: #D8DEE9;
+  --muted: #A5AEC0;
+  --rule: #4C566A;
+  --rule-2: #434C5E;
+  --focus: #B48EAD;
+}
+:root[data-palette="nordfox"][data-theme="dark"] {
+  --bg: #232831;
+  --surface: #2E3440;
+  --sunk: #1D2129;
+  --raised: #39404F;
+  --ink: #CDCECF;
+  --ink-2: #ABB1BB;
+  --muted: #959CAA;
+  --rule: #444C5E;
+  --rule-2: #39404F;
+  --focus: #81A1C1;
+}
+:root[data-palette="palenight-mild"][data-theme="dark"] {
+  --bg: #25293A;
+  --surface: #292D3E;
+  --sunk: #1F2232;
+  --raised: #313850;
+  --ink: #EEF1F8;
+  --ink-2: #BFC7D5;
+  --muted: #959DCB;
+  --rule: #2C2F40;
+  --rule-2: #2C2F40;
+  --focus: #C792EA;
+}
+:root[data-palette="palenightfall"][data-theme="dark"] {
+  --bg: #232534;
+  --surface: #252837;
+  --sunk: #1D1F2B;
+  --raised: #343A51;
+  --ink: #D4D8EE;
+  --ink-2: #A6ACCD;
+  --muted: #8C93BC;
+  --rule: #2E2E41;
+  --rule-2: #2B2F40;
+  --focus: #82AAFF;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

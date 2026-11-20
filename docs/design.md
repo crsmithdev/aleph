@@ -241,12 +241,24 @@ The dock's theme picker sets `data-palette` on `<html>`. A palette in `ui/app.cs
 | Palette | Accent |
 |---|---|
 | Lavender (no `data-palette`) | violet |
-| Slate | blue |
-| Sand | terracotta |
-| Forest | green |
+| Dracula | purple |
+| Nord | frost cyan |
+| Solarized | blue |
+| One | blue |
+| Tokyo Night | blue |
+| Tomorrow | blue |
+| Nightfox | blue |
+| Poimandres | teal; its light variant is aleph's own |
+| Iceberg | blue |
+| Nord Light | frost cyan; Nord Light's darker keyword blue in light |
+| Nord Aurora | Aurora purple |
+| Nordfox | blue; Nord Light in light |
+| Palenight Mild | violet; Lavender in light |
+| Palenightfall | blue; Lavender in light |
 
 - Give a new palette all ten tokens, in light and in both dark blocks.
 - Do not give a palette a status or chart colour.
+- The values and their sources are in `docs/mocks/theme-palettes/` (`build.py`). `ui/app.css` moves a text colour toward `--ink`, or toward black or white, until it reaches 4.5:1 (Contrast), so some values differ from the source.
 
 ## Content
 

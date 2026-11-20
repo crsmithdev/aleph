@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const root = join(import.meta.dir, "../..");
 /** The `literal` rows of `inventory.ts` over `ui/`: a ratchet, so lower it when a row goes and never raise it. */
-const LITERALS = 249;
+const LITERALS = 224;
 
 test("guard: the literal rows of the inventory over ui/ do not rise", () => {
   const out = Bun.spawnSync(["bun", "skills/design-language/scripts/inventory.ts", "ui"], { cwd: root }).stdout.toString();
