@@ -43,6 +43,11 @@ test("the model of a start comes from its detail word, not from text that begins
   expect(withRun("model opus")).toEqual(["j2 ✓ 5m 00s"]);
 });
 
+test("a held-path land line names the held file and who approved it", () => {
+  const [r] = rows([e("2026-11-13T10:05:00Z", "aleph-7", "done", []), row({ at: "2026-11-13T10:00:00Z", by: "rule", subject: "aleph-7", action: "landed", note: "held: path docs/a.md · approved by Always" })]);
+  expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["landed", "held path docs/a.md · approved by Always"]]);
+});
+
 test("a routine run with changes is one factory row that counts its edits by their past word, with a line for each in the order they ran", () => {
   const hk = (at: string, action: string) => e(at, "housekeeper", action, ["job.57"]);
   const change = (at: string, issue: string, note: string) => row({ at, by: "job.57", subject: issue, action: "changed", note });

@@ -136,15 +136,20 @@ const MARK = /\b(test|it|describe)\.(skip|only|todo)\b/;
 const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
 
 /**
- * The held rule the diff from `base` to `tip` breaks, or null: a path in the
- * `held` list that is not a test. The globs come from the registry, which the
- * branch cannot change. Test changes are `testFindings`, for the reviewer.
+ * The paths of the diff from `base` to `tip` in the `held` list that are not
+ * tests. The globs come from the registry, which the branch cannot change.
+ * Test changes are `testFindings`, for the reviewer.
  */
-export function heldRule(cwd: string, held: string[], base: string, tip: string): string | null {
+export function heldPaths(cwd: string, held: string[], base: string, tip: string): string[] {
   const isHeld = (p: string) => held.some((g) => new Bun.Glob(g).match(p));
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  for (const [, ...paths] of rows) for (const p of paths) if (isHeld(p) && !isGateTest(p)) return `held path ${p}`;
-  return null;
+  return rows.flatMap(([, ...paths]) => paths).filter((p) => isHeld(p) && !isGateTest(p));
+}
+
+/** The held rule the diff from `base` to `tip` breaks, `held path <first held path>`, or null. */
+export function heldRule(cwd: string, held: string[], base: string, tip: string): string | null {
+  const [p] = heldPaths(cwd, held, base, tip);
+  return p ? `held path ${p}` : null;
 }
 
 /**

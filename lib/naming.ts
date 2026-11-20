@@ -155,6 +155,7 @@ const WORDS: Record<string, readonly string[]> = {
   held: ["after", "job", "red", "file", "credit", "paused", "gpu", "full", "waiting", "done"],
   changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge", ...Object.keys(EDITS)],
   started: ["model"],
+  landed: ["held"],
   routed: ["classifier"],
   missed: ["start", "land", "intake", "Ask", "rescue", "rerun"],
 };
@@ -231,8 +232,8 @@ export const targetOf = (e: Partial<EventRow>): string => e.object_target ?? e.o
 function sentence(e: Partial<EventRow>): { verb: Said[]; rest: Said[]; after: Said[] } {
   const review = e.action === "returned" && (e.subject_role === "review" || e.subject === "reviewer");
   const tpl = review ? "{object} returned by| review" : SAY[String(e.action)] ?? `{object} ${e.action}|`, inline = tpl.includes("{detail}");
-  // A held event's detail is the hold word, a colon and its facts: the sentence reads `held: after issue.2985`.
-  const detail = e.action === "held" ? [wordOf(e), factsOf(e)].filter(Boolean).join(" ") : e.detail ?? "";
+  // A held event's detail is the hold word, a colon and its facts: the sentence reads `held: after issue.2985`. A held-path land reads `landed: held path docs/a.md · approved by Always`.
+  const detail = e.action === "held" || (e.action === "landed" && wordOf(e) === "held") ? [wordOf(e), factsOf(e)].filter(Boolean).join(" ") : e.detail ?? "";
   const fill: Record<string, Said[]> = { object: [{ id: e.object ?? "" }], by: [whoOf(e.subject ?? "", e.subject_role)], detail: linked(detail) };
   const [verb, rest] = tpl.split("|").map((t) => t.split(/(\{\w+\})/).filter(Boolean).flatMap((p) => fill[p.slice(1, -1)] ?? [p]));
   return { verb: verb!, rest: rest!, after: !inline && e.detail ? fill.detail : [] };

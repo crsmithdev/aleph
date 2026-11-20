@@ -30,13 +30,13 @@ import { issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/
 import { isRunning } from "../infra/process.ts";
 import { git, mainRef } from "../../../lib/git.ts";
 import { ofBranch } from "../records/jobdiff.ts";
-import { heldRule, NO_OUTPUT, securityChange } from "../gates/gate.ts";
+import { heldPaths, heldRule, NO_OUTPUT, securityChange } from "../gates/gate.ts";
 import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { because, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
+import { because, detailOf as wordDetail, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
 import { DIRECTOR_CAP } from "../infra/settings.ts";
 import { readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
@@ -151,15 +151,28 @@ const escalatedBefore = (c: Case, rec: Decision[]): boolean => {
   return last?.outcome === "escalated" && last.question === questionOf(c);
 };
 
+/** Where the branch forks from main, or null when there is no branch to read. */
+function forkOf(repo: Repo, branch: string | undefined): string | null {
+  if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return null;
+  const fork = git(repo.path, "merge-base", mainRef(repo.path, repo.main), `refs/heads/${branch}`);
+  return fork.ok ? fork.out.trim() : null;
+}
+
 /** The held rule the branch breaks (a security path, one of the `held` globs or bun.lock), or null; "unknown" when there is no branch to read. */
 function heldChange(repo: Repo, branch: string | undefined, held: string[] = repo.held): string | null | "unknown" {
-  if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
-  const main = mainRef(repo.path, repo.main);
-  const fork = git(repo.path, "merge-base", main, `refs/heads/${branch}`);
-  if (!fork.ok) return "unknown";
-  const sec = securityChange(repo.path, fork.out.trim(), `refs/heads/${branch}`);
+  const fork = forkOf(repo, branch);
+  if (!fork) return "unknown";
+  const sec = securityChange(repo.path, fork, `refs/heads/${branch}`);
   if (sec) return `held path ${sec}`;
-  return heldRule(repo.path, [...held, ...HELD_FILES], fork.out.trim(), `refs/heads/${branch}`);
+  return heldRule(repo.path, [...held, ...HELD_FILES], fork, `refs/heads/${branch}`);
+}
+
+/** The detail of a held-path land: `held: path <first held file> +<rest> · approved by <by>`. */
+function heldLand(c: Case, by: string): string {
+  const b = branchOf(c), fork = b && forkOf(b.repo, b.branch);
+  const [first, ...rest] = fork ? heldPaths(b.repo.path, b.repo.held, fork, `refs/heads/${b.branch}`) : [];
+  const file = first && `path ${first}${rest.length ? ` +${rest.length}` : ""}`;
+  return wordDetail("landed", "held", [file, `approved by ${by}`].filter(Boolean).join(" · "));
 }
 
 /** The branch of the run a case is about: the case's own run, or the open job of its item. */
@@ -524,8 +537,10 @@ async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
       const missing = missingVerdict(readFile(agent, "review.json"));
       if (missing) return no(a, missing);
     }
+    // The held files are read before the land: once the branch is on main, its diff is empty.
+    const ev = c.ask.reason === "held-path" ? { action: "landed", note: heldLand(c, "the director") } : { action: "landed", sub: c.ask.reason === "review-held" ? "override" : sub };
     const why = await ports.land(c.entry.run.name);
-    return why ? no(a, why) : done(a, { action: "landed", sub: c.ask.reason === "review-held" ? "override" : sub });
+    return why ? no(a, why) : done(a, ev);
   }
   if (a.do === "drop" || (a.do === "answer" && c.at === "run")) {
     const name = jobOf(c, n);
@@ -650,11 +665,12 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
       let why: string | null;
       // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays Chris's. A review-held run lands through the land action, which refuses the repo's held paths too.
       const held = granted === "approve" && base.reason === "held-path" ? landRefusal(c, []) : null;
+      const detail = granted === "approve" && base.reason === "held-path" ? heldLand(c, "Always") : undefined;
       if (held) why = held;
       else if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
       else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports); why = "refused" in o ? o.refused : null; }
       if (why) return escalate(c, base, undefined, `a rule's ${granted} was refused: ${why}`);
-      logAlways(base.reason, base.ref, granted === "continue" ? "reran" : granted === "approve" && c.at === "run" ? "landed" : "answered");
+      logAlways(base.reason, base.ref, granted === "continue" ? "reran" : granted === "approve" && c.at === "run" ? "landed" : "answered", detail ? { detail } : {});
       return { ...base, outcome: "decided", applied: [granted] };
     }
     // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to Chris with no second run.

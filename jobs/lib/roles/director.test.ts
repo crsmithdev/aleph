@@ -343,7 +343,9 @@ test("a held-path grant lands a run that changes only the repo's held paths, wit
   await direct();
   expect(landed).toEqual(["issue.1"]);
   expect(directorRuns()).toHaveLength(0);
-  expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "landed", object: "issue.1" }));
+  const land = events().find((e) => e.subject === "rule" && e.action === "landed" && e.object === "issue.1");
+  expect(land?.detail).toBe("held: path docs/a.md · approved by Always");
+  expect(land?.detail).not.toContain("a protected file");
 });
 
 test.each([
