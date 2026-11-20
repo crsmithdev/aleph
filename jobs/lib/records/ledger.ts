@@ -25,8 +25,8 @@ export type { State };
 /** `noVerdict`: a clock or a signal ended the check, so it neither passed nor failed. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number; tests?: TestRecord; noVerdict?: true }
 
-/** A failed test: its file, its name with its `describe` names (`a > b`), and the first 20 lines of its failure. */
-export interface FailedTest { file: string; name: string; message: string }
+/** A failed test: its file, its name with its `describe` names (`a > b`), and the first 20 lines of its failure. `onMain`: it fails on the branch's merge base too. */
+export interface FailedTest { file: string; name: string; message: string; onMain?: true }
 
 /** The tests of one check: the counts, and the failed tests, at most 20. `ran` is the tests that passed or failed. */
 export interface TestRecord { ran: number; passed: number; failed: number; skipped: number; failures: FailedTest[] }

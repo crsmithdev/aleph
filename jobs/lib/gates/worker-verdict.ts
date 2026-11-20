@@ -30,7 +30,9 @@ export interface ReviewCall { reason: string | null; cost?: number; none?: boole
 export interface VerdictPorts {
   /** The repo's checks: why they stopped, or null, and the last check of the run that failed. */
   checks(): Promise<{ stop: ChecksStop | null; failed?: string }>;
-  /** The Ask question when `check` failed with the same failing tests on the run before, else null. */
+  /** Runs the failed tests of `check` on the base and marks each that fails there too: whether every one does. */
+  failsOnMain(check: string): Promise<boolean>;
+  /** The Ask question when `check` failed with the same failing head-only tests on the run before, else null. */
   repeatedFailure(check: string): { question: string } | null;
   /** The keep-gate: the new tests of the branch that pass on its base, as `file > name`. */
   keepGate(): Promise<string[] | NoVerdict>;
@@ -115,6 +117,8 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (stop) {
     const check = backCheck(stop, failed);
     if (!check) return stopped(stop, facts);
+    // A failure that main has too is not the worker's to fix, so no fix round starts.
+    if (await p.failsOnMain(check)) return stopped({ ...stop, reason: `${stop.reason} (each failed test fails on main too)` }, facts);
     const same = done !== undefined && done < rounds ? p.repeatedFailure(check) : null;
     if (same) return { outcome: { ...waiting("question", same.question), question: same.question, ...stopFields(stop), ...facts }, code: 0 };
     return stopped(stop, { ...facts, ...checkBack(done, check, stop.reason, rounds) });
@@ -246,6 +250,24 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       const sha = git(repo.path, "rev-parse", tip).out;
       const stop = await checksAt({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: o.onSpawn }, sha, checksEnv(env));
       return { stop, failed: jobRecord.getRun(jobOfFolder(folder))?.checks?.findLast((c) => !c.ok)?.name };
+    },
+    failsOnMain: async (check) => {
+      const id = jobOfFolder(folder);
+      const checks = jobRecord.getRun(id)?.checks ?? [];
+      const at = checks.findLastIndex((c) => c.name === check);
+      const failures = checks[at]?.tests?.failures ?? [];
+      if (!failures.length) return false;
+      const report = junitFile(folder, `${check}-base`);
+      const command = `bun test ${[...new Set(failures.map((f) => `'./${f.file}'`))].join(" ")}`;
+      const r = await (o.runner ?? runOnCommit)(repo, base, withJunit(command, report));
+      logTo(folder, "checks", `## ${check} on the base: exit ${r.code}\n$ ${command}\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}\n\n`);
+      // A base run with no verdict marks nothing: each test stays the head's alone.
+      if (r.infra) return false;
+      const failing = new Set(testRecord(report).failures.map((f) => `${f.file} > ${f.name}`));
+      const marked = failures.map((f) => failing.has(`${f.file} > ${f.name}`) ? { ...f, onMain: true as const } : f);
+      jobRecord.patchRun(id, { checks: checks.with(at, { ...checks[at], tests: { ...checks[at].tests!, failures: marked } }) });
+      // The record keeps at most 20 failures, so a check with more cannot show that each fails on main.
+      return marked.length === checks[at].tests!.failed && marked.every((f) => f.onMain);
     },
     repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
     keepGate: async () => {

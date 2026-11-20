@@ -7,12 +7,13 @@ const run = (r: Partial<Run> = {}): Run => ({ n: 1, role: "build", job: "j1", na
 const checked = { checkedBase: "b0", checkedTip: "t1" };
 
 /** Fake ports: each step passes unless given; `calls` names the steps that ran. */
-function ports(o: { stop?: ChecksStop; failed?: string; same?: string; kept?: string[] | NoVerdict; security?: string; rule?: string; oracle?: string | NoVerdict; reviews?: ReviewCall[] } = {}) {
+function ports(o: { stop?: ChecksStop; failed?: string; main?: boolean; same?: string; kept?: string[] | NoVerdict; security?: string; rule?: string; oracle?: string | NoVerdict; reviews?: ReviewCall[] } = {}) {
   const calls: string[] = [];
   const seen: (string[] | null)[] = [];
   const reviews = [...(o.reviews ?? [{ reason: null }])];
   const p: VerdictPorts = {
     checks: async () => { calls.push("checks"); return { stop: o.stop ?? null, failed: o.failed }; },
+    failsOnMain: async (check) => { calls.push(`failsOnMain ${check}`); return !!o.main; },
     repeatedFailure: (check) => { calls.push(`repeatedFailure ${check}`); return o.same ? { question: o.same } : null; },
     keepGate: async () => { calls.push("keepGate"); return o.kept ?? []; },
     stat: () => " a.ts | 1 +",
@@ -38,7 +39,13 @@ describe("checks", () => {
     const v = await workerVerdict(branch({ earlier: [run({ failed: "tests" })], facts: { cost: 1 } }), p);
     expect(v).toEqual({ outcome: { state: "returned", cause: "check", checkName: "tests", reason: "tests failed", cost: 1, failed: "tests", round: 1 }, code: 1 });
     // The earlier round failed tests too, so the repeat rule looks; this fake finds no repeat.
-    expect(calls).toEqual(["checks", "repeatedFailure tests"]);
+    expect(calls).toEqual(["checks", "failsOnMain tests", "repeatedFailure tests"]);
+  });
+
+  test("a check whose every failed test fails on main too ends failed with no fix round, though rounds are left", async () => {
+    const { p, calls } = ports({ stop: tests, failed: "tests", main: true });
+    expect(await workerVerdict(branch({ earlier: [run({ failed: "tests" })] }), p)).toEqual({ outcome: { state: "failed", cause: "check", checkName: "tests", reason: "tests failed (each failed test fails on main too)" }, code: 1 });
+    expect(calls).toEqual(["checks", "failsOnMain tests"]);
   });
 
   test("at the cap the run stays failed and its reason counts the rounds; a cap of 0 adds nothing; a recheck has no rounds", async () => {
@@ -62,12 +69,12 @@ describe("checks", () => {
     const v = await workerVerdict(branch({ earlier: [run({ failed: "tests" })] }), p);
     expect(v.code).toBe(0);
     expect(v.outcome).toMatchObject({ state: "waiting", question: "Is the test wrong?", cause: "check", checkName: "tests", reason: tests.reason, ask: { reason: "question" } });
-    expect(calls).toEqual(["checks", "repeatedFailure tests"]);
+    expect(calls).toEqual(["checks", "failsOnMain tests", "repeatedFailure tests"]);
     // No round left, or a recheck: the question is not asked.
     for (const earlier of [two, undefined]) {
       const q = ports({ stop: tests, failed: "tests", same: "Is the test wrong?" });
       expect((await workerVerdict(branch({ earlier }), q.p)).outcome.state).toBe("failed");
-      expect(q.calls).toEqual(["checks"]);
+      expect(q.calls).toEqual(["checks", "failsOnMain tests"]);
     }
   });
 });

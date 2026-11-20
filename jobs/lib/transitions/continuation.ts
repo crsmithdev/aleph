@@ -224,7 +224,7 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
   const note = run.failed === "review"
     ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
-    ? `The check \`${run.failed}\` failed on this branch. ${failedTests(run, run.failed).length ? `Its failed tests:\n\n${quoteFailures(failedTests(run, run.failed))}` : `The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}`}\n\nFix the cause, run the tests, and commit.`
+    ? `The check \`${run.failed}\` failed on this branch. ${failedTests(run, run.failed).length ? testsNote(failedTests(run, run.failed)) : `The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}`}\n\nFix the cause, run the tests, and commit.`
     : bounceNote(run);
   return { note, merge: !run.failed && isMergeBounce(run) };
 }
@@ -240,6 +240,13 @@ const checkLog = (folder: string, name: string): string => checkSection(folder, 
 /** The failed tests in the run's record of the named check: empty when the check ran no `bun test` or no test failed. */
 const failedTests = (run: Run | null, check: string): FailedTest[] => run?.checks?.findLast((c) => c.name === check)?.tests?.failures ?? [];
 
+/** The note's failed tests: those of the branch alone, then those that fail on main too, which the worker leaves. */
+function testsNote(failures: FailedTest[]): string {
+  const main = failures.filter((f) => f.onMain);
+  const own = `Its failed tests:\n\n${quoteFailures(failures.filter((f) => !f.onMain))}`;
+  return main.length ? `${own}\n\nEach test below fails on main too. Do not fix it:\n\n${quoteFailures(main)}` : own;
+}
+
 /** Each failed test as `- file > name` and its failure, indented. */
 const quoteFailures = (failures: FailedTest[]): string =>
   failures.map((f) => `- ${f.file} > ${f.name}${f.message ? `\n${f.message.split("\n").map((l) => (l ? `    ${l}` : "")).join("\n")}` : ""}`).join("\n");
@@ -251,16 +258,16 @@ export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) =
 
 /**
  * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
- * names. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
+ * names, of the tests that fail on the branch alone. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
  * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
  * failed test, or there is no run before.
  */
 export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
   const prev = earlier.at(-1);
   if (!prev || prev.run.failed !== check) return null;
-  const now = failedTests(record.getRun(jobOfFolder(folder)), check);
+  const now = failedTests(record.getRun(jobOfFolder(folder)), check).filter((f) => !f.onMain);
   const key = (f: FailedTest) => `${f.file} > ${f.name}`;
-  const before = failedTests(prev.run, check).map(key).sort();
+  const before = failedTests(prev.run, check).filter((f) => !f.onMain).map(key).sort();
   const names = now.map(key).sort();
   if (!names.length || names.join("\n") !== before.join("\n")) return null;
   const quoted = quoteFailures(now.slice(0, 5));

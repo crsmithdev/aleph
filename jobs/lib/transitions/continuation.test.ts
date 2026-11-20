@@ -78,6 +78,12 @@ describe("next step after a build or recheck", () => {
     expect(note).toBe("The check `tests` failed on this branch. Its failed tests:\n\n- a.test.ts > s > one\n    Error: boom\n      at a.test.ts:3\n\nFix the cause, run the tests, and commit.");
   });
 
+  test("a check fail lists its tests that fail on main too apart, and tells the worker not to fix them", () => {
+    const failures = [{ file: "a.test.ts", name: "own", message: "Error: own" }, { file: "b.test.ts", name: "old", message: "Error: old", onMain: true as const }];
+    const ended = run({ state: "returned", failed: "tests", checks: [{ name: "tests", ok: false, seconds: 1, tests: { ran: 2, passed: 0, failed: 2, skipped: 0, failures } }] });
+    expect(nextBrief(folder("check-fail-main"), ended).note).toBe("The check `tests` failed on this branch. Its failed tests:\n\n- a.test.ts > own\n    Error: own\n\nEach test below fails on main too. Do not fix it:\n\n- b.test.ts > old\n    Error: old\n\nFix the cause, run the tests, and commit.");
+  });
+
   test("a failed run with no fix round left starts nothing", () => {
     expect(nextStep(run({ state: "failed", reason: "tests failed after 2 fix rounds" }), true)).toBeUndefined();
   });
@@ -104,6 +110,13 @@ describe("next step after a build or recheck", () => {
     expect(repeatedFailure(other, "tests", [prev])).toBeNull();
     const none = state();
     expect(repeatedFailure(none, "tests", [entry("fail-none-prev", { failed: "tests", checks: checks() })])).toBeNull();
+  });
+
+  test("the repeat rule leaves out the tests that fail on main too", () => {
+    const failures = (main: string) => [{ file: "s.test.ts", name: "one", message: "boom" }, { file: "s.test.ts", name: main, message: "old", onMain: true as const }];
+    const checks = (main: string) => [{ name: "tests", ok: false, seconds: 1, tests: { ran: 2, passed: 0, failed: 2, skipped: 0, failures: failures(main) } }];
+    const now = jobWith({ failed: "tests", checks: checks("two") }).folder;
+    expect(repeatedFailure(now, "tests", [entry("main-prev", { failed: "tests", checks: checks("three") })])?.names).toEqual(["s.test.ts > one"]);
   });
 
   test("the fix rounds are the job's other build runs that were sent back", () => {
