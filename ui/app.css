@@ -1402,6 +1402,8 @@ aleph-chart.active .chartbox { min-height: 0; height: 58px; flex: none; }
 .barrow { all: unset; box-sizing: border-box; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: var(--sp-6) 0; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
 .barrow .bl { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
 .barrow .bv { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
+/* An open fold's summary draws the rule above its body's first bar row. */
+.dp-body > .bars:first-child > .barrow:first-child { border-top: 0; }
 button.barrow { cursor: pointer; }
 button.barrow:hover, button.barrow[aria-pressed="true"] { background: var(--sunk); }
 button.barrow[aria-pressed="true"] .bl { font-weight: var(--fw-strong); }
