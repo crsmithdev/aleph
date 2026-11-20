@@ -197,4 +197,18 @@ describe("the Hooks page", () => {
     const set = renderHook({ event: "Stop", name: "one way", matcher: "Bash", file: "hooks/one-way.ts", mode: "async", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     for (const t of ["<dt>Matcher</dt><dd><code>Bash</code></dd>", "<dt>Mode</dt><dd>async</dd>"]) expect(set).toContain(t);
   });
+
+  test("the Hooks panel shows each timeout through dur() under the head Timeout", () => {
+    const panel = renderHooks(data, new URLSearchParams()).split('aria-label="Hooks"')[1].split("</section>")[0];
+    expect(panel).toContain('<td class="num">30s</td>');
+    expect(panel).toContain(">Timeout<");
+    expect(panel).not.toContain("Timeout s");
+  });
+
+  test("a hook's Timeout fact shows its timeout through dur()", () => {
+    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 90, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    const fact = html.split("<dt>Timeout</dt>")[1].split("</dd>")[0];
+    expect(fact).toContain("1m 30s");
+    expect(fact).not.toContain(" s");
+  });
 });

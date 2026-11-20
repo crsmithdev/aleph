@@ -3,7 +3,7 @@
 // One hook's page, on /api/hooks/:event/:name, draws the same parts.
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
-import { count, day, when } from "./lib/format.js";
+import { count, day, dur, when } from "./lib/format.js";
 import { DAY, WINDOWS } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { badCount, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
@@ -109,14 +109,14 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
   const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide" title="${esc(h.name)}"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
-    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(count(h.timeout), { num: true }), cell(count(h.holds), { num: true })].join("")}</tr>`).join("");
+    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(dur(h.timeout), { num: true }), cell(count(h.holds), { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
     card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length), aside: legend(d.byHook) }) +
     perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
-    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv),{ count: count(d.hooks.length) }) +
+    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout", "Holds"], ["Timeout", "Holds"]), inv),{ count: count(d.hooks.length) }) +
     holdsLog(d.holds, q, asCard) +
     `</div>`;
 }
@@ -154,7 +154,7 @@ export function renderHook(d, q) {
   const xs = d.holds;
   return `<div class="page dp-page">${crumb("#/hooks", [["hooks", "#/hooks"], [d.event], [d.name]])}` +
     pageHead(d.name, { aside: scope(q).bar() }) +
-    facts([["Event", esc(d.event)], ["Matcher", d.matcher && codeText(`\`${d.matcher}\``)], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode], ["Timeout", `${d.timeout} s`]]) +
+    facts([["Event", esc(d.event)], ["Matcher", d.matcher && codeText(`\`${d.matcher}\``)], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode], ["Timeout", dur(d.timeout)]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length) + legend(d.byKind), holdsBy(d.byKind, false)) +
       perDay(xs, q, `hooks/${d.event}/${d.name}`) +
