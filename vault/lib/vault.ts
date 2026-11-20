@@ -140,7 +140,7 @@ export function readNote(path: string, root: string): Note {
   return parseNote(path, root, readFileSync(path, "utf8"));
 }
 
-function parseNote(path: string, root: string, text: string): Note {
+export function parseNote(path: string, root: string, text: string): Note {
   const { frontmatter, body } = splitFrontmatter(text);
   const rel = relative(root, path);
   return { path, rel, title: basename(path, ".md"), fm: frontmatter === null ? {} : parseFrontmatter(frontmatter), hasFrontmatter: frontmatter !== null, body, text, wiki: rel.startsWith("wiki/"), archived: rel.startsWith("archive/") };
@@ -517,9 +517,9 @@ export function coreNotes<T extends Pick<Note, "title" | "fm" | "wiki" | "archiv
  * The SessionStart context for `scope`: MEMORY.md whole, then the core lines,
  * cut at whole lines to START_BUDGET bytes. `cut` counts the core lines left
  * out; the last line then points to the rest. The opening tag gives the
- * text's own bytes and the budget.
+ * text's own bytes and the budget. `bytes` is the size before the cut.
  */
-export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
+export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number; bytes: number } {
   const memory = notes.find((n) => n.rel === "MEMORY.md")?.text?.trim();
   const lines = coreNotes(notes, scope).map((n) => {
     const core = String(n.fm.core).trim();
@@ -536,7 +536,7 @@ export function startContext(root: string, notes: Note[], scope: string): { text
   };
   let kept = lines;
   while (kept.length && Buffer.byteLength(render(kept)) > START_BUDGET) kept = kept.slice(0, -1);
-  return { text: render(kept), cut: lines.length - kept.length };
+  return { text: render(kept), cut: lines.length - kept.length, bytes: Buffer.byteLength(render(lines)) };
 }
 
 /** Each daily note under `root` as its day and text, newest day first. */

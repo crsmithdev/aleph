@@ -379,6 +379,15 @@ describe("core", () => {
     expect(gitStatus()).toBe("");
     for (let j = 0; j < i; j++) (await cli("archive", `Budget Core ${j}`, "--why", "test fixture"));
   });
+  test("a write that shortens a core line of a scope over the start budget succeeds", async () => {
+    // 50 core lines of about 175 bytes each put the scope over 6000 bytes; no write can grow it there, so they are committed directly.
+    for (let i = 0; i < 50; i++) writeFileSync(join(vault, `wiki/decisions/Over Core ${i}.md`), readFileSync(note(`Over Core ${i}`, { kind: "decision", scope: "overcore", core: `Core fact ${i} ${"y".repeat(140)}` }), "utf8"));
+    Bun.spawnSync(["git", "-C", vault, "add", "-A"]);
+    Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed core lines"], { env: { ...process.env, ...testEnv } });
+    const r = (await cli("write", note("Over Core 0", { kind: "decision", scope: "overcore", core: "Core fact 0, shorter" }), "--why", "x"));
+    expect(r.code).toBe(0);
+    expect(readFileSync(join(vault, "wiki/decisions/Over Core 0.md"), "utf8")).toContain("core: Core fact 0, shorter");
+  });
 });
 
 describe("push", () => {

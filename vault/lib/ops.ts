@@ -16,7 +16,7 @@ import { compileDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, isVault, lintVault, linkTargets, loadVault, loadWiki, noteRead, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
+import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, isVault, lintVault, linkTargets, loadVault, loadWiki, noteRead, parseNote, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 import { errText } from "../../lib/errtext.ts";
 
@@ -94,15 +94,18 @@ function rollback(root: string, paths: string[]): void {
 }
 
 /**
- * The refusal for a core line the start context cannot hold. A global core
- * line is on in every scope, so it is checked against each scope that has
- * core lines.
+ * The refusal for a core line the start context cannot hold: a write that
+ * grows a scope's start context past the budget. A write that keeps an
+ * over-budget scope the same size or smaller, such as a shorter core line,
+ * passes. A global core line is on in every scope, so it is checked against
+ * each scope that has core lines.
  */
-function coreFindings(root: string, notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
+function coreFindings(root: string, prior: Note[], notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
   const scope = scopeOf(draft);
   const scopes = scope === "global" ? [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map(scopeOf)])] : [scope];
   for (const s of scopes) {
-    if (!startContext(root, notes, s).cut) continue;
+    const { bytes } = startContext(root, notes, s);
+    if (bytes <= START_BUDGET || bytes <= startContext(root, prior, s).bytes) continue;
     const ranked = coreNotes(notes, s).reverse();
     return {
       findings: [{ note: draft.title, rule: "core", detail: `the start context of scope ${s} is over ${START_BUDGET} bytes with this core line` }],
@@ -232,7 +235,9 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
   const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
   if (budget.length) { rollback(root, touched); refuse(budget); }
   if (typeof draft.fm.core === "string") {
-    const core = coreFindings(root, after, placed);
+    // A draft written in place is already on disk, so the vault before the write holds the committed note.
+    const head = git(root, "show", `HEAD:${relative(root, dest)}`);
+    const core = coreFindings(root, head.ok ? [...notes, parseNote(dest, root, head.out)] : notes, after, placed);
     if (core.findings.length) { rollback(root, touched); refuse(core.findings, core.hint); }
   }
   warn(w, lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
