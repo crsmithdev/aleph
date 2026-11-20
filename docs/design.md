@@ -240,21 +240,21 @@ The dock's theme picker sets `data-palette` on `<html>`. A palette in `ui/app.cs
 
 | Palette | Accent |
 |---|---|
-| Lavender (no `data-palette`) | violet |
 | Dracula | purple |
-| Nord | frost cyan |
-| Solarized | blue |
-| One | blue |
-| Tokyo Night | blue |
-| Tomorrow | blue |
-| Nightfox | blue |
-| Poimandres | teal; its light variant is aleph's own |
 | Iceberg | blue |
-| Nord Light | frost cyan; Nord Light's darker keyword blue in light |
+| Lavender (no `data-palette`) | violet |
+| Nightfox | blue |
+| Nord | frost cyan |
 | Nord Aurora | Aurora purple |
+| Nord Light | frost cyan; Nord Light's darker keyword blue in light |
 | Nordfox | blue; Nord Light in light |
+| One | blue |
 | Palenight Mild | violet; Lavender in light |
 | Palenightfall | blue; Lavender in light |
+| Poimandres | teal; its light variant is aleph's own |
+| Solarized | blue |
+| Tokyo Night | blue |
+| Tomorrow | blue |
 
 - Give a new palette all ten tokens, in light and in both dark blocks.
 - Do not give a palette a status or chart colour.
