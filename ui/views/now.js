@@ -11,6 +11,8 @@ import { feedRow, heraldRow } from "./lib/feed.js";
 import { share, flowOf, statusCards, usable } from "./lib/flow-parts.js";
 import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./lib/ask-cards.js";
 import { verdict } from "../../lib/status-words.ts";
+import { needItems } from "./lib/memory-health.js";
+import { get } from "./lib/router.js";
 
 export const view = {
   path: "/",
@@ -21,9 +23,9 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   refresh: 60,
   live: true,
-  // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s, page, q)}</div></div>`; },
-  more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
+  // `s.flow` is /api/flow for the window with its baseline and `s.memory` the Memory page's data, which `more` adds; the page draws without them first.
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page, q)}</div></div>`; },
+  more: async (s, q) => { const [flow, memory] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q)]); return { ...s, flow, memory }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
@@ -91,6 +93,27 @@ function renderActive(d) {
   if (!d) return card("Active Issues", loadingLine("the active issues"), { id: "active-issues" });
   if (d.error) return card("Active Issues", error(d.error), { id: "active-issues" });
   return panelOf("status/active", activeFrame(d), "active-issues");
+}
+
+/** /api/memory in the project of `q` with /api/memory/processes as `processes`, as the Memory page combines them; `{ error }` when a load fails. */
+async function memoryOf(q) {
+  try {
+    const [m, processes] = await Promise.all([scope(q).url("/api/memory"), "/api/memory/processes"].map(async (url) => {
+      const res = await get(url);
+      if (!res.ok) throw new Error(`Could not load Memory (${res.status}).`);
+      return res.json();
+    }));
+    return { ...m, processes };
+  } catch (e) { return { error: e.message }; }
+}
+
+/** The Memory card: the memory items that wait for Chris, as the Memory page's Needs-you strip lists them. `m` is null while it loads, or `{ error }`. */
+function renderMemory(m) {
+  const box = (body) => card("Memory", body, { id: "memory" });
+  if (!m) return box(loadingLine("the memory"));
+  if (m.error) return box(error(m.error));
+  const items = needItems(m);
+  return box(items.length ? list(items.join("")) : empty());
 }
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. Queue is the wait before the first build, not a run. */

@@ -441,7 +441,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.later = () => { window.skew += 61_000; window.tick(); };
       window.setInterval = (f) => { window.tick = f; return 0; };
       const rf = window.fetch;
-      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)) : !String(u).startsWith("/api/flow") ? rf(u, o) : rf(u, o).then((r) => {
+      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)) : !["/api/flow", "/api/memory"].some((p) => String(u).startsWith(p)) ? rf(u, o) : rf(u, o).then((r) => {
         const j = r.json.bind(r);
         const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
         r.json = () => j().then((d) => { setTimeout(count); return d; });
@@ -452,12 +452,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
     await page.when(buttons);
-    // The first load draws its buttons before its `more` (/api/flow) ends: wait for that count, or a refresh's wait ends on it.
-    await page.when("(window.fetched ?? 0) > 0");
+    // The first load draws its buttons before its `more` (/api/flow, /api/memory and /api/memory/processes) ends: wait for those 3 counts, or a refresh's wait ends on them.
+    await page.when("(window.fetched ?? 0) >= 3");
     const refresh = async () => {
       const n = await page.ev("window.fetched ?? 0");
       await page.ev("window.later()");
-      await page.when(`(window.fetched ?? 0) > ${n}`);
+      await page.when(`(window.fetched ?? 0) >= ${n + 3}`);
     };
     return { buttons, refresh, mark: () => page.ev('document.querySelector("#view > *").dataset.mark = "1"') };
   };

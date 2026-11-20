@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./now.js";
 // @ts-ignore plain JS, shared with the page
-import { error } from "./lib/html.js";
+import { empty, error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
 import { full, heraldOf, row, section, withAttn } from "../now.testkit.ts";
@@ -68,16 +68,21 @@ test("the Status page puts Agent Time, Pipeline and Active Issues in the main co
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 
-/** The Status data after the view's `more`, with each /api/flow request in `urls` answered by `body`. */
+/** Memory data with a cut core line, a refused note, 11 unoffered reads and a note 31 days late; CALM has none over its threshold. */
+const BUSY = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 1 } }, misses: { unoffered_reads: 11 }, processes: { decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
+const CALM = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
+
+/** The Status data after the view's `more`, with each request in `urls`: /api/flow answered by `body`, the memory ones by CALM. */
 async function more(body: unknown, q = new URLSearchParams()) {
   const was = globalThis.fetch, urls: string[] = [];
-  globalThis.fetch = (async (u: string) => { urls.push(u); return { ok: true, json: async () => body }; }) as any;
+  const answer = (u: string) => (u.startsWith("/api/flow") ? body : u === "/api/memory/processes" ? CALM.processes : CALM);
+  globalThis.fetch = (async (u: string) => { urls.push(u); return { ok: true, json: async () => answer(u) }; }) as any;
   try { return { urls, s: await view.view.more({ ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, q) }; } finally { globalThis.fetch = was; }
 }
 
 test("more fetches the week with its baseline, and the page fills the scorecard, the outcome bar and the Pipeline from it", async () => {
   const { urls, s } = await more({ ...WEEK, baseline: BASE });
-  expect(urls).toEqual(["/api/flow?window=week&baseline=1"]);
+  expect(urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes"]);
   const page = view.view.render(s, {}, new URLSearchParams());
   expect(page).toContain("<b>38%<em> / 6.0h</em></b>");
   expect(page).toContain('class="obar thin"');
@@ -106,7 +111,7 @@ test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs in that
 });
 
 test("more loads the window of the address", async () => {
-  expect((await more(WEEK, new URLSearchParams("window=hour"))).urls).toEqual(["/api/flow?window=hour&baseline=1"]);
+  expect((await more(WEEK, new URLSearchParams("window=hour"))).urls[0]).toBe("/api/flow?window=hour&baseline=1");
 });
 
 test("the outcome bar sits between the scorecard and the panels and fills once more brings /api/flow", async () => {
@@ -184,4 +189,19 @@ test("the Herald shows the rows of issues and of jobs together, with no toggles"
   expect(html).toContain('href="#/issues/aleph/5"');
   expect(html).toContain('href="#/jobs/job.57"');
   expect(html).not.toContain('name="show"');
+});
+
+test("the Memory panel lists each memory item that waits, linked to the Health tab; the empty mark when none waits; a loading line before the data", async () => {
+  const draw = (memory: unknown) => { const h = view.view.render({ ...state, usage: USAGE, memory } as any, {}, new URLSearchParams()) as string; return h.slice(h.indexOf('id="memory"'), h.indexOf('id="herald"')); };
+  const busy = draw(BUSY), links = [...busy.matchAll(/<a href="[^"]*"/g)].map((x) => x[0]);
+  expect(links).toEqual(Array(4).fill('<a href="#/memory?tab=health"'));
+  expect(busy).toContain("1 core line cut");
+  expect(busy).not.toContain(empty());
+  const calm = draw(CALM);
+  expect(calm).toContain(empty());
+  expect(calm).not.toContain("<a ");
+  expect(draw(undefined)).toContain("Loading the memory");
+  expect(draw({ error: "x" })).toContain(error("x"));
+  const { s } = await more(WEEK);
+  expect(s.memory).toEqual(CALM);
 });

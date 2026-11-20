@@ -24,8 +24,8 @@ export function writeWeeks(rows, now = Date.now()) {
   return { week, median: sorted[1], lo: sorted[0], hi: sorted[2] };
 }
 
-/** The cut core lines, the refusals, the unoffered reads and the notes far past their re-check, each shown only over its act-threshold. */
-export function needs(m, now = Date.now()) {
+/** The links to the cut core lines, the refusals, the unoffered reads and the notes far past their re-check, each only over its act-threshold. */
+export function needItems(m) {
   const cut = Object.values(m.start ?? {}).reduce((n, s) => n + s.cut, 0), refused = m.lint?.refuse.length ?? 0;
   const unoffered = m.misses?.unoffered_reads ?? 0, late = (m.processes?.decay.stale ?? []).filter((s) => s.over > 30).length;
   // prettier-ignore
@@ -35,7 +35,13 @@ export function needs(m, now = Date.now()) {
     [unoffered > 10, "reads", "need", `${count(unoffered)} reads nobody offered`, tab("health"), "Shows when more than 10 wiki reads in 7 days had no offer in their turn."],
     [late > 0, "re-check", "need", `${plural(late, "note")} over 30 d late`, tab("health"), "Shows when a note is more than 30 days past its re-check date."],
   ].filter(([on]) => on);
-  return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.map(([, k, t, text, href, tip]) => `<a href="${href}" title="${esc(tip)}">${tag(k, t)} ${esc(text)}</a>`).join("")}</div>` : "";
+  return items.map(([, k, t, text, href, tip]) => `<a href="${href}" title="${esc(tip)}">${tag(k, t)} ${esc(text)}</a>`);
+}
+
+/** The Needs-you strip of `needItems(m)`; nothing when none is over its threshold. */
+export function needs(m, now = Date.now()) {
+  const items = needItems(m);
+  return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";
 }
 
 /** The value at quantile `q` of `xs`, sorted. */
