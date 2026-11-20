@@ -4,7 +4,7 @@
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { barList, barRow, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, tag } from "./lib/html.js";
+import { barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -52,11 +52,14 @@ function holdsBy(groups, hookCol = true) {
   return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1])], nums), rows.join(""));
 }
 
-/** The Holds by Day panel: a bar list, oldest first, the largest day marked, its head the day count. */
-function perDay(holds) {
-  if (!holds.length) return detailPanel("Holds by Day", "0", empty());
+/** A card with `detailPanel`'s arguments, for the list page. */
+const asCard = (title, n, body, id) => card(title, body, { count: n, id });
+
+/** The Holds by Day panel, drawn by `box`: a bar list, oldest first, the largest day marked, its head the day count. */
+function perDay(holds, box) {
+  if (!holds.length) return box("Holds by Day", "0", empty());
   const days = [...Map.groupBy([...holds].reverse(), (h) => day(h.t)).entries()], most = Math.max(...days.map(([, xs]) => xs.length));
-  return detailPanel("Holds by Day", count(days.length), barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join("")));
+  return box("Holds by Day", count(days.length), barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join("")));
 }
 
 /** Errors by cause, each with its fix. */
@@ -68,8 +71,8 @@ const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cau
 const filtersOf = (q) => Object.fromEntries(["who", "hook", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));
 const uniq = (xs) => [...new Set(xs)].sort();
 
-/** The holds log, newest first, with its filters from the query `q`; `hookCol` adds the Hook column and filter. */
-function holdsLog(holds, q, hookCol = true) {
+/** The holds log, drawn by `box`, newest first, with its filters from the query `q`; `hookCol` adds the Hook column and filter. */
+function holdsLog(holds, q, box, hookCol = true) {
   const f = filtersOf(q);
   const shown = holds.filter((h) => (!f.who || whoOf(h) === f.who) && (!f.hook || h.hook === f.hook) && (!f.kind || h.kind === f.kind) && (!f.out || h.out === f.out));
   const rows = shown.map((h) => {
@@ -77,7 +80,7 @@ function holdsLog(holds, q, hookCol = true) {
     return row([`<td class="time lead">${esc(when(h.t))}</td>`, `<td>${idLink(h.sid.slice(0, 8), `#/sessions/${encodeURIComponent(h.sid)}`)}</td>`, ...(hookCol ? [cell(h.hook)] : []),
       cell(kindName(h.kind)), cell(h.who), `<td>${tag(h.out, tone)}</td>`, cell(h.why, { wide: true })]);
   });
-  if (!holds.length) return detailPanel("Holds", "0", empty(), "holds");
+  if (!holds.length) return box("Holds", "0", empty(), "holds");
   const page = pageOf(q ?? new URLSearchParams());
   const bar = filterBar([
     { label: "Who", bare: true, name: "who", value: f.who, options: [{ value: "", label: "All" }, { value: "interactive", label: "Interactive" }, { value: "workers", label: "Workers" }] },
@@ -86,7 +89,7 @@ function holdsLog(holds, q, hookCol = true) {
     { label: "Outcome", name: "out", data: true, value: f.out, options: [{ value: "", label: "All Outcomes" }, ...OUTS.map(([k, name]) => ({ value: k, label: name }))] },
   ]);
   const table = dataTable(heads(["Time", "Session", ...(hookCol ? ["Hook"] : []), "Kind", "Who", "Outcome", "Reason"]), pageRows(rows, page, PAGE).join(""));
-  return detailPanel("Holds", count(shown.length), bar + (shown.length ? table + pager(page, shown.length, PAGE) : empty()), "holds");
+  return box("Holds", count(shown.length), bar + (shown.length ? table + pager(page, shown.length, PAGE) : empty()), "holds");
 }
 
 /** The count of each outcome in `holds`, in OUTS order: `[key, label, count]`. */
@@ -96,14 +99,14 @@ export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
   const inv = d.hooks.map((h) => row([cell(h.event), `<td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
     `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })])).join("");
-  return `<div class="page dp-page">` +
+  return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
-    renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
-    detailPanel("Holds by Hook", count(d.byHook.length), holdsBy(d.byHook)) +
-    perDay(d.holds) +
-    detailPanel("Errors by Cause", count(d.errors.length), errorsTable(d.errors)) +
-    detailPanel("Hooks", String(d.hooks.length), dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv)) +
-    holdsLog(d.holds, q) +
+    tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
+    card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length) }) +
+    perDay(d.holds, asCard) +
+    card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
+    card("Hooks", dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv), { count: String(d.hooks.length) }) +
+    holdsLog(d.holds, q, asCard) +
     `</div>`;
 }
 
@@ -141,8 +144,8 @@ export function renderHook(d, q) {
     facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
-      perDay(xs) : "") +
-    holdsLog(xs, q, false) +
+      perDay(xs, detailPanel) : "") +
+    holdsLog(xs, q, detailPanel, false) +
     detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) +
     `</div>`;
 }
