@@ -46,15 +46,16 @@ test("the model of a start comes from its detail word, not from text that begins
 test("a routine run with changes is one factory row that counts its edits by their past word, with a line for each in the order they ran", () => {
   const hk = (at: string, action: string) => e(at, "housekeeper", action, ["job.57"]);
   const change = (at: string, issue: string, note: string) => row({ at, by: "job.57", subject: issue, action: "changed", note });
-  const [r, ...rest] = rows([hk("2026-11-15T13:10:00Z", "done"), change("2026-11-15T13:07:00Z", "aleph-9", "note: second look"), change("2026-11-15T13:06:00Z", "aleph-8", "note: first look"), change("2026-11-15T13:05:00Z", "aleph-5", "retitle: New title"), hk("2026-11-15T13:00:00Z", "running")], { reviewed: { "job.57": 3 } });
+  const [r, ...rest] = rows([hk("2026-11-15T13:10:00Z", "done"), change("2026-11-15T13:07:00Z", "aleph-9", "note: second look"), change("2026-11-15T13:06:00Z", "aleph-8", "note: first look"), change("2026-11-15T13:05:00Z", "aleph-5", "retitle: New title"), hk("2026-11-15T13:00:00Z", "running")], { runs: { "job.57": "housekeeper" }, reviewed: { "job.57": 3 } });
   expect(rest).toEqual([]);
-  expect([r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["ended", 3, "j57", "reviewed 3 · retitled 1 · commented 2"]);
+  expect([r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["ended", 3, "housekeeper j57", "reviewed 3 · retitled 1 · commented 2"]);
   expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["retitled", "a5 New title"], ["commented", "a8 first look"], ["commented", "a9 second look"]]);
 });
 
 test("a routine run that ended with no change has no row, and one that is still running has", () => {
   const hk = (at: string, action: string, job: string) => e(at, "housekeeper", action, [job]);
   expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56"), hk("2026-11-15T12:10:00Z", "done", "job.56")], { reviewed: { "job.56": 4 } })).toEqual([]);
+  expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56")], { runs: { "job.56": "housekeeper" } }).map((r) => [r.word, plain(r.id)])).toEqual([["started", "housekeeper j56"]]);
   expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56")]).map((r) => [r.word, plain(r.id)])).toEqual([["started", "j56"]]);
 });
 

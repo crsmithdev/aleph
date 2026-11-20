@@ -85,7 +85,7 @@ test("the data's Herald is one row per issue with its older events folded, and d
     ev("10:03", "gate", "running", "job.3"), ev("10:04", "job.3", "changed", "aleph-8", { detail: "retitle: New name" }), ev("10:06", "gate", "done", "job.3"),
   ] as any, { ...ctx, titles: { "aleph-7": "Fold the herald" }, runs: { "job.2": "judge", "job.3": "housekeeper" } }) } };
   const rows = data(s, flow).herald;
-  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["j3", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"]]);
+  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["housekeeper j3", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"]]);
   expect(rows[0].fold.map((f: any) => [f.label, f.text])).toEqual([["retitled", "aleph-8 New name"]]);
   expect(rows[1].fold.map((f: any) => f.label)).toEqual(["filed"]);
 });

@@ -27,10 +27,10 @@ const piecesText = (ps) => ps.map((p) => (typeof p === "string" ? p : p.mark ?? 
 const CHIP_TONES = { filed: "quiet", ended: "quiet", closed: "done", started: "run" };
 const chipTone = (word) => CHIP_TONES[word] ?? tone(word);
 
-/** A Herald row on one line: the time, the chip, the ID, then the text; `+N` is the count of lines in its fold, which holds the facts of its runs. */
+/** A Herald row on one line: the time, the chip, the ID (one grid cell, with a routine run's kind), then the text; `+N` is the count of lines in its fold, which holds the facts of its runs. */
 export function eventRow(r) {
   const line = r.sys ? `<span class="event-say">${piecesHtml(r.text)}</span>`
-    : `<span class="event-line">${tag(r.word, chipTone(r.word))}${piecesHtml(r.id)}${r.text.length ? `<span class="event-title" title="${esc(piecesText(r.text))}">${piecesHtml(r.text)}</span>` : "<span></span>"}${r.more ? `<span class="event-more">+${r.more}</span>` : ""}</span>`;
+    : `<span class="event-line">${tag(r.word, chipTone(r.word))}${r.id.length > 1 ? `<span>${piecesHtml(r.id)}</span>` : piecesHtml(r.id)}${r.text.length ? `<span class="event-title" title="${esc(piecesText(r.text))}">${piecesHtml(r.text)}</span>` : "<span></span>"}${r.more ? `<span class="event-more">+${r.more}</span>` : ""}</span>`;
   return feedRow({ tone: chipTone(r.word), at: r.at, by: r.by, cls: r.sys ? " sys" : "", body: line });
 }
 

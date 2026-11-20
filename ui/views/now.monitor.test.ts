@@ -233,6 +233,11 @@ test("the Herald folds an issue across its runs, and draws no row for a routine 
   expect(h).not.toMatch(/j9[12]/);
 });
 
+test("a routine run's row draws its kind and job as one cell of the line's grid", () => {
+  const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf([row({ at: "2026-11-09T13:00:00Z", by: "gate", subject: "housekeeper", action: "running", on: ["job.56"] })], { runs: { "job.56": "housekeeper" } }) });
+  expect(h).toContain('<span class="badge run">started</span><span>housekeeper <a class="idl" href="#/jobs/job.56">j56</a></span><span></span>');
+});
+
 test("the Herald hides an older start of a run with a newer event, leaves out the holds, and draws a routing event as its note", () => {
   const events = [
     row({ at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["job.94"] }),

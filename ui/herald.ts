@@ -109,11 +109,11 @@ function briefs(all: EventRow[], runs: Record<string, string>): Line[] {
   return out;
 }
 
-/** The row of a head event: the chip, the ID, then the title, or `said` for a routine run, or what the sentence adds; `more` is the count of lines in its fold. */
+/** The row of a head event: the chip, the ID (a routine run's kind before its job), then the title, or `said` for a routine run, or what the sentence adds; `more` is the count of lines in its fold. */
 function rowOf(head: EventRow, ctx: Context, key: string, lines: Line[], more: number, said = "", fold?: string): Row {
   const route = head.action === "routed" && !head.size, tgt = targetOf(head), job = jobOf(head);
   const { lead, rest } = route ? { lead: [], rest: [] } : parts(head), title = route ? "" : ctx.titles[tgt] ?? "";
-  const id = isIssue(tgt) ? [issuePiece(tgt, head.project)] : job ? [{ id: shownId(job), to: jobHref(job) }] : lead;
+  const id = isIssue(tgt) ? [issuePiece(tgt, head.project)] : job ? [...(ctx.runs[job] ? [`${runWord(ctx.runs[job])} `] : []), { id: shownId(job), to: jobHref(job) }] : lead;
   const text: Piece[] = route ? [head.detail ?? ""] : said ? [said] : title ? [title] : !isRouting(head) && plain(rest) !== head.action ? rest : [];
   return { key, ...(fold ? { fold } : {}), at: head.time, by: head.subject, ...(route ? { sys: true as const } : {}), word: stateWord(head), id: route ? [] : id, text, more, lines };
 }
