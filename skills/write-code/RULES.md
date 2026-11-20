@@ -33,7 +33,7 @@ Code is minimal and good to look at. When the repo runs a formatter, the formatt
 17. **No defence the inputs do not need.** Check input once, at the boundary. No `??`, `try` or check for a case the types or callers rule out. (slop)
 18. **Tables stay tables.** A table of data can keep its column alignment behind `// prettier-ignore`. Do this only for data, never for logic.
 19. **A comment gives what the code cannot:** a field meaning, a reason, a source. It never says what the next line does. Good: `// The dash is the old shown form: a copied \`j-06802\` still reads.` (aleph, `lib/naming.ts:77`). (slop)
-20. **Give the shape or the unit** of a value where the code makes it: `const NAME_MAX = 255; // bytes one file name may take` (aleph, `jobs/lib/learning/episode.ts:86`).
+20. **Give the shape or the unit** of a value where the code makes it: `const SAID = 600; // chars of a prompt or an answer` (aleph, `skills/sweep/turns.ts:15`).
 
 ## Interfaces
 
