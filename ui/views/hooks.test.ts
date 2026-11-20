@@ -16,12 +16,14 @@ const holds = [
 ];
 const data = {
   days: 7, holds,
-  byHook: [{ hook: "one way", kind: "new-copy", holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } }],
+  byHook: [{ hook: "one way", event: "Stop", kind: "new-copy", holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } }],
   errors: [{ cause: "Moved hook file", fix: "Stub or stable entry", n: 53, sessions: 10, hooks: ["vault"], events: ["SessionStart"], last: "2026-11-19T09:13:00Z" }],
-  hooks: [{ event: "Stop", name: "one way", matcher: "", file: "skills/refit-code/hook.ts", mode: "", timeout: 30, holds: 2 }],
+  hooks: [{ event: "Stop", name: "one way", matcher: "", file: "skills/refit-code/hook.ts", command: "bun skills/refit-code/hook.ts", mode: "", timeout: 30, workers: "skips", holds: 2, changed: null }],
 };
+/** A hook page's Command and Workers, which these tests do not vary. */
+const HOOK = { command: "bun x.ts", workers: "skips" };
 /** The count in the head of card or panel `title`. */
-const head = (html: string, title: string) => html.match(new RegExp(`(?:<h2>${title}</h2><span class="count">|<span>${title}</span><span class="dp-aside">)([^<]*)`))?.[1];
+const head = (html: string, title: string) => html.match(new RegExp(`(?:<h2[^>]*>${title}</h2><span class="count">|<span>${title}</span><span class="dp-aside">)([^<]*)`))?.[1];
 /** The holds over two days: the last a day later. */
 const twoDays = holds.map((h, i) => (i === 3 ? { ...h, t: "2026-11-19T10:00:00Z" } : h));
 /** The session ids of the holds log's rows. */
@@ -64,13 +66,13 @@ describe("the Hooks page", () => {
     expect(logIds("out=no%20effect")).toEqual(["bbbbbbbb2", "cccccccc3"]);
   });
 
-  test("writes an outcome as a state in lower case, and in Title Case as a KPI or a column header", () => {
+  test("writes an outcome as a state in lower case, and in Title Case in the legend, a KPI or a column header", () => {
     const xs = [holds[1], hold("eeeeeeee5", "one way", "boundary", "interactive", "held up")];
     const byKind = [{ kind: "boundary", holds: 2, interactive: 1, workers: 1, outcomes: { "no effect": 1, "held up": 1 } }];
-    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 30, holds: xs, byKind, errors: [] }, new URLSearchParams());
+    const one = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 30, holds: xs, byKind, errors: [] }, new URLSearchParams());
     for (const html of [renderHooks({ ...data, holds: xs }, new URLSearchParams()), one]) {
-      for (const [s, cls, tone] of [["no effect", "o-dead", "parked"], ["held up", "o-held", "quiet"]]) {
-        expect(html).toContain(`<li><i class="${cls}"></i>${s}</li>`);
+      for (const [s, label, cls, tone] of [["no effect", "No Effect", "o-dead", "parked"], ["held up", "Held Up", "o-held", "quiet"]]) {
+        expect(html).toContain(`<li><i class="${cls}"></i>${label}</li>`);
         expect(html).toContain(`<span class="badge ${tone}">${s}</span>`);
       }
       for (const h of ["Held Up", "No Reply", "No Effect"]) expect(html).toContain(`<th class="num">${h}</th>`);
@@ -87,8 +89,8 @@ describe("the Hooks page", () => {
     expect(none.split('aria-label="Holds by Hook"')[1].split("</section>")[0]).not.toContain('class="legend"');
   });
 
-  test("the outcome legend sits in the aside of Holds by Hook and Holds by Kind, not above the table", () => {
-    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
+  test("the outcome legend sits in the body of Holds by Hook and Holds by Kind, above the table, and the aside says Guide only", () => {
+    const one = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
     /** The head and the body of a section, split at `end`, the close of its head. */
     const split = (sec: string, end: string) => [sec.slice(0, sec.indexOf(end)), sec.slice(sec.indexOf(end))];
     const parts = [
@@ -96,13 +98,14 @@ describe("the Hooks page", () => {
       split(one.split("<span>Holds by Kind</span>")[1].split("</details>")[0], "</summary>"),
     ];
     for (const [top, body] of parts) {
-      expect(top).toMatch(/<span class="(dp-)?aside">[^]*<ul class="legend">/);
-      expect(body.split("<table")[0]).not.toContain('class="legend"');
+      expect(top).toMatch(/<span class="(dp-)?aside">[^]*<p class="note">Guide only<\/p>/);
+      expect(top).not.toContain('class="legend"');
+      expect(body.split("<table")[0]).toMatch(/<ul class="legend">[^]*Held Up[^]*No Effect/);
     }
   });
 
   test("Holds by Day is a chart panel under its own key on each page, not a bar list", () => {
-    const one = renderHook({ event: "Stop", name: "verify gate", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: [], errors: [] }, new URLSearchParams());
+    const one = renderHook({ ...HOOK, source: [], event: "Stop", name: "verify gate", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: [], errors: [] }, new URLSearchParams());
     const list = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
     const keys = [list, one].map((html) => html.match(/<aleph-chart key="([^"]+)"><section class="card" aria-label="Holds by Day">/)?.[1]);
     expect(keys).toEqual(["hooks/day", "hooks/Stop/verify gate"]);
@@ -139,24 +142,25 @@ describe("the Hooks page", () => {
     const tds = (title: string) => html.split(`aria-label="${title}"`)[1].split("<tbody>")[1].split("</tr>")[0].match(/<td[^>]*>.*?<\/td>/g)!;
     expect(tds("Holds by Hook").slice(6, 12)).toEqual(["1", "0", "0", "0", "0", "0"].map((n) => `<td class="num">${n}</td>`));
     expect(tds("Errors by Cause")[4]).toBe('<td class="num bad">1,234</td>');
-    expect(tds("Hooks")[6]).toBe('<td class="num">0</td>');
+    expect(tds("Hooks")[7]).toBe('<td class="num">0</td>');
   });
 
   test("a hook's Holds by Kind head counts its rows", () => {
     const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
-    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
+    const html = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
     expect(head(html, "Holds by Kind")).toBe("3");
     for (const c of ['class="page dp-page"', "dp-kpis", "<details"]) expect(html).toContain(c);
   });
 
-  test("Holds by Hook shows the hook as text and its Show button in the last td.acts; Holds by Kind's Show has no hook", () => {
+  test("Holds by Hook links the hook to its page and Holds by Kind's kind filters the log; Show sits in the last td.acts, with no hook on a hook's page", () => {
     /** The cells of the first body row of the card or panel `title`. */
     const tds = (html: string, title: string) => html.split(`>${title}<`)[1].split("<tbody>")[1].split("</tr>")[0].match(/<td[^>]*>.*?<\/td>/g)!;
     const byHook = tds(renderHooks(data, new URLSearchParams()), "Holds by Hook");
     expect(byHook.slice(0, -1).filter((td) => td.includes("<button"))).toEqual([]);
-    expect(byHook[0]).toBe("<td>one way</td>");
+    expect(byHook[0]).toBe('<td><a href="#/hooks/Stop/one%20way">one way</a></td>');
     expect(byHook.at(-1)).toBe('<td class="acts"><button class="act small" type="button" data-kind="new-copy" data-hook="one way">Show</button></td>');
-    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
+    const one = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
+    expect(tds(one, "Holds by Kind")[0]).toBe('<td><button type="button" class="link" data-kind="new-copy">new copy</button></td>');
     expect(tds(one, "Holds by Kind").at(-1)).toBe('<td class="acts"><button class="act small" type="button" data-kind="new-copy">Show</button></td>');
   });
 
@@ -172,14 +176,14 @@ describe("the Hooks page", () => {
   });
 
   test("a hook with no holds and no errors draws neither panel", () => {
-    const html = renderHook({ event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    const html = renderHook({ ...HOOK, source: [], event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     expect(html).not.toContain(empty());
     expect(html).not.toContain('id="holds"');
     expect(html).not.toContain("<summary><span>Errors</span>");
   });
 
   test("a hook draws its Holds panel with holds and its Errors panel only with errors", () => {
-    const hook = { event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: [] };
+    const hook = { ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: [] };
     for (const [errors, shown] of [[data.errors, true], [[], false]] as const) {
       const html = renderHook({ ...hook, errors }, new URLSearchParams());
       expect(html).toContain('id="holds"');
@@ -187,15 +191,43 @@ describe("the Hooks page", () => {
     }
   });
 
-  test("a hook's page head shows its name with no count, its event in the crumb and facts", () => {
-    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+  test("a hook's page head shows its name with no count, its event in the crumb, and its six facts, an empty Matcher or Mode as miss()", () => {
+    const html = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     expect(html).toContain('<header class="ph"><h1>one way</h1><div class="aside">');
     expect(html).not.toContain('<span class="count">');
     expect(html).toContain("<span>Stop</span> / <span>one way</span></nav>");
+    expect([...html.matchAll(/<dt>([^<]+)<\/dt>/g)].map((m) => m[1])).toEqual(["Event", "Matcher", "Command", "Mode", "Timeout", "Workers"]);
     expect(html).toContain("<dt>Event</dt><dd>Stop</dd>");
-    for (const t of ["<dt>Matcher</dt>", "<dt>Mode</dt>"]) expect(html).not.toContain(t);
-    const set = renderHook({ event: "Stop", name: "one way", matcher: "Bash", file: "hooks/one-way.ts", mode: "async", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    expect(html).toContain('<dt>Command</dt><dd><code>bun x.ts</code></dd>');
+    expect(html).toContain('<dt>Workers</dt><dd><span class="badge quiet">skips</span></dd>');
+    for (const t of ['<dt>Matcher</dt><dd><span title="matches all">', '<dt>Mode</dt><dd><span title="sync by default">']) expect(html).toContain(t);
+    const set = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "Bash", file: "hooks/one-way.ts", mode: "async", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     for (const t of ["<dt>Matcher</dt><dd><code>Bash</code></dd>", "<dt>Mode</dt><dd>async</dd>"]) expect(set).toContain(t);
+  });
+
+  test("each Hooks row has a Workers cell with a runs or skips badge", () => {
+    const html = renderHooks({ ...data, hooks: [data.hooks[0], { ...data.hooks[0], name: "vault", workers: "runs" }] }, new URLSearchParams());
+    const rows = html.split('aria-label="Hooks"')[1].split("</table>")[0].split("<tbody>")[1].split("</tr>").slice(0, -1).map((r: string) => r.match(/<td[^>]*>.*?<\/td>/g)![6]);
+    expect(rows).toEqual(['<td><span class="badge quiet">skips</span></td>', '<td><span class="badge run">runs</span></td>']);
+  });
+
+  test("the note under the title names the newest change of the data: its hooks, day, short hash and subject", () => {
+    const at = (t: string, hash: string, subject: string) => ({ ...data.hooks[0], changed: { t, hash, subject } });
+    const hooks = [at("2026-11-17T12:00:00Z", "abf2a568aaaa", "older"), { ...at("2026-11-19T12:00:00Z", "d90a0602bbbb", "only own files"), name: "one way" }, { ...data.hooks[0], name: "vault" }];
+    const ph = renderHooks({ ...data, hooks }, new URLSearchParams()).split('<section class="tiles"')[0];
+    expect(ph).toContain('</header><p class="notice" role="status">one way changed Nov 19 (d90a0602): only own files</p>');
+    expect(renderHooks(data, new URLSearchParams())).not.toContain('class="notice"');
+  });
+
+  test("a hook's Source panel comes last with one fold per file; a hook with no files shows The whole CLI", () => {
+    const source = [{ file: "hooks/a.ts", text: "a\nb" }, { file: "lib/b.ts", text: "c" }];
+    const html = renderHook({ ...HOOK, source, event: "Stop", name: "one way", matcher: "", file: "hooks/a.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: data.errors }, new URLSearchParams());
+    const panel = html.split("<span>Source</span>")[1];
+    expect([...panel.matchAll(/<details><summary><code>([^<]+)<\/code> <span class="quiet">(\d+) lines<\/span><\/summary><div class="md"><pre>/g)].map((m) => [m[1], m[2]])).toEqual([["hooks/a.ts", "2"], ["lib/b.ts", "1"]]);
+    expect(panel).toContain("<pre>c</pre>");
+    expect(panel).not.toContain("dp-panel");
+    const cli = renderHook({ ...HOOK, source: [], event: "SessionStart", name: "factory report", matcher: "", file: "cli/cli.ts", mode: "", timeout: 20, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    expect(cli.split("<span>Source</span>")[1]).toContain(empty("The whole CLI"));
   });
 
   test("the Hooks panel shows each timeout through dur() under the head Timeout", () => {
@@ -206,7 +238,7 @@ describe("the Hooks page", () => {
   });
 
   test("a hook's Timeout fact shows its timeout through dur()", () => {
-    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 90, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    const html = renderHook({ ...HOOK, source: [], event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 90, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     const fact = html.split("<dt>Timeout</dt>")[1].split("</dd>")[0];
     expect(fact).toContain("1m 30s");
     expect(fact).not.toContain(" s");

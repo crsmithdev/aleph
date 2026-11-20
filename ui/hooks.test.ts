@@ -51,7 +51,28 @@ test("a terminal session's hold has its hook, event, kind, session kind and outc
 
 test("a headless worker session's hold counts under Workers, with no effect", async () => {
   const r = await get("GET /api/hooks");
-  expect(r.byHook.find((x: any) => x.hook === "one way")).toEqual({ hook: "one way", kind: "new-copy", holds: 1, interactive: 0, workers: 1, outcomes: { "no effect": 1 } });
+  expect(r.byHook.find((x: any) => x.hook === "one way")).toEqual({ hook: "one way", event: "Stop", kind: "new-copy", holds: 1, interactive: 0, workers: 1, outcomes: { "no effect": 1 } });
+});
+
+test("each hook says from its code whether a factory worker runs it", async () => {
+  const r = await get("GET /api/hooks"), of = (name: string) => r.hooks.find((h: any) => h.name === name).workers;
+  expect(["verify gate", "context gate", "one way", "vault", "git-guard", "factory report"].map(of)).toEqual(["skips", "skips", "skips", "runs", "runs", "runs"]);
+});
+
+test("each hook has the newest commit of its entry file in the window, for the change note, or null", async () => {
+  const week = await get("GET /api/hooks"), hour = await get("GET /api/hooks", {}, "?window=hour");
+  expect(week.hooks.find((h: any) => h.name === "one way").changed).toEqual({
+    hash: "abf2a568feddd16b0da8eb2be9f58c16b1f20fa7", t: "2026-11-17T14:27:57-08:00", subject: "refit-code waste f58: recall from the FTS index keyed by HEAD, not every note",
+  });
+  expect(hour.hooks.filter((h: any) => h.changed)).toEqual([]);
+});
+
+test("a hook's page has its command, and its entry file with the local files it imports; a cli/ hook has no files", async () => {
+  const one = await get("GET /api/hooks/:event/:name", { event: "Stop", name: "one way" }), cli = await get("GET /api/hooks/:event/:name", { event: "SessionStart", name: "factory report" });
+  expect(one.command).toBe("bun skills/refit-code/hook.ts");
+  expect(one.source.map((s: any) => s.file)).toEqual(["skills/refit-code/hook.ts", "lib/env.ts", "lib/git.ts", "lib/json.ts", "hooks/lib/handshake.ts", "skills/refit-code/clones.ts", "skills/refit-code/cochange.ts"]);
+  expect(one.source[0].text).toContain('if (input.hook_event_name !== "Stop" || isAgent()) process.exit(0);');
+  expect([cli.command, cli.source]).toEqual(["bun cli/cli.ts report --hook", []]);
 });
 
 test("a hook with no entries in the window has zero holds and zero errors", async () => {

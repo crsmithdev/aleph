@@ -6,7 +6,7 @@ import { redraw } from "./lib/router.js";
 import { count, day, dur, when } from "./lib/format.js";
 import { DAY, WINDOWS } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { badCount, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
+import { badCount, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, fold, heads, idLink, legendHtml, meter, miss, note, notice, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -37,20 +37,23 @@ const PAGE = 50;
 const whoOf = (h) => (h.who === "interactive" ? "interactive" : "workers");
 const hookHref = (h) => `#/hooks/${encodeURIComponent(h.event)}/${encodeURIComponent(h.name)}`;
 
-/** The outcome legend of `groups`, labelled a guide, or nothing with no groups: the outcomes come from a keyword pass over each hold's reply. */
-const legend = (groups) => !groups.length ? "" : legendHtml(OUTS.map(([k, , cls]) => [k, cls])) + note("Guide only");
+/** The note of an outcome legend, or nothing with no groups: the outcomes come from a keyword pass over each hold's reply. */
+const guide = (groups) => !groups.length ? "" : note("Guide only");
+/** Whether a factory worker runs the hook, as a badge. */
+const workers = (h) => tag(h.workers, h.workers === "runs" ? "run" : "quiet");
 
-/** A table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook. Show sets the log's filters. */
+/** The outcome legend over a table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook, a link to its page. A kind's name and Show set the log's filters. */
 function holdsBy(groups, hookCol = true) {
   if (!groups.length) return empty();
   const rows = groups.map((g) => {
     const n = (k) => g.outcomes[k] ?? 0;
-    return row([cell(hookCol ? g.hook : kindName(g.kind)), ...(hookCol ? [cell(kindName(g.kind))] : []), cell(count(g.holds), { num: true }), cell(count(g.interactive), { num: true }), cell(count(g.workers), { num: true }),
+    const name = hookCol ? `<td><a href="${esc(hookHref({ event: g.event, name: g.hook }))}">${esc(g.hook)}</a></td>` : `<td><button type="button" class="link" data-kind="${esc(g.kind)}">${esc(kindName(g.kind))}</button></td>`;
+    return row([name, ...(hookCol ? [cell(kindName(g.kind))] : []), cell(count(g.holds), { num: true }), cell(count(g.interactive), { num: true }), cell(count(g.workers), { num: true }),
       `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>`,
       ...OUTS.map(([k]) => cell(count(n(k)), { num: true })), rowAct("Show", { kind: g.kind, ...(hookCol ? { hook: g.hook } : {}) })]);
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
-  return dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
+  return legendHtml(OUTS.map(([, name, cls]) => [name, cls])) + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
 }
 
 /** A card with `detailPanel`'s arguments, for the list page. */
@@ -108,15 +111,18 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
+  // The window's newest change of a hook's entry file, with each hook it changed.
+  const last = d.hooks.map((h) => h.changed).filter(Boolean).sort((a, b) => b.t.localeCompare(a.t))[0];
+  const changed = last ? notice(`${[...new Set(d.hooks.filter((h) => h.changed?.hash === last.hash).map((h) => h.name))].join(", ")} changed ${day(last.t)} (${last.hash.slice(0, 8)}): ${last.subject}`) : "";
   const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide" title="${esc(h.name)}"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
-    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(dur(h.timeout), { num: true }), cell(count(h.holds), { num: true })].join("")}</tr>`).join("");
+    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(dur(h.timeout), { num: true }), `<td>${workers(h)}</td>`, cell(count(h.holds), { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
-    pageHead("Hooks", { aside: scope(q).bar() }) +
+    pageHead("Hooks", { aside: scope(q).bar() }) + changed +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
-    card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length), aside: legend(d.byHook) }) +
+    card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length), aside: guide(d.byHook) }) +
     perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
-    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout", "Holds"], ["Timeout", "Holds"]), inv),{ count: count(d.hooks.length) }) +
+    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout", "Workers", "Holds"], ["Timeout", "Holds"]), inv), { count: count(d.hooks.length), id: "inventory" }) +
     holdsLog(d.holds, q, asCard) +
     `</div>`;
 }
@@ -149,17 +155,20 @@ const hookView = {
   mount,
 };
 
-/** One hook's page: its facts, its holds (outcomes, kinds, days, log) and its errors. */
+/** One hook's page: its facts, its holds (outcomes, kinds, days, log), its errors and its source, one fold per file. */
 export function renderHook(d, q) {
   const xs = d.holds;
   return `<div class="page dp-page">${crumb("#/hooks", [["hooks", "#/hooks"], [d.event], [d.name]])}` +
     pageHead(d.name, { aside: scope(q).bar() }) +
-    facts([["Event", esc(d.event)], ["Matcher", d.matcher && codeText(`\`${d.matcher}\``)], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode], ["Timeout", dur(d.timeout)]]) +
+    facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : miss("matches all")], ["Command", codeText(`\`${d.command}\``)],
+      ["Mode", d.mode ? esc(d.mode) : miss("sync by default")], ["Timeout", dur(d.timeout)], ["Workers", workers(d)]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
-      detailPanel("Holds by Kind", count(d.byKind.length) + legend(d.byKind), holdsBy(d.byKind, false)) +
+      detailPanel("Holds by Kind", count(d.byKind.length) + guide(d.byKind), holdsBy(d.byKind, false)) +
       perDay(xs, q, `hooks/${d.event}/${d.name}`) +
       holdsLog(xs, q, detailPanel, false) : "") +
     (d.errors.length ? detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) : "") +
+    detailPanel("Source", count(d.source.length), !d.source.length ? empty("The whole CLI") : d.source.map((s) =>
+      fold(`<code>${esc(s.file)}</code> <span class="quiet">${count(s.text.split("\n").length)} lines</span>`, `<div class="md"><pre>${esc(s.text)}</pre></div>`)).join("")) +
     `</div>`;
 }
 
