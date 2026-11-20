@@ -5,7 +5,8 @@ import { eventsOf, logEvent, readEvents } from "../../../lib/layout.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { realTell, type Tell } from "../records/ledger.ts";
 import type { Via } from "../../../lib/models.ts";
-import { BACKENDS, probeBackend } from "../routing/models.ts";
+import { BACKENDS, probeBackend, readModels, viaOfRun } from "../routing/models.ts";
+import { SIZES } from "../routing/route.ts";
 
 /** One record of why an issue waits: `kind` is the hold word, or `started`; `event` its log event, which a `started` record lacks. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
@@ -71,11 +72,14 @@ export const holdBound = (h: BackendHold): Bound =>
 
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
- * the issue (`holdIssue`), so the dispatch does not route the issue again while the hold lasts.
+ * the issue (`holdIssue`) and a size still runs on the held backend, so the dispatch does not route the issue
+ * again while the hold lasts, and routes it once Chris moves every size off that backend.
  */
 export function heldIssue(name: string): Bound | null {
   const h = backendHold();
-  return h?.issues?.includes(name) ? holdBound(h) : null;
+  if (!h?.issues?.includes(name)) return null;
+  const models = readModels();
+  return SIZES.some((s) => viaOfRun({ model: s }, models) === h.via) ? holdBound(h) : null;
 }
 
 /** Remembers in the backend hold that it held the issue. The hold lifts with its issues. */

@@ -102,7 +102,7 @@ Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factor
 | Gate | Binds when | Result |
 |---|---|---|
 | Pause | The `paused` setting holds a time | Nothing starts. Intake, director, suite, firefighter, and maintainer stop too. A unit's next step is kept in `paused-next` |
-| Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
+| Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`): its newest build run, or with no run yet, any size's model | Skip. Jobs on that backend do not start; jobs on other backends do. Once Chris moves every size off that backend, an issue with no run starts before the probe lifts the hold |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
 | Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |

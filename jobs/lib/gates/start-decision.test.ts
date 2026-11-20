@@ -5,7 +5,7 @@ import { read } from "../records/record.ts";
 import { setModel } from "../routing/models.ts";
 import type { Size } from "../routing/route.ts";
 import { issueFacts } from "./factory-status.ts";
-import { holdBackend } from "./holds.ts";
+import { holdBackend, holdIssue } from "./holds.ts";
 import { decideStart } from "./start-decision.ts";
 import { dispatchIssues } from "../transitions/dispatch.ts";
 import { stalled } from "../transitions/stall.ts";
@@ -74,6 +74,13 @@ test("a held backend holds an issue whose size runs on it; another size starts; 
   mk(`fac-${ran}`, "build", "failed", { model: "deepseek-v4.1-flash" });
   expect(await decide(ran, "large")).toMatchObject({ kind: "waiting", size: undefined });
   expect(asked).toBe(0);
+});
+
+test("an issue the OpenRouter hold held is not waiting once every size runs on Claude", async () => {
+  await holdBackend("openrouter", CREDIT);
+  const id = newIssue();
+  holdIssue(`issue.${id}`);
+  expect((await decide(id, "small")).kind).not.toBe("waiting");
 });
 
 test("the run cap and the no-commit streak stop a start that the factory gates let through", async () => {

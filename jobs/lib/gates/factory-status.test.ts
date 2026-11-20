@@ -8,6 +8,7 @@ import { backendHold, heldIssue, holdBackend, holdIssue, probeHold, recordHold }
 import { issueDecision } from "./issue-decision.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { logEvent, readEvents } from "../../../lib/layout.ts";
+import { setModel } from "../routing/models.ts";
 
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -91,6 +92,7 @@ test("the hold lifts when the probe answers, and stays when the probe fails", as
 });
 
 test("an issue with no run that the hold held stays held with no new routing, until the hold lifts", async () => {
+  setModel("small", { model: "deepseek-v4.1-flash" });
   await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
   holdIssue("fac-1");
   expect(heldIssue("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
@@ -99,7 +101,20 @@ test("an issue with no run that the hold held stays held with no new routing, un
   expect(heldIssue("fac-1")).toBeNull();
 });
 
+test("a held issue stops binding once no size runs on the held backend, while the hold stays", async () => {
+  setModel("small", { model: "deepseek-v4.1-flash" });
+  setModel("medium", { model: "sonnet" });
+  setModel("large", { model: "claude-opus-5-5" });
+  await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
+  holdIssue("fac-1");
+  expect(heldIssue("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
+  setModel("small", { model: "haiku" });
+  expect(heldIssue("fac-1")).toBeNull();
+  expect(backendHold()?.via).toBe("openrouter");
+});
+
 test("a backend-hold row stored with the old goals field still holds its issues", () => {
+  setModel("small", { model: "deepseek-v4.1-flash" });
   putJson("state", "backend-hold", { via: "openrouter", why: "API Error: 402", since: "2026-11-01T00:00:00Z", goals: ["fac-1"] });
   expect(heldIssue("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402");
   holdIssue("fac-2");
