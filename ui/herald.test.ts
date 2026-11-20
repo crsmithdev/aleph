@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { heraldRows, plain, type Context } from "./herald.ts";
 import { row } from "./now.testkit.ts";
-import { detailOf, missedOf, setCodes } from "../lib/naming.ts";
+import { ACTIONS, detailOf, missedOf, setCodes } from "../lib/naming.ts";
 
 beforeEach(() => setCodes({ aleph: "a" }));
 afterAll(() => setCodes({}));
@@ -57,15 +57,15 @@ test("a routine run with changes is one factory row that counts its edits by the
   expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["retitled", "a5 New title"], ["commented", "a8 first look"], ["commented", "a9 second look"]]);
 });
 
-test("a routine run that ended with no change has no row, and one that is still running has", () => {
+test("a routine run that ended with no change has a row, and one that is still running has", () => {
   const hk = (at: string, action: string, job: string) => e(at, "housekeeper", action, [job]);
-  expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56"), hk("2026-11-15T12:10:00Z", "done", "job.56")], { reviewed: { "job.56": 4 } })).toEqual([]);
+  expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56"), hk("2026-11-15T12:10:00Z", "done", "job.56")], { reviewed: { "job.56": 4 } }).map((r) => [r.word, plain(r.id), r.more])).toEqual([["ended", "j56", 0]]);
   expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56")], { runs: { "job.56": "housekeeper" } }).map((r) => [r.word, plain(r.id)])).toEqual([["started", "housekeeper j56"]]);
   expect(rows([hk("2026-11-15T12:00:00Z", "running", "job.56")]).map((r) => [r.word, plain(r.id)])).toEqual([["started", "j56"]]);
 });
 
-test("a routing event with no size is a system row with its note, and a hold is no row", () => {
-  const out = rows([row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", note: "small by classifier jev-1.13" }), row({ at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "after", on: ["aleph-7"] })], { titles: { "aleph-9": "Fix it" } });
+test("a routing event with no size is a system row with its note", () => {
+  const out = rows([row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", note: "small by classifier jev-1.13" })], { titles: { "aleph-9": "Fix it" } });
   expect(out.map((r) => [r.sys, r.id, plain(r.text)])).toEqual([[true, [], "small by classifier jev-1.13"]]);
 });
 
@@ -97,9 +97,19 @@ test("a missed event on an issue is a row with its short ID, a link and the stal
   expect(JSON.stringify(r)).not.toContain("goal:");
 });
 
-test("a hold word of lib/naming.ts that the Herald once lacked is a wait and has no row", () => {
-  const [r] = rows([e("2026-11-13T10:00:00Z", "aleph-7", "done", ["job.1"]), e("2026-11-13T11:00:00Z", "aleph-7", "parked", [])], { attempts: { "job.1": "job.1" } });
-  expect([r.key, r.word]).toEqual(["issue:aleph-7:job.1", "closed"]);
+test("a held event of an issue and a waiting event of its job each head the issue's row", () => {
+  const held = row({ at: "2026-11-13T10:00:00Z", by: "gate", subject: "aleph-7", action: "held", note: detailOf("held", "after", "issue.5") });
+  expect(rows([held]).map((r) => [r.key, r.word, r.at])).toEqual([["issue:aleph-7", "held", "2026-11-13T10:00:00Z"]]);
+  const [r, ...rest] = rows([e("2026-11-13T10:00:00Z", "aleph-7", "running", ["job.1"]), e("2026-11-13T11:00:00Z", "aleph-7", "waiting", ["job.1"])], { attempts: { "job.1": "job.1" } });
+  expect(rest).toEqual([]);
+  expect([r.key, r.word, r.at]).toEqual(["issue:aleph-7:job.1", "waiting", "2026-11-13T11:00:00Z"]);
+});
+
+test("each action of lib/naming.ts on an issue is the row's head or a line of its fold", () => {
+  const at = (i: number) => new Date(Date.parse("2026-11-13T10:00:00Z") + i * 60_000).toISOString();
+  const out = rows(ACTIONS.map((action, i) => row({ at: at(i), by: "gate", subject: "aleph-7", action })));
+  const shown = new Set(out.flatMap((r) => [r.at, ...r.lines.map((l) => l.at)]));
+  expect(ACTIONS.filter((_, i) => !shown.has(at(i)))).toEqual([]);
 });
 
 test("an ID with a # that parseKey does not read as a job is not a job ID", () => {

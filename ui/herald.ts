@@ -1,8 +1,8 @@
 // The Herald's event rows, built on the server from event rows and the maps they need: /api/factory sends them, the `ev` stream sends them
 // again when an event is added, and the terminal panel (herdr/status.ts) reads them. The page only draws them.
 // An issue's rows are one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
-// a routine's run is one row that says "N changes", each change a line in its fold. A hold is an issue's state, not an event, so no row has it.
-import { EDITS, HOLDS, OLD_HOLDS, factsOf, issueHref, jobHref, parseId, parseKey, runWord, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
+// a routine's run is one row that says "N changes", each change a line in its fold. Every event is in a row or a fold line.
+import { EDITS, factsOf, issueHref, jobHref, parseId, parseKey, runWord, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { dur } from "./views/lib/format.js";
 import { money } from "../lib/money.ts";
@@ -30,9 +30,6 @@ export interface Row {
 /** What the rows name besides the events: each issue's title by its target, each run's kind by its job, each job's attempt, each housekeeper run's reviewed count. */
 export interface Context { titles: Record<string, string>; runs: Record<string, string>; attempts: Record<string, string>; reviewed: Record<string, number> }
 
-const WAITS = new Set<string>(["waiting", ...HOLDS, ...OLD_HOLDS]);
-/** A routine run that ended and changed nothing has no row; one still running, or one that failed, has. */
-const FAILED = ["failed", "returned", "dropped"];
 const MARK: Record<string, string> = { passed: "✓", landed: "✓", done: "✓", failed: "✗", returned: "✗", dropped: "✗" };
 
 const isJobId = (id: string) => parseKey(id)?.kind === "job";
@@ -105,7 +102,7 @@ function briefs(all: EventRow[], runs: Record<string, string>): Line[] {
   for (const e of all) {
     const job = jobOf(e), kind = job && runs[job];
     if (e === all[0] && !isRouting(e) && !kind && (!e.detail || e.action === "routed")) continue;
-    if (e.action === "running" && (ended.has(job) || (kind && seen.has(kind)))) continue;
+    if (e.action === "running" && job && (ended.has(job) || (kind && seen.has(kind)))) continue;
     if (drawn(e)) continue;
     seen.add(kind);
     out.push(brief(e, runs, all));
@@ -126,10 +123,10 @@ function rowOf(head: EventRow, ctx: Context, key: string, lines: Line[], more: n
 export function heraldRows(events: EventRow[], ctx: Context): Row[] {
   const issues = new Map<string, EventRow[]>(), routine = new Map<string, EventRow[]>(), first = new Map<string, string>(), status: EventRow[] = [];
   const add = (m: Map<string, EventRow[]>, k: string, e: EventRow) => m.set(k, [e, ...(m.get(k) ?? [])]);
-  const live = events.filter((e) => !WAITS.has(e.action)), attemptOf = (e: EventRow) => ctx.attempts[jobOf(e) ?? ""] ?? "";
-  for (const e of live) if (isIssue(targetOf(e)) && attemptOf(e) && !first.has(targetOf(e))) first.set(targetOf(e), attemptOf(e));
-  const runIds = new Set(live.filter((e) => !isIssue(targetOf(e)) && jobOf(e)).map(jobOf)), now = new Map(first);
-  for (const e of live) {
+  const attemptOf = (e: EventRow) => ctx.attempts[jobOf(e) ?? ""] ?? "";
+  for (const e of events) if (isIssue(targetOf(e)) && attemptOf(e) && !first.has(targetOf(e))) first.set(targetOf(e), attemptOf(e));
+  const runIds = new Set(events.filter((e) => !isIssue(targetOf(e)) && jobOf(e)).map(jobOf)), now = new Map(first);
+  for (const e of events) {
     const tgt = targetOf(e);
     if (e.action === "status") status.push(e);
     else if (e.action === "changed" && runIds.has(e.subject)) add(routine, e.subject, e);
@@ -137,9 +134,8 @@ export function heraldRows(events: EventRow[], ctx: Context): Row[] {
     else if (jobOf(e)) add(routine, jobOf(e)!, e);
     else add(issues, tgt, e);
   }
-  const runRows = [...routine].flatMap(([job, evs]): Row[] => {
+  const runRows = [...routine].map(([job, evs]): Row => {
     const head = evs.find((e) => e.action !== "changed") ?? evs[0], changes = evs.filter((e) => e.action === "changed");
-    if (!changes.length && !FAILED.includes(head.action) && !evs.every((e) => e.action === "running")) return [];
     const edit = (c: EventRow) => (Object.hasOwn(EDITS, wordOf(c)) ? (wordOf(c) as keyof typeof EDITS) : null);
     const lines = [...changes].reverse().map((c): Line => {
       const verb = edit(c), note = verb ? factsOf(c) : c.detail;
@@ -148,7 +144,7 @@ export function heraldRows(events: EventRow[], ctx: Context): Row[] {
     const count = (v: string) => changes.filter((c) => edit(c) === v).length;
     const said = !changes.length ? "" : [ctx.reviewed[job] !== undefined && `reviewed ${ctx.reviewed[job]}`,
       ...(changes.every(edit) ? Object.keys(EDITS).filter(count).map((v) => `${EDITS[v as keyof typeof EDITS]} ${count(v)}`) : [`${changes.length} ${changes.length === 1 ? "change" : "changes"}`])].filter(Boolean).join(" · ");
-    return [rowOf(head, ctx, `event ${hash(`${head.time} ${head.subject} ${targetOf(head)} ${head.action} ${head.object}`)}`, lines, changes.length, said, lines.length ? `issue:${targetOf(head)}:${job}` : undefined)];
+    return rowOf(head, ctx, `event ${hash(`${head.time} ${head.subject} ${targetOf(head)} ${head.action} ${head.object}`)}`, lines, changes.length, said, lines.length ? `issue:${targetOf(head)}:${job}` : undefined);
   });
   const groupRows = [...issues].map(([k, evs]): Row => {
     const head = evs.find((e) => e.action !== "stalled") ?? evs[0];

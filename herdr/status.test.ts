@@ -77,7 +77,7 @@ test("the height fills the pane, and the cut drops the oldest events", () => {
   expect(shown(short)[0]).toStartWith("18:10 landed aleph-149");
 });
 
-test("the data's Herald is one row per issue with its older events folded, and drops a routine run that changed nothing", () => {
+test("the data's Herald is one row per issue with its older events folded, and a row for a routine run that changed nothing", () => {
   const ev = (time: string, subject: string, action: string, object: string, extra = {}) => ({ time: `2026-10-27T${time}:00Z`, subject, action, object, object_target: null, ...extra });
   const s = { ...state, herald: { rows: heraldRows([
     ev("10:00", "rule", "filed", "aleph-7"), ev("10:05", "gate", "landed", "aleph-7"),
@@ -85,7 +85,7 @@ test("the data's Herald is one row per issue with its older events folded, and d
     ev("10:03", "gate", "running", "job.3"), ev("10:04", "job.3", "changed", "aleph-8", { detail: "retitle: New name" }), ev("10:06", "gate", "done", "job.3"),
   ] as any, { ...ctx, titles: { "aleph-7": "Fold the herald" }, runs: { "job.2": "judge", "job.3": "housekeeper" } }) } };
   const rows = data(s, flow).herald;
-  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["housekeeper j3", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"]]);
+  expect(rows.map((r: any) => [r.id, r.word, r.title])).toEqual([["housekeeper j3", "ended", "retitled 1"], ["aleph-7", "landed", "Fold the herald"], ["judge j2", "ended", ""]]);
   expect(rows[0].fold.map((f: any) => [f.label, f.text])).toEqual([["retitled", "aleph-8 New name"]]);
   expect(rows[1].fold.map((f: any) => f.label)).toEqual(["filed"]);
 });

@@ -216,7 +216,7 @@ test("the Herald draws the state's rows and the streamed ones when they are newe
   const h = v.renderHerald(s, { stale: false, live: live(6), loaded });
   expect(order(h)).toEqual(["alert", "error", "warning"]);
   // Two columns: the time, then one line: the chip, the issue linked, the text the sentence adds.
-  expect(h).toContain('<span class="event-line"><span class="badge error">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="past its time box">past its time box</span><span class="event-more">+1</span></span>');
+  expect(h).toContain('<span class="event-line"><span class="badge error">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="past its time box">past its time box</span><span class="event-more">+2</span></span>');
   expect(h).not.toContain("event-tone");
 });
 
@@ -288,7 +288,7 @@ test("the Herald draws a routing event as a system row: its choice, with no titl
   expect(h).toMatch(/class="event-row quiet sys" data-by="rule"/);
 });
 
-test("the Herald folds an issue across its runs, and draws no row for a routine run that ended with no change", () => {
+test("the Herald folds an issue across its runs, and draws a row for a routine run that ended with no change", () => {
   const e = (at: string, subject: string, action: string, job: string) => (row({ at, by: "gate", subject, action, on: [job] }));
   const events = [
     e("2026-11-09T09:00:00Z", "housekeeper", "running", "job.91"), e("2026-11-09T09:10:00Z", "housekeeper", "done", "job.91"),
@@ -298,8 +298,8 @@ test("the Herald folds an issue across its runs, and draws no row for a routine 
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf(events) });
   expect(h).toContain('data-fold="issue:aleph-9"');
   expect(h).not.toContain('data-fold="issue:housekeeper"');
-  // A routine's run that ended with no change draws no row.
-  expect(h).not.toMatch(/j9[12]/);
+  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.91">j91</a>');
+  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.92">j92</a>');
 });
 
 test("a routine run's row draws its kind and job as one cell of the line's grid", () => {
@@ -307,7 +307,7 @@ test("a routine run's row draws its kind and job as one cell of the line's grid"
   expect(h).toContain('<span class="badge run">started</span><span>housekeeper <a class="idl" href="#/jobs/job.56">j56</a></span><span></span>');
 });
 
-test("the Herald hides an older start of a run with a newer event, leaves out the holds, and draws a routing event as its note", () => {
+test("the Herald hides an older start of a run with a newer event, draws the holds as lines, and draws a routing event as its note", () => {
   const events = [
     row({ at: "2026-11-09T13:00:00Z", by: "gate", subject: "aleph-9", action: "passed", on: ["job.94"] }),
     row({ at: "2026-11-09T12:00:00Z", by: "gate", subject: "aleph-9", action: "running", on: ["job.94"] }),
@@ -317,9 +317,9 @@ test("the Herald hides an older start of a run with a newer event, leaves out th
   ];
   const h = view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", herald: heraldOf(events, { runs: { "job.94": "build" } }) });
   expect(h).toMatch(/<span class="badge done">passed<\/span><a[^>]*>aleph-9<\/a>/);
-  // The fold has the build's line only: its start is hidden by its result, and the routing is drawn as the build's facts.
-  expect(h.match(/<div class="event-brief/g)).toHaveLength(1);
-  expect(h).not.toContain("aleph-8");
+  // The fold has the build's line and the two holds: the build's start is hidden by its result, and the routing is drawn as the build's facts.
+  expect(h.match(/<div class="event-brief/g)).toHaveLength(3);
+  expect(h).toContain("aleph-8");
   expect(h).toMatch(/<div data-key="[^"]*" id="[^"]*" class="event-row quiet sys" data-by="rule">/);
   expect(h).toContain("worker-medium by classifier jev-1.13");
 });
@@ -443,21 +443,21 @@ const hk = (at: string, action: string, on?: string[]) => row({ at, by: "gate", 
 const changed = (at: string, issue: string, why: string) => row({ at, by: "job.57", subject: issue, action: "changed", note: why });
 const feed = (events: object[], extra: object = {}) => view.renderHerald({ ...calm, now: "2026-11-15T14:00:00Z", herald: heraldOf(events, extra) });
 
-test("a housekeeper run with 2 changes is one row reading 2 changes, with a line for each in its fold, in the order they ran; an ended run with none has no row", () => {
+test("a housekeeper run with 2 changes is one row reading 2 changes, with a line for each in its fold, in the order they ran; an ended run with none has a row", () => {
   const h = feed([
     hk("2026-11-15T13:10:00Z", "done"), changed("2026-11-15T13:06:00Z", "aleph-8", "later"), changed("2026-11-15T13:05:00Z", "aleph-5", "the land did it"), hk("2026-11-15T13:00:00Z", "running"),
     hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"]),
   ]);
-  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
+  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(2);
+  expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.56">j56</a>');
   expect(h).toContain('<span class="badge quiet">ended</span><a class="idl" href="#/jobs/job.57">j57</a><span class="event-title" title="2 changes">2 changes</span><span class="event-more">+2</span>');
   const lines = h.split('<div class="herald-older">')[1].split('<div class="event-brief').slice(1);
   expect(lines).toHaveLength(2);
   expect(lines[0]).toContain("aleph-5");
   expect(lines[0]).toContain("the land did it");
   expect(lines[1]).toContain("aleph-8");
-  expect(h).not.toContain("j56");
-  // A reviewed count alone does not draw a row for a run that changed nothing.
-  expect(feed([hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"])], { reviewed: { "job.56": 4 } })).not.toContain("j56");
+  // A run that changed nothing draws no text, even with a reviewed count.
+  expect(feed([hk("2026-11-15T12:10:00Z", "done", ["job.56"]), hk("2026-11-15T12:00:00Z", "running", ["job.56"])], { reviewed: { "job.56": 4 } })).toContain('j56</a><span></span>');
 });
 
 test("the Herald state's reviewed count of a housekeeper job is its tally's reviewed", () => {
