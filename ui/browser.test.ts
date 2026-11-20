@@ -729,7 +729,8 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     const m = await page.ev<{ display: string; w: number; text: string; one: boolean }>(`import("/views/lib/html.js").then(({ statCard }) => {
       const host = document.createElement("div");
       host.id = "tile-probe";
-      document.querySelector("#view").prepend(host);
+      // Outside #view: the second draw of the page replaces the view and would take the probe with it.
+      document.body.prepend(host);
       host.innerHTML = '<section class="tiles">' + statCard({ k: "Worker slots", v: "0", v2: "5", q: ["in use", "cap"] }) + "</section>";
       const em = host.querySelector(".tile.sc b em"), b = host.querySelector(".tile.sc b");
       return { display: getComputedStyle(em).display, w: em.getBoundingClientRect().width, text: b.textContent, one: em.getBoundingClientRect().height < b.getBoundingClientRect().height * 1.5 && b.scrollWidth <= b.clientWidth };
