@@ -21,7 +21,7 @@ const WEEK = {
     { key: "dropped", lost: true, hours: 0, causes: [] },
   ],
   figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, firstPass: 0.91 },
-  filed: { followups: 5, all: 12 }, dropped: 3, open: { open: 4, parked: 2 },
+  filed: { followups: 5, all: 12 }, dropped: 3, open: { open: 4, parked: 2 }, failures: [],
 };
 
 const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };

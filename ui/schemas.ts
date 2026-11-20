@@ -35,7 +35,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/flow": {
     window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, filed: { followups: "number", all: "number" }, dropped: "number", open: { open: "number", parked: "number" }, checks: "array",
     buckets: [{ at: "time", runs: "number" }], active: [{ at: "time", intake: "number", queue: "number", running: "number", landed: "number" }], times: [{ id: "string", href: "string", outcome: "string", filed: "time?" }], slowest: "array",
-    stages: "object", wait: { count: "number", p50: "number?" }, builds: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number", causes: "array", top: "array" }], notCounted: "any", lost: "any", agents: "any",
+    stages: "object", failures: [{ issue: "string", stage: "string", at: "time" }], wait: { count: "number", p50: "number?" }, builds: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number", causes: "array", top: "array" }], notCounted: "any", lost: "any", agents: "any",
     "baseline?": "any",
     figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", waitShare: "number?", followups: "number?", filed: "number?" },
   },

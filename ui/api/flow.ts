@@ -59,6 +59,8 @@ export interface Speed {
   slowest: { name: string; state: string; model: string; tests: number | null; cost: number; took: number }[];
   /** The stages of the window, as the monitor counts them, and each Pipeline stage's issues: failed first, then most seconds. */
   stages: { rows: StageRow[]; issues: Record<(typeof PIPELINE)[number], StageIssue[]> };
+  /** The issues with a Pipeline run that gave nothing usable in the window, one per issue from its latest such run, newest first. */
+  failures: Failure[];
   /** Issues filed in the window by an event of the event table: `all` of them, `followups` those the factory's own actors filed (not claude, not human). Before 2026-11-13T18:09:00Z the filer is not in the subject, so there only an issue with `source: worker` counts. */
   filed: { followups: number; all: number };
   /** Issues closed as dropped in the window: a `dropped` event on an issue key. A job's drop is not one. */
@@ -139,7 +141,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   const stages = { rows: stageRows({ runs: entries }, since.getTime(), now.getTime()), issues: stageIssues(entries, ended.issues, since.getTime(), now.getTime()) };
-  for (const t of [...cls.classes.flatMap((c) => c.top), ...Object.values(stages.issues).flat()]) {
+  const failed = failures(entries, since.getTime(), now.getTime());
+  for (const t of [...cls.classes.flatMap((c) => c.top), ...Object.values(stages.issues).flat(), ...failed]) {
     const [repo, n] = splitId(t.issue);
     const item = lists.item(repo, n);
     t.title = item?.title;
@@ -193,6 +196,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     active: activeIssues(all, inp.filed, b, now.getTime(), (k) => inProject(k, project) && statusOf(k) === "open"),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,
+    failures: failed,
     issues,
     classes: cls.classes,
     notCounted: cls.notCounted,
@@ -220,6 +224,20 @@ function stageIssues(entries: Entry[], times: IssueTimes[], since: number, now: 
   for (const t of times) if (t.queue !== null) by.get("queue")!.set(t.id, { issue: t.id, runs: 0, secs: t.queue, failed: false });
   const sorted = (rows: Map<string, StageIssue>) => [...rows.values()].map((r) => ({ ...r, secs: round(r.secs), href: issueHref(r.issue) })).sort((a, b) => Number(b.failed) - Number(a.failed) || b.secs - a.secs);
   return Object.fromEntries(PIPELINE.map((k) => [k, sorted(by.get(k)!)])) as Speed["stages"]["issues"];
+}
+
+/** An issue's latest failed run: its stage and `at`, when the run ended (its start when it records no end). */
+type Failure = { issue: string; title?: string; href?: string; stage: string; at: string };
+
+/** Each issue's latest failed Pipeline run in `since`..`now`, newest first. A review's run is its build, so its time is the build's. */
+function failures(entries: Entry[], since: number, now: number): Failure[] {
+  const by = new Map<string, Failure>();
+  for (const x of stageRuns(entries, since, now)) {
+    const key = issueOf(x.run), at = x.run.ended ?? x.run.started;
+    if (!key || !x.unusable || !(PIPELINE as readonly string[]).includes(x.stage) || Date.parse(at) < Date.parse(by.get(key)?.at ?? "")) continue;
+    by.set(key, { issue: key, href: issueHref(key), stage: x.stage, at });
+  }
+  return [...by.values()].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 }
 
 /** The number of an issue, from its key or its old `<repo>-<n>` ID. */

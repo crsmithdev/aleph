@@ -96,6 +96,22 @@ test("stages.issues lists a stage's failed issue first, then the rest by most se
   ]);
 });
 
+test("failures lists each issue with a failed run once, from its latest failure, newest first", () => {
+  // 70 days back, so no other test's window sees these runs.
+  run({ role: "build", state: "failed", repo: "alpha", on: "alpha-1", ...secs(70, 9, 100) });
+  run({ role: "land", state: "failed", repo: "alpha", on: "alpha-2", ...secs(70, 11, 100) });
+  run({ role: "build", state: "passed", repo: "alpha", on: "alpha-3", ...secs(70, 10, 100) });
+  run({ role: "build", state: "failed", repo: "alpha", on: "alpha-4", ...secs(70, 8, 100) });
+  run({ role: "recheck", state: "failed", repo: "alpha", on: "alpha-4", ...secs(70, 12, 100) });
+  const d = speed("day", new Date(2026, 7, 19, 15));
+  const end = (h: number) => secs(70, h, 100).ended;
+  expect(d.failures.map(({ issue, stage, at }) => ({ issue, stage, at }))).toEqual([
+    { issue: "alpha-4", stage: "recheck", at: end(12) },
+    { issue: "alpha-2", stage: "land", at: end(11) },
+    { issue: "alpha-1", stage: "build", at: end(9) },
+  ]);
+});
+
 test("GET /api/flow takes a window (default week) and answers JSON", async () => {
   const get = async (q: string) => routes["GET /api/flow"](new Request(`http://x/api/flow${q}`), {}, new URL(`http://x/api/flow${q}`));
   expect((await (await get("?window=month")).json()).window).toBe("month");

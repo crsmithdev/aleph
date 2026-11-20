@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, setSystemTime, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./now.js";
 import { heraldOf, row, withFactory } from "../now.testkit.ts";
@@ -60,28 +60,40 @@ const flow = {
   window: "day",
   stages: { rows: [], issues: { intake: [], queue: [], build: [issue(8, "Fix the gate", { runs: 2, secs: 300, failed: true }), issue(7, "Add a tab", { runs: 1, secs: 900, failed: false })], review: [], recheck: [], land: [] } },
   classes: [{ key: "returned", lost: true, hours: 3, top: [issue(9, "Split the store", { hours: 2.5 }), issue(3, "Trim a test", { hours: 0.5 })] }],
+  failures: [issue(4, "Drop a flag", { stage: "recheck", at: "2026-11-20T12:05:00" }), issue(8, "Fix the gate", { stage: "build", at: "2026-11-20T09:30:00" })],
 };
-/** The Herald drawn with `at` as the kept tab and target, in the day window of the aleph project. */
-const inspected = (at: object | null) => {
+/** The Herald drawn with `at` as the kept tab and target, in the day window of the aleph project; `d` is its /api/flow. */
+const inspected = (at: object | null, d: object = flow) => {
   (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.inspect" && at ? JSON.stringify(at) : null), setItem() {} };
-  try { return view.renderHerald({ ...calm, flow }, { stale: false, live: null, loaded: null }, new URLSearchParams("window=day&project=aleph")); }
+  try { return view.renderHerald({ ...calm, flow: d }, { stale: false, live: null, loaded: null }, new URLSearchParams("window=day&project=aleph")); }
   finally { delete (globalThis as any).localStorage; }
 };
 /** The issue IDs of an Inspector list, in order. */
 const listed = (h: string) => [...h.slice(h.indexOf('data-pane="inspector"')).matchAll(/class="idl" href="[^"]*">([^<]*)</g)].map((m) => m[1]);
 
-test("the Herald opens on its Events tab, with the feed shown and no Inspector list", () => {
+test("the Herald opens on its Events tab, with the feed shown and the failed issues in the Inspector, newest failure first", () => {
+  // when() gives the month and day of a time in the year of now.
+  setSystemTime(new Date(2026, 10, 20, 15));
   const h = inspected(null);
+  setSystemTime();
   expect(h).toContain('<button type="button" data-tab="events" aria-pressed="true">Events</button>');
   expect(h).toMatch(/<section data-pane="events">.*class="herald-feed"/);
-  expect(h).toContain('<section data-pane="inspector" hidden><div class="empty">');
+  expect(h).toContain('<section data-pane="inspector" hidden><div class="inspect-head"><h3 class="sub-head">Failures</h3></div>');
+  expect(listed(h)).toEqual(["aleph-4", "aleph-8"]);
+  expect(h).toContain('<td class="wide" title="Drop a flag">Drop a flag</td><td>Recheck</td><td class="num">11/20 12:05</td>');
+  expect(h).toContain('<td class="wide" title="Fix the gate">Fix the gate</td><td>Implement</td><td class="num">11/20 09:30</td>');
+});
+
+test("with no failure in the window, the Inspector is empty", () => {
+  const h = inspected(null, { ...flow, failures: [] });
+  expect(h).toContain('<h3 class="sub-head">Failures</h3></div><div class="empty">');
   expect(listed(h)).toEqual([]);
 });
 
 test("a kept Inspector tab on the build stage lists its issues, failed first, under an All jobs link to the stage's Jobs in the window and project", () => {
   const h = inspected({ tab: "inspector", kind: "stage", target: "build" });
   expect(h).toContain('<section data-pane="events" hidden>');
-  expect(h).toContain('<h3 class="sub-head">Implement</h3><a href="#/factory/jobs?stage=implement&amp;role=worker&amp;window=day&amp;project=aleph">All jobs</a>');
+  expect(h).toContain('<h3 class="sub-head">Implement</h3><span><button type="button" class="pgo" data-inspect="failures">Failures</button> <a href="#/factory/jobs?stage=implement&amp;role=worker&amp;window=day&amp;project=aleph">All jobs</a></span>');
   expect(listed(h)).toEqual(["aleph-8", "aleph-7"]);
   expect(h).toContain('<td class="wide" title="Fix the gate">Fix the gate</td><td class="num">2</td><td class="num">5m 00s</td><td><span class="badge error">failed</span></td>');
   expect(h).toContain('<td class="num">15m 00s</td><td></td>');
@@ -89,7 +101,7 @@ test("a kept Inspector tab on the build stage lists its issues, failed first, un
 
 test("a kept Inspector tab on the returned class lists its issues with their hours, most hours first", () => {
   const h = inspected({ tab: "inspector", kind: "class", target: "returned" });
-  expect(h).toContain('<h3 class="sub-head">returned</h3></div>');
+  expect(h).toContain('<h3 class="sub-head">returned</h3><button type="button" class="pgo" data-inspect="failures">Failures</button></div>');
   expect(listed(h)).toEqual(["aleph-9", "aleph-3"]);
   expect(h).toContain('<td class="wide" title="Split the store">Split the store</td><td class="num">2.5h</td>');
   expect(h).not.toContain("All jobs");

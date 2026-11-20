@@ -206,22 +206,27 @@ function runNow(s) {
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
 
-/** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class". */
+/** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class", or "failures" with no target. */
 const INSPECT = "herald.inspect";
 
-/** The Inspector pane: the issues of the kept stage or class in `d`, /api/flow for the window; `at` is the kept target. */
+/** The Inspector pane: the issues of the kept stage or class in `d`, /api/flow for the window, else its failed issues; `at` is the kept target. */
 function inspector(d, at, q) {
-  if (!at.target) return empty();
   if (!d) return loadingLine("the issues");
   if (d.error) return error(d.error);
   const id = (x) => `<td>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`;
   const table = (head, rows) => (rows.length ? dataTable(head, rows.join("")) : empty());
+  // A click on it keeps no target, so the pane goes back to the failures.
+  const back = `<button type="button" class="pgo" data-inspect="failures">Failures</button>`;
+  if (!at.target) {
+    const rows = d.failures.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(PIPE[x.stage]), cell(when(x.at), { num: true })]));
+    return `<div class="inspect-head">${subHead("Failures")}</div>` + table(heads(["Issue", "Title", "Stage", "Failed"], ["Failed"]), rows);
+  }
   if (at.kind === "stage") {
     const rows = d.stages.issues[at.target].map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(count(x.runs), { num: true }), cell(dur(x.secs), { num: true }), `<td>${x.failed ? tag("failed", tone("failed")) : ""}</td>`]));
-    return `<div class="inspect-head">${subHead(PIPE[at.target])}<a href="${esc(drillHref(at.target, q))}">All jobs</a></div>` + table(heads(["Issue", "Title", "Runs", "Time", ""], ["Runs", "Time"]), rows);
+    return `<div class="inspect-head">${subHead(PIPE[at.target])}<span>${back} <a href="${esc(drillHref(at.target, q))}">All jobs</a></span></div>` + table(heads(["Issue", "Title", "Runs", "Time", ""], ["Runs", "Time"]), rows);
   }
   const rows = d.classes.find((c) => c.key === at.target).top.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(hours(x.hours), { num: true })]));
-  return `<div class="inspect-head">${subHead(at.target)}</div>` + table(heads(["Issue", "Title", "Hours"], ["Hours"]), rows);
+  return `<div class="inspect-head">${subHead(at.target)}${back}</div>` + table(heads(["Issue", "Title", "Hours"], ["Hours"]), rows);
 }
 
 /** Open the Inspector on a click of a Pipeline stage or an Agent Time line, and keep the tab a click opens. */
