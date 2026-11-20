@@ -63,9 +63,9 @@ function perDay(holds, box) {
 }
 
 /** Errors by cause, each with its fix. */
-const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Errors", "Sessions", "Fix", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
-  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")),
-    cell(e.n, { num: true }), cell(e.sessions, { num: true }), cell(e.fix), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
+const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
+  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), cell(e.fix),
+    cell(e.n, { num: true }), cell(e.sessions, { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 /** The filters of the holds log from the address. */
 const filtersOf = (q) => Object.fromEntries(["who", "hook", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));

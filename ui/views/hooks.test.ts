@@ -83,6 +83,13 @@ describe("the Hooks page", () => {
     expect([head(html, "Holds by Hook"), head(html, "Holds by Day"), head(html, "Errors by Cause")]).toEqual(["1", "2", "1"]);
   });
 
+  test("the errors table puts Fix before the numbers and Last at the end", () => {
+    const table = renderHooks(data, new URLSearchParams()).split('aria-label="Errors by Cause"')[1].split("</table>")[0];
+    expect([...table.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"]);
+    expect(table).toContain('<th class="num">Errors</th><th class="num">Sessions</th>');
+    expect(table).toMatch(/<td>Stub or stable entry<\/td><td class="num">53<\/td><td class="num">10<\/td><td class="time">/);
+  });
+
   test("a hook's Holds by Day head counts the days and Holds by Kind its rows", () => {
     const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
