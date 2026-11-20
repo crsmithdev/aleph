@@ -27,6 +27,7 @@ import { timer } from "../jobs/lib/infra/systemd.ts";
 import { probe } from "../lib/git.ts";
 import { dueAt } from "../jobs/lib/asks/timeout.ts";
 import { errText } from "../lib/errtext.ts";
+import { getJson, putJson } from "../lib/db.ts";
 
 const logged = new Set<string>();
 
@@ -160,21 +161,17 @@ interface HeraldHistoryItem {
   reason?: string;
 }
 
-const statusHistory: HeraldHistoryItem[] = [];
 /** The most events the Herald gets with the state; the stream adds the ones after. */
 const HERALD_EVENTS = 50;
 const MAX_STATUS_HISTORY = 50;
 
-function recordStatusTransition(item: HeraldHistoryItem): void {
-  const last = statusHistory[0];
-  if (!last || last.text !== item.text || last.tone !== item.tone) {
-    statusHistory.unshift(item);
-    if (statusHistory.length > MAX_STATUS_HISTORY) statusHistory.pop();
-  }
-}
-
-function currentStatusHistory(): HeraldHistoryItem[] {
-  return statusHistory.slice();
+/** The status history with `item` on top when its text or tone is new, newest first. It is a `state` row: each land restarts the server, and the history outlives it. */
+function recordStatusTransition(item: HeraldHistoryItem): HeraldHistoryItem[] {
+  const history = getJson<HeraldHistoryItem[]>("state", "herald.status", []);
+  if (history[0]?.text === item.text && history[0]?.tone === item.tone) return history;
+  const next = [item, ...history].slice(0, MAX_STATUS_HISTORY);
+  putJson("state", "herald.status", next);
+  return next;
 }
 
 export interface State {
@@ -488,12 +485,12 @@ export function state(now = new Date()): State {
   const att = attend({ runs: needs, issues: awaitingItems });
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, errored, asks: att.items, usage: summary(now.getTime()) });
-  recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
+  const history = recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const events = heraldEvents(now.getTime());
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
+    herald: { history, seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
     asks: att.items, done, doneStamps,
     errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),

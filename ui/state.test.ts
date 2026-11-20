@@ -17,6 +17,7 @@ import { rows, withAttn } from "./now.testkit.ts";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 import { logEvent } from "../lib/layout.ts";
+import { putJson } from "../lib/db.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -368,5 +369,22 @@ describe("a live job on a parked issue", () => {
     const names = state(now).running.map((j) => j.name);
     expect(names).toContain(live);
     expect(names).not.toContain(held);
+  });
+});
+
+describe("the Herald's status history", () => {
+  test("holds a red aleph CI and its recovery as two entries across a restart of the server", async () => {
+    const red = { aleph: { repo: "aleph", ok: false, sha: "a1", url: "u", sinceSha: "a0", since: "2026-11-04T10:00:00Z", runs: 2 } };
+    try {
+      putJson("state", "ci", red);
+      state(now);
+      putJson("state", "ci", {});
+      // A land restarts the server: a fresh copy of the module is the restarted one.
+      const copy = "./state.ts?restart";
+      const restarted: typeof import("./state.ts") = await import(copy);
+      const [recovered, broken] = restarted.state(now).herald!.history;
+      expect(broken.text).toBe("Alert: GitHub CI is broken; jobs are unhealthy; attention is needed.");
+      expect(recovered.text).toBe("Alert: Jobs are unhealthy; attention is needed.");
+    } finally { putJson("state", "ci", {}); }
   });
 });
