@@ -13,7 +13,7 @@ import { CLASSES, classify } from "../flow/classes.ts";
 import { buckets } from "../../lib/windows.ts";
 import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { statusCards, usageCard } from "../views/lib/flow-parts.js";
+import { cardDur, statusCards, usageCard } from "../views/lib/flow-parts.js";
 // @ts-ignore plain JS shared with the page
 import { pct, xLabel } from "../views/lib/format.js";
 // @ts-ignore plain JS shared with the page
@@ -178,6 +178,19 @@ test("the Usage card note is the pace word, and the bar title holds the percent 
   expect(h).toContain('title="40% used, 14% of the week gone, 12% off this machine"');
   expect(h).toContain('<span class="q m" title="over pace">over pace</span>');
   expect(usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: null } })).not.toContain("off this machine");
+});
+
+test("cardDur: as dur under 10m, whole minutes cut down under 1h, then whole hours rounded", () => {
+  const cases: [number | null, string][] = [[599, "9m 59s"], [632, "10m"], [3599, "59m"], [5520, "2h"], [5340, "1h"], [108000, "30h"], [null, "–"]];
+  for (const [s, shown] of cases) expect(cardDur(s)).toBe(shown);
+});
+
+test("the Status Completion card shows its durations through cardDur", () => {
+  const d = { figures: { lost: null, hours: null, leadP50: 632, leadP90: 5520, asks: 0, landed: null, firstPass: null } };
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [] }, d, {});
+  const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Completion"))!;
+  expect(card).toContain("<b>10m<em> / 2h</em></b>");
+  expect(card).not.toContain("10m 32s");
 });
 
 test("the Status Usage meter fill takes the default fill", () => {

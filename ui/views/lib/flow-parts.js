@@ -41,6 +41,11 @@ export function pace(s) {
   return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
 }
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
+/** A card's duration from seconds: as `dur` under 10m, whole minutes cut down under 1h, then whole hours rounded. */
+export function cardDur(s) {
+  if (!(s >= 600)) return dur(s);
+  return s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.round(s / 3600)}h`;
+}
 
 /** The trend of one figure of `d` against the baseline of its own /api/flow answer; empty with no baseline. */
 export function windowTrend(d, figure, value, o) {
@@ -56,7 +61,7 @@ export function cardList(s, d, { performance }) {
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   return [
     { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }) },
-    { k: "Completion", loading, failed, ...(f ? { v: dur(f.leadP50), v2: dur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance },
+    { k: "Completion", loading, failed, ...(f ? { v: cardDur(f.leadP50), v2: cardDur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance },
     { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }) },
     { k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" },
     usageProps(s),
