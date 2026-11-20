@@ -516,7 +516,8 @@ export function coreNotes<T extends Pick<Note, "title" | "fm" | "wiki" | "archiv
 /**
  * The SessionStart context for `scope`: MEMORY.md whole, then the core lines,
  * cut at whole lines to START_BUDGET bytes. `cut` counts the core lines left
- * out; the last line then points to the rest.
+ * out; the last line then points to the rest. The opening tag gives the
+ * text's own bytes and the budget.
  */
 export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
   const memory = notes.find((n) => n.rel === "MEMORY.md")?.text?.trim();
@@ -526,7 +527,12 @@ export function startContext(root: string, notes: Note[], scope: string): { text
   });
   const render = (kept: string[]) => {
     const cut = lines.length - kept.length;
-    return [`<vault path="${root}">`, ...(memory ? [memory, ""] : []), ...kept, ...(cut ? [`${cut} more core lines: aleph memory recall --scope ${scope}`] : []), "</vault>"].join("\n");
+    const body = [...(memory ? [memory, ""] : []), ...kept, ...(cut ? [`${cut} more core lines: aleph memory recall --scope ${scope}`] : []), "</vault>"].join("\n");
+    const tagged = (bytes: number) => `<vault path="${root}" bytes="${bytes}" budget="${START_BUDGET}">\n${body}`;
+    // The count holds its own digits, so grow it until the text it tags has that size.
+    let bytes = 0;
+    while (Buffer.byteLength(tagged(bytes)) !== bytes) bytes = Buffer.byteLength(tagged(bytes));
+    return tagged(bytes);
   };
   let kept = lines;
   while (kept.length && Buffer.byteLength(render(kept)) > START_BUDGET) kept = kept.slice(0, -1);

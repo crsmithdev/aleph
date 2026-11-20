@@ -125,3 +125,24 @@ test("startContext shows a core line's own note link once, and adds it to a line
   expect(text.split("\n")).toContain("- Times are Pacific [[Other]]");
   rmSync(r, { recursive: true, force: true });
 });
+
+const tagBytes = (text: string) => Number(text.split("\n")[0].match(/ bytes="(\d+)"/)?.[1]);
+
+test("startContext puts its own bytes and the budget on the opening tag", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-tag-"));
+  const { text } = startContext(r, await loadVault(r), "aleph");
+  expect(tagBytes(text)).toBe(Buffer.byteLength(text));
+  expect(text.split("\n")[0]).toContain(' budget="6000"');
+  rmSync(r, { recursive: true, force: true });
+});
+
+test("startContext cuts core lines past the budget and the tag counts the bytes left", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-cut-"));
+  mkdirSync(join(r, "wiki", "concepts"), { recursive: true });
+  for (let i = 0; i < 60; i++) writeFileSync(join(r, "wiki", "concepts", `Core ${i}.md`), `---\nkind: concept\nscope: global\ncore: ${"x".repeat(150)}\nupdated: 2026-10-01\n---\n# Core ${i}\n\n**Claim.** as of 2026-10-01 x\n`);
+  const { text, cut } = startContext(r, await loadVault(r), "aleph");
+  expect(cut).toBeGreaterThan(0);
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(6000);
+  expect(tagBytes(text)).toBe(Buffer.byteLength(text));
+  rmSync(r, { recursive: true, force: true });
+});

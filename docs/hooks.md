@@ -36,7 +36,7 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### vault-context
 
-`hooks/vault-context.ts` injects `additionalContext`: the vault's `MEMORY.md`, then the `core:` lines of the repo's scope and of `global`. `startContext` in `vault/lib/vault.ts` cuts the text to a byte budget. The hook is silent when `<vault>/VAULT.md` does not exist. `ALEPH_VAULT` sets the vault path (default `~/.aleph/vault`).
+`hooks/vault-context.ts` injects `additionalContext`: the vault's `MEMORY.md`, then the `core:` lines of the repo's scope and of `global`. `startContext` in `vault/lib/vault.ts` cuts the text to a byte budget. Its opening tag gives the text's bytes and the budget, as in `<vault path="…" bytes="5967" budget="6000">`. The hook is silent when `<vault>/VAULT.md` does not exist. `ALEPH_VAULT` sets the vault path (default `~/.aleph/vault`).
 
 ### handoff-start
 
