@@ -96,7 +96,7 @@ export function renderHooks(d, q) {
   const inv = d.hooks.map((h) => `<tr><td>${esc(h.event)}</td><td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td><td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>` +
     `<td>${codeText(`\`${h.file}\``)}</td><td>${esc(h.mode)}</td><td class="num">${h.timeout}</td><td class="num">${h.holds || ""}</td></tr>`).join("");
   return `<div class="page dp-page">` +
-    pageHead("Hooks", { count: String(d.hooks.length), aside: `Last ${d.days} days` }) +
+    pageHead("Hooks", { aside: `Last ${d.days} days` }) +
     renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
     detailPanel("Holds by Hook", count(d.holds.length), holdsBy(d.byHook)) +
     (d.holds.length ? detailPanel("Holds by Day", count(d.holds.length), perDay(d.holds)) : "") +

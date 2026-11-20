@@ -35,6 +35,14 @@ describe("the Hooks page", () => {
     expect(logIds("")).toEqual(["aaaaaaaa1", "bbbbbbbb2", "cccccccc3", "dddddddd4"]);
   });
 
+  test("the page head leaves the count of hooks to the Hooks panel", () => {
+    const html = renderHooks(data, new URLSearchParams());
+    const head = html.match(/<header class="ph">.*?<\/header>/)![0];
+    expect(head).not.toContain('<span class="count">');
+    expect(head).toContain('<div class="aside">Last 7 days</div>');
+    expect(html).toContain(`<summary><span>Hooks</span><span class="dp-aside">${data.hooks.length}</span></summary>`);
+  });
+
   test("each filter of the holds log leaves only its rows", () => {
     expect(logIds("who=workers")).toEqual(["bbbbbbbb2", "cccccccc3"]);
     expect(logIds("who=interactive")).toEqual(["aaaaaaaa1", "dddddddd4"]);
