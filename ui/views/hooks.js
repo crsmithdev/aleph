@@ -154,7 +154,7 @@ export function renderHook(d, q) {
   const xs = d.holds;
   return `<div class="page dp-page">${crumb("#/hooks", [["hooks", "#/hooks"], [d.event], [d.name]])}` +
     pageHead(d.name, { aside: scope(q).bar() }) +
-    facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
+    facts([["Event", esc(d.event)], ["Matcher", d.matcher && codeText(`\`${d.matcher}\``)], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
       perDay(xs, q, `hooks/${d.event}/${d.name}`) +

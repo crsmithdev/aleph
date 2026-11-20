@@ -167,5 +167,8 @@ describe("the Hooks page", () => {
     expect(html).not.toContain('<span class="count">');
     expect(html).toContain("<span>Stop</span> / <span>one way</span></nav>");
     expect(html).toContain("<dt>Event</dt><dd>Stop</dd>");
+    for (const t of ["<dt>Matcher</dt>", "<dt>Mode</dt>"]) expect(html).not.toContain(t);
+    const set = renderHook({ event: "Stop", name: "one way", matcher: "Bash", file: "hooks/one-way.ts", mode: "async", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    for (const t of ["<dt>Matcher</dt><dd><code>Bash</code></dd>", "<dt>Mode</dt><dd>async</dd>"]) expect(set).toContain(t);
   });
 });
