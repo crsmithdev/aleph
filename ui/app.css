@@ -1293,7 +1293,7 @@ table.tbl .tr { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: v
 table.tbl .tr.good { color: var(--good); }
 table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); }
-.card .sh .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
+.card .sh .aside, .dp-aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .card p { margin: 0; color: var(--ink-2); }
 .card h2 { margin: 0; }
 .card h3 { margin: var(--sp-4) 0 0; }

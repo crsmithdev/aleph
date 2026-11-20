@@ -37,8 +37,8 @@ const PAGE = 50;
 const whoOf = (h) => (h.who === "interactive" ? "interactive" : "workers");
 const hookHref = (h) => `#/hooks/${encodeURIComponent(h.event)}/${encodeURIComponent(h.name)}`;
 
-/** The outcome legend, labelled a guide: the outcomes come from a keyword pass over each hold's reply. */
-const legend = legendHtml(OUTS.map(([k, , cls]) => [k, cls])) + note("Guide only");
+/** The outcome legend of `groups`, labelled a guide, or nothing with no groups: the outcomes come from a keyword pass over each hold's reply. */
+const legend = (groups) => !groups.length ? "" : legendHtml(OUTS.map(([k, , cls]) => [k, cls])) + note("Guide only");
 
 /** A table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook. Show sets the log's filters. */
 function holdsBy(groups, hookCol = true) {
@@ -50,7 +50,7 @@ function holdsBy(groups, hookCol = true) {
       ...OUTS.map(([k]) => cell(n(k) || "", { num: true })), rowAct("Show", { kind: g.kind, ...(hookCol ? { hook: g.hook } : {}) })]);
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
-  return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
+  return dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
 }
 
 /** A card with `detailPanel`'s arguments, for the list page. */
@@ -113,7 +113,7 @@ export function renderHooks(d, q) {
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
-    card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length) }) +
+    card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length), aside: legend(d.byHook) }) +
     perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
     card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv),{ count: String(d.hooks.length) }) +
@@ -156,7 +156,7 @@ export function renderHook(d, q) {
     pageHead(d.name, { aside: scope(q).bar() }) +
     facts([["Event", esc(d.event)], ["Matcher", d.matcher && codeText(`\`${d.matcher}\``)], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
-      detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
+      detailPanel("Holds by Kind", count(d.byKind.length) + legend(d.byKind), holdsBy(d.byKind, false)) +
       perDay(xs, q, `hooks/${d.event}/${d.name}`) +
       holdsLog(xs, q, detailPanel, false) : "") +
     (d.errors.length ? detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) : "") +

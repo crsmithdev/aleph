@@ -79,9 +79,26 @@ describe("the Hooks page", () => {
     expect(one).toContain('<span class="dp-k">No Effect</span>');
   });
 
-  test("the heads of Holds by Hook and Errors by Cause count their own items", () => {
+  test("the heads of Holds by Hook and Errors by Cause count their own items; an empty Holds by Hook has no legend", () => {
     const html = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
     expect([head(html, "Holds by Hook"), head(html, "Errors by Cause")]).toEqual(["1", "1"]);
+    const none = renderHooks({ ...data, byHook: [] }, new URLSearchParams());
+    expect(head(none, "Holds by Hook")).toBe("0");
+    expect(none.split('aria-label="Holds by Hook"')[1].split("</section>")[0]).not.toContain('class="legend"');
+  });
+
+  test("the outcome legend sits in the aside of Holds by Hook and Holds by Kind, not above the table", () => {
+    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
+    /** The head and the body of a section, split at `end`, the close of its head. */
+    const split = (sec: string, end: string) => [sec.slice(0, sec.indexOf(end)), sec.slice(sec.indexOf(end))];
+    const parts = [
+      split(renderHooks(data, new URLSearchParams()).split('aria-label="Holds by Hook"')[1].split("</section>")[0], "</div>"),
+      split(one.split("<span>Holds by Kind</span>")[1].split("</details>")[0], "</summary>"),
+    ];
+    for (const [top, body] of parts) {
+      expect(top).toMatch(/<span class="(dp-)?aside">[^]*<ul class="legend">/);
+      expect(body.split("<table")[0]).not.toContain('class="legend"');
+    }
   });
 
   test("Holds by Day is a chart panel under its own key on each page, not a bar list", () => {

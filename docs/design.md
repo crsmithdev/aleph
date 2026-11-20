@@ -431,7 +431,7 @@ A detail panel is one section of a detail page. It has a head and a body.
 |---|---|---|---|---|
 | 1 | Box | The section | | `--surface`, shadow `--card-lift`, no visible border, radius `--r-card` |
 | 2 | Head | The title of the section | | `--sans` `--fs-lg` `--fw-strong`, `--ink`; padding `--sp-14` `--sp-18` |
-| 3 | Aside | A note; in `detailPanel()`, text or a badge only | yes | `--fs-sm`, `--muted` |
+| 3 | Aside | A note; in `detailPanel()`, text, a badge or a legend | yes | `--fs-sm`, `--muted` |
 | 4 | Body | The content | | `detailPanel()`: padding `--sp-10` `--sp-18` `--sp-14`; `panel()`: the padding of its `.md` |
 | 5 | Code block | Logs or output | yes | `--mono` `--fs-xs`, `--ink-2` on `--sunk`, radius `--r-tag`; scrolls at 70% of the screen height |
 | 6 | Mark | An agent's findings for Chris: the Investigation | yes | left border 3px `--focus`, from `cls` `dp-marked` |
