@@ -49,20 +49,22 @@ export function windowTrend(d, figure, value, o) {
   return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
-/** The props of the five cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
+/** The props of the six cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
 export function cardList(s, d, { performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null, loading = !d, failed = d?.error ?? "";
+  const issues = new Set(s.errored.filter((j) => j.item).map((j) => `${j.repo}/${j.item.id}`)); // the issues with an errored job
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   return [
     { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }) },
     { k: "Completion", loading, failed, ...(f ? { v: cardDur(f.leadP50), v2: cardDur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance },
     { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }) },
-    { k: "Jobs", v: count(s.factory.liveRuns), v2: count(s.queued.length), q: ["running", "queued"], href: "#/factory/jobs" },
+    { k: "Issues", loading, failed, ...(f ? { v: count(d.open?.open), v2: [count(f.landed), count(issues.size)] } : {}), q: ["active", "landed", "errored"] },
+    { k: "Jobs", v: count(s.factory.liveRuns), v2: [count(s.queued.length), count(s.errored.length)], q: ["running", "queued", "error"], href: "#/factory/jobs" },
     usageProps(s),
   ];
 }
-/** The Status scorecard's five cards as HTML. */
+/** The Status scorecard's six cards as HTML. */
 export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
 
 /** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. `link` is `{href}` or `{key, on}`. */

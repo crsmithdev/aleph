@@ -426,21 +426,21 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis,
 }
 /**
  * A metric card, 3 rows: the key and the trend; the value and the second value; one line of qualifier or note.
- * `v` and `v2` are text; `q` is `[first, second]`, naming the two values; `note` is text when there is no `q`;
+ * `v` is text; `v2` is text, or an array of texts for a third value on; `q` names each value, `[first, second, ...]`; `note` is text when there is no `q`;
  * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3; `title` is a definition for the tooltip.
  * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
  * While a figure waits (`loading`) or its fetch failed (`failed`, the error line), a mark takes the trend's place and an
  * undefined `v` or `v2` leaves its space blank, so the card keeps its height.
  */
 export function statCard({ k, v, v2, q, note, title, trend = "", extra = "", href, key, on = false, loading = false, failed = "" }) {
-  const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
-  const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
+  const rest = [v2].flat().filter((x) => x !== undefined);
+  const row3 = q ? `<span class="q"><span>${esc(q[0])}</span>${q.slice(1).map((n) => `<span class="m"> / ${esc(n)}</span>`).join("")}</span>`
     : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
-  const shown = [v, v2].filter((x) => x !== undefined).join(" / ");
-  const tip = ` title="${esc([shown && `${k} ${shown}`, q && `${q[0]} / ${q[1]}`, title].filter(Boolean).join(", "))}"`;
+  const shown = [v, ...rest].filter((x) => x !== undefined).join(" / ");
+  const tip = ` title="${esc([shown && `${k} ${shown}`, q?.join(" / "), title].filter(Boolean).join(", "))}"`;
   const mark = failed ? `<i class="spin bad" role="img" aria-label="${esc(failed)}" title="${esc(failed)}">!</i>`
     : loading ? `<i class="spin" role="status" aria-label="Loading"></i>` : trend;
-  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${mark}</span><b>${v === undefined ? "&nbsp;" : esc(v)}${second}</b>${extra}${row3}`;
+  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${mark}</span><b>${v === undefined ? "&nbsp;" : esc(v)}${rest.map((x) => `<em> / ${esc(x)}</em>`).join("")}</b>${extra}${row3}`;
   if (key) return `<button type="button" class="tile sc"${tip} data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
   return href ? `<a class="tile sc"${tip} href="${esc(href)}">${inner}</a>` : `<div class="tile sc"${tip}>${inner}</div>`;
 }

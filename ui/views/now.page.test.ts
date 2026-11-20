@@ -36,22 +36,22 @@ test("a card has no trend without a baseline or with a zero baseline of a count"
   expect(z).not.toContain("Previous 5;");
 });
 
-test("the scorecard before the data arrives: a spinner in the three flow cards, a count in Jobs, a dash for usage with no usage", () => {
+test("the scorecard before the data arrives: a spinner in the four flow cards, a count in Jobs, a dash for usage with no usage", () => {
   const h = view.renderTiles({ ...state, usage: undefined }, null);
-  expect(h.match(/<i class="spin" role="status"/g)?.length).toBe(3);
+  expect(h.match(/<i class="spin" role="status"/g)?.length).toBe(4);
   expect(h.match(/<b>–/g)?.length).toBe(1);
   expect(h).not.toContain('class="tr');
 });
 
-test("the Jobs card shows live runs and queued with no trend, and there is no Asks card", () => {
+test("the Jobs card shows live runs, queued and errored with no trend, and there is no Asks card", () => {
   const s = { ...state, usage: USAGE, factory: { ...state.factory, liveRuns: 3 }, queued: [{}, {}, {}, {}, {}] };
   const h = view.renderTiles(s, { ...WEEK, baseline: BASE }, "week");
   expect(h).not.toContain("Asks");
-  expect(h).toContain("<b>3<em> / 5</em></b>");
-  expect(h).toContain('<span>running</span><span class="m"> / queued</span>');
+  expect(h).toContain("<b>3<em> / 5</em><em> / 1</em></b>");
+  expect(h).toContain('<span>running</span><span class="m"> / queued</span><span class="m"> / error</span>');
   expect(h).toContain('class="tr');
   expect(h.split('class="tile sc"').find((t: string) => t.includes(">Jobs<"))).not.toContain('class="tr');
-  expect(view.renderTiles({ ...s, queued: [] }, null, "week")).toContain("<b>3<em> / 0</em></b>");
+  expect(view.renderTiles({ ...s, queued: [] }, null, "week")).toContain("<b>3<em> / 0</em><em> / 1</em></b>");
 });
 
 test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {
@@ -60,6 +60,13 @@ test("the Landed card shows the clean share, then the clean count, and trends on
   const h = view.renderTiles({ ...state, usage: undefined }, d);
   expect(h).toContain("<b>78%<em> / 49</em></b>");
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
+});
+
+test("the scorecard is the tiles section Scorecard, with an Issues card", () => {
+  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
+  const at = page.indexOf('<section class="tiles" id="scorecard" aria-label="Scorecard">');
+  expect(at).toBeGreaterThan(-1);
+  expect(page.slice(at, page.indexOf('class="rail"'))).toContain('<span class="k">Issues</span>');
 });
 
 test("the Status page puts Pipeline and Issues in the main column and the Herald in the rail beside it", () => {

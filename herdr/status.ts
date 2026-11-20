@@ -28,7 +28,7 @@ const trend = (html: string) => html.replace(/<[^>]*>/g, "");
 
 /** The scorecard of the page: each card's name, value, trend and what the value counts, from the page's card list. */
 const scorecard = (s: State, d: Flow): { name: string; value: string; trend: string; note: string }[] => cardList(s, d, {}).map((c: any) => ({
-  name: c.k, value: [c.v, c.v2].filter((x) => x !== undefined).join(" / "), trend: trend(c.trend ?? ""), note: c.q?.join(" / ") ?? c.note ?? "",
+  name: c.k, value: [c.v, c.v2].flat().filter((x) => x !== undefined).join(" / "), trend: trend(c.trend ?? ""), note: c.q?.join(" / ") ?? c.note ?? "",
 }));
 
 /** Agent Time: the hours of each outcome class, and the kept and total hours. */
