@@ -49,8 +49,8 @@ export const view = {
   swap: (root) => heraldMotion(root),
 };
 
-/** What the page keeps between draws: the last rendered state, the shell's out-of-date verdict, the last rows the stream sent (`{ seq, rows }`), and the text and time of the first render of the page load, which no status row repeats or precedes. `renderHerald` takes it as a parameter. */
-const page = { state: null, stale: false, live: null, loaded: null };
+/** What the page keeps between draws: the last rendered state, the shell's out-of-date verdict, and the last rows the stream sent (`{ seq, rows }`). `renderHerald` takes it as a parameter. */
+const page = { state: null, stale: false, live: null };
 
 /** The Herald drawn again from the last state, with its folds and motion kept. */
 function redrawHerald(root) {
@@ -185,14 +185,8 @@ export function renderPipeline(d, q = new URLSearchParams(), errored = 0) {
 /** A Herald row's element id from its key, so a redraw by morph keeps the row's node and does not reuse it for another row. */
 const rowId = (key) => esc(`h-${key.replace(/\s+/g, "-")}`);
 
-/** A short hash of a text, to key a row by its text. */
-const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
-
 /** The key of the Herald's word filter in keep(): the chip word whose event rows the feed shows, or null for every row. */
 const WORD = "herald.word";
-
-/** A status text without the "health: " of each health line, which older history entries carry. */
-const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
 /** A job's ID linked to its page; a job with no ID links its item. */
 const jobLink = (j) => (j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j));
@@ -276,25 +270,11 @@ export function renderHerald(s, st = page, q) {
       `</section>`
     : "";
 
-  // The server's history; the page's own verdict on top when it differs, as for a project's scope or an out-of-date state.
-  const history = [...(s.herald?.history ?? [])];
-  if (history[0]?.text !== cur.text || history[0]?.tone !== cur.tone) history.unshift({ at: s.now, tone: cur.tone, label: cur.label, text: cur.text });
-
-  // A status row is an event row with the new status text only, drawn where the text changes after the page loaded; the page's first render has none.
-  st.loaded ??= { at: s.now, text: history[0].text };
-  const after = [...history.filter((ev) => ev.at >= st.loaded.at), st.loaded];
-  const status = after.slice(0, -1).filter((ev, i) => statusText(ev.text) !== statusText(after[i + 1].text))
-    .map((ev) => ({ at: ev.at, key: `status ${hash(`${ev.tone} ${ev.text}`)}`, html: feedRow({ tone: esc(ev.tone), at: ev.at, body: `<span class="event-say">${esc(statusText(ev.text))}</span>` }) }));
-  // The status changes and the events in one feed, newest first.
-  // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
-  const seen = new Map();
-  for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
   // The stream's rows stand in for the state's while they are newer.
   const word = kept(WORD);
   const live = st.live && st.live.seq > (s.herald?.seq ?? 0) ? st.live : s.herald;
-  const events = (live?.rows ?? []).filter((r) => !word || r.word === word).map((r) => ({ at: r.at, key: r.key, html: heraldRow(r) }));
-  const rows = [...status, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
-  const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
+  const rows = (live?.rows ?? []).filter((r) => !word || r.word === word).sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const feed = rows.map((r) => heraldRow(r).replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));

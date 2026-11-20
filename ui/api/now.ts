@@ -33,7 +33,7 @@ async function build(project: string | null) {
   const { doneStamps, herald, ...s } = forProject(state(), project);
   const fit = await currentFit();
   annotate([...s.errored, ...s.running], fit);
-  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald) }, usage: await summaryOff(fit) };
+  return { ...s, herald: herald && { seq: herald.seq, rows: heraldRows(herald.events, herald) }, usage: await summaryOff(fit) };
 }
 
 /** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */

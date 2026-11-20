@@ -18,8 +18,9 @@ import { rows, withAttn } from "./now.testkit.ts";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 import { logEvent, readEvents } from "../lib/layout.ts";
-import { putJson } from "../lib/db.ts";
+import { getJson, putJson } from "../lib/db.ts";
 import { factsOf, wordOf } from "../lib/naming.ts";
+import { verdict } from "../lib/status-words.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -312,7 +313,7 @@ describe("a returned run with its rework queued", () => {
       const s = state(now);
       expect(names(s.errored)).not.toContain("fac-80");
       expect(names(s.running)).toContain("fac-80");
-      expect(s.herald!.history[0].text.toLowerCase()).not.toContain("jobs are unhealthy");
+      expect(verdict(s).text.toLowerCase()).not.toContain("jobs are unhealthy");
     } finally { drop3("open"); }
     run("20261027-000081-a", { job: "fac-81", name: "fac-81", state: "returned", reason: "a check failed", on: "fac-81" });
     expect(names(state(now).errored)).toContain("fac-81");
@@ -374,22 +375,10 @@ describe("a live job on a parked issue", () => {
   });
 });
 
-describe("the Herald's status history", () => {
-  test("holds a red aleph CI and its recovery as two entries across a restart of the server", async () => {
-    const red = { aleph: { repo: "aleph", ok: false, sha: "a1", url: "u", sinceSha: "a0", since: "2026-11-04T10:00:00Z", runs: 2 } };
-    // A host with no aleph-tick.timer reads as a stopped tick, and that sentence takes the place of one the test expects.
-    const tick = spyOn(systemd, "timer").mockReturnValue({ next: NOW + 60_000, running: false, err: null });
-    try {
-      putJson("state", "ci", red);
-      state(now);
-      putJson("state", "ci", {});
-      // A land restarts the server: a fresh copy of the module is the restarted one.
-      const copy = "./state.ts?restart";
-      const restarted: typeof import("./state.ts") = await import(copy);
-      const [recovered, broken] = restarted.state(now).herald!.history;
-      expect(broken.text).toBe("Alert: GitHub CI is broken; jobs are unhealthy; attention is needed.");
-      expect(recovered.text).toBe("Alert: Jobs are unhealthy; attention is needed.");
-    } finally { tick.mockRestore(); putJson("state", "ci", {}); }
+describe("the Herald's state", () => {
+  test("has no status history, and state() writes no herald.status row", () => {
+    expect(state(now).herald).not.toHaveProperty("history");
+    expect(getJson("state", "herald.status", null)).toBeNull();
   });
 });
 

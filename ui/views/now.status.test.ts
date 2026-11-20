@@ -4,7 +4,7 @@ import { setCodes } from "../../lib/naming.ts";
 import * as view from "./now.js";
 import { attend } from "../asks.ts";
 import { held, job, state } from "../fixtures/status-state.ts";
-import { asksOf, heraldOf, issue, withAttn, withFactory } from "../now.testkit.ts";
+import { asksOf, heraldOf, issue, row, withAttn, withFactory } from "../now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { pageHead } from "./lib/html.js";
 import { labelOf, verdict } from "../../lib/status-words.ts";
@@ -208,52 +208,34 @@ test("one mapping gives each status sentence its Herald label, on the page too",
   expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
 });
 
-// The Herald keeps the text of its first render for the page's life: each such test takes a copy of the module of its own.
-let copies = 0;
-const fresh = () => import(`./now.js?status=${++copies}`);
-
 const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
-const entry = (m: number, tone: string, text: string) => ({ at: at(m), tone, label: tone, text });
-/** The state at minute `m` with a live tick, so its own status is the fine one, and the server's `history`. */
-const at_ = (m: number, history: object[], paused = false) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: heraldOf([], { history }) });
-const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*" id="[^"]*" class="event-row (?:fine|warning|alert)[^"]*"><span class="event-time">[^<]*<\/span><span class="event-body[^"]*">(.*?)<\/span><\/div>/g)].map((m) => m[1].replace(/<[^>]*>/g, ""));
+/** The state at minute `m` with a live tick, so its own status is the fine one or the paused one, and the Herald rows of `events`. */
+const at_ = (m: number, paused = false, events: object[] = []) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: heraldOf(events) });
+/** A status event at minute `m` with its detail `<tone>: <text>`. */
+const status = (m: number, detail: string) => row({ at: at(m), by: "gate", subject: "status", action: "status", note: detail });
+/** The text of each status row of the feed. */
+const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*"[^]*?class="event-title" title="([^"]*)"/g)].map((m) => m[1]);
 
-test("the first render of a page load draws no status row, whatever its history holds", async () => {
-  const v = await fresh();
-  const h = v.renderHerald(at_(10, [entry(5, "warning", "The factory is paused."), entry(1, "alert", "Alert: The build is failing on main.")]));
-  expect(h).not.toContain('data-key="status');
+test("a status text change after the first render draws no status-only row; a status event in the stream's rows draws one row with its text", () => {
+  const paused = "The factory is paused.";
+  view.renderHerald(at_(10));
+  expect(view.renderHerald(at_(20, true))).not.toContain('data-key="status');
+  expect(statusRows(view.renderHerald(at_(20, true, [status(15, `warning: ${paused}`)])))).toEqual([paused]);
 });
 
-test("a status row is drawn where the text changes, with the new text only; the same text in another tone draws none", async () => {
-  const v = await fresh();
-  const fine = "Everything is fine.", paused = "The factory is paused.";
-  v.renderHerald(at_(10, [entry(0, "fine", fine)]));
-  // The tone changes and the text does not: no row.
-  expect(statusRows(v.renderHerald(at_(20, [entry(15, "warning", fine), entry(0, "fine", fine)])))).toEqual([]);
-  // The text changes: one row, the new text only, with no label or reason; the page's own status, the same text as the server's newest, adds none.
-  const h = v.renderHerald(at_(30, [{ ...entry(25, "warning", paused), reason: "health: x" }, entry(15, "warning", fine), entry(0, "fine", fine)], true));
-  expect(statusRows(h)).toEqual([paused]);
-  expect(h).not.toContain("health: x");
-});
-
-test("a kept word filters the Herald's event rows, keeps the status and running rows, and puts its chip in the aside", async () => {
-  const v = await fresh();
-  const fine = "Everything is fine.", paused = "The factory is paused.";
+test("a kept word filters the Herald's event rows, keeps the running rows, and puts its chip in the aside", () => {
   const ev = (n: number, word: string) => ({ key: `row ${n}`, at: at(n), by: "gate", word, id: [], text: [`row ${n}`], more: 0, lines: [] });
-  const s = { ...at_(30, [entry(25, "warning", paused), entry(0, "fine", fine)], true), runningIssues: [{ id: "aleph-3", title: "Three", stage: "implement", at: at(2) }], running: [] };
+  const s = { ...at_(30, true), runningIssues: [{ id: "aleph-3", title: "Three", stage: "implement", at: at(2) }], running: [] };
   s.herald.rows = [ev(21, "landed"), ev(22, "failed"), ev(23, "landed")];
-  const keys = (h: string) => [...h.matchAll(/data-key="([^"]*)"/g)].map((m) => m[1].replace(/ .*/, ""));
   const store: Record<string, string> = {};
   (globalThis as any).localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, x: string) => { store[k] = x; } };
   try {
-    v.renderHerald(at_(10, [entry(0, "fine", fine)]));
-    const all = v.renderHerald(s);
+    const all = view.renderHerald(s);
     expect(all.match(/data-key="row/g)).toHaveLength(3);
     expect(all).not.toContain("ref-x");
     store["aleph.herald.word"] = JSON.stringify("landed");
-    const h = v.renderHerald(s);
+    const h = view.renderHerald(s);
     expect([...h.matchAll(/data-key="(row \d+)"/g)].map((m) => m[1])).toEqual(["row 23", "row 21"]);
-    expect(keys(h)).toContain("status");
     expect(h).toContain('data-job="aleph-3"');
     expect(h.match(/<span class="aside">([^]*?)<\/span><\/div>/)![1]).toMatch(/landed <button type="button" class="ref-x" aria-label="Clear">×<\/button>/);
   } finally {

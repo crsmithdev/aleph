@@ -65,7 +65,7 @@ const flow = {
 /** The Herald drawn with `at` as the kept tab and target, in the day window of the aleph project; `d` is its /api/flow. */
 const inspected = (at: object | null, d: object = flow) => {
   (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.inspect" && at ? JSON.stringify(at) : null), setItem() {} };
-  try { return view.renderHerald({ ...calm, flow: d }, { stale: false, live: null, loaded: null }, new URLSearchParams("window=day&project=aleph")); }
+  try { return view.renderHerald({ ...calm, flow: d }, { stale: false, live: null }, new URLSearchParams("window=day&project=aleph")); }
   finally { delete (globalThis as any).localStorage; }
 };
 /** The issue IDs of an Inspector list, in order. */
@@ -176,20 +176,9 @@ test("the Herald panel shows an OK badge with no alerts and no alert row", () =>
   expect(h).toContain('<span class="badge done">OK</span>');
 });
 
-test("high weekly usage draws a warning status row after the page loaded, with its text only", async () => {
-  const v = await fresh();
-  v.renderHerald(calm);
-  const h = v.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
-  expect(h).toContain("weekly usage is at 93%");
-  expect(h).not.toContain(">Warn<");
-  expect(h).toContain('class="event-row warning"');
-  expect(h).toContain('<span class="event-body"><span class="event-say">');
-});
-
 test("an error is not pinned: the badge says Not OK, and no row repeats the error lines or a health prefix", async () => {
   const v = await fresh();
-  const herald = { history: [{ at: "2026-10-01T00:00:00Z", tone: "alert", label: "Alert", text: "Alert: Health: aleph main is red", reason: "health: aleph main is red" }] };
-  const h = v.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
+  const h = v.renderHerald({ ...calm, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
   expect(h).not.toContain("ask-head");
   expect(h).not.toContain("No active alerts");
   expect(h).toContain('<span class="badge error">Not OK</span>');
@@ -201,20 +190,20 @@ test("an error is not pinned: the badge says Not OK, and no row repeats the erro
 let copies = 0;
 const fresh = () => import(`./now.js?copy=${++copies}`);
 
-test("the Herald draws the state's rows and the streamed ones when they are newer, newest first, with the status rows", async () => {
+test("the Herald draws the state's rows and the streamed ones when they are newer, newest first, with no status rows from history", async () => {
   const ev = (at: string, action: string, o: object = {}) => (row({ at, by: "gate", subject: "aleph-5", action, on: ["aleph-5#1"], ...o }));
-  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { ...heraldOf([ev("2026-11-09T11:30:00Z", "running")], { history: [{ at: "2026-11-09T11:00:00Z", tone: "warning", label: "Wait", text: "The factory is paused" }] }), seq: 5 } };
+  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { ...heraldOf([ev("2026-11-09T11:30:00Z", "running")]), history: [{ at: "2026-11-09T11:00:00Z", tone: "warning", label: "Wait", text: "The factory is paused" }], seq: 5 } };
   const v = await fresh();
+  // The page loaded at 10:00, before the history's status at 11:00 and the status now (12:00).
   v.renderHerald({ ...calm, now: "2026-11-09T10:00:00Z" });
-  const loaded = { at: "2026-11-09T10:00:00Z", text: "x" };
   const order = (h: string) => [...h.slice(h.indexOf("herald-feed")).matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
-  // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
-  expect(order(v.renderHerald(s))).toEqual(["alert", "run", "warning"]);
+  // The event at 11:30 is the one row: neither status draws one.
+  expect(order(v.renderHerald(s))).toEqual(["run"]);
   // Rows of the stream with an older seq change nothing; a newer seq replaces the state's rows.
   const live = (seq: number) => ({ ...heraldOf([ev("2026-11-09T11:30:00Z", "running"), ev("2026-11-09T11:45:00Z", "failed", { note: "past its time box" })]), seq });
-  expect(order(v.renderHerald(s, { stale: false, live: live(4), loaded }))).toEqual(order(v.renderHerald(s)));
-  const h = v.renderHerald(s, { stale: false, live: live(6), loaded });
-  expect(order(h)).toEqual(["alert", "error", "warning"]);
+  expect(order(v.renderHerald(s, { stale: false, live: live(4) }))).toEqual(order(v.renderHerald(s)));
+  const h = v.renderHerald(s, { stale: false, live: live(6) });
+  expect(order(h)).toEqual(["error"]);
   // Two columns: the time, then one line: the chip, the issue linked, the text the sentence adds.
   expect(h).toContain('<span class="event-line"><span class="badge error">failed</span><a class="idl" href="#/issues/aleph/5">aleph-5</a><span class="event-title" title="past its time box">past its time box</span><span class="event-more">+2</span></span>');
   expect(h).not.toContain("event-tone");

@@ -27,7 +27,6 @@ import { timer } from "../jobs/lib/infra/systemd.ts";
 import { probe } from "../lib/git.ts";
 import { dueAt } from "../jobs/lib/asks/timeout.ts";
 import { errText } from "../lib/errtext.ts";
-import { getJson, putJson } from "../lib/db.ts";
 
 const logged = new Set<string>();
 
@@ -152,27 +151,8 @@ interface RunningIssue { id: string; title: string; href: string; stage: string;
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
 interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
 
-/** One status transition or factory event in the Herald feed. */
-interface HeraldHistoryItem {
-  at: string;
-  tone: "alert" | "warning" | "fine" | "run" | "ask";
-  label?: string;
-  text: string;
-  reason?: string;
-}
-
 /** The most events the Herald gets with the state; the stream adds the ones after. */
 const HERALD_EVENTS = 50;
-const MAX_STATUS_HISTORY = 50;
-
-/** The status history with `item` on top when its text or tone is new, newest first. It is a `state` row: each land restarts the server, and the history outlives it. */
-function recordStatusTransition(item: HeraldHistoryItem): HeraldHistoryItem[] {
-  const history = getJson<HeraldHistoryItem[]>("state", "herald.status", []);
-  if (history[0]?.text === item.text && history[0]?.tone === item.tone) return history;
-  const next = [item, ...history].slice(0, MAX_STATUS_HISTORY);
-  putJson("state", "herald.status", next);
-  return next;
-}
 
 export interface State {
   now: string;
@@ -201,8 +181,8 @@ export interface State {
   done: DoneItem[];
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
-  /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: HeraldContext & { history: HeraldHistoryItem[]; /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[] };
+  /** The newest HERALD_EVENTS events of the event log in the last day, oldest first. */
+  herald?: HeraldContext & { /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[] };
 }
 
 const DONE = 10;
@@ -493,14 +473,13 @@ export function checkStatus(now = new Date()): void {
 export function state(now = new Date()): State {
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs();
-  const { projector, errored, running, slots, picks, gated, factory, att, timers, v } = statusOf(now, jobs);
+  const { projector, errored, running, slots, picks, gated, factory, att, timers } = statusOf(now, jobs);
   const { done, doneStamps } = doneOf(slots, picks, projector);
-  const history = recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const events = heraldEvents(now.getTime());
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history, seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
+    herald: { seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
     asks: att.items, done, doneStamps,
     errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),
