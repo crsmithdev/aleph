@@ -81,6 +81,12 @@ describe("the Hooks page", () => {
     expect([head(html, "Holds by Day"), head(html, "Holds by Kind")]).toEqual(["2", "3"]);
   });
 
+  test("the list page with no holds keeps the Holds by Day card, empty", () => {
+    const html = renderHooks({ ...data, holds: [], byHook: [], errors: [] }, new URLSearchParams());
+    const card = html.split("<summary><span>Holds by Day</span>")[1]?.split("</details>")[0];
+    expect(card).toContain(empty());
+  });
+
   test("a hook with no holds and no errors shows the empty state", () => {
     const html = renderHook({ event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     expect(html.split(empty()).length - 1).toBe(2);

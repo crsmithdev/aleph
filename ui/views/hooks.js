@@ -54,6 +54,7 @@ function holdsBy(groups, hookCol = true) {
 
 /** The Holds by Day panel: a bar list, oldest first, the largest day marked, its head the day count. */
 function perDay(holds) {
+  if (!holds.length) return detailPanel("Holds by Day", "0", empty());
   const days = [...Map.groupBy([...holds].reverse(), (h) => day(h.t)).entries()], most = Math.max(...days.map(([, xs]) => xs.length));
   return detailPanel("Holds by Day", count(days.length), barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join("")));
 }
@@ -99,7 +100,7 @@ export function renderHooks(d, q) {
     pageHead("Hooks", { aside: `Last ${d.days} days` }) +
     renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
     detailPanel("Holds by Hook", count(d.byHook.length), holdsBy(d.byHook)) +
-    (d.holds.length ? perDay(d.holds) : "") +
+    perDay(d.holds) +
     detailPanel("Errors by Cause", count(d.errors.length), errorsTable(d.errors)) +
     detailPanel("Hooks", String(d.hooks.length), dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv)) +
     holdsLog(d.holds, q) +
