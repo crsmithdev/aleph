@@ -39,8 +39,8 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** Opens the stream, waits for its first ping, runs `act` and returns the text up to and with the first `change` event, or null when the stream ends first. */
-async function changeAfter(act: () => void, query = ""): Promise<string | null> {
+/** Opens the stream, waits for its first ping, runs `act` and returns the text up to and with the first chunk `enough` holds for, or null when the stream ends first. */
+async function streamUntil(act: () => void, enough: (text: string) => boolean, query = ""): Promise<string | null> {
   const ctl = new AbortController();
   const res = await fetch(`http://127.0.0.1:${server.port}/api/events${query}`, { signal: ctl.signal });
   expect(res.headers.get("content-type")).toBe("text/event-stream");
@@ -50,7 +50,7 @@ async function changeAfter(act: () => void, query = ""): Promise<string | null> 
   act();
   let text = "";
   try {
-    while (!/event: change\ndata: .*\n\n/.test(text)) {
+    while (!enough(text)) {
       const { value, done } = await reader.read();
       if (done) return null;
       text += new TextDecoder().decode(value);
@@ -59,6 +59,12 @@ async function changeAfter(act: () => void, query = ""): Promise<string | null> 
   } catch { return null; }
   finally { ctl.abort(); }
 }
+
+/** The bytes that end a `change` event. */
+const CHANGE = /event: change\ndata: .*\n\n/;
+
+/** Runs `act` and returns the text up to and with the first `change` event, or null when the stream ends first. */
+const changeAfter = (act: () => void, query = "") => streamUntil(act, (text) => CHANGE.test(text), query);
 
 const run = (repo: string, n: number): Seed => ({ role: "build", name: `issue.${n}`, repo, target: `issue.${n}`, state: "running", told: false, started: "2026-11-04T10:00:00Z" });
 let first: string;
@@ -87,6 +93,13 @@ test("a change in the factory folder or to the store's origin/main sends a chang
 /** The pages the `ev` events of `text` link: each row's leading ID. */
 const linked = (text: string) => [...text.matchAll(/event: ev\ndata: (.*)\n/g)].flatMap((m) => JSON.parse(m[1]).rows.flatMap((r: any) => [...r.id, ...r.lines.flatMap((l: any) => l.text)].flatMap((p: any) => (p.to ? [p.to] : []))));
 
+/**
+ * Runs `act` and returns the text once it holds the first `ev` that links `to()` and a `change`, or null when the
+ * stream ends first. A `change` from another source, or from an earlier write in `act`, must not end the read before
+ * the `ev` that links the row arrives. `to` is read after `act` runs, which names the row it seeded.
+ */
+const evAndChange = (act: () => void, to: () => string, query = "") => streamUntil(act, (text) => linked(text).includes(to()) && CHANGE.test(text), query);
+
 test("a run that starts sends the Herald's rows as an ev, before the change, with the new event's row among them", async () => {
   let id = "";
   const text = (await changeAfter(() => { id = seed(run("p", 3)).id; }))!;
@@ -101,7 +114,7 @@ test("a run that starts sends the Herald's rows as an ev, before the change, wit
 
 test("a stream with a project sends only the ev events of that project, and a change to all", async () => {
   const ids: Record<string, string> = {};
-  const text = (await changeAfter(() => { for (const repo of ["q", "p-x", "p"]) ids[repo] = seed(run(repo, 9)).id; }, "?project=p"))!;
+  const text = (await evAndChange(() => { for (const repo of ["q", "p-x", "p"]) ids[repo] = seed(run(repo, 9)).id; }, () => `#/jobs/${ids.p}`, "?project=p"))!;
   const to = linked(text);
   expect(to).toContain(`#/jobs/${ids.p}`);
   expect(to).not.toContain(`#/jobs/${ids.q}`);
@@ -112,7 +125,7 @@ test("a stream with a project sends an ev with the row of an event on an issue o
   // The test above leaves a bad ref in the items repo.
   writeFileSync(join(ref, "main"), `${main}\n`);
   // Logged here, not by a process the test starts: the ref's change above comes 500 ms on, and under load a new bun can start later.
-  const text = (await changeAfter(() => { for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: `issue.${n}` }); }, "?project=p"))!;
+  const text = (await evAndChange(() => { for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: `issue.${n}` }); }, () => "#/issues/p/1", "?project=p"))!;
   expect(linked(text)).toContain("#/issues/p/1");
   expect(linked(text)).not.toContain("#/issues/q/2");
 }, 10_000);
