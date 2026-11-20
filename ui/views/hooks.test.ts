@@ -91,6 +91,18 @@ describe("the Hooks page", () => {
     expect(table).toMatch(/<td>Stub or stable entry<\/td><td class="num bad">53<\/td><td class="num">10<\/td><td class="time">/);
   });
 
+  test("an empty Fix, Matcher or Mode shows miss() with its reason, a set one its text", () => {
+    const set = { ...data.hooks[0], matcher: "Bash", mode: "async" };
+    const html = renderHooks({ ...data, errors: [...data.errors, { ...data.errors[0], cause: "Other", fix: "" }], hooks: [...data.hooks, set] }, new URLSearchParams());
+    /** The cell `col` of each body row of the card `title`. */
+    const cells = (title: string, col: number) => html.split(`aria-label="${title}"`)[1].split("</table>")[0].split("<tbody>")[1].split("</tr>").slice(0, -1)
+      .map((r: string) => r.match(/<td[^>]*>.*?<\/td>/g)![col]);
+    const [fixed, unfixed] = cells("Errors by Cause", 3), [bare, matched] = cells("Hooks", 2), [sync, async] = cells("Hooks", 4);
+    for (const td of [unfixed, bare, sync]) expect(td).toMatch(/^<td[^>]*><span title="[^"]+">–<\/span><\/td>$/);
+    expect(bare).toContain('title="matches all"');
+    expect([fixed, matched, async].map((td) => td.replace(/<[^>]+>/g, ""))).toEqual(["Stub or stable entry", "Bash", "async"]);
+  });
+
   test("a hook's Holds by Day head counts the days and Holds by Kind its rows", () => {
     const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());

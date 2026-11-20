@@ -4,7 +4,7 @@
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
+import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -64,7 +64,7 @@ function perDay(holds, box) {
 
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
-  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), cell(e.fix),
+  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), e.fix ? cell(e.fix) : `<td>${miss("no known fix")}</td>`,
     badCount(e.n), cell(e.sessions, { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 /** The filters of the holds log from the address. */
@@ -97,8 +97,8 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
-  const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
-    `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })].join("")}</tr>`).join("");
+  const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
+    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
