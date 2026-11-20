@@ -56,3 +56,29 @@ test("the Container widths row of the design doc lists exactly the @container wi
   expect(widths(row)).toEqual(widths(queries));
   expect(widths(row)).toEqual([420, 560]);
 });
+
+test("the ask dot, the prose, a selected row, a warn button, an indented list, a tile's second figure and a Herald row take their look from the tokens", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  // The declarations of each rule whose selector list names `sel`, the last one winning.
+  const rule = (sel: string) => Object.fromEntries([...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => m[1].split(",").map((s) => s.trim()).includes(sel))
+    .flatMap((m) => m[2].split(";").filter((d) => d.includes(":")).map((d) => [d.slice(0, d.indexOf(":")).trim(), d.slice(d.indexOf(":") + 1).trim()])));
+  // prettier-ignore
+  const looks = [
+    [".ask-dot", "width", "var(--dot-m)"],
+    [".dp-prose > .md", "max-width", "var(--measure)"],
+    ['.mrow[aria-selected="true"]', "background", "var(--sunk)"],
+    ['.mrow[aria-selected="true"]', "box-shadow", "inset 2px 0 0 var(--run)"],
+    [".act.warn", "background", "var(--need-bg)"],
+    [".act.warn", "color", "var(--need)"],
+    [".act.warn", "border-color", "var(--need)"],
+    [".issue-row .decision ul", "padding-left", "var(--indent-list)"],
+    [".body ul", "padding-left", "var(--indent-list)"],
+    ["ul.tight", "padding-left", "var(--indent-list)"],
+    [".chat .msg ul", "padding-left", "var(--indent-list)"],
+    [".chat .msg ol", "padding-left", "var(--indent-list)"],
+    [".tile b em", "font", "var(--fw-strong) .62em/1 var(--metric)"],
+    [".event-row", "border-left", "3px solid var(--stripe, var(--rule))"],
+  ];
+  expect(looks.map(([sel, prop]) => [sel, prop, rule(sel)[prop]])).toEqual(looks);
+  expect(css.match(/:root\s*\{[^}]*\}/)![0]).toContain("--indent-list: 18px;");
+});

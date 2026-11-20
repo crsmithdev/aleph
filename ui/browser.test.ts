@@ -27,15 +27,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   const hash = () => page.ev<string>("location.hash");
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
 
-  test("the sidebar opens with the Factory header, with no link above it", async () => {
+  test("the shell: the sidebar opens each page, an old, unknown or badly encoded address gets its answer, a view's handlers die with it, and a failed load says why", async () => {
+    // The sidebar opens with the Factory header, with no link above it.
     expect(await page.ev('(() => { const li = document.querySelector("#nav li"); return [li.className, li.textContent, !!li.querySelector("a")]; })()')).toEqual(["head", "Factory", false]);
     // Every view the page loads sits in a group the sidebar shows under a header: no view keeps a hidden group.
     const heads = await page.ev<string[]>('[...document.querySelectorAll("#nav li.head")].map((li) => li.textContent.toLowerCase())');
     const groups = await page.ev<string[]>('fetch("/api/views").then((r) => r.json()).then((ns) => Promise.all(ns.map((n) => import("/views/" + n).then((m) => (m.views ?? (m.view ? [m.view] : [])).map((v) => v.group))))).then((gs) => gs.flat())');
     expect([...new Set(groups.filter(Boolean))].filter((g) => !heads.includes(g))).toEqual([]);
-  });
-
-  test("every sidebar link opens its page and marks itself, with no page error", async () => {
+    // Every sidebar link opens its page and marks itself, with no page error.
     const links = await page.ev<[string, string][]>('[...document.querySelectorAll("#nav li a")].map((a) => [a.getAttribute("href"), a.textContent])');
     expect(links.length).toBeGreaterThan(3);
     for (const [href, name] of links) {
@@ -45,19 +44,25 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       expect(await page.ev('!!document.querySelector("#view > .page > .error")')).toBe(false);
     }
     expect(page.errors).toEqual([]);
-  }, 60_000);
-
-  test("an old address redirects and keeps its filters", async () => {
+    // An old address redirects and keeps its filters.
     await page.go("#/inventory?status=done");
     expect(await hash()).toBe("#/issues?status=done");
     await page.go("#/agents?days=30");
     expect(await hash()).toBe("#/sessions?days=30");
     await page.go("#/status/capacity");
     expect(await hash()).toBe("#/factory/agents");
-  }, 30_000);
-
-  test("a view's handlers do not outlive it", async () => {
-    // go() can return while #view still shows the page before, so wait for the new view's own markup.
+    // An unknown address says so and links to Status.
+    await page.go("#/nothing/here");
+    expect(await page.ev('document.querySelector("#view header.ph h1")?.textContent')).toBe("Nothing at /nothing/here");
+    expect(await page.ev('document.querySelectorAll("#view h1").length')).toBe(1);
+    expect(await page.ev('document.querySelector("#view a[href=\\"#/\\"]").textContent')).toBe("Status");
+    // A badly encoded address shows the view's own answer, not the page before it, and throws nothing.
+    await page.go("#/issues");
+    const before = page.errors.length;
+    await page.ev('void (location.hash = "#/jobs/%zz")');
+    await page.when('!document.querySelector("#view .contents") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+    expect(page.errors.slice(before)).toEqual([]);
+    // A view's handlers do not outlive it. go() can return while #view still shows the page before, so wait for the new view's own markup.
     await page.go("#/factory/jobs");
     await page.when('document.querySelector("#view #perf") && typeof document.querySelector("#view").onclick === "function"');
     expect(await page.ev('typeof document.querySelector("#view").oninput')).toBe("function");
@@ -67,34 +72,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('document.querySelector("#view").oninput')).toBeNull();
     await click('#inv-filters .seg button[data-value="done"]');
     await page.when('location.hash === "#/issues?status=done"');
-  }, 30_000);
-
-  test("a badly encoded address shows the view's own answer, not the page before it, and throws nothing", async () => {
-    await page.go("#/issues");
-    const before = page.errors.length;
-    await page.ev('void (location.hash = "#/jobs/%zz")');
-    await page.when('!document.querySelector("#view .contents") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
-    expect(page.errors.slice(before)).toEqual([]);
-  }, 30_000);
-
-  dockTest("the font picker changes the --display font of the page, with no page error", async () => {
-    await page.go("#/");
-    const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
-    expect(await root()).toContain("Merriweather");
-    await page.ev('(() => { const s = document.getElementById("dock-fonts").shadowRoot.querySelector("select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
-    expect(await root()).toContain("Lora");
-    expect(await page.ev<string>('getComputedStyle(document.querySelector(".mark")).fontFamily')).toContain("Merriweather");
-    expect(page.errors).toEqual([]);
-  }, 30_000);
-
-  test("an unknown address says so and links to Status", async () => {
-    await page.go("#/nothing/here");
-    expect(await page.ev('document.querySelector("#view header.ph h1")?.textContent')).toBe("Nothing at /nothing/here");
-    expect(await page.ev('document.querySelectorAll("#view h1").length')).toBe(1);
-    expect(await page.ev('document.querySelector("#view a[href=\\"#/\\"]").textContent')).toBe("Status");
-  }, 30_000);
-
-  test("a failed first load shows one line and no hint, and a stale server shows its command", async () => {
+    // A failed first load shows one line and no hint.
     await page.ev('(() => { const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/issues") ? Promise.reject(new Error("down")) : f(u, o); })()');
     await page.go("#/issues");
     expect(await page.ev('document.querySelectorAll("#view .error p").length')).toBe(1);
@@ -106,6 +84,16 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when('document.querySelector("#stale .notice.bad")');
     expect(await page.ev('document.querySelector("#stale .cmd").dataset.cmd')).toBe("systemctl --user restart aleph-ui");
     await page.reload();
+  }, 90_000);
+
+  dockTest("the font picker changes the --display font of the page, with no page error", async () => {
+    await page.go("#/");
+    const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
+    expect(await root()).toContain("Merriweather");
+    await page.ev('(() => { const s = document.getElementById("dock-fonts").shadowRoot.querySelector("select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
+    expect(await root()).toContain("Lora");
+    expect(await page.ev<string>('getComputedStyle(document.querySelector(".mark")).fontFamily')).toContain("Merriweather");
+    expect(page.errors).toEqual([]);
   }, 30_000);
 
   test("Issues: a filter, a sort and the search change the table in place", async () => {
@@ -230,7 +218,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
-  test("the sidebar collapses, keeps its links, and remembers it over a reload", async () => {
+  test("the sidebar collapses, keeps its links, and it and an open fold stay set over a reload, also under the older key", async () => {
     const tip = () => page.ev('[document.querySelector("#collapse").title, document.querySelector("#collapse").getAttribute("aria-label")]');
     const [t0, a0] = await tip();
     expect(t0).toBe(a0);
@@ -243,9 +231,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('!!document.querySelector(".shell.collapsed")')).toBe(true);
     await click("#collapse");
     await page.when('!document.querySelector(".shell.collapsed")');
-  }, 30_000);
-
-  test("an open fold and a collapsed sidebar are both still set after a page reload", async () => {
     // A reader who collapsed the sidebar under the older key still sees it collapsed.
     await page.ev('localStorage.clear(); localStorage.setItem("aleph-sidebar-collapsed", "1")');
     await page.reload();
@@ -267,7 +252,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.ev(`${fold}.open = false`);
     await click("#collapse");
     await page.when('!document.querySelector(".shell.collapsed")');
-  }, 30_000);
+  }, 60_000);
 
   test("the Status entry takes the status tone on any page, and follows a change with no reload", async () => {
     await page.go("#/factory/jobs");
@@ -318,23 +303,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).not.toBe("none");
   }, 30_000);
-
-  test("Design: the ask dot is 8px, the detail prose stops at 76ch, and a selected row has the Selected look", async () => {
-    await page.go("#/design");
-    await page.when('document.querySelector(".ask-dot") && document.querySelector(".dp-prose > .md") && document.querySelector("tr.mrow[aria-selected=true]")');
-    // A probe inside the prose, styled with the token, gives the computed form of 76ch, --sunk and the 2px --run bar.
-    const r = await page.ev<any>(`(() => {
-      const probe = (style) => { const i = document.createElement("div"); i.style.cssText = style; document.querySelector(".dp-prose > .md").append(i); const c = getComputedStyle(i); const o = { w: c.width, bg: c.backgroundColor, sh: c.boxShadow }; i.remove(); return o; };
-      const row = getComputedStyle(document.querySelector("tr.mrow[aria-selected=true]")), want = probe("display:block;width:76ch;background:var(--sunk);box-shadow:inset 2px 0 0 var(--run)");
-      return { dot: getComputedStyle(document.querySelector(".ask-dot")).width, prose: getComputedStyle(document.querySelector(".dp-prose > .md")).maxWidth, want: want.w,
-        bg: row.backgroundColor, wantBg: want.bg, sh: row.boxShadow, wantSh: want.sh };
-    })()`);
-    expect(r.dot).toBe("8px");
-    // Chrome rounds the probe's width to its layout grid, so the two agree to within a fraction of a pixel.
-    expect(Math.abs(parseFloat(r.prose) - parseFloat(r.want))).toBeLessThan(0.1);
-    expect(r.bg).toBe(r.wantBg);
-    expect(r.sh).toBe(r.wantSh);
-  });
 
   test("the Memory search and each segmented button fill --ctl-h, and a status dot is a pill", async () => {
     await page.go("#/memory");
@@ -615,7 +583,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched EventSource and fetch away.
   }, 30_000);
 
-  test("an action the server refuses shows the server's reason on the row", async () => {
+  test("Status: a refused action shows the reason on its row, Enter confirms a Deny, and a decided Ask stays off when the Herald draws again", async () => {
     await page.go("#/");
     await page.when(`document.querySelector('#view button.act[data-act="land"], #view button.act[data-act="recheck"]')`);
     await page.ev(`(() => {
@@ -628,10 +596,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when('document.querySelector("#view .act-msg")?.textContent.includes("it cannot wait")');
     expect(await page.ev('document.querySelector("#view .act-msg").closest("article").isConnected')).toBe(true);
     await page.reload(); // Takes the patched fetch away.
-  }, 30_000);
-
-  test("Enter in the reason box confirms a Deny, and the card leaves before any reload of the state", async () => {
-    await page.go("#/");
+    // Enter in the reason box confirms a Deny, and the card leaves before any reload of the state.
     await page.when('document.querySelector("#view article.issue-row")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
     await page.ev(`import("/views/lib/ask-cards.js").then(({ askCard }) => {
@@ -653,10 +618,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const posts = await page.ev<[string, string][]>("window.posts");
     expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools-4/drop", { reason: "Chris denied: not now" }]]);
     await page.reload(); // Takes the patched fetch away.
-  }, 30_000);
-
-  test("a decided Ask stays off the Status page when the Herald draws again from its last state", async () => {
-    await page.go("#/");
+    // A decided Ask stays off the Status page when the Herald draws again from its last state.
     await page.when('document.querySelector("#herald")');
     // The Herald's last state lists the Ask; a stream event draws it again. After the POST every other fetch hangs.
     await page.ev(`Promise.all([import("/views/now.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, s]) => {
@@ -678,9 +640,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.ev("window.beat()");
     expect(await page.ev<number>('document.querySelectorAll("#view article.issue-row[data-ask=\'tools-5\']").length')).toBe(0);
     await page.reload(); // Takes the patched fetch away.
-  }, 30_000);
+  }, 60_000);
 
-  test("a dead blocker shows on the Issue page, and Stop waiting removes it", async () => {
+  test("Issue: a dead blocker shows and Stop waiting removes it, an attached image shows in Media, and a pasted screenshot attaches", async () => {
     await page.go("#/issues/demo/21");
     await page.when(`document.querySelector('.dp-blocked [data-act="unblock"]')`);
     expect(await page.ev<string>(`document.querySelector(".dp-blocked").textContent`)).toContain("Waits on");
@@ -688,9 +650,31 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when(`!document.querySelector('.dp-blocked [data-act="unblock"]')`);
     expect(await page.ev<string>(`document.querySelector(".dp-blocked")?.textContent ?? ""`)).not.toContain("Waits on");
     expect(page.errors).toEqual([]);
-  }, 30_000);
+    // An attached image shows in Media, and a pasted screenshot attaches.
+    // A PNG drawn on a canvas, filed through the API as the new-issue form files it.
+    const filed = await page.ev<{ key: string; n: number }>(`(async () => {
+      const key = (await fetch("/api/issues").then((r) => r.json()).then((d) => (d.issues ?? d)[0].repo));
+      const c = Object.assign(document.createElement("canvas"), { width: 40, height: 30 });
+      c.getContext("2d").fillRect(0, 0, 20, 15);
+      const data = c.toDataURL("image/png").split(",")[1];
+      const r = await fetch("/api/issues", { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify({ repo: key, title: "Fix the header colour", body: "see the shot", media: [{ name: "shot.png", data }] }) }).then((r) => r.json());
+      return { key, n: r.added };
+    })()`);
+    await page.go(`#/issues/${filed.key}/${filed.n}`);
+    await page.when(`[...document.querySelectorAll(".media-grid img")].some((i) => i.complete && i.naturalWidth === 40)`);
+    await page.ev(`(async () => {
+      const blob = await fetch(document.querySelector(".media-grid img").src).then((r) => r.blob());
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "", { type: "image/png" }));
+      const form = document.querySelector('form[data-ui="issue-media"]');
+      form.querySelector("input[type=file]").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      form.requestSubmit();
+    })()`);
+    await page.when(`document.querySelectorAll(".media-grid img").length === 2`);
+    expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
+  }, 90_000);
 
-  test("the Issue page's contents link each panel it shows, and a click keeps the route", async () => {
+  test("the Issue page's contents link each panel it shows, a click keeps the route, and a click elsewhere leaves no entry current", async () => {
     await page.width(1400);
     await page.go("#/issues/demo/21");
     await page.when('document.querySelector(".issue-page .toc a")');
@@ -708,13 +692,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('[...document.querySelectorAll(".toc a[aria-current]")].map((a) => a.textContent)'))
       .toEqual([await page.ev('[...document.querySelectorAll(".toc a")].at(-1).textContent')]);
     expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
-    expect(page.errors).toEqual([]);
-  }, 30_000);
-
-  test("no contents entry stays current when a click elsewhere leaves no section in the band", async () => {
-    await page.width(1400);
-    await page.go("#/issues/demo/21");
-    await page.when('document.querySelector(".issue-page .toc a")');
+    // No entry stays current when a click elsewhere leaves no section in the band.
     await page.ev('document.querySelector(".toc a[href=\'#issue-notes\']").click()');
     await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Notes"');
     // The router's smooth scroll to Notes ends first, or it would carry on past the scroll to the top.
@@ -723,7 +701,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when('scrollY === 0 && !document.querySelector(".toc a[aria-current]")');
     expect(await page.ev('document.querySelectorAll(".toc a[aria-current]").length')).toBe(0);
     expect(page.errors).toEqual([]);
-  }, 30_000);
+  }, 60_000);
 
 });
 
@@ -783,20 +761,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.ev('document.querySelector("#obar-probe")?.remove()');
   }, 30_000);
 
-  test("the second tile figure is a share of the value", async () => {
-    await page.go("#/");
-    const m = await page.ev<{ em: number; val: number }>(`import("/views/lib/html.js").then(({ statCard }) => {
-      const host = document.createElement("div");
-      host.id = "tile-probe";
-      document.querySelector("#view").prepend(host);
-      host.innerHTML = '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
-      const em = host.querySelector(".tile.sc b em"), val = host.querySelector(".tile.sc b");
-      return { em: parseFloat(getComputedStyle(em).fontSize), val: parseFloat(getComputedStyle(val).fontSize) };
-    })`);
-    expect(m.em / m.val).toBeCloseTo(0.62, 2);
-    await page.ev('document.querySelector("#tile-probe").remove()');
-  }, 30_000);
-
   test("a metric card keeps its second value at phone width", async () => {
     await page.width(400);
     await page.go("#/");
@@ -814,22 +778,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(m.one).toBe(true);
     await page.ev('document.querySelector("#tile-probe").remove()');
     await page.width(1200);
-  }, 30_000);
-
-  test("Design: a warn button outside the page head has the warn style", async () => {
-    await page.go("#/design");
-    await page.when('document.querySelector("#design-button .act.warn")');
-    const r = await page.ev<any>(`(() => {
-      const probe = document.createElement("i");
-      document.body.append(probe);
-      const val = (prop, v) => { probe.style.cssText = prop + ":" + v; return getComputedStyle(probe)[prop]; };
-      const s = getComputedStyle(document.querySelector("#design-button .act.warn"));
-      const r = { in: !!document.querySelector("#design-button .act.warn").closest(".shead"), got: [s.backgroundColor, s.color, s.borderTopColor], want: [val("background-color", "var(--need-bg)"), val("color", "var(--need)"), val("border-top-color", "var(--need)")] };
-      probe.remove();
-      return r;
-    })()`);
-    expect(r.in).toBe(false);
-    expect(r.got).toEqual(r.want);
   }, 30_000);
 
   test("Design: at 390 px a key on two lines keeps the values of a metric row level, and the smallest value is the size floor", async () => {
@@ -1001,46 +949,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  test("every indented list takes its left padding from --indent-list", async () => {
-    await page.width(1200);
-    await page.go("#/");
-    const pads = await page.ev<string[]>(`(() => {
-      const mk = (parent, tag) => { const el = document.createElement(tag); parent.append(el); return el; };
-      const wrap = (cls) => { const d = document.createElement("div"); d.className = cls; document.body.append(d); return d; };
-      const row = wrap("issue-row"), dec = mk(row, "div"); dec.className = "decision";
-      const body = wrap("body"), tight = document.createElement("ul"); tight.className = "tight"; document.body.append(tight);
-      const chat = wrap("chat"), msg = mk(chat, "div"); msg.className = "msg";
-      const lists = [mk(dec, "ul"), mk(body, "ul"), tight, mk(msg, "ul"), mk(msg, "ol")];
-      const out = lists.map((l) => getComputedStyle(l).paddingLeft);
-      for (const e of [row, body, tight, chat]) e.remove();
-      return out;
-    })()`);
-    expect(pads).toEqual(["18px", "18px", "18px", "18px", "18px"]);
-  }, 30_000);
-  test("Issue: an attached image shows in Media, and a pasted screenshot attaches", async () => {
-    // A PNG drawn on a canvas, filed through the API as the new-issue form files it.
-    const filed = await page.ev<{ key: string; n: number }>(`(async () => {
-      const key = (await fetch("/api/issues").then((r) => r.json()).then((d) => (d.issues ?? d)[0].repo));
-      const c = Object.assign(document.createElement("canvas"), { width: 40, height: 30 });
-      c.getContext("2d").fillRect(0, 0, 20, 15);
-      const data = c.toDataURL("image/png").split(",")[1];
-      const r = await fetch("/api/issues", { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify({ repo: key, title: "Fix the header colour", body: "see the shot", media: [{ name: "shot.png", data }] }) }).then((r) => r.json());
-      return { key, n: r.added };
-    })()`);
-    await page.go(`#/issues/${filed.key}/${filed.n}`);
-    await page.when(`[...document.querySelectorAll(".media-grid img")].some((i) => i.complete && i.naturalWidth === 40)`);
-    await page.ev(`(async () => {
-      const blob = await fetch(document.querySelector(".media-grid img").src).then((r) => r.blob());
-      const dt = new DataTransfer();
-      dt.items.add(new File([blob], "", { type: "image/png" }));
-      const form = document.querySelector('form[data-ui="issue-media"]');
-      form.querySelector("input[type=file]").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-      form.requestSubmit();
-    })()`);
-    await page.when(`document.querySelectorAll(".media-grid img").length === 2`);
-    expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
-  }, 60_000);
-
   test("Issue: in edit mode the title input fills the width of its heading", async () => {
     await page.go(await page.ev<string>('fetch("/api/issues").then((r) => r.json()).then((d) => (d.issues ?? d)[0].href)'));
     await page.when('document.querySelector(".issue-page [data-editor=start]")');
@@ -1167,12 +1075,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(bg).not.toBe("rgba(0, 0, 0, 0)");
     expect(["clip", "hidden"]).toContain(overflow);
   }, 60_000);
-
-  test("guard: a Herald row keeps its 3px tone stripe", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#herald .event-row")');
-    expect(await page.ev('getComputedStyle(document.querySelector("#herald .event-row")).borderLeftWidth')).toBe("3px");
-  }, 30_000);
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {
