@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gh-guard · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<link rel="stylesheet" href="app.css">
+<style>.o-caught{background:var(--done)}.o-handoff{background:var(--done);opacity:.55}.o-held{background:var(--muted)}.o-false{background:var(--error)}.o-none{background:var(--need)}.o-dead{background:var(--rule)}.hooks .tbl td.wide .meter{min-width:160px}.hooks details.src{margin-top:var(--sp-8)}.hooks details.src summary{cursor:pointer;display:flex;gap:var(--sp-10);align-items:baseline}.hooks details.src pre{max-height:40em;overflow:auto;margin:var(--sp-6) 0 0;padding:var(--sp-8) var(--sp-10);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-tag);font:var(--fs-xs)/1.5 var(--mono);white-space:pre}</style></head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Views"><a class="mark" href="#/"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/><circle cx="35.5" cy="64.5" r="20" fill="currentColor"/></svg>aleph</a><div id="nav"><ul><li class="head">Factory</li><li><a href="#/" title="Status"><wa-icon name="gauge-high" aria-hidden="true"></wa-icon><span class="lbl">Status</span></a></li><li><a href="#/automation" title="Automation"><wa-icon name="shield-halved" aria-hidden="true"></wa-icon><span class="lbl">Automation</span></a></li><li><a href="#/factory/agents" title="Agents"><wa-icon name="robot" aria-hidden="true"></wa-icon><span class="lbl">Agents</span></a></li><li><a href="#/issues" title="Issues"><wa-icon name="list-check" aria-hidden="true"></wa-icon><span class="lbl">Issues</span></a></li><li><a href="#/factory/jobs" title="Jobs"><wa-icon name="stopwatch" aria-hidden="true"></wa-icon><span class="lbl">Jobs</span></a></li><li><a href="#/ideas" title="Ideas"><wa-icon name="lightbulb" aria-hidden="true"></wa-icon><span class="lbl">Ideas</span></a></li><li><a href="#/explore" title="Explore"><wa-icon name="magnifying-glass-chart" aria-hidden="true"></wa-icon><span class="lbl">Explore</span></a></li><li class="head">Claude</li><li><a href="#/sessions" title="Sessions"><wa-icon name="comments" aria-hidden="true"></wa-icon><span class="lbl">Sessions</span></a></li><li><a href="#/memory" title="Memory"><wa-icon name="brain" aria-hidden="true"></wa-icon><span class="lbl">Memory</span></a></li><li><a href="#/hooks" title="Hooks" aria-current="page"><wa-icon name="plug" aria-hidden="true"></wa-icon><span class="lbl">Hooks</span></a></li></ul></div></nav>
+<main><div id="view"><div class="page dp-page hooks"><nav class="crumb" aria-label="Breadcrumb"><a href="index.html" aria-label="Back">«</a> <a href="index.html">hooks</a> / <span>PreToolUse</span> / <span>gh-guard</span></nav><header class="ph"><h1>gh-guard</h1><span class="count">PreToolUse</span><div class="aside">Last 7 days</div></header><dl class="facts"><div><dt>Event</dt><dd>PreToolUse</dd></div><div><dt>Matcher</dt><dd><code>Bash</code></dd></div><div><dt>Command</dt><dd><code>sh hooks/gh-guard.ts</code></dd></div><div><dt>Mode</dt><dd>sync</dd></div><div><dt>Timeout</dt><dd>15 s</dd></div><div><dt>Workers</dt><dd><span class="badge run">runs</span></dd></div></dl><details class="dp-panel dp-fold" open><summary><span>Holds</span><span class="dp-aside">0</span></summary><div class="dp-body"><div class="empty"><p>No data</p></div></div></details><details class="dp-panel dp-fold" open><summary><span>Errors</span><span class="dp-aside">38</span></summary><div class="dp-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Cause</th><th>Event</th><th class="num">Errors (all hooks)</th><th class="num">Sessions</th><th>Fix</th><th>Last</th></tr></thead><tbody><tr><td>Worktree gone (worker)</td><td>PostToolUse, PostToolUseFailure, PreToolUse</td><td class="num">38</td><td class="num">6</td><td>Keep until worker ends</td><td class="time">Nov 15, 5:53 AM</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Source</span><span class="dp-aside">6</span></summary><div class="dp-body"><details class="src" open><summary><code>hooks/gh-guard.ts</code><span class="quiet">100 lines</span></summary><pre>#!/usr/bin/env bun
+/**
+ * PreToolUse on Bash: a `gh` command that writes to a GitHub repo the user
+ * does not own asks first. A post there reaches other people. Reads go
+ * through. The target is the repo named by `-R`/`--repo`, by a github.com URL,
+ * by `repos/&lt;owner&gt;/&lt;repo&gt;` in `gh api`, or else the origin of the directory
+ * the command runs in. A write whose target cannot be found asks. The user is
+ * `ALEPH_GH_USER`, or else the login of `gh api user`, asked once a day.
+ */
+/*
+ * A hook that exits 1 does not block the tool, so a guard that throws before
+ * its verdict exits 2 (deny) with its name and the error on stderr.
+ */
+import { join, resolve } from &quot;node:path&quot;;
+import { GH_USER_CMD } from &quot;../lib/env.ts&quot;;
+import { today } from &quot;../lib/day.ts&quot;;
+import { probe } from &quot;../lib/git.ts&quot;;
+import { readJsonOr, writeJson } from &quot;../lib/json.ts&quot;;
+import { spoolDir } from &quot;./lib/handshake.ts&quot;;
+
+try {
+  const input = JSON.parse(await Bun.stdin.text());
+  const command: string = input.tool_input?.command ?? &quot;&quot;;
+  if (!/\bgh\s/.test(command)) process.exit(0);
+
+  const VERBS = new Set([
+    &quot;create&quot;, &quot;comment&quot;, &quot;edit&quot;, &quot;close&quot;, &quot;reopen&quot;, &quot;delete&quot;, &quot;merge&quot;, &quot;review&quot;, &quot;fork&quot;, &quot;lock&quot;, &quot;unlock&quot;,
+    &quot;pin&quot;, &quot;unpin&quot;, &quot;transfer&quot;, &quot;ready&quot;, &quot;rename&quot;, &quot;archive&quot;, &quot;unarchive&quot;, &quot;sync&quot;, &quot;set&quot;, &quot;develop&quot;,
+    &quot;rerun&quot;, &quot;cancel&quot;, &quot;upload&quot;, &quot;add&quot;, &quot;remove&quot;, &quot;enable&quot;, &quot;disable&quot;, &quot;run&quot;,
+  ]);
+  const WORD = `&quot;[^&quot;]*&quot;|&#39;[^&#39;]*&#39;|[^\\s;&amp;|()]+`;
+  const unquote = (w: string) =&gt; w.replace(/^([&quot;&#39;])(.*)\1$/, &quot;$2&quot;);
+
+  /** The owner of a github.com remote URL, or null. */
+  function remoteOwner(dir: string | null): string | null {
+    if (!dir) return null;
+    return probe(dir, &quot;remote&quot;, &quot;get-url&quot;, &quot;origin&quot;).out.match(/github\.com[:/]([^/\s]+)\//)?.[1] ?? null;
+  }
+
+  /** The owner a write in `part` goes to, &quot;&quot; for a read, or null when the target is unknown. */
+  function target(part: string, dir: string | null): string | null | &quot;&quot; {
+    const m = part.match(/\bgh\s+(\S+)(?:\s+(\S+))?/);
+    if (!m) return &quot;&quot;;
+    const [, group, verb] = m;
+    if (group === &quot;api&quot;) {
+      const method = part.match(/(?:-X|--method)[\s=]+[&quot;&#39;]?(\w+)/)?.[1]?.toUpperCase();
+      const fields = /\s(?:-[fF]|--field|--raw-field|--input)[\s=]/.test(part);
+      const write = method ? method !== &quot;GET&quot; : fields &amp;&amp; !/\bgraphql\b/.test(part);
+      if (!write &amp;&amp; !/\bmutation\b/.test(part)) return &quot;&quot;;
+      return part.match(/\brepos\/([^/\s&quot;&#39;]+)\//)?.[1] ?? null;
+    }
+    if (!verb || !VERBS.has(verb)) return &quot;&quot;;
+    const named = part.match(new RegExp(`(?:-R|--repo)[\\s=]+(${WORD})`))?.[1];
+    if (named) return unquote(named).replace(/^(?:https?:\/\/)?github\.com\//, &quot;&quot;).split(&quot;/&quot;)[0];
+    const url = part.match(/github\.com\/([^/\s&quot;&#39;]+)\//)?.[1];
+    if (url) return url;
+    const positional = group === &quot;repo&quot; ? part.match(/\bgh\s+repo\s+\S+\s+([\w.-]+)\/[\w.-]+/)?.[1] : undefined;
+    return positional ?? remoteOwner(dir);
+  }
+
+  let dir: string | null = input.cwd ?? process.cwd();
+  const owners: (string | null)[] = [];
+  for (const part of command.split(/&amp;&amp;|\|\||[;|\n]/)) {
+    const cd = part.match(new RegExp(`^\\s*cd\\s+(${WORD})`))?.[1];
+    if (cd !== undefined) {
+      const path = unquote(cd);
+      dir = dir === null || (cd[0] !== &quot;&#39;&quot; &amp;&amp; /[$`]/.test(path)) ? null : resolve(dir, path.replace(/^~(?=\/|$)/, process.env.HOME ?? &quot;~&quot;));
+      continue;
+    }
+    const owner = target(part, dir);
+    if (owner !== &quot;&quot;) owners.push(owner);
+  }
+  if (owners.length === 0) process.exit(0);
+
+  /** The login of `gh api user`: a network call, so a login is kept in the spool for the day. */
+  function ghLogin(): string {
+    const file = join(spoolDir(), &quot;gh-user.json&quot;);
+    const day = today();
+    const kept = readJsonOr&lt;{ day: string; login: string } | null&gt;(file, null);
+    if (kept?.day === day) return kept.login;
+    const login = Bun.spawnSync(GH_USER_CMD, { stdout: &quot;pipe&quot;, stderr: &quot;ignore&quot; }).stdout.toString().trim();
+    if (login) writeJson(file, { day, login });
+    return login;
+  }
+
+  const user = process.env.ALEPH_GH_USER || ghLogin();
+  const foreign = owners.filter((o) =&gt; o === null || o.toLowerCase() !== user.toLowerCase());
+  if (foreign.length === 0) process.exit(0);
+
+  const named = foreign.map((o) =&gt; o ?? &quot;an unknown owner&quot;).join(&quot;, &quot;);
+  console.log(JSON.stringify({ hookSpecificOutput: {
+    hookEventName: &quot;PreToolUse&quot;,
+    permissionDecision: &quot;ask&quot;,
+    permissionDecisionReason: `gh-guard: this command writes to a GitHub repo of ${named}, not of ${user || &quot;the user&quot;}. A post there reaches other people.`,
+  } }));
+} catch (e) {
+  console.error(`gh-guard: the guard failed (${e instanceof Error ? (e.stack ?? e.message) : String(e)}), so this tool call is denied. Fix the hook and retry.`);
+  process.exit(2);
+}
+</pre></details><details class="src"><summary><code>lib/env.ts</code><span class="quiet">99 lines</span></summary><pre>import { readFileSync } from &quot;node:fs&quot;;
+import { alephPath } from &quot;./paths.ts&quot;;
+
+export interface LangfuseConfig {
+  baseUrl: string;
+  publicKey: string;
+  secretKey: string;
+}
+
+/** True in a factory agent: the agent settings in jobs/lib/routing/models.ts set ALEPH_AGENT for the claude process of each role. */
+export const isAgent = (): boolean =&gt; Boolean(process.env.ALEPH_AGENT);
+
+/** The id of the job this process runs for, if any: the unit sets ALEPH_JOB_ID (jobs/lib/roles/unit.ts), and its children inherit it. */
+export const jobId = (): string | undefined =&gt; process.env.ALEPH_JOB_ID;
+
+/** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
+const envFile = (): string =&gt; alephPath(&quot;ALEPH_ENV_FILE&quot;, &quot;.env&quot;);
+
+/** One key from the dotenv file, never copied to process.env; null when the file or the key is missing. */
+function dotenvKey(name: string): string | null {
+  let text: string;
+  try { text = readFileSync(envFile(), &quot;utf8&quot;); } catch { return null; }
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`, &quot;m&quot;));
+  return m ? m[1].trim().replace(/^([&quot;&#39;])(.*)\1$/, &quot;$2&quot;) : null;
+}
+
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  return process.env.OPENROUTER_API_KEY || dotenvKey(&quot;OPENROUTER_API_KEY&quot;);
+}
+
+/** ANTHROPIC_API_KEY from the dotenv file only: a process that has it in its environment bills the API instead of the subscription. */
+export const anthropicKey = (): string | null =&gt; dotenvKey(&quot;ANTHROPIC_API_KEY&quot;);
+
+/**
+ * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
+ * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
+ * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
+ */
+export function loadDotenv(path = envFile()): void {
+  let text: string;
+  try { text = readFileSync(path, &quot;utf8&quot;); } catch { return; }
+  for (const raw of text.split(&quot;\n&quot;)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(&quot;#&quot;)) continue;
+    const eq = line.indexOf(&quot;=&quot;);
+    if (eq &lt; 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key.startsWith(&quot;LANGFUSE_&quot;)) continue;
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith(&#39;&quot;&#39;) &amp;&amp; value.endsWith(&#39;&quot;&#39;)) || (value.startsWith(&quot;&#39;&quot;) &amp;&amp; value.endsWith(&quot;&#39;&quot;))) value = value.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+export function langfuseConfig(): LangfuseConfig | null {
+  loadDotenv();
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  if (!publicKey || !secretKey) return null;
+  return { baseUrl: (process.env.LANGFUSE_BASE_URL ?? &quot;http://127.0.0.1:3010&quot;).replace(/\/+$/, &quot;&quot;), publicKey, secretKey };
+}
+
+/**
+ * Langfuse environment for the session: `ALEPH_ENV` if set (the live tests
+ * say `test`), else `headless` when an ancestor is `claude -p`, else `interactive`.
+ * The parent chain is the only place a hook can see how claude was started.
+ */
+export function classifyEnvironment(ancestorArgvs: string[][], override = process.env.ALEPH_ENV): string {
+  if (override) return override;
+  // claude is argv[0], or argv[1] behind a shell wrapper; only flags after it count
+  const headless = ancestorArgvs.some((argv) =&gt; {
+    const at = argv.slice(0, 2).findIndex((arg) =&gt; arg === &quot;claude&quot; || arg.endsWith(&quot;/claude&quot;));
+    return at &gt;= 0 &amp;&amp; argv.slice(at + 1).some((arg) =&gt; arg === &quot;-p&quot; || arg === &quot;--print&quot;);
+  });
+  return headless ? &quot;headless&quot; : &quot;interactive&quot;;
+}
+
+const DEPTH = 6;
+
+function ancestorArgvs(): string[][] {
+  const out: string[][] = [];
+  let pid = process.ppid;
+  for (let i = 0; i &lt; DEPTH &amp;&amp; pid &gt; 1; i++) {
+    let cmdline: string, status: string;
+    try { cmdline = readFileSync(`/proc/${pid}/cmdline`, &quot;utf8&quot;); status = readFileSync(`/proc/${pid}/status`, &quot;utf8&quot;); } catch { break; }
+    out.push(cmdline.split(&quot;\0&quot;).filter(Boolean));
+    pid = Number(status.match(/^PPid:\s*(\d+)/m)?.[1] ?? 0);
+  }
+  return out;
+}
+
+export function sessionEnvironment(): string {
+  return classifyEnvironment(ancestorArgvs());
+}
+
+/** The command whose output is the user gh-guard compares owners with when `ALEPH_GH_USER` is unset. */
+export const GH_USER_CMD = [&quot;gh&quot;, &quot;api&quot;, &quot;user&quot;, &quot;-q&quot;, &quot;.login&quot;];
+</pre></details><details class="src"><summary><code>lib/day.ts</code><span class="quiet">22 lines</span></summary><pre>// Local time, not UTC. `toISOString` stamps the UTC date, so west of Greenwich
+// every issue filed in the evening carried tomorrow&#39;s date.
+export const today = (d = new Date()): string =&gt;
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, &quot;0&quot;)}-${String(d.getDate()).padStart(2, &quot;0&quot;)}`;
+
+/** The local time of `d` as zero-padded `HH:MM`. */
+export const clock = (d = new Date()): string =&gt;
+  `${String(d.getHours()).padStart(2, &quot;0&quot;)}:${String(d.getMinutes()).padStart(2, &quot;0&quot;)}`;
+
+/** The local date `n` calendar days after `day` (YYYY-MM-DD). Noon keeps a DST change from moving it, which `n` times 24 hours of ms does not. */
+export function addDays(day: string, n: number): string {
+  const d = new Date(`${day}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return today(d);
+}
+
+/** The local date `n` calendar days before `from`. */
+export const daysAgo = (n: number, from = new Date()): string =&gt; addDays(today(from), -n);
+
+/** The local date before `now`. */
+export const yesterday = (now: number): string =&gt; addDays(today(new Date(now)), -1);
+</pre></details><details class="src"><summary><code>lib/git.ts</code><span class="quiet">139 lines</span></summary><pre>/**
+ * git for aleph: the one runner (a spawn that says where it failed, aleph&#39;s env, and a wait on another
+ * process&#39;s index.lock), a fetch, a tree with files replaced, and the main checkout following origin.
+ * Every write to main goes through a push that git refuses when main moved, so the push is the compare-and-swap.
+ */
+import { existsSync, rmSync } from &quot;node:fs&quot;;
+import { tmpdir } from &quot;node:os&quot;;
+import { join } from &quot;node:path&quot;;
+
+// A worker&#39;s env carries GIT_CONFIG_* to send its pushes nowhere. aleph&#39;s own
+// writes (an issue commit from a worker) are not the worker&#39;s push.
+const baseEnv = (): Record&lt;string, string | undefined&gt; =&gt; {
+  const env: Record&lt;string, string | undefined&gt; = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith(&quot;GIT_CONFIG_&quot;)) delete env[k];
+  return env;
+};
+
+/** `Bun.spawnSync` for git. A spawn that throws is rethrown with the original as `cause` and a one-line message that says where and with which PATH it ran. */
+export function spawnGit(cmd: string[], opts: { cwd?: string; env?: Record&lt;string, string | undefined&gt;; stdin?: &quot;ignore&quot; | Blob; stdout: &quot;pipe&quot;; stderr: &quot;pipe&quot; | &quot;ignore&quot; }): { exitCode: number | null; stdout: Buffer; stderr: Buffer } {
+  try {
+    return Bun.spawnSync(cmd, opts) as { exitCode: number | null; stdout: Buffer; stderr: Buffer };
+  } catch (e) {
+    const cwd = opts.cwd;
+    let here: string;
+    try { here = process.cwd(); } catch (err) { here = `unreadable (${(err as Error).message})`; }
+    const PATH = (opts.env ?? process.env).PATH;
+    const found = Bun.which(&quot;git&quot;, { PATH: PATH ?? &quot;&quot; });
+    const text = (e as Error).message.replace(/\s+/g, &quot; &quot;);
+    throw new Error(
+      `git could not start (${text}). The cwd passed is ${cwd === undefined ? &quot;none&quot; : JSON.stringify(cwd)}` +
+      `${cwd === undefined ? &quot;&quot; : ` and ${existsSync(cwd) ? &quot;exists&quot; : &quot;does not exist&quot;} (existsSync ${existsSync(cwd)})`}. ` +
+      `process.cwd() is ${here}. The PATH passed is ${JSON.stringify(PATH)}. Bun.which finds git at ${JSON.stringify(found)}. ` +
+      `TMPDIR is ${JSON.stringify(process.env.TMPDIR)} and tmpdir() ${existsSync(tmpdir()) ? &quot;exists&quot; : &quot;does not exist&quot;} (existsSync ${existsSync(tmpdir())}).`,
+      { cause: e },
+    );
+  }
+}
+
+export function git(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  return gitWith({}, cwd, ...args);
+}
+
+function gitWith(o: { env?: Record&lt;string, string&gt;; stdin?: string | Uint8Array }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  // Several facts gates write the vault in the same second; a git call that
+  // meets another&#39;s index.lock waits and tries again (6 facts lost to it, 1 to 3 Nov).
+  for (let i = 0; ; i++) {
+    const p = spawnGit([&quot;git&quot;, ...args], {
+      cwd, env: { ...baseEnv(), ...o.env }, stdin: o.stdin === undefined ? &quot;ignore&quot; : new Blob([o.stdin as BlobPart]), stdout: &quot;pipe&quot;, stderr: &quot;pipe&quot;,
+    });
+    const r = { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? &quot;&quot; : p.stderr.toString())).trimEnd() };
+    if (r.ok || !r.out.includes(&quot;index.lock&quot;) || i === 10) return r;
+    Bun.sleepSync(200 * (i + 1));
+  }
+}
+
+/** `git` in `cwd`, not ok (and no throw) when `cwd` does not exist. */
+export function probe(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  return existsSync(cwd) ? git(cwd, ...args) : { ok: false, out: &quot;&quot; };
+}
+
+/** The ref of a repo&#39;s main to read: `origin/&lt;main&gt;` when the repo has it, else the local `&lt;main&gt;`. */
+export function mainRef(cwd: string, main: string): string {
+  return git(cwd, &quot;rev-parse&quot;, &quot;--verify&quot;, &quot;-q&quot;, `origin/${main}^{commit}`).ok ? `origin/${main}` : main;
+}
+
+/** The pause between two tries of a step that met a held git lock: `sleep` waits, Bun.sleepSync unless the caller passes Bun.sleep and awaits it. A test replaces it to free the lock. */
+export const lockRetry = { pause: (sleep: (ms: number) =&gt; unknown = Bun.sleepSync): unknown =&gt; sleep(100 + Math.random() * 200) };
+
+type Run = { ok: boolean; out: string };
+
+/** The tries of a fetch: it yields the number of each try and takes its result. A try after the first waits out the ref lock that another process holds (up to 5 tries). */
+function* fetchTries(): Generator&lt;number, Run, Run&gt; {
+  let r = yield 0;
+  for (let i = 1; i &lt; 5 &amp;&amp; !r.ok &amp;&amp; r.out.includes(&quot;cannot lock ref&quot;); i++) r = yield i;
+  return r;
+}
+
+/** `git fetch -q origin &lt;refs&gt;`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
+export function fetchOrigin(cwd: string, ...refs: string[]): Run {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) lockRetry.pause();
+    t = tries.next(git(cwd, &quot;fetch&quot;, &quot;-q&quot;, &quot;origin&quot;, ...refs));
+  }
+}
+
+/** fetchOrigin that does not block: each try is an async spawn and each pause an async sleep. */
+export async function fetchOriginAsync(cwd: string, ...refs: string[]): Promise&lt;Run&gt; {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) await lockRetry.pause(Bun.sleep);
+    let p;
+    // A spawn throws when cwd is gone: the UI&#39;s timer then fetches a store a test removed.
+    try { p = Bun.spawn([&quot;git&quot;, &quot;fetch&quot;, &quot;-q&quot;, &quot;origin&quot;, ...refs], { cwd, env: baseEnv(), stdin: &quot;ignore&quot;, stdout: &quot;ignore&quot;, stderr: &quot;pipe&quot; }); }
+    catch (e) { return { ok: false, out: (e as Error).message }; }
+    const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited]);
+    t = tries.next({ ok: code === 0, out: code === 0 ? &quot;&quot; : err.trimEnd() || `git fetch exited ${code}` });
+  }
+}
+
+/** `tree` with each path in `files` set to its content, or removed when it is null. */
+export function treeWithFiles(cwd: string, tree: string, files: Record&lt;string, string | Uint8Array | null&gt;): string {
+  const index = join(tmpdir(), `aleph-index-${process.pid}-${crypto.randomUUID()}`);
+  const env = { GIT_INDEX_FILE: index };
+  try {
+    const steps = [[&quot;read-tree&quot;, tree]];
+    for (const [path, content] of Object.entries(files)) {
+      if (content === null) { steps.push([&quot;update-index&quot;, &quot;--force-remove&quot;, path]); continue; }
+      const blob = gitWith({ stdin: content }, cwd, &quot;hash-object&quot;, &quot;-w&quot;, &quot;--stdin&quot;);
+      if (!blob.ok) throw new Error(`hash-object: ${blob.out}`);
+      steps.push([&quot;update-index&quot;, &quot;--add&quot;, &quot;--cacheinfo&quot;, `100644,${blob.out},${path}`]);
+    }
+    for (const args of steps) {
+      const r = gitWith({ env }, cwd, ...args);
+      if (!r.ok) throw new Error(`${args[0]}: ${r.out}`);
+    }
+    const w = gitWith({ env }, cwd, &quot;write-tree&quot;);
+    if (!w.ok) throw new Error(`write-tree: ${w.out}`);
+    return w.out;
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+/**
+ * Fast-forward the main checkout to origin/&lt;main&gt;. Returns why it could not,
+ * or null. It never moves a checkout that is on another branch or has tracked changes.
+ */
+export function followMain(path: string, main: string): string | null {
+  const head = git(path, &quot;symbolic-ref&quot;, &quot;--short&quot;, &quot;HEAD&quot;).out;
+  if (head !== main) return `main checkout not updated: it is on ${head || &quot;a detached HEAD&quot;}`;
+  const dirty = git(path, &quot;status&quot;, &quot;--porcelain&quot;, &quot;--untracked-files=no&quot;).out.split(&quot;\n&quot;).filter(Boolean).map((l) =&gt; l.slice(3));
+  if (dirty.length) return `main checkout not updated: it has changes in ${dirty.join(&quot;, &quot;)}`;
+  const ff = git(path, &quot;merge&quot;, &quot;--ff-only&quot;, &quot;-q&quot;, `origin/${main}`);
+  return ff.ok ? null : `main checkout not updated: ${ff.out.split(&quot;\n&quot;)[0]}`;
+}
+</pre></details><details class="src"><summary><code>lib/json.ts</code><span class="quiet">26 lines</span></summary><pre>// The factory&#39;s JSON state files. The only module that parses one: a missing file is the caller&#39;s fallback, a file
+// that does not parse is a bug and throws. The write goes through a rename, so a reader never sees half a file.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from &quot;node:fs&quot;;
+import { dirname } from &quot;node:path&quot;;
+
+/** The JSON in `file`, or `fallback` when there is no file. A file that does not parse throws. */
+export function readJsonOr&lt;T&gt;(file: string, fallback: T): T {
+  let text: string;
+  try { text = readFileSync(file, &quot;utf8&quot;); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === &quot;ENOENT&quot;) return fallback;
+    throw e;
+  }
+  return JSON.parse(text);
+}
+
+/** The temp file a writer fills beside `file` before it renames it over `file`: named by pid, so two processes do not collide. */
+export const tmpName = (file: string): string =&gt; `${file}.${process.pid}.tmp`;
+
+/** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. `mode` sets the new file&#39;s permissions. */
+export function writeJson(file: string, value: unknown, mode?: number): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = tmpName(file);
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + &quot;\n&quot;, { mode });
+  renameSync(tmp, file);
+}
+</pre></details><details class="src"><summary><code>hooks/lib/handshake.ts</code><span class="quiet">83 lines</span></summary><pre>/**
+ * Hooks are separate processes. A Pre* event leaves a small file that the
+ * matching Post* event picks up, so a span can carry its real start time and
+ * its parent. Files live in ~/.aleph/spool (ALEPH_SPOOL overrides, for tests).
+ * Each kind of record has its own typed slot below; the key prefix is the kind.
+ */
+import { readJsonOr } from &quot;../../lib/json.ts&quot;;
+import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { alephPath } from &quot;../../lib/paths.ts&quot;;
+import type { Snapshot } from &quot;./snapshot.ts&quot;;
+
+export function spoolDir(): string {
+  return alephPath(&quot;ALEPH_SPOOL&quot;, &quot;spool&quot;);
+}
+
+function pathFor(key: string): string {
+  return join(spoolDir(), `${key.replace(/[^A-Za-z0-9_.:-]/g, &quot;_&quot;)}.json`);
+}
+
+function slot&lt;T&gt;(key: string) {
+  const get = (): T | null =&gt; {
+    return readJsonOr&lt;T | null&gt;(pathFor(key), null);
+  };
+  return {
+    get,
+    set(value: T): void {
+      mkdirSync(spoolDir(), { recursive: true });
+      writeFileSync(pathFor(key), JSON.stringify(value));
+    },
+    take(): T | null {
+      const value = get();
+      if (value !== null) { try { unlinkSync(pathFor(key)); } catch { /* already gone */ } }
+      return value;
+    },
+  };
+}
+
+/** Left by SessionStart: the name, tags and cwd every turn trace repeats, and the last turn&#39;s trace for a rating. */
+export interface Session { start: number; name?: string; tags?: string[]; cwd?: string; lastTraceId?: string }
+export const session = (id: string) =&gt; slot&lt;Session&gt;(`session:${id}`);
+
+/** The turn&#39;s start and prompt, from UserPromptSubmit to Stop. */
+export const turn = (promptId: string) =&gt; slot&lt;{ start: number; input: string }&gt;(`turn:${promptId}`);
+
+/** A tool call&#39;s start and input, from PreToolUse to PostToolUse. */
+export const tool = (toolUseId: string) =&gt; slot&lt;{ start: number; input: unknown }&gt;(`tool:${toolUseId}`);
+
+/** A subagent&#39;s span and trace, from SubagentStart to SubagentStop. */
+export const agent = (agentId: string) =&gt; slot&lt;{ start: number; spanId: string; parentSpanId?: string; traceId: string }&gt;(`agent:${agentId}`);
+
+/** The repo&#39;s snapshot at the prompt, for the verify gate at Stop. */
+export const snap = (promptId: string) =&gt; slot&lt;Snapshot&gt;(`snap:${promptId}`);
+
+/** A count of denials: the verify gate&#39;s of a turn, or the refit-code hook&#39;s blocks of a session. */
+export function denials(promptId: string) {
+  const s = slot&lt;number&gt;(`denials:${promptId}`);
+  return {
+    count: (): number =&gt; s.get() ?? 0,
+    add: (): void =&gt; s.set((s.get() ?? 0) + 1),
+    clear: (): void =&gt; void s.take(),
+  };
+}
+
+/** A mark for something that happens once per key, such as a block once per session. */
+export function once(key: string) {
+  const s = slot&lt;number&gt;(key);
+  return { seen: (): boolean =&gt; s.get() !== null, mark: (): void =&gt; s.set(Date.now()) };
+}
+
+const MAX_AGE_MS = 86_400_000;
+
+/** A Pre event whose Post never came leaves a file behind; drop anything older than a day. */
+export function prune(): void {
+  let names: string[];
+  try { names = readdirSync(spoolDir()); } catch { return; }
+  const cutoff = Date.now() - MAX_AGE_MS;
+  for (const name of names) {
+    const path = join(spoolDir(), name);
+    try { if (statSync(path).mtimeMs &lt; cutoff) unlinkSync(path); } catch { /* raced with another hook */ }
+  }
+}
+</pre></details></div></details></div></div></main>
+</div>
+<script>
+const v = document.getElementById("view"), f = {};
+const apply = () => { let c = 0; for (const r of v.querySelectorAll("#holds-log tbody tr")) { const on = Object.entries(f).every(([k, x]) => !x || r.dataset[k] === x); r.hidden = !on; c += on; } v.querySelector("#holds .dp-aside").textContent = c; };
+const set = (k, x) => { f[k] = x; const s = v.querySelector(`select[name="${k}"]`); if (s) s.value = x; };
+v.addEventListener("change", (e) => { if (e.target.matches(".fbar select")) { f[e.target.name] = e.target.value; apply(); } });
+v.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.closest(".seg[data-name]")) { for (const x of b.parentElement.children) x.setAttribute("aria-pressed", x === b); f[b.parentElement.dataset.name] = b.dataset.value; apply(); }
+  else if (b.dataset.show !== undefined) { f.who = ""; for (const x of v.querySelectorAll(".seg[data-name=who] button")) x.setAttribute("aria-pressed", x.dataset.value === ""); if (b.dataset.show) set("hook", b.dataset.show); set("kind", b.dataset.kind ?? ""); set("out", ""); apply(); document.getElementById("holds").scrollIntoView({ behavior: "smooth" }); }
+});
+</script>
+</body></html>

@@ -1,0 +1,1046 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>obs · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<link rel="stylesheet" href="app.css">
+<style>.o-caught{background:var(--done)}.o-handoff{background:var(--done);opacity:.55}.o-held{background:var(--muted)}.o-false{background:var(--error)}.o-none{background:var(--need)}.o-dead{background:var(--rule)}.hooks .tbl td.wide .meter{min-width:160px}.hooks details.src{margin-top:var(--sp-8)}.hooks details.src summary{cursor:pointer;display:flex;gap:var(--sp-10);align-items:baseline}.hooks details.src pre{max-height:40em;overflow:auto;margin:var(--sp-6) 0 0;padding:var(--sp-8) var(--sp-10);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-tag);font:var(--fs-xs)/1.5 var(--mono);white-space:pre}</style></head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Views"><a class="mark" href="#/"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/><circle cx="35.5" cy="64.5" r="20" fill="currentColor"/></svg>aleph</a><div id="nav"><ul><li class="head">Factory</li><li><a href="#/" title="Status"><wa-icon name="gauge-high" aria-hidden="true"></wa-icon><span class="lbl">Status</span></a></li><li><a href="#/automation" title="Automation"><wa-icon name="shield-halved" aria-hidden="true"></wa-icon><span class="lbl">Automation</span></a></li><li><a href="#/factory/agents" title="Agents"><wa-icon name="robot" aria-hidden="true"></wa-icon><span class="lbl">Agents</span></a></li><li><a href="#/issues" title="Issues"><wa-icon name="list-check" aria-hidden="true"></wa-icon><span class="lbl">Issues</span></a></li><li><a href="#/factory/jobs" title="Jobs"><wa-icon name="stopwatch" aria-hidden="true"></wa-icon><span class="lbl">Jobs</span></a></li><li><a href="#/ideas" title="Ideas"><wa-icon name="lightbulb" aria-hidden="true"></wa-icon><span class="lbl">Ideas</span></a></li><li><a href="#/explore" title="Explore"><wa-icon name="magnifying-glass-chart" aria-hidden="true"></wa-icon><span class="lbl">Explore</span></a></li><li class="head">Claude</li><li><a href="#/sessions" title="Sessions"><wa-icon name="comments" aria-hidden="true"></wa-icon><span class="lbl">Sessions</span></a></li><li><a href="#/memory" title="Memory"><wa-icon name="brain" aria-hidden="true"></wa-icon><span class="lbl">Memory</span></a></li><li><a href="#/hooks" title="Hooks" aria-current="page"><wa-icon name="plug" aria-hidden="true"></wa-icon><span class="lbl">Hooks</span></a></li></ul></div></nav>
+<main><div id="view"><div class="page dp-page hooks"><nav class="crumb" aria-label="Breadcrumb"><a href="index.html" aria-label="Back">«</a> <a href="index.html">hooks</a> / <span>Stop</span> / <span>obs</span></nav><header class="ph"><h1>obs</h1><span class="count">Stop</span><div class="aside">Last 7 days</div></header><dl class="facts"><div><dt>Event</dt><dd>Stop</dd></div><div><dt>Matcher</dt><dd>all</dd></div><div><dt>Command</dt><dd><code>bun hooks/obs.ts</code></dd></div><div><dt>Mode</dt><dd>sync</dd></div><div><dt>Timeout</dt><dd>5 s</dd></div><div><dt>Workers</dt><dd><span class="badge run">runs</span></dd></div></dl><details class="dp-panel dp-fold" open><summary><span>Holds</span><span class="dp-aside">0</span></summary><div class="dp-body"><div class="empty"><p>No data</p></div></div></details><details class="dp-panel dp-fold" open><summary><span>Errors</span><span class="dp-aside">44</span></summary><div class="dp-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Cause</th><th>Event</th><th class="num">Errors (all hooks)</th><th class="num">Sessions</th><th>Fix</th><th>Last</th></tr></thead><tbody><tr><td>Worktree gone (worker)</td><td>PostToolUse, PostToolUseFailure, PreToolUse</td><td class="num">38</td><td class="num">6</td><td>Keep until worker ends</td><td class="time">Nov 15, 5:53 AM</td></tr><tr><td>Worktree gone (cwd)</td><td>Stop</td><td class="num">6</td><td class="num">3</td><td>Fixed d90a0602 (one way)</td><td class="time">Nov 16, 11:21 AM</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Source</span><span class="dp-aside">11</span></summary><div class="dp-body"><details class="src" open><summary><code>hooks/obs.ts</code><span class="quiet">312 lines</span></summary><pre>#!/usr/bin/env bun
+/**
+ * Every observability hook is this one script. It reads the event from stdin,
+ * turns it into one OTLP span, and posts it to Langfuse. Wired with
+ * `async: true` (except Stop, StopFailure and SessionEnd, which the session
+ * would not wait for), so it never blocks a turn and its stdout is ignored.
+ *
+ * One trace per turn, all in one Langfuse session, so the Sessions page shows
+ * a session as its prompts and replies:
+ *
+ *   turn (root)  →  tool | agent → tool | generation | event
+ */
+import { langfuseConfig, sessionEnvironment } from &quot;../lib/env.ts&quot;;
+import { scopeOfCwd } from &quot;../lib/paths.ts&quot;;
+import { agent, prune, session, tool, turn } from &quot;./lib/handshake.ts&quot;;
+import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from &quot;../lib/otlp.ts&quot;;
+import { parseRating } from &quot;./lib/rating.ts&quot;;
+import { traceAttrs } from &quot;./lib/trace.ts&quot;;
+import { readEntries } from &quot;./lib/digest.ts&quot;;
+import { readLines } from &quot;../lib/jsonl.ts&quot;;
+import { decide, judgeChoice, type Question } from &quot;../lib/jev.ts&quot;;
+import { costDetails, type Usage } from &quot;../lib/pricing.ts&quot;;
+
+type Payload = Record&lt;string, any&gt;;
+
+const input: Payload = JSON.parse(await Bun.stdin.text());
+const cfg = langfuseConfig();
+const sessionId: string | undefined = input.session_id;
+if (!cfg || !sessionId) process.exit(0);
+
+// `ALEPH_NOW` fixes the clock for tests, as in lib/todo.ts `clock`.
+const now = process.env.ALEPH_NOW ? Date.parse(process.env.ALEPH_NOW) : Date.now();
+const event: string = input.hook_event_name ?? &quot;unknown&quot;;
+const sessionSlot = session(sessionId);
+const turnSlot = input.prompt_id ? turn(input.prompt_id) : null;
+const agentSlot = input.agent_id ? agent(input.agent_id) : null;
+
+// SessionStart posts nothing. It leaves the name, tags and cwd that every turn trace repeats.
+if (event === &quot;SessionStart&quot;) {
+  prune();
+  const project = input.cwd ? scopeOfCwd(input.cwd) : undefined;
+  sessionSlot.set({
+    start: now,
+    name: project,
+    cwd: input.cwd,
+    tags: [
+      `source:${input.source ?? &quot;unknown&quot;}`,
+      `mode:${input.permission_mode ?? &quot;unknown&quot;}`,
+      ...(project ? [`project:${project}`] : []),
+    ],
+  });
+  process.exit(0);
+}
+
+// A span belongs to its turn&#39;s trace. Inside a subagent the agent&#39;s handshake remembers which.
+const resolvedTraceId = input.prompt_id ? turnTraceIdFor(input.prompt_id) : agentSlot?.get()?.traceId;
+if (!resolvedTraceId) process.exit(0);
+const traceId: string = resolvedTraceId;
+const turnSpanId = input.prompt_id ? turnSpanIdFor(input.prompt_id) : undefined;
+
+/** Tool spans inside a subagent hang off the agent span; everything else off the turn. */
+function parentForChild(): string | undefined {
+  if (agentSlot) return agentSlot.get()?.spanId;
+  return turnSpanId;
+}
+
+function scalars(payload: Payload, skip: string[]): Record&lt;string, AttrValue&gt; {
+  const out: Record&lt;string, AttrValue&gt; = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (skip.includes(key) || value === null || value === undefined) continue;
+    if (typeof value === &quot;string&quot; || typeof value === &quot;number&quot; || typeof value === &quot;boolean&quot;) out[`langfuse.observation.metadata.${key}`] = value;
+  }
+  return out;
+}
+
+const known = sessionSlot.get();
+const base = traceAttrs(input);
+
+function span(name: string, type: string, start: number, extra: Record&lt;string, AttrValue | undefined | null&gt;, opts: { id?: string; parent?: string; error?: string; end?: number } = {}): Span {
+  const s: Span = {
+    traceId,
+    spanId: opts.id ?? spanId(),
+    parentSpanId: opts.parent,
+    name,
+    kind: 1,
+    startTimeUnixNano: nano(start),
+    endTimeUnixNano: nano(Math.max(opts.end ?? now, start)),
+    attributes: attrs({ ...base, &quot;langfuse.observation.type&quot;: type, ...extra }),
+  };
+  if (opts.error) s.status = { code: 2, message: opts.error.slice(0, 200) };
+  return s;
+}
+
+/**
+ * The turn is the trace&#39;s root, posted once at the prompt and again, with the
+ * same id, when it ends: Langfuse updates the span in place. Its input and
+ * output are the trace&#39;s, which is what the Sessions page shows.
+ */
+function turnSpan(start: number, output: string | undefined, error?: string, extra: Record&lt;string, AttrValue | undefined&gt; = {}): Span {
+  const prompt = turnSlot!.get()?.input;
+  const inputText = prompt === undefined ? undefined : truncate(prompt);
+  const outputText = output === undefined ? undefined : truncate(output);
+  return span(&quot;turn&quot;, &quot;agent&quot;, start, {
+    &quot;langfuse.observation.input&quot;: inputText,
+    &quot;langfuse.trace.input&quot;: inputText,
+    &quot;langfuse.observation.output&quot;: outputText,
+    &quot;langfuse.trace.output&quot;: outputText,
+    &quot;langfuse.observation.level&quot;: error ? &quot;ERROR&quot; : &quot;DEFAULT&quot;,
+    &quot;langfuse.observation.metadata.prompt_id&quot;: input.prompt_id,
+    ...extra,
+  }, { id: turnSpanId, error });
+}
+
+const TASK_TYPES: Record&lt;string, string&gt; = {
+  code_edit: &quot;The turn mainly writes or changes source code&quot;,
+  debug: &quot;The turn mainly finds or fixes the cause of a bug, failure or error&quot;,
+  research: &quot;The turn mainly reads, searches or investigates to answer a question&quot;,
+  writing: &quot;The turn mainly writes prose: docs, messages, specs, summaries&quot;,
+  planning: &quot;The turn mainly plans, designs or breaks down work without doing it&quot;,
+  ops: &quot;The turn mainly does git, deploys, config or factory operations&quot;,
+  chat: &quot;The turn is conversation with no work product&quot;,
+  other: &quot;None of the other kinds fits&quot;,
+};
+const TASK_TYPE_QUESTION: Question = { type: &quot;choice&quot;, instructions: &quot;Which kind of turn is this?&quot;, criteria: TASK_TYPES };
+
+/** Jev&#39;s top task type for the turn and its probability, or {} when Jev is off, has nothing to read, errors or is late. */
+async function taskType(prompt: string | undefined, finalMessage: string): Promise&lt;Record&lt;string, AttrValue&gt;&gt; {
+  if (!prompt?.trim() || judgeChoice() === &quot;haiku&quot;) return {};
+  try {
+    const d = await decide({ user_prompt: prompt, final_message: finalMessage }, { task_type: TASK_TYPE_QUESTION }, 1500);
+    const a = d.answers.task_type;
+    if (a.type !== &quot;choice&quot; || !(a.choice in TASK_TYPES)) return {};
+    const p = a.probabilities?.[a.choice] ?? a.confidence;
+    return {
+      &quot;langfuse.trace.metadata.task_type&quot;: a.choice,
+      ...(typeof p === &quot;number&quot; ? { &quot;langfuse.trace.metadata.task_type_p&quot;: p } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Whether an assistant entry carries the final message. An empty message has nothing to wait for. */
+function landed(entries: Record&lt;string, any&gt;[], finalMessage: string): boolean {
+  const needle = finalMessage.trim().slice(0, 80);
+  return !needle || entries.some((e) =&gt; e.type === &quot;assistant&quot; &amp;&amp; Array.isArray(e.message?.content)
+    &amp;&amp; e.message.content.some((block: any) =&gt; block.type === &quot;text&quot; &amp;&amp; typeof block.text === &quot;string&quot; &amp;&amp; block.text.includes(needle)));
+}
+
+/**
+ * Stop fires while the last assistant entry may still be on its way to disk
+ * (measured: the final request was missing from the transcript at Stop). Wait,
+ * briefly, until an assistant entry carries the final message. Only the late
+ * copy of the hook waits: the Stop hook is synchronous.
+ */
+function settledEntries(transcriptPath: string, promptId: string, finalMessage: string) {
+  for (let attempt = 0; attempt &lt; 20; attempt++) {
+    const entries = readEntries(transcriptPath, promptId);
+    if (landed(entries, finalMessage)) return entries;
+    Bun.sleepSync(100);
+  }
+  return readEntries(transcriptPath, promptId);
+}
+
+/**
+ * One generation per API request in these entries. Assistant entries come one per
+ * content block and repeat the request&#39;s usage, so dedupe on requestId. The
+ * span runs from the previous entry&#39;s timestamp to this one&#39;s: the model was
+ * the only thing happening in between.
+ */
+function generations(entries: Record&lt;string, any&gt;[], parent: string | undefined): Span[] {
+  const out: Span[] = [];
+  const seen = new Set&lt;string&gt;();
+  let previous = 0;
+  for (const entry of entries) {
+    const at = Date.parse(entry.timestamp ?? &quot;&quot;) || previous || now;
+    const usage = entry.message?.usage;
+    const requestId: string | undefined = entry.requestId;
+    if (entry.type === &quot;assistant&quot; &amp;&amp; usage &amp;&amp; requestId &amp;&amp; !seen.has(requestId)) {
+      seen.add(requestId);
+      const model: string = entry.message?.model ?? &quot;unknown&quot;;
+      const usageDetails: Usage = { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 };
+      if (usage.cache_read_input_tokens) usageDetails.cache_read_input_tokens = usage.cache_read_input_tokens;
+      if (usage.cache_creation_input_tokens) usageDetails.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+      const cost = costDetails(model, usageDetails);
+      out.push(span(model, &quot;generation&quot;, previous || at, {
+        &quot;langfuse.observation.model.name&quot;: model,
+        &quot;langfuse.observation.usage_details&quot;: JSON.stringify(usageDetails),
+        &quot;langfuse.observation.cost_details&quot;: cost ? JSON.stringify(cost) : undefined,
+        &quot;langfuse.observation.metadata.request_id&quot;: requestId,
+      }, { parent, end: at }));
+    }
+    previous = at;
+  }
+  return out;
+}
+
+/**
+ * One event per assistant text block in this turn, in transcript order, at the
+ * block&#39;s timestamp, so the chat view can show what Claude said between tool
+ * calls. Thinking blocks are stored empty and are skipped.
+ */
+function textBlocks(entries: Record&lt;string, any&gt;[]): Span[] {
+  const out: Span[] = [];
+  let previous = 0;
+  for (const entry of entries) {
+    const at = Date.parse(entry.timestamp ?? &quot;&quot;) || previous || now;
+    previous = at;
+    if (entry.type !== &quot;assistant&quot; || !Array.isArray(entry.message?.content)) continue;
+    for (const block of entry.message.content) {
+      if (block.type !== &quot;text&quot; || typeof block.text !== &quot;string&quot; || !block.text.trim()) continue;
+      out.push(span(&quot;text&quot;, &quot;event&quot;, at, {
+        &quot;langfuse.observation.output&quot;: truncate(block.text),
+        &quot;langfuse.observation.metadata.seq&quot;: out.length,
+      }, { parent: turnSpanId, end: at }));
+    }
+  }
+  return out;
+}
+
+const spans: Span[] = [];
+const scores: Score[] = [];
+
+switch (event) {
+  case &quot;UserPromptSubmit&quot;: {
+    turnSlot!.set({ start: now, input: input.prompt ?? &quot;&quot; });
+    spans.push(turnSpan(now, undefined));
+    // &quot;N/10&quot; in a prompt rates the previous reply; the session handshake remembers which trace that was
+    const previous = known?.lastTraceId;
+    sessionSlot.set({ ...(known ?? { start: now }), lastTraceId: traceId });
+    const rating = parseRating(input.prompt ?? &quot;&quot;);
+    if (rating !== null &amp;&amp; previous) scores.push({ traceId: previous, name: &quot;rating&quot;, value: rating, comment: input.prompt, environment: sessionEnvironment() });
+    break;
+  }
+
+  case &quot;PreToolUse&quot;:
+    if (input.tool_use_id) tool(input.tool_use_id).set({ start: now, input: input.tool_input });
+    process.exit(0);
+
+  case &quot;PostToolUse&quot;:
+  case &quot;PostToolUseFailure&quot;: {
+    const hs = input.tool_use_id ? tool(input.tool_use_id).take() : null;
+    const failed = event === &quot;PostToolUseFailure&quot;;
+    const toolName: string = input.tool_name ?? &quot;tool&quot;;
+    const name = toolName === &quot;Skill&quot; &amp;&amp; input.tool_input?.skill ? `skill:${input.tool_input.skill}` : toolName;
+    const output = failed ? input.tool_error : (input.tool_response ?? input.tool_output);
+    spans.push(span(name, &quot;tool&quot;, hs?.start ?? now, {
+      &quot;langfuse.observation.input&quot;: truncate(input.tool_input ?? hs?.input ?? {}),
+      &quot;langfuse.observation.output&quot;: output === undefined ? undefined : truncate(output),
+      &quot;langfuse.observation.level&quot;: failed ? &quot;ERROR&quot; : &quot;DEFAULT&quot;,
+      &quot;langfuse.observation.metadata.tool_use_id&quot;: input.tool_use_id,
+      &quot;langfuse.observation.metadata.tool&quot;: toolName,
+      &quot;langfuse.observation.metadata.agent_type&quot;: input.agent_type,
+    }, { parent: parentForChild(), error: failed ? truncate(input.tool_error, 200) : undefined }));
+    break;
+  }
+
+  case &quot;SubagentStart&quot;:
+    agentSlot?.set({ start: now, spanId: spanId(), parentSpanId: turnSpanId, traceId });
+    process.exit(0);
+
+  case &quot;SubagentStop&quot;: {
+    const hs = agentSlot?.take();
+    const agentSpan = span(input.agent_type ?? &quot;subagent&quot;, &quot;agent&quot;, hs?.start ?? now, {
+      &quot;langfuse.observation.output&quot;: truncate(input.last_assistant_message ?? &quot;&quot;),
+      &quot;langfuse.observation.metadata.agent_id&quot;: input.agent_id,
+      &quot;langfuse.observation.metadata.agent_type&quot;: input.agent_type,
+    }, { id: hs?.spanId, parent: hs?.parentSpanId ?? turnSpanId });
+    spans.push(agentSpan);
+    if (input.agent_transcript_path) spans.push(...generations(readLines(input.agent_transcript_path), agentSpan.spanId));
+    break;
+  }
+
+  case &quot;Stop&quot;:
+  case &quot;StopFailure&quot;: {
+    // get, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
+    const start = turnSlot!.get()?.start ?? now;
+    const failed = event === &quot;StopFailure&quot;;
+    const message: string = input.last_assistant_message ?? &quot;&quot;;
+    // a failed turn&#39;s message is the API error, which never reaches the transcript, so do not wait for it
+    if (!failed &amp;&amp; input.transcript_path &amp;&amp; !process.env.ALEPH_OBS_LATE &amp;&amp; !landed(readEntries(input.transcript_path, input.prompt_id), message)) {
+      const late = Bun.spawn([&quot;bun&quot;, import.meta.path], { detached: true, stdin: &quot;pipe&quot;, stdout: &quot;ignore&quot;, stderr: &quot;ignore&quot;, env: { ...process.env, ALEPH_OBS_LATE: &quot;1&quot;, ALEPH_NOW: new Date(now).toISOString() } });
+      late.stdin.write(JSON.stringify(input));
+      await late.stdin.end();
+      late.unref();
+      process.exit(0);
+    }
+    const tag = failed ? {} : await taskType(turnSlot!.get()?.input, message);
+    spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || &quot;StopFailure&quot;) : undefined, tag));
+    if (input.transcript_path) {
+      const entries = settledEntries(input.transcript_path, input.prompt_id, failed ? &quot;&quot; : message);
+      spans.push(...generations(entries, turnSpanId));
+      if (!failed) spans.push(...textBlocks(entries));
+    }
+    break;
+  }
+
+  default: {
+    // PreCompact, PostCompact, PermissionDenied, SessionEnd, anything new that arrives inside a turn.
+    spans.push(span(event, &quot;event&quot;, now, {
+      ...scalars(input, [&quot;session_id&quot;, &quot;cwd&quot;, &quot;hook_event_name&quot;, &quot;transcript_path&quot;, &quot;prompt_id&quot;]),
+      &quot;langfuse.observation.level&quot;: event === &quot;PermissionDenied&quot; ? &quot;WARNING&quot; : &quot;DEFAULT&quot;,
+      &quot;langfuse.observation.input&quot;: input.tool_input ? truncate(input.tool_input) : undefined,
+    }, { parent: parentForChild() }));
+  }
+}
+
+// The turn-ending hooks run synchronously (an async hook is killed when the session exits), so keep their wait short.
+const timeoutMs = event === &quot;Stop&quot; || event === &quot;StopFailure&quot; || event === &quot;SessionEnd&quot; ? 3000 : 8000;
+const results = await Promise.all([postSpans(cfg, spans, timeoutMs), ...scores.map((score) =&gt; postScore(cfg, score, timeoutMs))]);
+for (const result of results) if (!result.ok) console.error(`[aleph obs] ${event}: ${result.status ?? &quot;&quot;} ${result.error ?? &quot;&quot;}`.trim());
+</pre></details><details class="src"><summary><code>lib/env.ts</code><span class="quiet">99 lines</span></summary><pre>import { readFileSync } from &quot;node:fs&quot;;
+import { alephPath } from &quot;./paths.ts&quot;;
+
+export interface LangfuseConfig {
+  baseUrl: string;
+  publicKey: string;
+  secretKey: string;
+}
+
+/** True in a factory agent: the agent settings in jobs/lib/routing/models.ts set ALEPH_AGENT for the claude process of each role. */
+export const isAgent = (): boolean =&gt; Boolean(process.env.ALEPH_AGENT);
+
+/** The id of the job this process runs for, if any: the unit sets ALEPH_JOB_ID (jobs/lib/roles/unit.ts), and its children inherit it. */
+export const jobId = (): string | undefined =&gt; process.env.ALEPH_JOB_ID;
+
+/** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
+const envFile = (): string =&gt; alephPath(&quot;ALEPH_ENV_FILE&quot;, &quot;.env&quot;);
+
+/** One key from the dotenv file, never copied to process.env; null when the file or the key is missing. */
+function dotenvKey(name: string): string | null {
+  let text: string;
+  try { text = readFileSync(envFile(), &quot;utf8&quot;); } catch { return null; }
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`, &quot;m&quot;));
+  return m ? m[1].trim().replace(/^([&quot;&#39;])(.*)\1$/, &quot;$2&quot;) : null;
+}
+
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  return process.env.OPENROUTER_API_KEY || dotenvKey(&quot;OPENROUTER_API_KEY&quot;);
+}
+
+/** ANTHROPIC_API_KEY from the dotenv file only: a process that has it in its environment bills the API instead of the subscription. */
+export const anthropicKey = (): string | null =&gt; dotenvKey(&quot;ANTHROPIC_API_KEY&quot;);
+
+/**
+ * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
+ * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
+ * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
+ */
+export function loadDotenv(path = envFile()): void {
+  let text: string;
+  try { text = readFileSync(path, &quot;utf8&quot;); } catch { return; }
+  for (const raw of text.split(&quot;\n&quot;)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(&quot;#&quot;)) continue;
+    const eq = line.indexOf(&quot;=&quot;);
+    if (eq &lt; 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key.startsWith(&quot;LANGFUSE_&quot;)) continue;
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith(&#39;&quot;&#39;) &amp;&amp; value.endsWith(&#39;&quot;&#39;)) || (value.startsWith(&quot;&#39;&quot;) &amp;&amp; value.endsWith(&quot;&#39;&quot;))) value = value.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+export function langfuseConfig(): LangfuseConfig | null {
+  loadDotenv();
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  if (!publicKey || !secretKey) return null;
+  return { baseUrl: (process.env.LANGFUSE_BASE_URL ?? &quot;http://127.0.0.1:3010&quot;).replace(/\/+$/, &quot;&quot;), publicKey, secretKey };
+}
+
+/**
+ * Langfuse environment for the session: `ALEPH_ENV` if set (the live tests
+ * say `test`), else `headless` when an ancestor is `claude -p`, else `interactive`.
+ * The parent chain is the only place a hook can see how claude was started.
+ */
+export function classifyEnvironment(ancestorArgvs: string[][], override = process.env.ALEPH_ENV): string {
+  if (override) return override;
+  // claude is argv[0], or argv[1] behind a shell wrapper; only flags after it count
+  const headless = ancestorArgvs.some((argv) =&gt; {
+    const at = argv.slice(0, 2).findIndex((arg) =&gt; arg === &quot;claude&quot; || arg.endsWith(&quot;/claude&quot;));
+    return at &gt;= 0 &amp;&amp; argv.slice(at + 1).some((arg) =&gt; arg === &quot;-p&quot; || arg === &quot;--print&quot;);
+  });
+  return headless ? &quot;headless&quot; : &quot;interactive&quot;;
+}
+
+const DEPTH = 6;
+
+function ancestorArgvs(): string[][] {
+  const out: string[][] = [];
+  let pid = process.ppid;
+  for (let i = 0; i &lt; DEPTH &amp;&amp; pid &gt; 1; i++) {
+    let cmdline: string, status: string;
+    try { cmdline = readFileSync(`/proc/${pid}/cmdline`, &quot;utf8&quot;); status = readFileSync(`/proc/${pid}/status`, &quot;utf8&quot;); } catch { break; }
+    out.push(cmdline.split(&quot;\0&quot;).filter(Boolean));
+    pid = Number(status.match(/^PPid:\s*(\d+)/m)?.[1] ?? 0);
+  }
+  return out;
+}
+
+export function sessionEnvironment(): string {
+  return classifyEnvironment(ancestorArgvs());
+}
+
+/** The command whose output is the user gh-guard compares owners with when `ALEPH_GH_USER` is unset. */
+export const GH_USER_CMD = [&quot;gh&quot;, &quot;api&quot;, &quot;user&quot;, &quot;-q&quot;, &quot;.login&quot;];
+</pre></details><details class="src"><summary><code>lib/paths.ts</code><span class="quiet">64 lines</span></summary><pre>/**
+ * Where aleph&#39;s files live: under ~/.aleph unless an environment variable names the place. Home is
+ * HOME, else the OS&#39;s home folder, and a leading ~ in a variable is home; this module alone reads them.
+ * Each function reads at each call, and a path that a UI build reads touches its source (sources.ts).
+ */
+import { readFileSync } from &quot;node:fs&quot;;
+import { homedir } from &quot;node:os&quot;;
+import { basename, dirname, join, resolve } from &quot;node:path&quot;;
+import { readProjects } from &quot;./projects.ts&quot;;
+import { probe } from &quot;./git.ts&quot;;
+import { touch } from &quot;./sources.ts&quot;;
+
+/** HOME, else the OS&#39;s home folder. */
+export const home = (): string =&gt; process.env.HOME || homedir();
+
+/** `p` with a leading `~` as home. */
+export const expand = (p: string): string =&gt; (p === &quot;~&quot; || p.startsWith(&quot;~/&quot;) ? join(home(), p.slice(1)) : p);
+
+/**
+ * Chris&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
+ * `os.userInfo().homedir` follows HOME (Node&#39;s does not), so the file is read. Null when no entry is found.
+ */
+function passwdHome(): string | null {
+  const uid = String(process.getuid?.());
+  try {
+    const row = readFileSync(&quot;/etc/passwd&quot;, &quot;utf8&quot;).split(&quot;\n&quot;).map((l) =&gt; l.split(&quot;:&quot;)).find((f) =&gt; f[2] === uid);
+    return row?.[5] || null;
+  } catch { return null; }
+}
+const owner = passwdHome();
+const live = owner === null ? null : join(owner, &quot;.aleph&quot;);
+
+/**
+ * The variable `name`, expanded, else `rel` under ~/.aleph. Under `bun test` (NODE_ENV=test) a path in the live store
+ * throws: a test that reaches it, by a missing preload or an env restored to unset, wrote fixture events to the live log.
+ */
+export function alephPath(name: string, rel: string): string {
+  const p = expand(process.env[name] ?? join(home(), &quot;.aleph&quot;, rel));
+  if (process.env.NODE_ENV === &quot;test&quot; &amp;&amp; live !== null &amp;&amp; (p === live || p.startsWith(`${live}/`))) throw new Error(`a test reached the live store: ${name} unset, ${p}`);
+  return p;
+}
+
+/** The folder of Claude Code&#39;s transcripts, `&lt;project&gt;/&lt;session&gt;.jsonl`. */
+export const claudeProjects = (): string =&gt; expand(process.env.ALEPH_CLAUDE_PROJECTS ?? join(home(), &quot;.claude&quot;, &quot;projects&quot;));
+/** The vault folder. */
+export const vaultDir = (): string =&gt; { touch(&quot;vault&quot;); return alephPath(&quot;ALEPH_VAULT&quot;, &quot;vault&quot;); };
+/** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
+export const handoffsDir = (): string =&gt; { touch(&quot;handoffs&quot;); return expand(process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), &quot;handoffs&quot;)); };
+/** The paired devices of the UI: one `&lt;sha256-hex&gt; &lt;label&gt; &lt;iso-date&gt;` line each (ui/pair.ts). */
+export const uiTokensFile = (): string =&gt; alephPath(&quot;ALEPH_UI_TOKENS&quot;, &quot;ui-tokens&quot;);
+/** The notes pinned on UI pages, and the answers to them: the scope file of the aleph-tools notes handler (ui/server.ts) and of `shelf note --file`. */
+export const annotationsFile = (): string =&gt; { touch(&quot;annotations&quot;); return alephPath(&quot;ALEPH_ANNOTATIONS&quot;, &quot;annotations.json&quot;); };
+
+/** The registry key of the repo that `cwd` is in, a worktree of it too; else the folder name of the main checkout. With `git` false: the key whose path holds `cwd`, else &quot;&quot;, and no git run. */
+export function scopeOfCwd(cwd: string, git = true): string {
+  touch(&quot;registry&quot;);
+  const repos = readProjects().filter((p) =&gt; p.fields.path).map((p) =&gt; ({ key: p.name, path: expand(p.fields.path) }));
+  const at = (dir: string) =&gt; repos.find((r) =&gt; dir === r.path || dir.startsWith(`${r.path.replace(/\/+$/, &quot;&quot;)}/`));
+  if (!git) return at(cwd)?.key ?? &quot;&quot;;
+  const common = probe(cwd, &quot;rev-parse&quot;, &quot;--path-format=absolute&quot;, &quot;--git-common-dir&quot;);
+  const root = common.ok ? dirname(common.out) : cwd;
+  return (at(cwd) ?? at(root))?.key ?? basename(root);
+}
+</pre></details><details class="src"><summary><code>hooks/lib/handshake.ts</code><span class="quiet">83 lines</span></summary><pre>/**
+ * Hooks are separate processes. A Pre* event leaves a small file that the
+ * matching Post* event picks up, so a span can carry its real start time and
+ * its parent. Files live in ~/.aleph/spool (ALEPH_SPOOL overrides, for tests).
+ * Each kind of record has its own typed slot below; the key prefix is the kind.
+ */
+import { readJsonOr } from &quot;../../lib/json.ts&quot;;
+import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { alephPath } from &quot;../../lib/paths.ts&quot;;
+import type { Snapshot } from &quot;./snapshot.ts&quot;;
+
+export function spoolDir(): string {
+  return alephPath(&quot;ALEPH_SPOOL&quot;, &quot;spool&quot;);
+}
+
+function pathFor(key: string): string {
+  return join(spoolDir(), `${key.replace(/[^A-Za-z0-9_.:-]/g, &quot;_&quot;)}.json`);
+}
+
+function slot&lt;T&gt;(key: string) {
+  const get = (): T | null =&gt; {
+    return readJsonOr&lt;T | null&gt;(pathFor(key), null);
+  };
+  return {
+    get,
+    set(value: T): void {
+      mkdirSync(spoolDir(), { recursive: true });
+      writeFileSync(pathFor(key), JSON.stringify(value));
+    },
+    take(): T | null {
+      const value = get();
+      if (value !== null) { try { unlinkSync(pathFor(key)); } catch { /* already gone */ } }
+      return value;
+    },
+  };
+}
+
+/** Left by SessionStart: the name, tags and cwd every turn trace repeats, and the last turn&#39;s trace for a rating. */
+export interface Session { start: number; name?: string; tags?: string[]; cwd?: string; lastTraceId?: string }
+export const session = (id: string) =&gt; slot&lt;Session&gt;(`session:${id}`);
+
+/** The turn&#39;s start and prompt, from UserPromptSubmit to Stop. */
+export const turn = (promptId: string) =&gt; slot&lt;{ start: number; input: string }&gt;(`turn:${promptId}`);
+
+/** A tool call&#39;s start and input, from PreToolUse to PostToolUse. */
+export const tool = (toolUseId: string) =&gt; slot&lt;{ start: number; input: unknown }&gt;(`tool:${toolUseId}`);
+
+/** A subagent&#39;s span and trace, from SubagentStart to SubagentStop. */
+export const agent = (agentId: string) =&gt; slot&lt;{ start: number; spanId: string; parentSpanId?: string; traceId: string }&gt;(`agent:${agentId}`);
+
+/** The repo&#39;s snapshot at the prompt, for the verify gate at Stop. */
+export const snap = (promptId: string) =&gt; slot&lt;Snapshot&gt;(`snap:${promptId}`);
+
+/** A count of denials: the verify gate&#39;s of a turn, or the refit-code hook&#39;s blocks of a session. */
+export function denials(promptId: string) {
+  const s = slot&lt;number&gt;(`denials:${promptId}`);
+  return {
+    count: (): number =&gt; s.get() ?? 0,
+    add: (): void =&gt; s.set((s.get() ?? 0) + 1),
+    clear: (): void =&gt; void s.take(),
+  };
+}
+
+/** A mark for something that happens once per key, such as a block once per session. */
+export function once(key: string) {
+  const s = slot&lt;number&gt;(key);
+  return { seen: (): boolean =&gt; s.get() !== null, mark: (): void =&gt; s.set(Date.now()) };
+}
+
+const MAX_AGE_MS = 86_400_000;
+
+/** A Pre event whose Post never came leaves a file behind; drop anything older than a day. */
+export function prune(): void {
+  let names: string[];
+  try { names = readdirSync(spoolDir()); } catch { return; }
+  const cutoff = Date.now() - MAX_AGE_MS;
+  for (const name of names) {
+    const path = join(spoolDir(), name);
+    try { if (statSync(path).mtimeMs &lt; cutoff) unlinkSync(path); } catch { /* raced with another hook */ }
+  }
+}
+</pre></details><details class="src"><summary><code>lib/otlp.ts</code><span class="quiet">110 lines</span></summary><pre>/**
+ * OTLP/HTTP JSON straight to Langfuse. No SDK: a hook is a fresh process that
+ * lives for one event, so the whole exporter is one fetch.
+ */
+import { createHash, randomBytes } from &quot;node:crypto&quot;;
+import type { LangfuseConfig } from &quot;./env.ts&quot;;
+import { auth } from &quot;./langfuse.ts&quot;;
+
+const MAX_FIELD = 4096;
+
+export type AttrValue = string | number | boolean | string[];
+type OtlpAttr = { key: string; value: Record&lt;string, unknown&gt; };
+
+export interface Span {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  startTimeUnixNano: string;
+  endTimeUnixNano: string;
+  attributes: OtlpAttr[];
+  kind: number;
+  status?: { code: number; message?: string };
+}
+
+/** A trace id from any string; the live test uses it for a throwaway session. */
+export function traceIdFor(seed: string): string {
+  return createHash(&quot;sha256&quot;).update(seed).digest(&quot;hex&quot;).slice(0, 32);
+}
+
+/** One turn, one trace: the id is a pure function of the prompt id, so every hook lands in the same trace. */
+export function turnTraceIdFor(promptId: string): string {
+  return traceIdFor(`turn:${promptId}`);
+}
+
+export function spanId(): string {
+  return randomBytes(8).toString(&quot;hex&quot;);
+}
+
+/** The turn span id is a pure function of the prompt id, so any hook can parent to it. */
+export function turnSpanIdFor(promptId: string): string {
+  return createHash(&quot;sha256&quot;).update(`turn:${promptId}`).digest(&quot;hex&quot;).slice(0, 16);
+}
+
+export function nano(ms: number): string {
+  return `${BigInt(Math.round(ms))}000000`;
+}
+
+export function truncate(value: unknown, max = MAX_FIELD): string {
+  const text = typeof value === &quot;string&quot; ? value : JSON.stringify(value) ?? &quot;&quot;;
+  if (text.length &lt;= max) return text;
+  return `${text.slice(0, max)}…[+${text.length - max} chars]`;
+}
+
+function encode(value: AttrValue): Record&lt;string, unknown&gt; {
+  if (Array.isArray(value)) return { arrayValue: { values: value.map((item) =&gt; ({ stringValue: String(item) })) } };
+  if (typeof value === &quot;boolean&quot;) return { boolValue: value };
+  if (typeof value === &quot;number&quot;) return Number.isInteger(value) ? { intValue: String(value) } : { doubleValue: value };
+  return { stringValue: value };
+}
+
+export function attrs(record: Record&lt;string, AttrValue | undefined | null&gt;): OtlpAttr[] {
+  return Object.entries(record)
+    .filter(([, value]) =&gt; value !== undefined &amp;&amp; value !== null &amp;&amp; value !== &quot;&quot;)
+    .map(([key, value]) =&gt; ({ key, value: encode(value as AttrValue) }));
+}
+
+interface PostResult { ok: boolean; status?: number; error?: string }
+
+export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 8000): Promise&lt;PostResult&gt; {
+  const body = {
+    resourceSpans: [{
+      resource: { attributes: attrs({ &quot;service.name&quot;: &quot;aleph&quot;, &quot;service.version&quot;: &quot;0.1.0&quot; }) },
+      scopeSpans: [{ scope: { name: &quot;aleph-hooks&quot; }, spans }],
+    }],
+  };
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/public/otel/v1/traces`, {
+      method: &quot;POST&quot;,
+      headers: {
+        &quot;content-type&quot;: &quot;application/json&quot;,
+        authorization: auth(cfg),
+        &quot;x-langfuse-ingestion-version&quot;: &quot;4&quot;,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, error: res.ok ? undefined : (await res.text()).slice(0, 300) };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+export type Score = ({ traceId: string; sessionId?: never } | { sessionId: string; traceId?: never }) &amp; { name: string; value: number; comment?: string; environment?: string };
+
+/** A score on a trace or on a session, through the scores API: OTLP has no score. */
+export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3000): Promise&lt;PostResult&gt; {
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/public/scores`, {
+      method: &quot;POST&quot;,
+      headers: { &quot;content-type&quot;: &quot;application/json&quot;, authorization: auth(cfg) },
+      body: JSON.stringify({ ...score, dataType: &quot;NUMERIC&quot;, comment: score.comment?.slice(0, 500) }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, error: res.ok ? undefined : (await res.text()).slice(0, 300) };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+</pre></details><details class="src"><summary><code>hooks/lib/rating.ts</code><span class="quiet">9 lines</span></summary><pre>/**
+ * A prompt that carries &quot;N/10&quot; rates the previous reply. The score is N;
+ * the prompt is the comment. &quot;9/10/2026&quot; and &quot;3/100&quot; are not ratings.
+ */
+export function parseRating(prompt: string): number | null {
+  const m = prompt.match(/(?&lt;![\d/.])(10|\d)\s*\/\s*10(?![\d/])/);
+  return m ? Number(m[1]) : null;
+}
+</pre></details><details class="src"><summary><code>hooks/lib/trace.ts</code><span class="quiet">42 lines</span></summary><pre>/**
+ * The trace attributes of a turn, and one span posted on the turn&#39;s trace.
+ * Every span carries the trace attributes: a span without trace.name, tags and
+ * cwd lets Langfuse rename the trace after its root span.
+ */
+import { basename } from &quot;node:path&quot;;
+import { langfuseConfig, sessionEnvironment } from &quot;../../lib/env.ts&quot;;
+import { attrs, nano, postSpans, spanId, turnSpanIdFor, turnTraceIdFor, type AttrValue } from &quot;../../lib/otlp.ts&quot;;
+import { session } from &quot;./handshake.ts&quot;;
+
+type Attrs = Record&lt;string, AttrValue | undefined | null&gt;;
+
+/** Session, user, environment, trace name, tags and cwd (from the SessionStart handshake), and the hook event. */
+export function traceAttrs(input: Record&lt;string, any&gt;): Attrs {
+  const s = input.session_id ? session(input.session_id).get() : null;
+  return {
+    &quot;langfuse.session.id&quot;: input.session_id,
+    &quot;langfuse.user.id&quot;: &quot;chris&quot;,
+    &quot;langfuse.environment&quot;: sessionEnvironment(),
+    &quot;langfuse.trace.name&quot;: s?.name ?? (input.cwd ? basename(input.cwd) : undefined),
+    &quot;langfuse.trace.tags&quot;: s?.tags,
+    &quot;langfuse.trace.metadata.cwd&quot;: s?.cwd ?? input.cwd,
+    &quot;aleph.event&quot;: input.hook_event_name,
+  };
+}
+
+/** One span under the turn of `input.prompt_id`, from `start` to now. A failed post changes nothing. */
+export async function postTurnSpan(input: Record&lt;string, any&gt;, name: string, start: number, extra: Attrs): Promise&lt;void&gt; {
+  const cfg = langfuseConfig();
+  if (!cfg || !input.prompt_id) return;
+  await postSpans(cfg, [{
+    traceId: turnTraceIdFor(input.prompt_id),
+    spanId: spanId(),
+    parentSpanId: turnSpanIdFor(input.prompt_id),
+    name,
+    kind: 1,
+    startTimeUnixNano: nano(start),
+    endTimeUnixNano: nano(Math.max(Date.now(), start)),
+    attributes: attrs({ ...traceAttrs(input), ...extra }),
+  }], 3000);
+}
+</pre></details><details class="src"><summary><code>hooks/lib/digest.ts</code><span class="quiet">134 lines</span></summary><pre>/**
+ * What one prompt&#39;s turn did, read from the transcript: edits, commands and
+ * their output, other tool calls, the last user text, the final message.
+ */
+import { resultContent, resultEntries } from &quot;../../lib/toolresult.ts&quot;;
+import { jobId } from &quot;../../lib/env.ts&quot;;
+import { readLines, type Entry } from &quot;../../lib/jsonl.ts&quot;;
+
+const MAX_CHARS = 12_000;
+
+export interface Digest {
+  prompt: string;
+  edits: string[];
+  commands: string[];
+  /** The transcript cwd of each call, edits then commands; undefined when the entry has none. */
+  dirs: [string, string | undefined][];
+  items: string[];
+  finalMessage: string;
+  text: string;
+}
+
+const EDIT_TOOLS = new Set([&quot;Edit&quot;, &quot;Write&quot;, &quot;MultiEdit&quot;, &quot;NotebookEdit&quot;]);
+const TAIL = 500;
+
+function tail(value: unknown, max = TAIL): string {
+  const text = typeof value === &quot;string&quot; ? value : JSON.stringify(value) ?? &quot;&quot;;
+  return text.length &lt;= max ? text : `…${text.slice(-max)}`;
+}
+
+/** A Bash result keeps its first and last TAIL chars: a compound command prints its early output first. */
+export function bashResult(value: string): string {
+  if (value.length &lt;= 2 * TAIL) return value;
+  const cut = value.length - 2 * TAIL;
+  return `${value.slice(0, TAIL)}…(${cut} chars cut)…${value.slice(-TAIL)}`;
+}
+
+function head(value: unknown, max = 200): string {
+  const text = typeof value === &quot;string&quot; ? value : JSON.stringify(value) ?? &quot;&quot;;
+  return text.length &lt;= max ? text : `${text.slice(0, max)}…`;
+}
+
+export function resultText(entry: Entry): string {
+  const tur = entry.toolUseResult;
+  if (tur &amp;&amp; typeof tur === &quot;object&quot; &amp;&amp; !Array.isArray(tur) &amp;&amp; (&quot;stdout&quot; in tur || &quot;stderr&quot; in tur)) {
+    return [tur.stdout, tur.stderr ? `stderr: ${tur.stderr}` : &quot;&quot;].filter(Boolean).join(&quot;\n&quot;);
+  }
+  const block = Array.isArray(entry.message?.content) ? entry.message.content.find((c: Entry) =&gt; c.type === &quot;tool_result&quot;) : null;
+  return resultContent(block?.content);
+}
+
+/**
+ * Only user entries carry promptId; assistant entries do not. A prompt&#39;s turn
+ * is the user entry with that id and everything after it until a user entry
+ * with a different id.
+ */
+export function readEntries(transcriptPath: string, promptId: string): Entry[] {
+  const entries = readLines(transcriptPath);
+  const turn: Entry[] = [];
+  let inside = false;
+  for (const e of entries) {
+    if (e.isSidechain || (e.type !== &quot;user&quot; &amp;&amp; e.type !== &quot;assistant&quot;)) continue;
+    if (e.promptId !== undefined) inside = e.promptId === promptId;
+    if (inside) turn.push(e);
+  }
+  return turn;
+}
+
+/**
+ * `stopFinal` is the Stop input&#39;s last_assistant_message. It wins over the
+ * transcript: at Stop the transcript can still lack the last text, so its last
+ * text is a mid-turn preamble (&quot;I&#39;ll check ...&quot;).
+ */
+export function digest(transcriptPath: string, promptId: string, stopFinal = &quot;&quot;): Digest {
+  const entries = readEntries(transcriptPath, promptId);
+  const results = resultEntries(entries);
+
+  let prompt = &quot;&quot;;
+  const edits: string[] = [];
+  const commands: string[] = [];
+  const dirs: [string, string | undefined][] = [];
+  const items: string[] = [];
+  let finalMessage = &quot;&quot;;
+
+  for (const e of entries) {
+    const content = e.message?.content;
+    if (e.type === &quot;user&quot;) {
+      if (e.isMeta) continue;
+      if (typeof content === &quot;string&quot;) prompt = content;
+      else if (Array.isArray(content)) {
+        const text = content.filter((c: Entry) =&gt; c.type === &quot;text&quot;).map((c: Entry) =&gt; c.text).join(&quot;\n&quot;);
+        if (text) prompt = text;
+      }
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    const texts: string[] = [];
+    for (const block of content) {
+      if (block.type === &quot;text&quot; &amp;&amp; block.text) texts.push(block.text);
+      if (block.type !== &quot;tool_use&quot;) continue;
+      const name: string = block.name ?? &quot;tool&quot;;
+      const inp = block.input ?? {};
+      const out = results.get(block.id);
+      if (EDIT_TOOLS.has(name)) {
+        edits.push(inp.file_path ?? &quot;?&quot;);
+        dirs.push([inp.file_path ?? &quot;?&quot;, e.cwd]);
+        items.push(`EDIT ${name} ${inp.file_path ?? &quot;?&quot;}`);
+      } else if (name === &quot;Bash&quot;) {
+        commands.push(String(inp.command ?? &quot;&quot;));
+        dirs.push([String(inp.command ?? &quot;&quot;), e.cwd]);
+        items.push(`RUN ${head(inp.command, 400)}\n  → ${out ? bashResult(resultText(out)) : &quot;(no result)&quot;}`);
+      } else {
+        items.push(`CALL ${name} ${head(inp)}${out ? `\n  → ${tail(resultText(out), 200)}` : &quot;&quot;}`);
+      }
+    }
+    if (texts.length) finalMessage = texts.join(&quot;\n&quot;);
+  }
+  if (stopFinal) finalMessage = stopFinal;
+
+  let body = items.join(&quot;\n&quot;);
+  if (body.length &gt; MAX_CHARS) body = `…(${items.length} items, earliest trimmed)\n${body.slice(-MAX_CHARS)}`;
+  const text = [
+    `USER PROMPT:\n${head(prompt, 600)}`,
+    `TURN (in order):\n${body || &quot;(no tool calls)&quot;}`,
+    `FINAL MESSAGE:\n${finalMessage}`,
+  ].join(&quot;\n\n&quot;);
+  return { prompt, edits, commands, dirs, items, finalMessage, text };
+}
+
+/** Never inside an aleph job: a worker&#39;s prompt is not Chris speaking. */
+export function userGrantedSkip(prompt: string): boolean {
+  if (jobId()) return false;
+  return /\bskip\s+verif(y|ication)\b/i.test(prompt);
+}
+</pre></details><details class="src"><summary><code>lib/jsonl.ts</code><span class="quiet">45 lines</span></summary><pre>// The one reader of a JSONL transcript. A line that does not parse is skipped: the last line of a live session can be cut off.
+import { readFileSync, statSync } from &quot;node:fs&quot;;
+
+export type Entry = Record&lt;string, any&gt;;
+
+/** The entries of JSONL `text`, one per line that parses. */
+export function jsonLines(text: string): Entry[] {
+  const entries: Entry[] = [];
+  for (const line of text.split(&quot;\n&quot;)) {
+    if (!line) continue;
+    try { entries.push(JSON.parse(line)); } catch { /* partial last line */ }
+  }
+  return entries;
+}
+
+let parsed: { path: string; size: number; entries: Entry[] } | null = null;
+
+/** Every entry of a JSONL transcript, or none when the file cannot be read. A hook process parses a path once while its size holds: a parse of a 25 MB transcript takes about 110 ms. */
+export function readLines(transcriptPath: string): Entry[] {
+  let size: number;
+  try { size = statSync(transcriptPath).size; } catch { return []; }
+  if (parsed?.path === transcriptPath &amp;&amp; parsed.size === size) return parsed.entries;
+  let raw: string;
+  try { raw = readFileSync(transcriptPath, &quot;utf8&quot;); } catch { return []; }
+  const entries = jsonLines(raw);
+  parsed = { path: transcriptPath, size, entries };
+  return entries;
+}
+
+/** The text of a JSONL transcript, or &quot;&quot; when the file cannot be read. */
+export function readText(transcriptPath: string): string {
+  try { return readFileSync(transcriptPath, &quot;utf8&quot;); } catch { return &quot;&quot;; }
+}
+
+/** The entries of JSONL `text` from the last back. Only a line that matches `grep` is parsed, so a search for a rare entry does not pay a parse of the whole text. */
+export function* entriesBackward(text: string, grep: RegExp): Generator&lt;Entry&gt; {
+  for (let end = text.length; end &gt; 0;) {
+    const start = text.lastIndexOf(&quot;\n&quot;, end - 1) + 1;
+    const line = text.slice(start, end);
+    end = start - 1;
+    if (!grep.test(line)) continue;
+    try { yield JSON.parse(line); } catch { /* partial last line */ }
+  }
+}
+</pre></details><details class="src"><summary><code>lib/jev.ts</code><span class="quiet">67 lines</span></summary><pre>/**
+ * Jev, TypeSafe&#39;s decision model, through OpenRouter&#39;s decisions endpoint.
+ * It answers typed questions (choice, noul, score) with probabilities and no
+ * text, at $0.042 per million input tokens (OpenRouter, 27 Oct 2026). It
+ * cannot be called through chat/completions.
+ */
+import { conn, getJson, putJson } from &quot;./db.ts&quot;;
+import { openRouterKey } from &quot;./env.ts&quot;;
+import { logSetting } from &quot;./layout.ts&quot;;
+
+const JEV_MODEL = &quot;typesafe/jev-1.13&quot;;
+type JudgeChoice = &quot;jev&quot; | &quot;haiku&quot;;
+
+/**
+ * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,
+ * else the `judge` setting that `aleph judge` writes, else jev.
+ */
+export function judgeChoice(): JudgeChoice {
+  const v = process.env.ALEPH_JUDGE ?? getJson(&quot;settings&quot;, &quot;judge&quot;, &quot;&quot;);
+  return v === &quot;haiku&quot; ? &quot;haiku&quot; : &quot;jev&quot;;
+}
+
+export function setJudgeChoice(choice: JudgeChoice) {
+  putJson(&quot;settings&quot;, &quot;judge&quot;, choice);
+  logSetting(`judge is ${choice}`);
+}
+const URL = () =&gt; process.env.ALEPH_JEV_URL ?? &quot;https://openrouter.ai/api/alpha/decisions&quot;;
+
+export type Noul = { type: &quot;noul&quot;; instructions: string; criteria?: { true: string; false: string } };
+export type Question = { type: &quot;choice&quot;; instructions: string; criteria: Record&lt;string, string&gt; } | Noul;
+type Answer =
+  | { type: &quot;choice&quot;; choice: string; probabilities?: Record&lt;string, number&gt;; confidence?: number }
+  | { type: &quot;noul&quot;; noul: number };
+export interface Decision { answers: Record&lt;string, Answer&gt;; cost: number; model: string; ms: number }
+
+/** One request: the state and the questions in, typed answers out. Throws on any failure. */
+export async function decide(state: unknown, questions: Record&lt;string, Question&gt;, timeoutMs = 15_000): Promise&lt;Decision&gt; {
+  const key = openRouterKey();
+  if (!key) throw new Error(&quot;no OPENROUTER_API_KEY&quot;);
+  const started = performance.now();
+  const res = await fetch(URL(), {
+    method: &quot;POST&quot;,
+    headers: { authorization: `Bearer ${key}`, &quot;content-type&quot;: &quot;application/json&quot; },
+    body: JSON.stringify({ model: JEV_MODEL, state, questions }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body: any = await res.json().catch(() =&gt; null);
+  if (!res.ok) throw new Error(`jev ${res.status}: ${JSON.stringify(body?.error ?? body).slice(0, 200)}`);
+  for (const id of Object.keys(questions)) {
+    const a = body?.answers?.[id];
+    if (a?.type !== questions[id].type) throw new Error(`jev: no ${questions[id].type} answer for ${id}`);
+  }
+  const cost = body.usage?.cost ?? 0;
+  // One row per call in `jev`: OpenRouter bills Jev on aleph&#39;s key, and its calls are in no transcript, so the OpenRouter rate (models.ts) subtracts them.
+  if (cost &gt; 0) {
+    try { conn().query(&quot;INSERT INTO jev (time, cost) VALUES (?, ?)&quot;).run(new Date().toISOString(), cost); } catch { /* a lost row costs cents */ }
+  }
+  return { answers: body.answers, cost, model: body.model ?? JEV_MODEL, ms: performance.now() - started };
+}
+
+/** decide() for yes-or-no questions: each question&#39;s probability of yes, by id. */
+export async function nouls(state: unknown, questions: Record&lt;string, Noul&gt;, timeoutMs?: number): Promise&lt;{ p: Record&lt;string, number&gt;; cost: number }&gt; {
+  const d = await decide(state, questions, timeoutMs);
+  const p = Object.fromEntries(Object.keys(questions).map((id) =&gt; [id, (d.answers[id] as { noul: number }).noul]));
+  return { p, cost: d.cost };
+}
+</pre></details><details class="src"><summary><code>lib/pricing.ts</code><span class="quiet">60 lines</span></summary><pre>/**
+ * USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pricing
+ * (read 2026-09-03); the three 5.5 models from https://claude.com/pricing (read 2026-10-27).
+ * A cache write costs twice the input rate: Claude Code uses the 1-hour cache, and
+ * an exact fit over 465 result events showed that rate (read 2026-11-11).
+ * These are API list prices. Chris&#39;s runs use the claude.ai subscription, so a
+ * cost from this table is an API-equivalent estimate. Where Claude Code reports
+ * a cost (`total_cost_usd` in a `claude -p` result), that cost wins for a Claude
+ * model; the table prices transcript turns, and the runs of the models in
+ * lib/models.ts that Claude does not serve, whose prices Claude Code does not know. Langfuse&#39;s public models API keeps only input/output
+ * prices, and cache reads are most of a Claude Code request, so the hook
+ * prices each generation itself and sends cost_details.
+ */
+import { MODELS, type Rate } from &quot;./models.ts&quot;;
+
+/** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
+type Price = Rate &amp; { long?: { above: number; rate: Rate } };
+const PER_MILLION: Record&lt;string, Price&gt; = {
+  // The local and OpenRouter models, by name and by the id a transcript carries.
+  ...Object.fromEntries(Object.entries(MODELS).flatMap(([name, m]) =&gt; (m.price ? [[name, m.price], [m.id, m.price]] : []))),
+  &quot;claude-opus-5-5&quot;: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 8 },
+  &quot;claude-sonnet-5-5&quot;: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 4 },
+  &quot;claude-haiku-5-5&quot;: {
+    input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.2,
+    long: { above: 100_000, rate: { input: 0.5, output: 2.5, cacheRead: 0.05, cacheWrite: 1 } },
+  },
+  &quot;claude-fable-5-1&quot;: { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 20 },
+  &quot;claude-fable-5&quot;: { input: 10, output: 50, cacheRead: 1, cacheWrite: 20 },
+  &quot;claude-opus-5&quot;: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  &quot;claude-opus-4-8&quot;: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  &quot;claude-opus-4-7&quot;: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  &quot;claude-opus-4-6&quot;: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 10 },
+  &quot;claude-sonnet-5&quot;: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 4 },
+  &quot;claude-sonnet-4-6&quot;: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 6 },
+  &quot;claude-haiku-4-5&quot;: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 2 },
+};
+
+export interface Usage { input: number; output: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+
+/** Longest known prefix wins, so `claude-haiku-4-5-20251001` prices as haiku 4.5. */
+export function priceFor(model: string) {
+  const key = Object.keys(PER_MILLION).filter((k) =&gt; model.startsWith(k)).sort((a, b) =&gt; b.length - a.length)[0];
+  return key ? PER_MILLION[key] : null;
+}
+
+export function costDetails(model: string, usage: Usage): Record&lt;string, number&gt; | null {
+  const price = priceFor(model);
+  if (!price) return null;
+  const prompt = usage.input + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+  const p: Rate = price.long &amp;&amp; prompt &gt; price.long.above ? price.long.rate : price;
+  const cost: Record&lt;string, number&gt; = {
+    input: (usage.input * p.input) / 1e6,
+    output: (usage.output * p.output) / 1e6,
+  };
+  if (usage.cache_read_input_tokens) cost.cache_read_input_tokens = (usage.cache_read_input_tokens * p.cacheRead) / 1e6;
+  if (usage.cache_creation_input_tokens) cost.cache_creation_input_tokens = (usage.cache_creation_input_tokens * p.cacheWrite) / 1e6;
+  cost.total = Object.values(cost).reduce((sum, value) =&gt; sum + value, 0);
+  return cost;
+}
+</pre></details></div></details></div></div></main>
+</div>
+<script>
+const v = document.getElementById("view"), f = {};
+const apply = () => { let c = 0; for (const r of v.querySelectorAll("#holds-log tbody tr")) { const on = Object.entries(f).every(([k, x]) => !x || r.dataset[k] === x); r.hidden = !on; c += on; } v.querySelector("#holds .dp-aside").textContent = c; };
+const set = (k, x) => { f[k] = x; const s = v.querySelector(`select[name="${k}"]`); if (s) s.value = x; };
+v.addEventListener("change", (e) => { if (e.target.matches(".fbar select")) { f[e.target.name] = e.target.value; apply(); } });
+v.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.closest(".seg[data-name]")) { for (const x of b.parentElement.children) x.setAttribute("aria-pressed", x === b); f[b.parentElement.dataset.name] = b.dataset.value; apply(); }
+  else if (b.dataset.show !== undefined) { f.who = ""; for (const x of v.querySelectorAll(".seg[data-name=who] button")) x.setAttribute("aria-pressed", x.dataset.value === ""); if (b.dataset.show) set("hook", b.dataset.show); set("kind", b.dataset.kind ?? ""); set("out", ""); apply(); document.getElementById("holds").scrollIntoView({ behavior: "smooth" }); }
+});
+</script>
+</body></html>

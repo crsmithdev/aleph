@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>one way · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<link rel="stylesheet" href="app.css">
+<style>.o-caught{background:var(--done)}.o-handoff{background:var(--done);opacity:.55}.o-held{background:var(--muted)}.o-false{background:var(--error)}.o-none{background:var(--need)}.o-dead{background:var(--rule)}.hooks .tbl td.wide .meter{min-width:160px}.hooks details.src{margin-top:var(--sp-8)}.hooks details.src summary{cursor:pointer;display:flex;gap:var(--sp-10);align-items:baseline}.hooks details.src pre{max-height:40em;overflow:auto;margin:var(--sp-6) 0 0;padding:var(--sp-8) var(--sp-10);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-tag);font:var(--fs-xs)/1.5 var(--mono);white-space:pre}</style></head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Views"><a class="mark" href="#/"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/><circle cx="35.5" cy="64.5" r="20" fill="currentColor"/></svg>aleph</a><div id="nav"><ul><li class="head">Factory</li><li><a href="#/" title="Status"><wa-icon name="gauge-high" aria-hidden="true"></wa-icon><span class="lbl">Status</span></a></li><li><a href="#/automation" title="Automation"><wa-icon name="shield-halved" aria-hidden="true"></wa-icon><span class="lbl">Automation</span></a></li><li><a href="#/factory/agents" title="Agents"><wa-icon name="robot" aria-hidden="true"></wa-icon><span class="lbl">Agents</span></a></li><li><a href="#/issues" title="Issues"><wa-icon name="list-check" aria-hidden="true"></wa-icon><span class="lbl">Issues</span></a></li><li><a href="#/factory/jobs" title="Jobs"><wa-icon name="stopwatch" aria-hidden="true"></wa-icon><span class="lbl">Jobs</span></a></li><li><a href="#/ideas" title="Ideas"><wa-icon name="lightbulb" aria-hidden="true"></wa-icon><span class="lbl">Ideas</span></a></li><li><a href="#/explore" title="Explore"><wa-icon name="magnifying-glass-chart" aria-hidden="true"></wa-icon><span class="lbl">Explore</span></a></li><li class="head">Claude</li><li><a href="#/sessions" title="Sessions"><wa-icon name="comments" aria-hidden="true"></wa-icon><span class="lbl">Sessions</span></a></li><li><a href="#/memory" title="Memory"><wa-icon name="brain" aria-hidden="true"></wa-icon><span class="lbl">Memory</span></a></li><li><a href="#/hooks" title="Hooks" aria-current="page"><wa-icon name="plug" aria-hidden="true"></wa-icon><span class="lbl">Hooks</span></a></li></ul></div></nav>
+<main><div id="view"><div class="page dp-page hooks"><nav class="crumb" aria-label="Breadcrumb"><a href="index.html" aria-label="Back">«</a> <a href="index.html">hooks</a> / <span>Stop</span> / <span>one way</span></nav><header class="ph"><h1>one way</h1><span class="count">Stop</span><div class="aside">Last 7 days</div></header><dl class="facts"><div><dt>Event</dt><dd>Stop</dd></div><div><dt>Matcher</dt><dd>all</dd></div><div><dt>Command</dt><dd><code>bun skills/refit-code/hook.ts</code></dd></div><div><dt>Mode</dt><dd>sync</dd></div><div><dt>Timeout</dt><dd>20 s</dd></div><div><dt>Workers</dt><dd><span class="badge quiet">skips</span></dd></div></dl><section class="dp-panel dp-kpis" aria-label="Summary"><div class="dp-kpi"><span class="dp-k">Holds</span><span class="dp-v">112</span></div><div class="dp-kpi"><span class="dp-k">Caught</span><span class="dp-v">2</span></div><div class="dp-kpi"><span class="dp-k">Held up</span><span class="dp-v">4</span></div><div class="dp-kpi"><span class="dp-k">False</span><span class="dp-v">14</span></div><div class="dp-kpi"><span class="dp-k">No reply</span><span class="dp-v">6</span></div><div class="dp-kpi"><span class="dp-k">No effect</span><span class="dp-v">86</span></div></section><details class="dp-panel dp-fold" open><summary><span>Holds by Kind</span><span class="dp-aside">3</span></summary><div class="dp-body"><ul class="legend"><li><i class="o-caught"></i>Caught</li><li><i class="o-handoff"></i>Handoff</li><li><i class="o-held"></i>Held up</li><li><i class="o-false"></i>False</li><li><i class="o-none"></i>No reply</li><li><i class="o-dead"></i>No effect</li></ul><div class="tscroll"><table class="tbl"><thead><tr><th>Kind</th><th class="num">Holds</th><th class="num">Interactive</th><th class="num">Workers</th><th>Outcome</th><th class="num">Caught</th><th class="num">Handoff</th><th class="num">Held up</th><th class="num">False</th><th class="num">No reply</th><th class="num">No effect</th></tr></thead><tbody><tr><td><button type="button" class="link" data-show="" data-kind="new-copy" title="Show these holds">new copy</button></td><td class="num">85</td><td class="num">23</td><td class="num">62</td><td class="wide"><span class="meter" role="img" aria-label="Caught 2, Handoff 0, Held up 2, False 13, No reply 6, No effect 62" title="Caught 2, Handoff 0, Held up 2, False 13, No reply 6, No effect 62"><i class="o-caught" style="width:2.4%"></i><i class="o-held" style="width:2.4%"></i><i class="o-false" style="width:15.3%"></i><i class="o-none" style="width:7.1%"></i><i class="o-dead" style="width:72.9%"></i></span></td><td class="num">2</td><td class="num"></td><td class="num">2</td><td class="num">13</td><td class="num">6</td><td class="num">62</td></tr><tr><td><button type="button" class="link" data-show="" data-kind="boundary+new-copy" title="Show these holds">both</button></td><td class="num">16</td><td class="num">1</td><td class="num">15</td><td class="wide"><span class="meter" role="img" aria-label="Caught 0, Handoff 0, Held up 1, False 0, No reply 0, No effect 15" title="Caught 0, Handoff 0, Held up 1, False 0, No reply 0, No effect 15"><i class="o-held" style="width:6.3%"></i><i class="o-dead" style="width:93.8%"></i></span></td><td class="num"></td><td class="num"></td><td class="num">1</td><td class="num"></td><td class="num"></td><td class="num">15</td></tr><tr><td><button type="button" class="link" data-show="" data-kind="boundary" title="Show these holds">boundary</button></td><td class="num">11</td><td class="num">2</td><td class="num">9</td><td class="wide"><span class="meter" role="img" aria-label="Caught 0, Handoff 0, Held up 1, False 1, No reply 0, No effect 9" title="Caught 0, Handoff 0, Held up 1, False 1, No reply 0, No effect 9"><i class="o-held" style="width:9.1%"></i><i class="o-false" style="width:9.1%"></i><i class="o-dead" style="width:81.8%"></i></span></td><td class="num"></td><td class="num"></td><td class="num">1</td><td class="num">1</td><td class="num"></td><td class="num">9</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Holds by Day</span><span class="dp-aside">112</span></summary><div class="dp-body"><div class="bars"><div class="barrow"><span class="bl">Thu, Nov 12</span><span class="meter" aria-hidden="true"><i style="width:26.5%"></i></span><span class="bv">9</span></div><div class="barrow"><span class="bl">Fri, Nov 13</span><span class="meter" aria-hidden="true"><i style="width:8.8%"></i></span><span class="bv">3</span></div><div class="barrow"><span class="bl">Sat, Nov 14</span><span class="meter" aria-hidden="true"><i style="width:14.7%"></i></span><span class="bv">5</span></div><div class="barrow"><span class="bl">Sun, Nov 15</span><span class="meter" aria-hidden="true"><i style="width:79.4%"></i></span><span class="bv">27</span></div><div class="barrow"><span class="bl">Mon, Nov 16</span><span class="meter" aria-hidden="true"><i style="width:70.6%"></i></span><span class="bv">24</span></div><div class="barrow top"><span class="bl">Tue, Nov 17</span><span class="meter" aria-hidden="true"><i style="width:100.0%"></i></span><span class="bv">34</span></div><div class="barrow"><span class="bl">Wed, Nov 18</span><span class="meter" aria-hidden="true"><i style="width:26.5%"></i></span><span class="bv">9</span></div><div class="barrow"><span class="bl">Thu, Nov 19</span><span class="meter" aria-hidden="true"><i style="width:2.9%"></i></span><span class="bv">1</span></div></div></div></details><details id="holds" class="dp-panel dp-fold" open><summary><span>Holds</span><span class="dp-aside">112</span></summary><div class="dp-body"><div class="fbar"><div class="fg"><div class="seg" role="group" aria-label="Who" data-name="who"><button type="button" data-value="" aria-pressed="true">All</button><button type="button" data-value="interactive" aria-pressed="false">Interactive</button><button type="button" data-value="workers" aria-pressed="false">Workers</button></div></div><div class="fg"><span class="fl">Kind</span><select name="kind" aria-label="Kind"><option value="" selected>All Kinds</option><option value="boundary">boundary</option><option value="new-copy">new copy</option><option value="boundary+new-copy">both</option></select></div><div class="fg"><span class="fl">Outcome</span><select name="out" aria-label="Outcome"><option value="" selected>All Outcomes</option><option value="caught">Caught</option><option value="handoff">Handoff</option><option value="held up">Held up</option><option value="false">False</option><option value="no reply">No reply</option><option value="no effect">No effect</option></select></div></div><div id="holds-log"><div class="tscroll"><table class="tbl"><thead><tr><th>Time</th><th>Session</th><th>Kind</th><th>Who</th><th>Outcome</th><th>Reason</th></tr></thead><tbody><tr data-who="interactive" data-hook="one way" data-kind="boundary" data-out="held up"><td class="time lead">Nov 19, 9:17 AM</td><td><a class="idl" href="#/sessions/b04e2e60-85c8-4853-9849-5e4d6b318a86">b04e2e60</a></td><td>boundary</td><td>interactive</td><td><span class="badge quiet">Held up</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 18, 5:18 PM</td><td><a class="idl" href="#/sessions/70126ff5-d5d1-4838-ab60-c6d4e6b7e177">70126ff5</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/memory-loop/r5-status.html:14-245 repeats docs/mocks/memory-loop/lessons-1.html:2-234 (233 lines), a copy the base did not have. Call or extend the fi">this change may add a second way or leave a copy behind. - docs/mocks/memory-loop/r5-status.html:14-245 repeats docs/mocks/memory-loop/lessons-1.html:2-234 (233 lines), a copy the base did not have. Call or extend the fi</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 18, 5:02 PM</td><td><a class="idl" href="#/sessions/2ab1c58a-83b9-4a37-a9f6-733f8df321c4">2ab1c58a</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/memory-loop/policy-due.html:1-1233 repeats docs/mocks/memory-loop/lessons-1.html:1-1233 (1233 lines), a copy the base did not have. Call or extend the">this change may add a second way or leave a copy behind. - docs/mocks/memory-loop/policy-due.html:1-1233 repeats docs/mocks/memory-loop/lessons-1.html:1-1233 (1233 lines), a copy the base did not have. Call or extend the</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 18, 4:36 PM</td><td><a class="idl" href="#/sessions/e868df95-72c1-4028-a61d-11f47a0f6775">e868df95</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:89-95 repeats jobs/lib/asks/ask.ts:82-88 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:89-95 repeats jobs/lib/asks/ask.ts:82-88 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 18, 3:51 PM</td><td><a class="idl" href="#/sessions/4c04d113-0114-4797-86e7-bf97827f3a5b">4c04d113</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:89-95 repeats jobs/lib/asks/ask.ts:82-88 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:89-95 repeats jobs/lib/asks/ask.ts:82-88 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 18, 2:04 PM</td><td><a class="idl" href="#/sessions/37fe4cca-cf0f-4e52-a11f-cfa032567fce">37fe4cca</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:791-909 repeats docs/mocks/file-search/app.css:782-900 (119 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref">this change may add a second way or leave a copy behind. - ui/app.css:791-909 repeats docs/mocks/file-search/app.css:782-900 (119 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 18, 1:57 PM</td><td><a class="idl" href="#/sessions/fbb769ec-0f95-47e6-b400-8ec881ab1904">fbb769ec</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1-232 repeats docs/mocks/file-search/app.css:1-232 (232 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j">this change may add a second way or leave a copy behind. - ui/app.css:1-232 repeats docs/mocks/file-search/app.css:1-232 (232 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 18, 1:41 PM</td><td><a class="idl" href="#/sessions/073b0381-8a7d-47dc-ace8-c7bb9edbe5e6">073b0381</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:4 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on ">this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:4 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on </td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 18, 1:28 PM</td><td><a class="idl" href="#/sessions/c5790fdb-c30d-47a3-9d7b-66b69b5101da">c5790fdb</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 18, 1:26 PM</td><td><a class="idl" href="#/sessions/714b91d9-a779-4ff8-b6bf-c8ef0c8c12c8">714b91d9</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:35 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/tick.ts:</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 5:19 PM</td><td><a class="idl" href="#/sessions/545a9d30-2273-41b6-bfae-1cbb09ad9f80">545a9d30</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:36 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/report.t">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:36 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/report.t</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 4:47 PM</td><td><a class="idl" href="#/sessions/ac4adf7f-f32c-42b5-8f6b-ddce98ba5208">ac4adf7f</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:36 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/report.t">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:36 copies ui/api/scope.ts:6, which boundary &quot;page scope&quot; keeps in its owner. Call the owner instead. - jobs/lib/transitions/report.t</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 4:41 PM</td><td><a class="idl" href="#/sessions/ce84afd2-0246-4467-84d2-3fbd5d11f8c5">ce84afd2</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/langfuse.ts:25-29 repeats ui/api/skills.ts:101-106 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec">this change may add a second way or leave a copy behind. - ui/langfuse.ts:25-29 repeats ui/api/skills.ts:101-106 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 4:24 PM</td><td><a class="idl" href="#/sessions/5cdd3702-b4a1-4f95-8978-2197599e64aa">5cdd3702</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:18-25 repeats jobs/lib/land/landing.ts:14-21 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .r">this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:18-25 repeats jobs/lib/land/landing.ts:14-21 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .r</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 17, 4:12 PM</td><td><a class="idl" href="#/sessions/ddae3834-998c-4af9-b991-546d2a60d1af">ddae3834</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - vault/lib/ops.ts:18-25 repeats hooks/obs.ts:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A second ">this change may add a second way or leave a copy behind. - vault/lib/ops.ts:18-25 repeats hooks/obs.ts:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A second </td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 3:35 PM</td><td><a class="idl" href="#/sessions/e6fdb510-9644-4ecc-84f9-c59c04d97efa">e6fdb510</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:5 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - jobs/lib/trans">this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:5 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - jobs/lib/trans</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 3:11 PM</td><td><a class="idl" href="#/sessions/02ea07ab-b587-476d-b1d9-6f307ec04f14">02ea07ab</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:30-36 repeats herdr/status.ts:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -">this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:30-36 repeats herdr/status.ts:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 3:11 PM</td><td><a class="idl" href="#/sessions/7e2edd2d-83c6-42d6-abea-5808a1bb82dc">7e2edd2d</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/housekeeper.ts:19-26 repeats cli/commands.ts:29-36 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit">this change may add a second way or leave a copy behind. - jobs/lib/roles/housekeeper.ts:19-26 repeats cli/commands.ts:29-36 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 3:03 PM</td><td><a class="idl" href="#/sessions/e49b0427-80d5-46f6-b846-0a5803842bfc">e49b0427</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:5 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - jobs/lib/trans">this change may add a second way or leave a copy behind. - jobs/lib/transitions/stall.ts:5 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - jobs/lib/trans</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:56 PM</td><td><a class="idl" href="#/sessions/7c11e9c9-767e-4540-8613-65e89a1789b1">7c11e9c9</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/issues.ts:10-17 repeats skills/refit-code/hook.ts:15-21 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js">this change may add a second way or leave a copy behind. - ui/api/issues.ts:10-17 repeats skills/refit-code/hook.ts:15-21 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:54 PM</td><td><a class="idl" href="#/sessions/e31af7af-f1b7-4e83-84f3-250a4dbabf85">e31af7af</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/land/landing.ts:14-20 repeats cli/commands.ts:29-35 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json">this change may add a second way or leave a copy behind. - jobs/lib/land/landing.ts:14-20 repeats cli/commands.ts:29-35 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:43 PM</td><td><a class="idl" href="#/sessions/d2fb3c73-8de1-45a4-9e41-dd38b7c60323">d2fb3c73</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:30-36 repeats herdr/status.ts:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -">this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:30-36 repeats herdr/status.ts:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:36 PM</td><td><a class="idl" href="#/sessions/0c1f3710-fcd3-4b74-b426-6a9cdbc36533">0c1f3710</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:26-31 repeats jobs/lib/transitions/factory.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the ">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:26-31 repeats jobs/lib/transitions/factory.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the </td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:29 PM</td><td><a class="idl" href="#/sessions/d7142cc2-69f6-4f80-a5eb-ed005e5f6779">d7142cc2</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:96-103 repeats jobs/lib/asks/ask.ts:74-79 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:96-103 repeats jobs/lib/asks/ask.ts:74-79 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:22 PM</td><td><a class="idl" href="#/sessions/32551a01-d1c2-4d12-98df-5c7f9dd628e9">32551a01</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:17 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/recheck.ts">this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:17 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/recheck.ts</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:20 PM</td><td><a class="idl" href="#/sessions/0162e3bc-7d9f-46f9-acbf-1aecd291bdc3">0162e3bc</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:17 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/context.ts:2-9 repeats jobs/l">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:17 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/context.ts:2-9 repeats jobs/l</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:15 PM</td><td><a class="idl" href="#/sessions/99262235-86f9-4467-a35b-000964f5f139">99262235</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/alias.ts:9 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/alias.ts:7 c">this change may add a second way or leave a copy behind. - jobs/lib/roles/alias.ts:9 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/alias.ts:7 c</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:08 PM</td><td><a class="idl" href="#/sessions/786e29e1-d30a-4279-ad4f-588d442863e3">786e29e1</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:131-143 repeats ui/views/efficiency.js:74-85 (12 lines), a copy the base did not have. Call or extend the first, or record the pair in .">this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:131-143 repeats ui/views/efficiency.js:74-85 (12 lines), a copy the base did not have. Call or extend the first, or record the pair in .</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:06 PM</td><td><a class="idl" href="#/sessions/d97895da-1421-4d66-bbc9-cce0ea326cca">d97895da</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/agent-call.ts:10 copies jobs/lib/roles/maintainer.ts:7, which boundary &quot;maintainer pass&quot; keeps in its owner. Call the owner instead. - jobs/lib/ro">this change may add a second way or leave a copy behind. - jobs/lib/roles/agent-call.ts:10 copies jobs/lib/roles/maintainer.ts:7, which boundary &quot;maintainer pass&quot; keeps in its owner. Call the owner instead. - jobs/lib/ro</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:06 PM</td><td><a class="idl" href="#/sessions/06500286-def6-4516-8bd5-59b2d7326bef">06500286</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - vault/lib/maintain.ts:5-11 repeats jobs/lib/roles/housekeeper.ts:20-26 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .">this change may add a second way or leave a copy behind. - vault/lib/maintain.ts:5-11 repeats jobs/lib/roles/housekeeper.ts:20-26 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 2:02 PM</td><td><a class="idl" href="#/sessions/dbe0af4e-065b-42af-966b-f9b95e953bc6">dbe0af4e</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/kit.js:7-11 repeats ui/views/factory-agents.js:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json">this change may add a second way or leave a copy behind. - ui/views/kit.js:7-11 repeats ui/views/factory-agents.js:5-11 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 17, 2:01 PM</td><td><a class="idl" href="#/sessions/18007ac3-dcdb-49d0-b4a6-6f1e37c9c4a9">18007ac3</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - hooks/vault-recall.ts:10 copies ">this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - hooks/vault-recall.ts:10 copies </td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 17, 1:43 PM</td><td><a class="idl" href="#/sessions/6f89ce5a-c1f8-4509-ab72-e6d4cb98a534">6f89ce5a</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/context.ts:2 copies jobs/lib/roles/maintainer.ts:7, which boundary &quot;maintainer pass&quot; keeps in its owner. Call the owner instead. A second way on purpose g">this change may add a second way or leave a copy behind. - ui/api/context.ts:2 copies jobs/lib/roles/maintainer.ts:7, which boundary &quot;maintainer pass&quot; keeps in its owner. Call the owner instead. A second way on purpose g</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 1:41 PM</td><td><a class="idl" href="#/sessions/1cf940e8-769a-42d1-95fb-7f11375df0af">1cf940e8</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:131-143 repeats ui/views/efficiency.js:74-85 (12 lines), a copy the base did not have. Call or extend the first, or record the pair in .">this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:131-143 repeats ui/views/efficiency.js:74-85 (12 lines), a copy the base did not have. Call or extend the first, or record the pair in .</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 1:38 PM</td><td><a class="idl" href="#/sessions/fece9eb2-e118-4440-a09c-c9eaf8e1cd9c">fece9eb2</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/memory.ts:16-21 repeats h">this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/memory.ts:16-21 repeats h</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 1:25 PM</td><td><a class="idl" href="#/sessions/b97dbf25-5516-4745-8207-b88370d64e75">b97dbf25</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/memory.ts:16-21 repeats h">this change may add a second way or leave a copy behind. - vault/lib/vault.ts:7 copies ui/memory-items.ts:11, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/api/memory.ts:16-21 repeats h</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 1:13 PM</td><td><a class="idl" href="#/sessions/3090d2a9-87f9-4da1-9118-83266a5f64af">3090d2a9</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/issues.ts:28-34 repeats jobs/lib/roles/housekeeper.ts:19-25 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi">this change may add a second way or leave a copy behind. - ui/api/issues.ts:28-34 repeats jobs/lib/roles/housekeeper.ts:19-25 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 17, 1:06 PM</td><td><a class="idl" href="#/sessions/6f0fd42c-0092-4a87-8f00-0ef4c9188a78">6f0fd42c</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:16 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/alias.ts:7">this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:16 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/alias.ts:7</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 12:46 PM</td><td><a class="idl" href="#/sessions/7659137d-e7b9-4c09-a6b9-198fab497790">7659137d</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:15 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/maintainer.ts:7 copie">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:15 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/maintainer.ts:7 copie</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 12:28 PM</td><td><a class="idl" href="#/sessions/da9cc88b-5781-4a4a-a706-77dc4b5cf9a2">da9cc88b</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:16 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/routing/models.t">this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:16 copies ui/memory-items.ts:19, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/routing/models.t</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 17, 12:09 PM</td><td><a class="idl" href="#/sessions/228e6a22-c475-4dda-9320-f3946665505e">228e6a22</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/agents.ts:6 (partOf) copies ui/memory-items.ts:20, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/memory-items.ts:19-26 ">this change may add a second way or leave a copy behind. - ui/api/agents.ts:6 (partOf) copies ui/memory-items.ts:20, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - ui/memory-items.ts:19-26 </td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 10:59 AM</td><td><a class="idl" href="#/sessions/d89078bb-d615-44aa-8255-44786e11efd2">d89078bb</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - skills/refit/HTML.md:31-38 repeats skills/explainer/base.html:90-98 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref">this change may add a second way or leave a copy behind. - skills/refit/HTML.md:31-38 repeats skills/explainer/base.html:90-98 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 17, 6:43 AM</td><td><a class="idl" href="#/sessions/90f12fa1-3282-45fc-87cc-8ae14947463d">90f12fa1</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - skills/refit-design/SKILL.md:16-23 repeats skills/refit-code/SKILL.md:18-25 (8 lines), a copy the base did not have. Call or extend the first, or record the pair">this change may add a second way or leave a copy behind. - skills/refit-design/SKILL.md:16-23 repeats skills/refit-code/SKILL.md:18-25 (8 lines), a copy the base did not have. Call or extend the first, or record the pair</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 17, 1:18 AM</td><td><a class="idl" href="#/sessions/76e83453-66a7-47b3-9718-5cece87f2f90">76e83453</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:92-100 repeats ui/views/efficiency.js:71-79 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:92-100 repeats ui/views/efficiency.js:71-79 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 16, 11:11 PM</td><td><a class="idl" href="#/sessions/694c752e-9065-4b40-8053-c0262bf0d365">694c752e</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/intake.ts:19 copies j">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/intake.ts:19 copies j</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 11:00 PM</td><td><a class="idl" href="#/sessions/b4ee5a70-e9e1-4ee7-bb8a-cb4295e8b685">b4ee5a70</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:894-911 repeats docs/mocks/job-controls/app.css:910-927 (18 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref">this change may add a second way or leave a copy behind. - ui/app.css:894-911 repeats docs/mocks/job-controls/app.css:910-927 (18 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 16, 10:56 PM</td><td><a class="idl" href="#/sessions/bc9fb800-25cb-4bea-b67e-1d8f16e2022b">bc9fb800</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/alias.ts:7 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on purpos">this change may add a second way or leave a copy behind. - jobs/lib/roles/alias.ts:7 copies jobs/lib/roles/agent-call.ts:10, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on purpos</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 16, 10:48 PM</td><td><a class="idl" href="#/sessions/121d5d00-dcce-47a0-9913-9bb2789164c3">121d5d00</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. A second way on purpose goes in .refit">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. A second way on purpose goes in .refit</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 16, 10:07 PM</td><td><a class="idl" href="#/sessions/b090f86e-99bc-4157-a360-5c322d54d536">b090f86e</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/refit-report/index.html:4-12 repeats docs/mocks/refit-report/finding-first.html:4-12 (9 lines), a copy the base did not have. Call or extend the first">this change may add a second way or leave a copy behind. - docs/mocks/refit-report/index.html:4-12 repeats docs/mocks/refit-report/finding-first.html:4-12 (9 lines), a copy the base did not have. Call or extend the first</td></tr><tr data-who="interactive" data-hook="one way" data-kind="boundary+new-copy" data-out="held up"><td class="time lead">Nov 16, 3:19 PM</td><td><a class="idl" href="#/sessions/655da282-ca98-45b2-a3de-c0c78a2516f8">655da282</a></td><td>both</td><td>interactive</td><td><span class="badge quiet">Held up</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/intake.ts:19 copies j">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/intake.ts:19 copies j</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="held up"><td class="time lead">Nov 16, 2:43 PM</td><td><a class="idl" href="#/sessions/655da282-ca98-45b2-a3de-c0c78a2516f8">655da282</a></td><td>new copy</td><td>interactive</td><td><span class="badge quiet">Held up</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/refit-report/app.css:1-107 repeats docs/mocks/job-controls/app.css:1-107 (107 lines), a copy the base did not have. Call or extend the first, or recor">this change may add a second way or leave a copy behind. - docs/mocks/refit-report/app.css:1-107 repeats docs/mocks/job-controls/app.css:1-107 (107 lines), a copy the base did not have. Call or extend the first, or recor</td></tr><tr data-who="interactive" data-hook="one way" data-kind="boundary" data-out="false"><td class="time lead">Nov 16, 2:37 PM</td><td><a class="idl" href="#/sessions/655da282-ca98-45b2-a3de-c0c78a2516f8">655da282</a></td><td>boundary</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/maintainer.ts:13 copi">this change may add a second way or leave a copy behind. - ui/api/jobs.ts:14 copies ui/memory-items.ts:7, which boundary &quot;memory sources&quot; keeps in its owner. Call the owner instead. - jobs/lib/roles/maintainer.ts:13 copi</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 2:12 PM</td><td><a class="idl" href="#/sessions/ce5e06c3-42f6-4f49-8045-829967b20545">ce5e06c3</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - tests/preload.ts:26-34 repeats tests/preload.ts:26-32 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec">this change may add a second way or leave a copy behind. - tests/preload.ts:26-34 repeats tests/preload.ts:26-32 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 16, 1:32 PM</td><td><a class="idl" href="#/sessions/3c9bcad7-6404-494d-a0be-380e3e59c4f2">3c9bcad7</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1-120 repeats docs/mocks/job-controls/app.css:1-120 (120 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.">this change may add a second way or leave a copy behind. - ui/app.css:1-120 repeats docs/mocks/job-controls/app.css:1-120 (120 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 1:30 PM</td><td><a class="idl" href="#/sessions/52b765ce-28dc-43a6-bb1b-ce817c5f3127">52b765ce</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - tests/preload.ts:26-34 repeats tests/preload.ts:26-32 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec">this change may add a second way or leave a copy behind. - tests/preload.ts:26-34 repeats tests/preload.ts:26-32 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A sec</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 16, 1:24 PM</td><td><a class="idl" href="#/sessions/3c9bcad7-6404-494d-a0be-380e3e59c4f2">3c9bcad7</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/infra/retention.ts:7-14 repeats ideas/ideas.ts:13-20 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/infra/retention.ts:7-14 repeats ideas/ideas.ts:13-20 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 16, 1:21 PM</td><td><a class="idl" href="#/sessions/d0a5dd00-4d8d-40ac-8554-5088baf8c259">d0a5dd00</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/director.ts:29-36 repeats jobs/lib/learning/episode.ts:8-15 (8 lines), a copy the base did not have. Call or extend the first, or record the pair ">this change may add a second way or leave a copy behind. - jobs/lib/roles/director.ts:29-36 repeats jobs/lib/learning/episode.ts:8-15 (8 lines), a copy the base did not have. Call or extend the first, or record the pair </td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 12:27 PM</td><td><a class="idl" href="#/sessions/4bb8f915-7c3d-422c-acae-1ee4a5882579">4bb8f915</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:634-781 repeats docs/mocks/job-controls/app.css:649-796 (148 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:634-781 repeats docs/mocks/job-controls/app.css:649-796 (148 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 12:22 PM</td><td><a class="idl" href="#/sessions/90ae1efa-e416-4132-835a-3e06c57bcc06">90ae1efa</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:634-781 repeats docs/mocks/job-controls/app.css:649-796 (148 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:634-781 repeats docs/mocks/job-controls/app.css:649-796 (148 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 12:16 PM</td><td><a class="idl" href="#/sessions/e15084a0-619c-4915-8d06-2695ce70bb7a">e15084a0</a></td><td>new copy</td><td>headless</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/issues.ts:11-18 repeats skills/refit-code/hook.ts:15-21 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js">this change may add a second way or leave a copy behind. - ui/api/issues.ts:11-18 repeats skills/refit-code/hook.ts:15-21 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 12:03 PM</td><td><a class="idl" href="#/sessions/4cabba5a-b6f0-43ae-98d7-6fc3864e287a">4cabba5a</a></td><td>new copy</td><td>headless</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:86-98 repeats ui/views/efficiency.js:65-77 (13 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/views/factory-jobs.js:86-98 repeats ui/views/efficiency.js:65-77 (13 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 12:00 PM</td><td><a class="idl" href="#/sessions/e539c81a-8cb5-49f4-b0b2-fe971ecb9f6a">e539c81a</a></td><td>new copy</td><td>headless</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A">this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 16, 12:00 PM</td><td><a class="idl" href="#/sessions/d0a5dd00-4d8d-40ac-8554-5088baf8c259">d0a5dd00</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A">this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 16, 12:00 PM</td><td><a class="idl" href="#/sessions/d0a5dd00-4d8d-40ac-8554-5088baf8c259">d0a5dd00</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -">this change may add a second way or leave a copy behind. - jobs/lib/roles/unit.ts:36-40 repeats herdr/status.ts:6-11 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. -</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 16, 10:39 AM</td><td><a class="idl" href="#/sessions/8141bbaf-e1cd-43d8-bf58-55807285a1f4">8141bbaf</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:869-918 repeats docs/mocks/job-controls/app.css:861-910 (50 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref">this change may add a second way or leave a copy behind. - ui/app.css:869-918 repeats docs/mocks/job-controls/app.css:861-910 (50 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 16, 10:29 AM</td><td><a class="idl" href="#/sessions/1be1c477-18db-4fa7-8a6f-682dfdc7966a">1be1c477</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/agents-retro/options.html:5-10 repeats docs/mocks/agent-roles/index.html:5-10 (6 lines), a copy the base did not have. Call or extend the first, or re">this change may add a second way or leave a copy behind. - docs/mocks/agents-retro/options.html:5-10 repeats docs/mocks/agent-roles/index.html:5-10 (6 lines), a copy the base did not have. Call or extend the first, or re</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 16, 10:23 AM</td><td><a class="idl" href="#/sessions/1be1c477-18db-4fa7-8a6f-682dfdc7966a">1be1c477</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/agents-retro/index.html:5-10 repeats docs/mocks/agent-roles/index.html:5-10 (6 lines), a copy the base did not have. Call or extend the first, or reco">this change may add a second way or leave a copy behind. - docs/mocks/agents-retro/index.html:5-10 repeats docs/mocks/agent-roles/index.html:5-10 (6 lines), a copy the base did not have. Call or extend the first, or reco</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 16, 10:05 AM</td><td><a class="idl" href="#/sessions/d33793bd-1b9c-4241-9cd9-501c1719f6c1">d33793bd</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - skills/refit-agents/voice.ts:11-17 repeats jobs/lib/roles/intake.ts:21-27 (7 lines), a copy the base did not have. Call or extend the first, or record the pair i">this change may add a second way or leave a copy behind. - skills/refit-agents/voice.ts:11-17 repeats jobs/lib/roles/intake.ts:21-27 (7 lines), a copy the base did not have. Call or extend the first, or record the pair i</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:51 PM</td><td><a class="idl" href="#/sessions/6fc5a051-fc61-4a2b-b7e9-467310247dba">6fc5a051</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:378-505 repeats docs/mocks/job-controls/app.css:369-496 (128 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:378-505 repeats docs/mocks/job-controls/app.css:369-496 (128 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 15, 9:31 PM</td><td><a class="idl" href="#/sessions/61e54691-af6d-4a24-b265-404610352b2a">61e54691</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/job-controls/index.html:1-10 repeats docs/mocks/agent-roles/index.html:1-10 (10 lines), a copy the base did not have. Call or extend the first, or rec">this change may add a second way or leave a copy behind. - docs/mocks/job-controls/index.html:1-10 repeats docs/mocks/agent-roles/index.html:1-10 (10 lines), a copy the base did not have. Call or extend the first, or rec</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 1:11 PM</td><td><a class="idl" href="#/sessions/dd70e63e-a7d2-46fd-ab95-85e1b3b84125">dd70e63e</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1134 repeats docs/mocks/job-controls/app.css:1016-1124 (109 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1134 repeats docs/mocks/job-controls/app.css:1016-1124 (109 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 12:08 PM</td><td><a class="idl" href="#/sessions/1412d81d-6004-4903-adc9-d69cfbe0bae3">1412d81d</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:845-850 repeats docs/mocks/job-controls/app.css:835-840 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi">this change may add a second way or leave a copy behind. - ui/app.css:845-850 repeats docs/mocks/job-controls/app.css:835-840 (6 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 10:14 AM</td><td><a class="idl" href="#/sessions/d17148d6-6683-46b1-b13c-57e6b3effaca">d17148d6</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1161 repeats docs/mocks/job-controls/app.css:1016-1151 (136 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1161 repeats docs/mocks/job-controls/app.css:1016-1151 (136 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:57 AM</td><td><a class="idl" href="#/sessions/d2e44a83-523b-45c2-a4b2-1228de7c7728">d2e44a83</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1138 repeats docs/mocks/job-controls/app.css:1016-1128 (113 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1138 repeats docs/mocks/job-controls/app.css:1016-1128 (113 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:53 AM</td><td><a class="idl" href="#/sessions/da938229-550e-4acb-b0a7-21a539e4c1bd">da938229</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/now.js:9-17 repeats ui/views/gates.js:6-16 (11 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A seco">this change may add a second way or leave a copy behind. - ui/views/now.js:9-17 repeats ui/views/gates.js:6-16 (11 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A seco</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:53 AM</td><td><a class="idl" href="#/sessions/e50ba1b7-18db-4f56-9b06-80c250b43f72">e50ba1b7</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1145 repeats docs/mocks/job-controls/app.css:1016-1135 (120 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1145 repeats docs/mocks/job-controls/app.css:1016-1135 (120 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:52 AM</td><td><a class="idl" href="#/sessions/2ccd7850-ab39-4efd-9ace-b3718098d141">2ccd7850</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1157 repeats docs/mocks/job-controls/app.css:1016-1147 (132 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1157 repeats docs/mocks/job-controls/app.css:1016-1147 (132 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:51 AM</td><td><a class="idl" href="#/sessions/f8f73074-a29f-4904-bbd0-e3025e2811e0">f8f73074</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1026-1160 repeats docs/mocks/job-controls/app.css:1016-1150 (135 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - ui/app.css:1026-1160 repeats docs/mocks/job-controls/app.css:1016-1150 (135 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 9:31 AM</td><td><a class="idl" href="#/sessions/0c3c3deb-0bf6-4bd6-9218-88bb23f47503">0c3c3deb</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:871-943 repeats docs/mocks/job-controls/app.css:861-932 (72 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref">this change may add a second way or leave a copy behind. - ui/app.css:871-943 repeats docs/mocks/job-controls/app.css:861-932 (72 lines), a copy the base did not have. Call or extend the first, or record the pair in .ref</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 8:07 AM</td><td><a class="idl" href="#/sessions/be6b82c1-e141-4d0a-a3c1-f8c899cbfdce">be6b82c1</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:363-371 repeats docs/mocks/job-controls/app.css:357-365 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi">this change may add a second way or leave a copy behind. - ui/app.css:363-371 repeats docs/mocks/job-controls/app.css:357-365 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refi</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 8:00 AM</td><td><a class="idl" href="#/sessions/4058392c-0fb6-4bf7-b78f-382435281530">4058392c</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 7:23 AM</td><td><a class="idl" href="#/sessions/727c4ed8-0c21-4698-905d-9b4dc3605345">727c4ed8</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 7:10 AM</td><td><a class="idl" href="#/sessions/67d08631-2a8c-40c2-bf98-d0df5bcea078">67d08631</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/asks/ask.ts:84-90 repeats jobs/lib/asks/ask.ts:77-83 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 6:54 AM</td><td><a class="idl" href="#/sessions/a0eef053-5684-493d-8ae0-94ea77593511">a0eef053</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/views/now.js:70-77 repeats ui/views/factory-agents.js:79-86 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js">this change may add a second way or leave a copy behind. - ui/views/now.js:70-77 repeats ui/views/factory-agents.js:79-86 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 6:49 AM</td><td><a class="idl" href="#/sessions/bb105380-9663-4c13-8aca-8a1324a4a2e5">bb105380</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1-288 repeats docs/mocks/job-controls/app.css:1-288 (288 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.">this change may add a second way or leave a copy behind. - ui/app.css:1-288 repeats docs/mocks/job-controls/app.css:1-288 (288 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 5:56 AM</td><td><a class="idl" href="#/sessions/97b44715-dd47-4f9e-a1b9-b713d8fc5c2b">97b44715</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:870-1255 repeats docs/mocks/job-controls/app.css:861-1246 (386 lines), a copy the base did not have. Call or extend the first, or record the pair in .">this change may add a second way or leave a copy behind. - ui/app.css:870-1255 repeats docs/mocks/job-controls/app.css:861-1246 (386 lines), a copy the base did not have. Call or extend the first, or record the pair in .</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 5:38 AM</td><td><a class="idl" href="#/sessions/f08e5a8f-baa4-4bb1-80f8-3ac6671d3c43">f08e5a8f</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/herald/final.html:19-24 repeats docs/mocks/herald/final.html:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pa">this change may add a second way or leave a copy behind. - docs/mocks/herald/final.html:19-24 repeats docs/mocks/herald/final.html:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pa</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 5:29 AM</td><td><a class="idl" href="#/sessions/ed55ad95-08be-4af9-ac67-13553389898d">ed55ad95</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/herald/final.html:19-24 repeats docs/mocks/herald/final.html:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pa">this change may add a second way or leave a copy behind. - docs/mocks/herald/final.html:19-24 repeats docs/mocks/herald/final.html:16-21 (6 lines), a copy the base did not have. Call or extend the first, or record the pa</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 5:22 AM</td><td><a class="idl" href="#/sessions/f8e70f24-2d41-446f-8dfd-458ed858c2d1">f8e70f24</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:365-834 repeats docs/mocks/job-controls/app.css:357-826 (470 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:365-834 repeats docs/mocks/job-controls/app.css:357-826 (470 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 5:11 AM</td><td><a class="idl" href="#/sessions/c476bacf-5ee8-48ec-8a4c-8bd0a1a9bef2">c476bacf</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 4:56 AM</td><td><a class="idl" href="#/sessions/0d08e2ca-fc16-4b52-8230-b1630100f73a">0d08e2ca</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 4:50 AM</td><td><a class="idl" href="#/sessions/518b44b2-ec8d-4865-8341-e2ac6ec8f6e0">518b44b2</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - ui/app.css:365-847 repeats docs/mocks/job-controls/app.css:357-839 (483 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 3:54 AM</td><td><a class="idl" href="#/sessions/040f2975-b302-438f-83af-88e47229c2ce">040f2975</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/api/chat.ts:15-22 repeats jobs/lib/learning/episode.ts:8-15 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js">this change may add a second way or leave a copy behind. - ui/api/chat.ts:15-22 repeats jobs/lib/learning/episode.ts:8-15 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.js</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 2:27 AM</td><td><a class="idl" href="#/sessions/901c47d1-9cd4-4f9b-8da7-e9481513ccea">901c47d1</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - lib/otlp.ts:102-111 repeats lib/otlp.ts:85-94 (10 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A second way">this change may add a second way or leave a copy behind. - lib/otlp.ts:102-111 repeats lib/otlp.ts:85-94 (10 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. A second way</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 15, 2:25 AM</td><td><a class="idl" href="#/sessions/e44753f1-55d4-4dc8-b715-7851563476b0">e44753f1</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/herald/filter.html:1-7 repeats docs/mocks/herald/b2.html:1-7 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in ">this change may add a second way or leave a copy behind. - docs/mocks/herald/filter.html:1-7 repeats docs/mocks/herald/b2.html:1-7 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in </td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="caught"><td class="time lead">Nov 14, 10:42 PM</td><td><a class="idl" href="#/sessions/fd934d91-229b-4010-84a7-aa3e50ec7bf2">fd934d91</a></td><td>new copy</td><td>interactive</td><td><span class="badge done">Caught</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - skills/sweep/turns.ts:19-24 repeats skills/automate/scan.ts:43-49 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit">this change may add a second way or leave a copy behind. - skills/sweep/turns.ts:19-24 repeats skills/automate/scan.ts:43-49 (7 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 14, 3:54 PM</td><td><a class="idl" href="#/sessions/fd2336d3-a8bf-4d25-b9b0-f2f7a091162b">fd2336d3</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/land/rescue.ts:67-76 repeats jobs/lib/land/rescue.ts:64-73 (10 lines), a copy the base did not have. Call or extend the first, or record the pair in .re">this change may add a second way or leave a copy behind. - jobs/lib/land/rescue.ts:67-76 repeats jobs/lib/land/rescue.ts:64-73 (10 lines), a copy the base did not have. Call or extend the first, or record the pair in .re</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="caught"><td class="time lead">Nov 14, 3:25 PM</td><td><a class="idl" href="#/sessions/fd2336d3-a8bf-4d25-b9b0-f2f7a091162b">fd2336d3</a></td><td>new copy</td><td>interactive</td><td><span class="badge done">Caught</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/migrate.ts:133-141 repeats issues/lib/todo.ts:112-122 (11 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j">this change may add a second way or leave a copy behind. - jobs/lib/migrate.ts:133-141 repeats issues/lib/todo.ts:112-122 (11 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="no reply"><td class="time lead">Nov 14, 2:54 PM</td><td><a class="idl" href="#/sessions/fd2336d3-a8bf-4d25-b9b0-f2f7a091162b">fd2336d3</a></td><td>new copy</td><td>interactive</td><td><span class="badge need">No reply</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/housekeeper.ts:16-23 repeats ideas/ideas.ts:9-16 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j">this change may add a second way or leave a copy behind. - jobs/lib/roles/housekeeper.ts:16-23 repeats ideas/ideas.ts:9-16 (8 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.j</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 14, 1:35 PM</td><td><a class="idl" href="#/sessions/5a5a4e9b-88d1-476f-aeb2-e20af1a9fae6">5a5a4e9b</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:23-31 repeats ideas/ideas.ts:9-17 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. ">this change may add a second way or leave a copy behind. - jobs/lib/roles/intake.ts:23-31 repeats ideas/ideas.ts:9-17 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json. </td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="held up"><td class="time lead">Nov 13, 1:43 PM</td><td><a class="idl" href="#/sessions/516abdfc-10c5-4adc-bbe0-af2fbb4444e1">516abdfc</a></td><td>new copy</td><td>interactive</td><td><span class="badge quiet">Held up</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/app.css:1-1245 repeats docs/mocks/herald/app.css:1-1245 (1245 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - ui/app.css:1-1245 repeats docs/mocks/herald/app.css:1-1245 (1245 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="interactive" data-hook="one way" data-kind="new-copy" data-out="false"><td class="time lead">Nov 13, 11:27 AM</td><td><a class="idl" href="#/sessions/6328cb94-37e6-4e5f-9a02-0e713f66aab1">6328cb94</a></td><td>new copy</td><td>interactive</td><td><span class="badge error">False</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - .playwright-cli/page-2026-11-13T19-26-33-186Z.yml:1-318 repeats .playwright-cli/page-2026-11-13T19-26-23-796Z.yml:1-318 (318 lines), a copy the base did not have">this change may add a second way or leave a copy behind. - .playwright-cli/page-2026-11-13T19-26-33-186Z.yml:1-318 repeats .playwright-cli/page-2026-11-13T19-26-23-796Z.yml:1-318 (318 lines), a copy the base did not have</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 13, 8:55 AM</td><td><a class="idl" href="#/sessions/d9d3808b-3a9c-47e3-ba89-8dfb2f36b454">d9d3808b</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - ui/vendor/idiomorph.js:1443-1451 repeats ui/vendor/idiomorph.js:1441-1449 (9 lines), a copy the base did not have. Call or extend the first, or record the pair i">this change may add a second way or leave a copy behind. - ui/vendor/idiomorph.js:1443-1451 repeats ui/vendor/idiomorph.js:1441-1449 (9 lines), a copy the base did not have. Call or extend the first, or record the pair i</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 9:21 PM</td><td><a class="idl" href="#/sessions/0edc6dd7-7e28-49c1-8068-11cd844ea6da">0edc6dd7</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:9-17 repeats jobs/lib/learning/episode.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:9-17 repeats jobs/lib/learning/episode.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 9:16 PM</td><td><a class="idl" href="#/sessions/1de9a7b9-9421-4bb6-b49e-9da9fa7d3725">1de9a7b9</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:9-17 repeats jobs/lib/learning/episode.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in">this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:9-17 repeats jobs/lib/learning/episode.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 9:08 PM</td><td><a class="idl" href="#/sessions/131bf687-f2fd-4d04-99c7-1109a328b08b">131bf687</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:8-15 repeats jobs/lib/gates/doc-claims-repo.ts:10-17 (8 lines), a copy the base did not have. Call or extend the first, or record the p">this change may add a second way or leave a copy behind. - jobs/lib/roles/recheck.ts:8-15 repeats jobs/lib/gates/doc-claims-repo.ts:10-17 (8 lines), a copy the base did not have. Call or extend the first, or record the p</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 9:07 PM</td><td><a class="idl" href="#/sessions/59b7fec5-f218-43bd-97a1-21ccbdb8d169">59b7fec5</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - docs/mocks/memory-views/Processes.dc.html:117-125 repeats docs/mocks/memory-views/Log.dc.html:99-107 (9 lines), a copy the base did not have. Call or extend the ">this change may add a second way or leave a copy behind. - docs/mocks/memory-views/Processes.dc.html:117-125 repeats docs/mocks/memory-views/Log.dc.html:99-107 (9 lines), a copy the base did not have. Call or extend the </td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 5:41 PM</td><td><a class="idl" href="#/sessions/f6e63f87-ff96-4602-9060-b660b80b9748">f6e63f87</a></td><td>new copy</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:25-31 repeats jobs/lib/roles/maintainer.ts:7-13 (7 lines), a copy the base did not have. Call or extend the first, or record the pai">this change may add a second way or leave a copy behind. - jobs/lib/transitions/tick.ts:25-31 repeats jobs/lib/roles/maintainer.ts:7-13 (7 lines), a copy the base did not have. Call or extend the first, or record the pai</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 5:13 PM</td><td><a class="idl" href="#/sessions/c0dd9f3a-a7c7-4233-b079-7cd61911829d">c0dd9f3a</a></td><td>new copy</td><td>headless</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/maintainer.ts:9-17 repeats ideas/ideas.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/roles/maintainer.ts:9-17 repeats ideas/ideas.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="new-copy" data-out="no effect"><td class="time lead">Nov 12, 5:12 PM</td><td><a class="idl" href="#/sessions/ec554b7d-faa6-4e82-95a3-a4b47e3e935b">ec554b7d</a></td><td>new copy</td><td>headless</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/lib/roles/maintainer.ts:9-17 repeats ideas/ideas.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso">this change may add a second way or leave a copy behind. - jobs/lib/roles/maintainer.ts:9-17 repeats ideas/ideas.ts:8-16 (9 lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.jso</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary+new-copy" data-out="no effect"><td class="time lead">Nov 12, 1:35 PM</td><td><a class="idl" href="#/sessions/81930006-e8d2-4a99-a61a-973ab9148742">81930006</a></td><td>both</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/commands.ts:28 copies jobs/lib/roles/agent-call.ts:9, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - vault/lib/ops.ts:390-415 re">this change may add a second way or leave a copy behind. - jobs/commands.ts:28 copies jobs/lib/roles/agent-call.ts:9, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. - vault/lib/ops.ts:390-415 re</td></tr><tr data-who="workers" data-hook="one way" data-kind="boundary" data-out="no effect"><td class="time lead">Nov 12, 1:31 PM</td><td><a class="idl" href="#/sessions/16eeb0e9-0eeb-4654-b033-2e5051e33a32">16eeb0e9</a></td><td>boundary</td><td>worker</td><td><span class="badge parked">No effect</span></td><td class="wide" title="this change may add a second way or leave a copy behind. - jobs/commands.ts:28 copies jobs/lib/roles/agent-call.ts:9, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on purpose goes ">this change may add a second way or leave a copy behind. - jobs/commands.ts:28 copies jobs/lib/roles/agent-call.ts:9, which boundary &quot;stream-json&quot; keeps in its owner. Call the owner instead. A second way on purpose goes </td></tr></tbody></table></div></div></div></details><details class="dp-panel dp-fold" open><summary><span>Errors</span><span class="dp-aside">17</span></summary><div class="dp-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Cause</th><th>Event</th><th class="num">Errors (all hooks)</th><th class="num">Sessions</th><th>Fix</th><th>Last</th></tr></thead><tbody><tr><td>No bun on PATH</td><td>SessionStart, Stop, UserPromptSubmit</td><td class="num">10</td><td class="num">1</td><td>Probe session</td><td class="time">Nov 15, 12:12 PM</td></tr><tr><td>Worktree gone (cwd)</td><td>Stop</td><td class="num">6</td><td class="num">3</td><td>Fixed d90a0602 (one way)</td><td class="time">Nov 16, 11:21 AM</td></tr><tr><td>Cancelled</td><td>Stop</td><td class="num">1</td><td class="num">1</td><td>Interrupt</td><td class="time">Nov 16, 12:00 PM</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Source</span><span class="dp-aside">7</span></summary><div class="dp-body"><details class="src" open><summary><code>skills/refit-code/hook.ts</code><span class="quiet">101 lines</span></summary><pre>#!/usr/bin/env bun
+/**
+ * The refit-code Stop hook: the tool guards of the skill. It asks three questions of the current change, with no model:
+ *
+ *   co-change   a file that history says changes with a changed file (confidence ≥ 0.7) is left out
+ *   boundaries  a changed file holds a copy of code that `.jscpd.json` keeps inside its owner
+ *   new copies  a changed file holds a copy of code (renamed copies too) that the branch&#39;s base did not have
+ *
+ * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
+ * owner, or records the second way in `.refit.json`. The same findings do not block twice, so a retry after its
+ * own block passes. A session blocks at most 3 times in all; after that the hook stays silent. A stop that another Stop hook already continued is checked like a first stop. A change is the agent&#39;s
+ * when it came after the session&#39;s start and the session&#39;s transcript names its file in an edit or a command, so a
+ * commit by another session and a file another process wrote are not counted. A boundary copy counts only when its
+ * lines are not in the base. A session with no start record is skipped, and so is a factory agent.
+ */
+import { createHash } from &quot;node:crypto&quot;;
+import { existsSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { isAgent } from &quot;../../lib/env.ts&quot;;
+import { probe } from &quot;../../lib/git.ts&quot;;
+import { readJsonOr, writeJson } from &quot;../../lib/json.ts&quot;;
+import { denials, once, session, spoolDir } from &quot;../../hooks/lib/handshake.ts&quot;;
+import { added, scan } from &quot;./clones.ts&quot;;
+import { accepted, base, changed, history, holes, isAccepted, rules, touched, type Rule } from &quot;./cochange.ts&quot;;
+
+const MAX_BLOCKS = 3;
+const at = (s: { name: string; start: number; function?: string }) =&gt; `${s.name}:${s.start}${s.function ? ` (${s.function})` : &quot;&quot;}`;
+
+/** The co-change rules of the commits at HEAD: history and rules cost about 240 ms, so one file per repo keeps the rules for the HEAD they came from. */
+function headRules(root: string): Map&lt;string, Rule[]&gt; {
+  const r = probe(root, &quot;rev-parse&quot;, &quot;HEAD&quot;);
+  if (!r.ok) return new Map(); // no commit yet: no history to learn from
+  const head = r.out.trim();
+  const file = join(spoolDir(), `cochange-${createHash(&quot;sha1&quot;).update(root).digest(&quot;hex&quot;).slice(0, 12)}.json`);
+  const kept = readJsonOr&lt;{ head: string; rules: [string, Rule[]][] } | null&gt;(file, null);
+  if (kept?.head === head) return new Map(kept.rules);
+  const all = rules(history(root));
+  writeJson(file, { head, rules: [...all] });
+  return all;
+}
+
+/** The `scan` of the working tree against `from`: jscpd takes seconds, so one file per repo keeps its result for the tree it came from (HEAD, the uncommitted diff and the untracked files) and the base. */
+function treeScan(root: string, from: string): ReturnType&lt;typeof scan&gt; {
+  const untracked = probe(root, &quot;ls-files&quot;, &quot;--others&quot;, &quot;--exclude-standard&quot;, &quot;-z&quot;).out.split(&quot;\0&quot;).filter(Boolean);
+  const tree = [from, probe(root, &quot;rev-parse&quot;, &quot;HEAD&quot;).out, probe(root, &quot;diff&quot;, &quot;HEAD&quot;).out, untracked.join(&quot;\0&quot;), untracked.length ? probe(root, &quot;hash-object&quot;, &quot;--&quot;, ...untracked).out : &quot;&quot;];
+  const key = createHash(&quot;sha1&quot;).update(tree.join(&quot;\0&quot;)).digest(&quot;hex&quot;);
+  const file = join(spoolDir(), `jscpd-${createHash(&quot;sha1&quot;).update(root).digest(&quot;hex&quot;).slice(0, 12)}.json`);
+  const kept = readJsonOr&lt;{ key: string; found: ReturnType&lt;typeof scan&gt; } | null&gt;(file, null);
+  if (kept?.key === key) return kept.found;
+  const found = scan(root, from || undefined);
+  writeJson(file, { key, found });
+  return found;
+}
+
+/** The block reason for the findings, or null when there are none. */
+function reason(root: string, since: number, mine: Set&lt;string&gt;): string | null {
+  const from = base(root);
+  const change = new Set([...changed(root, from, since)].filter((f) =&gt; mine.has(f)));
+  if (!change.size) return null;
+  const ok = accepted(root);
+  const left = holes(root, change, headRules(root), ok);
+  const { clones, violations } = treeScan(root, from);
+  const copies = violations.filter((v) =&gt; change.has(v.copy.name) &amp;&amp; added(root, from, v.copy));
+  const pasted = clones.filter((c) =&gt; c.isNew &amp;&amp; (change.has(c.a.name) || change.has(c.b.name)) &amp;&amp; !violations.some((v) =&gt; (v.copy.name === c.a.name &amp;&amp; v.owner.name === c.b.name) || (v.copy.name === c.b.name &amp;&amp; v.owner.name === c.a.name)) &amp;&amp; !isAccepted(ok, c.a.name, c.b.name));
+  if (!left.length &amp;&amp; !copies.length &amp;&amp; !pasted.length) return null;
+  const lines = [
+    ...left.map((h) =&gt; `- ${h.a} changed; ${h.b} changed with it in ${h.co} of ${h.n} commits (confidence ${h.conf.toFixed(2)}, e.g. ${h.shas.join(&quot; &quot;)}). Change ${h.b} too, or record the pair in .refit.json.`),
+    ...copies.map((v) =&gt; `- ${at(v.copy)} copies ${at(v.owner)}, which boundary &quot;${v.rule}&quot; keeps in its owner. Call the owner instead.`),
+    ...pasted.map((c) =&gt; `- ${c.b.name}:${c.b.start}-${c.b.end} repeats ${c.a.name}:${c.a.start}-${c.a.end} (${c.lines} lines), a copy the base did not have. Call or extend the first, or record the pair in .refit.json.`),
+  ];
+  return `Refit: this change may add a second way or leave a copy behind.\n${lines.join(&quot;\n&quot;)}\nA second way on purpose goes in .refit.json as {&quot;copies&quot;: [...], &quot;reason&quot;: &quot;...&quot;} under &quot;accepted&quot;.`;
+}
+
+if (import.meta.main) {
+  const input = JSON.parse(await Bun.stdin.text());
+  // A factory agent&#39;s work is judged by the factory&#39;s own gates; its Stop comes after it returned its result.
+  if (input.hook_event_name !== &quot;Stop&quot; || isAgent()) process.exit(0);
+  const cwd: string = input.cwd ?? process.cwd();
+  if (!existsSync(cwd)) process.exit(0); // a removed worktree: spawn would throw
+  const top = Bun.spawnSync([&quot;git&quot;, &quot;rev-parse&quot;, &quot;--show-toplevel&quot;], { cwd, stdout: &quot;pipe&quot;, stderr: &quot;ignore&quot; });
+  if (top.exitCode !== 0) process.exit(0);
+  const start = session(input.session_id).get()?.start;
+  if (start === undefined) process.exit(0);
+  const blocks = denials(`oneway:${input.session_id}`);
+  if (blocks.count() &gt;= MAX_BLOCKS) process.exit(0);
+  let text: string | null;
+  try {
+    const root = top.stdout.toString().trim();
+    text = reason(root, start, touched(input.transcript_path ?? &quot;&quot;, cwd, root));
+  } catch (e) {
+    console.log(JSON.stringify({ systemMessage: `refit-code hook failed: ${(e as Error).message}` }));
+    process.exit(0);
+  }
+  if (!text) process.exit(0);
+  const blocked = once(`oneway:${input.session_id}:${createHash(&quot;sha1&quot;).update(text).digest(&quot;hex&quot;).slice(0, 12)}`);
+  if (blocked.seen()) process.exit(0);
+  blocked.mark();
+  blocks.add();
+  console.log(JSON.stringify({ decision: &quot;block&quot;, reason: text }));
+}
+</pre></details><details class="src"><summary><code>lib/env.ts</code><span class="quiet">99 lines</span></summary><pre>import { readFileSync } from &quot;node:fs&quot;;
+import { alephPath } from &quot;./paths.ts&quot;;
+
+export interface LangfuseConfig {
+  baseUrl: string;
+  publicKey: string;
+  secretKey: string;
+}
+
+/** True in a factory agent: the agent settings in jobs/lib/routing/models.ts set ALEPH_AGENT for the claude process of each role. */
+export const isAgent = (): boolean =&gt; Boolean(process.env.ALEPH_AGENT);
+
+/** The id of the job this process runs for, if any: the unit sets ALEPH_JOB_ID (jobs/lib/roles/unit.ts), and its children inherit it. */
+export const jobId = (): string | undefined =&gt; process.env.ALEPH_JOB_ID;
+
+/** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
+const envFile = (): string =&gt; alephPath(&quot;ALEPH_ENV_FILE&quot;, &quot;.env&quot;);
+
+/** One key from the dotenv file, never copied to process.env; null when the file or the key is missing. */
+function dotenvKey(name: string): string | null {
+  let text: string;
+  try { text = readFileSync(envFile(), &quot;utf8&quot;); } catch { return null; }
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`, &quot;m&quot;));
+  return m ? m[1].trim().replace(/^([&quot;&#39;])(.*)\1$/, &quot;$2&quot;) : null;
+}
+
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  return process.env.OPENROUTER_API_KEY || dotenvKey(&quot;OPENROUTER_API_KEY&quot;);
+}
+
+/** ANTHROPIC_API_KEY from the dotenv file only: a process that has it in its environment bills the API instead of the subscription. */
+export const anthropicKey = (): string | null =&gt; dotenvKey(&quot;ANTHROPIC_API_KEY&quot;);
+
+/**
+ * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
+ * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
+ * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
+ */
+export function loadDotenv(path = envFile()): void {
+  let text: string;
+  try { text = readFileSync(path, &quot;utf8&quot;); } catch { return; }
+  for (const raw of text.split(&quot;\n&quot;)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(&quot;#&quot;)) continue;
+    const eq = line.indexOf(&quot;=&quot;);
+    if (eq &lt; 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key.startsWith(&quot;LANGFUSE_&quot;)) continue;
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith(&#39;&quot;&#39;) &amp;&amp; value.endsWith(&#39;&quot;&#39;)) || (value.startsWith(&quot;&#39;&quot;) &amp;&amp; value.endsWith(&quot;&#39;&quot;))) value = value.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+export function langfuseConfig(): LangfuseConfig | null {
+  loadDotenv();
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  if (!publicKey || !secretKey) return null;
+  return { baseUrl: (process.env.LANGFUSE_BASE_URL ?? &quot;http://127.0.0.1:3010&quot;).replace(/\/+$/, &quot;&quot;), publicKey, secretKey };
+}
+
+/**
+ * Langfuse environment for the session: `ALEPH_ENV` if set (the live tests
+ * say `test`), else `headless` when an ancestor is `claude -p`, else `interactive`.
+ * The parent chain is the only place a hook can see how claude was started.
+ */
+export function classifyEnvironment(ancestorArgvs: string[][], override = process.env.ALEPH_ENV): string {
+  if (override) return override;
+  // claude is argv[0], or argv[1] behind a shell wrapper; only flags after it count
+  const headless = ancestorArgvs.some((argv) =&gt; {
+    const at = argv.slice(0, 2).findIndex((arg) =&gt; arg === &quot;claude&quot; || arg.endsWith(&quot;/claude&quot;));
+    return at &gt;= 0 &amp;&amp; argv.slice(at + 1).some((arg) =&gt; arg === &quot;-p&quot; || arg === &quot;--print&quot;);
+  });
+  return headless ? &quot;headless&quot; : &quot;interactive&quot;;
+}
+
+const DEPTH = 6;
+
+function ancestorArgvs(): string[][] {
+  const out: string[][] = [];
+  let pid = process.ppid;
+  for (let i = 0; i &lt; DEPTH &amp;&amp; pid &gt; 1; i++) {
+    let cmdline: string, status: string;
+    try { cmdline = readFileSync(`/proc/${pid}/cmdline`, &quot;utf8&quot;); status = readFileSync(`/proc/${pid}/status`, &quot;utf8&quot;); } catch { break; }
+    out.push(cmdline.split(&quot;\0&quot;).filter(Boolean));
+    pid = Number(status.match(/^PPid:\s*(\d+)/m)?.[1] ?? 0);
+  }
+  return out;
+}
+
+export function sessionEnvironment(): string {
+  return classifyEnvironment(ancestorArgvs());
+}
+
+/** The command whose output is the user gh-guard compares owners with when `ALEPH_GH_USER` is unset. */
+export const GH_USER_CMD = [&quot;gh&quot;, &quot;api&quot;, &quot;user&quot;, &quot;-q&quot;, &quot;.login&quot;];
+</pre></details><details class="src"><summary><code>lib/git.ts</code><span class="quiet">139 lines</span></summary><pre>/**
+ * git for aleph: the one runner (a spawn that says where it failed, aleph&#39;s env, and a wait on another
+ * process&#39;s index.lock), a fetch, a tree with files replaced, and the main checkout following origin.
+ * Every write to main goes through a push that git refuses when main moved, so the push is the compare-and-swap.
+ */
+import { existsSync, rmSync } from &quot;node:fs&quot;;
+import { tmpdir } from &quot;node:os&quot;;
+import { join } from &quot;node:path&quot;;
+
+// A worker&#39;s env carries GIT_CONFIG_* to send its pushes nowhere. aleph&#39;s own
+// writes (an issue commit from a worker) are not the worker&#39;s push.
+const baseEnv = (): Record&lt;string, string | undefined&gt; =&gt; {
+  const env: Record&lt;string, string | undefined&gt; = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith(&quot;GIT_CONFIG_&quot;)) delete env[k];
+  return env;
+};
+
+/** `Bun.spawnSync` for git. A spawn that throws is rethrown with the original as `cause` and a one-line message that says where and with which PATH it ran. */
+export function spawnGit(cmd: string[], opts: { cwd?: string; env?: Record&lt;string, string | undefined&gt;; stdin?: &quot;ignore&quot; | Blob; stdout: &quot;pipe&quot;; stderr: &quot;pipe&quot; | &quot;ignore&quot; }): { exitCode: number | null; stdout: Buffer; stderr: Buffer } {
+  try {
+    return Bun.spawnSync(cmd, opts) as { exitCode: number | null; stdout: Buffer; stderr: Buffer };
+  } catch (e) {
+    const cwd = opts.cwd;
+    let here: string;
+    try { here = process.cwd(); } catch (err) { here = `unreadable (${(err as Error).message})`; }
+    const PATH = (opts.env ?? process.env).PATH;
+    const found = Bun.which(&quot;git&quot;, { PATH: PATH ?? &quot;&quot; });
+    const text = (e as Error).message.replace(/\s+/g, &quot; &quot;);
+    throw new Error(
+      `git could not start (${text}). The cwd passed is ${cwd === undefined ? &quot;none&quot; : JSON.stringify(cwd)}` +
+      `${cwd === undefined ? &quot;&quot; : ` and ${existsSync(cwd) ? &quot;exists&quot; : &quot;does not exist&quot;} (existsSync ${existsSync(cwd)})`}. ` +
+      `process.cwd() is ${here}. The PATH passed is ${JSON.stringify(PATH)}. Bun.which finds git at ${JSON.stringify(found)}. ` +
+      `TMPDIR is ${JSON.stringify(process.env.TMPDIR)} and tmpdir() ${existsSync(tmpdir()) ? &quot;exists&quot; : &quot;does not exist&quot;} (existsSync ${existsSync(tmpdir())}).`,
+      { cause: e },
+    );
+  }
+}
+
+export function git(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  return gitWith({}, cwd, ...args);
+}
+
+function gitWith(o: { env?: Record&lt;string, string&gt;; stdin?: string | Uint8Array }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  // Several facts gates write the vault in the same second; a git call that
+  // meets another&#39;s index.lock waits and tries again (6 facts lost to it, 1 to 3 Nov).
+  for (let i = 0; ; i++) {
+    const p = spawnGit([&quot;git&quot;, ...args], {
+      cwd, env: { ...baseEnv(), ...o.env }, stdin: o.stdin === undefined ? &quot;ignore&quot; : new Blob([o.stdin as BlobPart]), stdout: &quot;pipe&quot;, stderr: &quot;pipe&quot;,
+    });
+    const r = { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? &quot;&quot; : p.stderr.toString())).trimEnd() };
+    if (r.ok || !r.out.includes(&quot;index.lock&quot;) || i === 10) return r;
+    Bun.sleepSync(200 * (i + 1));
+  }
+}
+
+/** `git` in `cwd`, not ok (and no throw) when `cwd` does not exist. */
+export function probe(cwd: string, ...args: string[]): { ok: boolean; out: string } {
+  return existsSync(cwd) ? git(cwd, ...args) : { ok: false, out: &quot;&quot; };
+}
+
+/** The ref of a repo&#39;s main to read: `origin/&lt;main&gt;` when the repo has it, else the local `&lt;main&gt;`. */
+export function mainRef(cwd: string, main: string): string {
+  return git(cwd, &quot;rev-parse&quot;, &quot;--verify&quot;, &quot;-q&quot;, `origin/${main}^{commit}`).ok ? `origin/${main}` : main;
+}
+
+/** The pause between two tries of a step that met a held git lock: `sleep` waits, Bun.sleepSync unless the caller passes Bun.sleep and awaits it. A test replaces it to free the lock. */
+export const lockRetry = { pause: (sleep: (ms: number) =&gt; unknown = Bun.sleepSync): unknown =&gt; sleep(100 + Math.random() * 200) };
+
+type Run = { ok: boolean; out: string };
+
+/** The tries of a fetch: it yields the number of each try and takes its result. A try after the first waits out the ref lock that another process holds (up to 5 tries). */
+function* fetchTries(): Generator&lt;number, Run, Run&gt; {
+  let r = yield 0;
+  for (let i = 1; i &lt; 5 &amp;&amp; !r.ok &amp;&amp; r.out.includes(&quot;cannot lock ref&quot;); i++) r = yield i;
+  return r;
+}
+
+/** `git fetch -q origin &lt;refs&gt;`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
+export function fetchOrigin(cwd: string, ...refs: string[]): Run {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) lockRetry.pause();
+    t = tries.next(git(cwd, &quot;fetch&quot;, &quot;-q&quot;, &quot;origin&quot;, ...refs));
+  }
+}
+
+/** fetchOrigin that does not block: each try is an async spawn and each pause an async sleep. */
+export async function fetchOriginAsync(cwd: string, ...refs: string[]): Promise&lt;Run&gt; {
+  const tries = fetchTries();
+  for (let t = tries.next(); ; ) {
+    if (t.done) return t.value;
+    if (t.value) await lockRetry.pause(Bun.sleep);
+    let p;
+    // A spawn throws when cwd is gone: the UI&#39;s timer then fetches a store a test removed.
+    try { p = Bun.spawn([&quot;git&quot;, &quot;fetch&quot;, &quot;-q&quot;, &quot;origin&quot;, ...refs], { cwd, env: baseEnv(), stdin: &quot;ignore&quot;, stdout: &quot;ignore&quot;, stderr: &quot;pipe&quot; }); }
+    catch (e) { return { ok: false, out: (e as Error).message }; }
+    const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited]);
+    t = tries.next({ ok: code === 0, out: code === 0 ? &quot;&quot; : err.trimEnd() || `git fetch exited ${code}` });
+  }
+}
+
+/** `tree` with each path in `files` set to its content, or removed when it is null. */
+export function treeWithFiles(cwd: string, tree: string, files: Record&lt;string, string | Uint8Array | null&gt;): string {
+  const index = join(tmpdir(), `aleph-index-${process.pid}-${crypto.randomUUID()}`);
+  const env = { GIT_INDEX_FILE: index };
+  try {
+    const steps = [[&quot;read-tree&quot;, tree]];
+    for (const [path, content] of Object.entries(files)) {
+      if (content === null) { steps.push([&quot;update-index&quot;, &quot;--force-remove&quot;, path]); continue; }
+      const blob = gitWith({ stdin: content }, cwd, &quot;hash-object&quot;, &quot;-w&quot;, &quot;--stdin&quot;);
+      if (!blob.ok) throw new Error(`hash-object: ${blob.out}`);
+      steps.push([&quot;update-index&quot;, &quot;--add&quot;, &quot;--cacheinfo&quot;, `100644,${blob.out},${path}`]);
+    }
+    for (const args of steps) {
+      const r = gitWith({ env }, cwd, ...args);
+      if (!r.ok) throw new Error(`${args[0]}: ${r.out}`);
+    }
+    const w = gitWith({ env }, cwd, &quot;write-tree&quot;);
+    if (!w.ok) throw new Error(`write-tree: ${w.out}`);
+    return w.out;
+  } finally {
+    rmSync(index, { force: true });
+  }
+}
+
+/**
+ * Fast-forward the main checkout to origin/&lt;main&gt;. Returns why it could not,
+ * or null. It never moves a checkout that is on another branch or has tracked changes.
+ */
+export function followMain(path: string, main: string): string | null {
+  const head = git(path, &quot;symbolic-ref&quot;, &quot;--short&quot;, &quot;HEAD&quot;).out;
+  if (head !== main) return `main checkout not updated: it is on ${head || &quot;a detached HEAD&quot;}`;
+  const dirty = git(path, &quot;status&quot;, &quot;--porcelain&quot;, &quot;--untracked-files=no&quot;).out.split(&quot;\n&quot;).filter(Boolean).map((l) =&gt; l.slice(3));
+  if (dirty.length) return `main checkout not updated: it has changes in ${dirty.join(&quot;, &quot;)}`;
+  const ff = git(path, &quot;merge&quot;, &quot;--ff-only&quot;, &quot;-q&quot;, `origin/${main}`);
+  return ff.ok ? null : `main checkout not updated: ${ff.out.split(&quot;\n&quot;)[0]}`;
+}
+</pre></details><details class="src"><summary><code>lib/json.ts</code><span class="quiet">26 lines</span></summary><pre>// The factory&#39;s JSON state files. The only module that parses one: a missing file is the caller&#39;s fallback, a file
+// that does not parse is a bug and throws. The write goes through a rename, so a reader never sees half a file.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from &quot;node:fs&quot;;
+import { dirname } from &quot;node:path&quot;;
+
+/** The JSON in `file`, or `fallback` when there is no file. A file that does not parse throws. */
+export function readJsonOr&lt;T&gt;(file: string, fallback: T): T {
+  let text: string;
+  try { text = readFileSync(file, &quot;utf8&quot;); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === &quot;ENOENT&quot;) return fallback;
+    throw e;
+  }
+  return JSON.parse(text);
+}
+
+/** The temp file a writer fills beside `file` before it renames it over `file`: named by pid, so two processes do not collide. */
+export const tmpName = (file: string): string =&gt; `${file}.${process.pid}.tmp`;
+
+/** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. `mode` sets the new file&#39;s permissions. */
+export function writeJson(file: string, value: unknown, mode?: number): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = tmpName(file);
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + &quot;\n&quot;, { mode });
+  renameSync(tmp, file);
+}
+</pre></details><details class="src"><summary><code>hooks/lib/handshake.ts</code><span class="quiet">83 lines</span></summary><pre>/**
+ * Hooks are separate processes. A Pre* event leaves a small file that the
+ * matching Post* event picks up, so a span can carry its real start time and
+ * its parent. Files live in ~/.aleph/spool (ALEPH_SPOOL overrides, for tests).
+ * Each kind of record has its own typed slot below; the key prefix is the kind.
+ */
+import { readJsonOr } from &quot;../../lib/json.ts&quot;;
+import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { alephPath } from &quot;../../lib/paths.ts&quot;;
+import type { Snapshot } from &quot;./snapshot.ts&quot;;
+
+export function spoolDir(): string {
+  return alephPath(&quot;ALEPH_SPOOL&quot;, &quot;spool&quot;);
+}
+
+function pathFor(key: string): string {
+  return join(spoolDir(), `${key.replace(/[^A-Za-z0-9_.:-]/g, &quot;_&quot;)}.json`);
+}
+
+function slot&lt;T&gt;(key: string) {
+  const get = (): T | null =&gt; {
+    return readJsonOr&lt;T | null&gt;(pathFor(key), null);
+  };
+  return {
+    get,
+    set(value: T): void {
+      mkdirSync(spoolDir(), { recursive: true });
+      writeFileSync(pathFor(key), JSON.stringify(value));
+    },
+    take(): T | null {
+      const value = get();
+      if (value !== null) { try { unlinkSync(pathFor(key)); } catch { /* already gone */ } }
+      return value;
+    },
+  };
+}
+
+/** Left by SessionStart: the name, tags and cwd every turn trace repeats, and the last turn&#39;s trace for a rating. */
+export interface Session { start: number; name?: string; tags?: string[]; cwd?: string; lastTraceId?: string }
+export const session = (id: string) =&gt; slot&lt;Session&gt;(`session:${id}`);
+
+/** The turn&#39;s start and prompt, from UserPromptSubmit to Stop. */
+export const turn = (promptId: string) =&gt; slot&lt;{ start: number; input: string }&gt;(`turn:${promptId}`);
+
+/** A tool call&#39;s start and input, from PreToolUse to PostToolUse. */
+export const tool = (toolUseId: string) =&gt; slot&lt;{ start: number; input: unknown }&gt;(`tool:${toolUseId}`);
+
+/** A subagent&#39;s span and trace, from SubagentStart to SubagentStop. */
+export const agent = (agentId: string) =&gt; slot&lt;{ start: number; spanId: string; parentSpanId?: string; traceId: string }&gt;(`agent:${agentId}`);
+
+/** The repo&#39;s snapshot at the prompt, for the verify gate at Stop. */
+export const snap = (promptId: string) =&gt; slot&lt;Snapshot&gt;(`snap:${promptId}`);
+
+/** A count of denials: the verify gate&#39;s of a turn, or the refit-code hook&#39;s blocks of a session. */
+export function denials(promptId: string) {
+  const s = slot&lt;number&gt;(`denials:${promptId}`);
+  return {
+    count: (): number =&gt; s.get() ?? 0,
+    add: (): void =&gt; s.set((s.get() ?? 0) + 1),
+    clear: (): void =&gt; void s.take(),
+  };
+}
+
+/** A mark for something that happens once per key, such as a block once per session. */
+export function once(key: string) {
+  const s = slot&lt;number&gt;(key);
+  return { seen: (): boolean =&gt; s.get() !== null, mark: (): void =&gt; s.set(Date.now()) };
+}
+
+const MAX_AGE_MS = 86_400_000;
+
+/** A Pre event whose Post never came leaves a file behind; drop anything older than a day. */
+export function prune(): void {
+  let names: string[];
+  try { names = readdirSync(spoolDir()); } catch { return; }
+  const cutoff = Date.now() - MAX_AGE_MS;
+  for (const name of names) {
+    const path = join(spoolDir(), name);
+    try { if (statSync(path).mtimeMs &lt; cutoff) unlinkSync(path); } catch { /* raced with another hook */ }
+  }
+}
+</pre></details><details class="src"><summary><code>skills/refit-code/clones.ts</code><span class="quiet">65 lines</span></summary><pre>/**
+ * jscpd over the repo, with the repo&#39;s `.jscpd.json`: the copies of code (renamed copies too, when the config sets
+ * `ignoreIdentifiers` and `ignoreLiterals`) and the copies of code a boundary keeps in its owner. One run answers
+ * both. Given a base commit, each clone says whether the base already had it. A clone of import lines alone is no clone.
+ */
+import { existsSync, mkdtempSync, readFileSync, rmSync } from &quot;node:fs&quot;;
+import { tmpdir } from &quot;node:os&quot;;
+import { dirname, join } from &quot;node:path&quot;;
+import { probe } from &quot;../../lib/git.ts&quot;;
+
+/** The jscpd of the nearest `node_modules` at or above `dir`, so a `.worktrees/&lt;name&gt;` checkout uses its parent&#39;s. */
+export function jscpd(dir: string): string {
+  const bin = join(dir, &quot;node_modules/.bin/jscpd&quot;);
+  return existsSync(bin) || dirname(dir) === dir ? bin : jscpd(dirname(dir));
+}
+
+const JSCPD = jscpd(join(import.meta.dir, &quot;../..&quot;));
+
+// A statement that imports, or re-exports from, a module; it may span lines.
+const IMPORT = /^(?:import\b[^;&#39;&quot;]*?|export\b[^;&#39;&quot;]*?\bfrom\s*)[&quot;&#39;][^&quot;&#39;]*[&quot;&#39;];?[ \t]*$/gm;
+
+/** Whether every line of `side` is a blank line or part of an import statement. */
+function isImports(root: string, side: { name: string; start: number; end: number }): boolean {
+  const text = readFileSync(join(root, side.name), &quot;utf8&quot;);
+  const lines = text.split(&quot;\n&quot;);
+  const imported = new Set&lt;number&gt;();
+  for (const m of text.matchAll(IMPORT)) {
+    const first = text.slice(0, m.index).split(&quot;\n&quot;).length;
+    for (let n = first; n &lt; first + m[0].split(&quot;\n&quot;).length; n++) imported.add(n);
+  }
+  return lines.slice(side.start - 1, side.end).every((line, i) =&gt; !line.trim() || imported.has(side.start + i));
+}
+
+type Side = { name: string; start: number; end: number };
+export type Clone = { a: Side; b: Side; lines: number; isNew: boolean };
+type Violation = { rule: string; copy: Side &amp; { function?: string }; owner: Side &amp; { function?: string } };
+
+/** The clones and boundary violations of the working tree, or nothing when the repo has no `.jscpd.json`. */
+export function scan(root: string, base?: string): { clones: Clone[]; violations: Violation[] } {
+  if (!existsSync(join(root, &quot;.jscpd.json&quot;))) return { clones: [], violations: [] };
+  const out = mkdtempSync(join(tmpdir(), &quot;refit-&quot;));
+  try {
+    const run = Bun.spawnSync([process.execPath, JSCPD, &quot;--reporters&quot;, &quot;json&quot;, &quot;--output&quot;, out, &quot;--silent&quot;, ...(base ? [&quot;--baseline-from-ref&quot;, base] : []), &quot;.&quot;], { cwd: root, stdout: &quot;ignore&quot;, stderr: &quot;pipe&quot; });
+    const file = join(out, &quot;jscpd-report.json&quot;);
+    if (!existsSync(file)) throw new Error(`jscpd exited ${run.exitCode} and wrote no report: ${run.stderr}`);
+    const report = JSON.parse(readFileSync(file, &quot;utf8&quot;));
+    const side = (f: any) =&gt; ({ name: f.name, start: f.start, end: f.end, ...(f.function ? { function: f.function } : {}) });
+    const violations = (report.boundaries ?? []).flatMap((b: any) =&gt; b.violations.map((v: any) =&gt; ({ rule: b.name, copy: side(v.copy), owner: side(v.protected) })));
+    // jscpd exits 1 when it finds a boundary violation; any other failure is an error.
+    if (run.exitCode !== 0 &amp;&amp; !violations.length) throw new Error(`jscpd exited ${run.exitCode}: ${run.stderr}`);
+    const clones = report.duplicates.map((d: any) =&gt; ({ a: side(d.firstFile), b: side(d.secondFile), lines: d.lines, isNew: d.isNew === true }));
+    return { clones: clones.filter((c: Clone) =&gt; !(isImports(root, c.a) &amp;&amp; isImports(root, c.b))), violations };
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+}
+
+/** Whether the lines of `side` are new since `base`: jscpd marks no violation as new, and its `isNew` on a clone follows the order of equal clones, not the file. A copy that the base file holds verbatim is old, wherever it sits in the file. */
+export function added(root: string, base: string, side: { name: string; start: number; end: number }): boolean {
+  const was = base ? probe(root, &quot;show&quot;, `${base}:${side.name}`) : null;
+  if (!was?.ok) return true;
+  const copy = readFileSync(join(root, side.name), &quot;utf8&quot;).split(&quot;\n&quot;).slice(side.start - 1, side.end).join(&quot;\n&quot;).trimEnd();
+  return !was.out.includes(copy);
+}
+</pre></details><details class="src"><summary><code>skills/refit-code/cochange.ts</code><span class="quiet">181 lines</span></summary><pre>#!/usr/bin/env bun
+/**
+ * Co-change from git history: which files change together, and which files the history says are fixed again and
+ * again. The seed adds jscpd&#39;s copies of code (clones.ts). The find step seeds its hunt with it (`seed`); the Stop hook asks it which companions a change left out (`holes`).
+ *
+ * A rule A → B says: a commit that changes A also changes B. Its confidence is the Wilson lower bound of
+ * co(A,B) / n(A), so a pair seen 3 times of 3 does not outrank one seen 40 times of 44. Merges and commits of more
+ * than 30 files teach nothing about pairs and are skipped, and so are test files.
+ *
+ *   bun cochange.ts seed  [--since 90.days]   JSON: the files fixed most, and the strongest pairs
+ *   bun cochange.ts holes                      JSON: companions the current change left out
+ */
+import { existsSync, readFileSync, statSync } from &quot;node:fs&quot;;
+import { join, resolve } from &quot;node:path&quot;;
+import { digest } from &quot;../../hooks/lib/digest.ts&quot;;
+import { probe } from &quot;../../lib/git.ts&quot;;
+import { readLines } from &quot;../../lib/jsonl.ts&quot;;
+import { expand } from &quot;../../lib/paths.ts&quot;;
+import { isTestFile } from &quot;../../lib/test-files.ts&quot;;
+import { scan } from &quot;./clones.ts&quot;;
+
+const WIDE = 30;
+const SUPPORT = 10;
+const FLOOR = 0.6;
+const BLOCK = 0.7;
+// Design drafts and browser snapshots are not code: jscpd ignores them (.jscpd.json) and so does the change set.
+const DRAFTS = /^(docs\/mocks|\.playwright-cli)\//;
+const FIX = /\b(fix|fixes|fixed|stale|mismatch|wrong|again|drift)\b/i;
+
+export type Commit = { sha: string; subject: string; files: string[] };
+export type Rule = { a: string; b: string; co: number; n: number; conf: number; shas: string[] };
+export type Accepted = { concept?: string; copies: string[]; reason: string };
+
+/** The output of `git`, or a throw with git&#39;s message: the hook reports it, so a failed git is not a quiet pass. */
+function git(cwd: string, ...args: string[]): string {
+  const r = probe(cwd, ...args);
+  if (!r.ok) throw new Error(`git ${args[0]} failed: ${r.out}`);
+  return r.out;
+}
+
+/** The merge-base of HEAD and `ref`, or &quot;&quot; when there is none or `ref` is not there. */
+const mergeBase = (root: string, ref: string): string =&gt; { const r = probe(root, &quot;merge-base&quot;, &quot;HEAD&quot;, ref); return r.ok ? r.out.trim() : &quot;&quot;; };
+
+/** The last `limit` commits that are not merges, newest first. Each file is named by the path it has today, so a
+ * rename does not split a file&#39;s history in two: walking newest first, a rename teaches the old path its new name. */
+export function history(cwd: string, limit = 2000, since?: string): Commit[] {
+  const out = git(cwd, &quot;log&quot;, &quot;--no-merges&quot;, &quot;-M&quot;, &quot;--name-status&quot;, &quot;--format=\x1e%h\x1f%s&quot;, `-n${limit}`, ...(since ? [`--since=${since}`] : []));
+  const today = new Map&lt;string, string&gt;();
+  return out.split(&quot;\x1e&quot;).slice(1).map((c) =&gt; {
+    const [head, ...lines] = c.split(&quot;\n&quot;);
+    const [sha, subject] = head.split(&quot;\x1f&quot;);
+    const files = lines.filter(Boolean).map((l) =&gt; {
+      const [status, a, b] = l.split(&quot;\t&quot;);
+      const path = status[0] === &quot;R&quot; ? b : a;
+      const name = today.get(path) ?? path;
+      if (status[0] === &quot;R&quot;) today.set(a, name);
+      return name;
+    });
+    return { sha, subject, files };
+  });
+}
+
+const Z = 1.96;
+
+/** The Wilson lower bound of k successes in n trials, at 95%. */
+export function wilson(k: number, n: number): number {
+  if (n === 0) return 0;
+  const p = k / n, z2 = Z * Z;
+  return (p + z2 / (2 * n) - Z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n)) / (1 + z2 / n);
+}
+
+/** Every rule A → B with n(A) ≥ 10 and confidence ≥ 0.6, keyed by A. */
+export function rules(commits: Commit[]): Map&lt;string, Rule[]&gt; {
+  const n = new Map&lt;string, number&gt;();
+  const co = new Map&lt;string, { k: number; shas: string[] }&gt;();
+  for (const c of commits) {
+    if (c.files.length &gt; WIDE) continue;
+    // A test changes with its code by design; it is not a second copy of a concept.
+    const files = c.files.filter((f) =&gt; !isTestFile(f));
+    for (const a of files) {
+      n.set(a, (n.get(a) ?? 0) + 1);
+      for (const b of files) {
+        if (a === b) continue;
+        const e = co.get(`${a}\0${b}`) ?? { k: 0, shas: [] };
+        e.k++;
+        if (e.shas.length &lt; 3) e.shas.push(c.sha);
+        co.set(`${a}\0${b}`, e);
+      }
+    }
+  }
+  const out = new Map&lt;string, Rule[]&gt;();
+  for (const [key, e] of co) {
+    const [a, b] = key.split(&quot;\0&quot;);
+    const na = n.get(a)!;
+    if (na &lt; SUPPORT) continue;
+    const conf = wilson(e.k, na);
+    if (conf &lt; FLOOR) continue;
+    out.set(a, [...(out.get(a) ?? []), { a, b, co: e.k, n: na, conf, shas: e.shas }]);
+  }
+  return out;
+}
+
+/** The accepted second ways of the repo, from `.refit.json`. */
+export function accepted(root: string): Accepted[] {
+  const path = join(root, &quot;.refit.json&quot;);
+  return existsSync(path) ? (JSON.parse(readFileSync(path, &quot;utf8&quot;)).accepted ?? []) : [];
+}
+
+const fileOf = (copy: string) =&gt; copy.split(&quot;:&quot;)[0];
+export const isAccepted = (list: Accepted[], a: string, b: string) =&gt;
+  list.some((e) =&gt; e.copies.some((c) =&gt; fileOf(c) === a) &amp;&amp; e.copies.some((c) =&gt; fileOf(c) === b));
+
+/** The commit where the branch left the default branch, or &quot;&quot; when there is none. */
+export function base(root: string): string {
+  return mergeBase(root, &quot;origin/HEAD&quot;) || mergeBase(root, &quot;main&quot;);
+}
+
+/** The files the current change touches: the branch since it left the default branch, plus the working tree. With `since` (ms), only the commits and edits from then on, so a change from before the session does not count. */
+export function changed(root: string, from = base(root), since = 0): Set&lt;string&gt; {
+  const branch = !from ? [] : since
+    ? git(root, &quot;log&quot;, `--since=${new Date(since).toISOString()}`, &quot;--name-only&quot;, &quot;--pretty=format:&quot;, `${from}..HEAD`).split(&quot;\n&quot;)
+    : git(root, &quot;diff&quot;, &quot;--name-only&quot;, `${from}...HEAD`).split(&quot;\n&quot;);
+  const edited = (f: string) =&gt; { try { return statSync(join(root, f)).mtimeMs &gt;= since; } catch { return true; } };
+  const tree = git(root, &quot;status&quot;, &quot;--porcelain&quot;, &quot;--untracked-files=all&quot;).split(&quot;\n&quot;).map((l) =&gt; l.slice(3).split(&quot; -&gt; &quot;).pop()!).filter(edited);
+  return new Set([...branch, ...tree].filter((f) =&gt; f &amp;&amp; !DRAFTS.test(f)));
+}
+
+/**
+ * The files of `root` that the session&#39;s edits and commands name, from its whole transcript. An Edit or Write names its file;
+ * a Bash command (`sed -i`, a heredoc, `git checkout -- f`) names it as a word, which resolves from the cwd of that call.
+ * A command that writes a file it does not name (a glob, a script, `git add -A`) is missed.
+ */
+export function touched(transcript: string, cwd: string, root: string): Set&lt;string&gt; {
+  const out = new Set&lt;string&gt;();
+  const ids = new Set(readLines(transcript).map((e) =&gt; e.promptId).filter(Boolean));
+  for (const id of ids) {
+    for (const [target, dir] of digest(transcript, id).dirs) {
+      for (const word of target.split(/[\s&#39;&quot;`&lt;&gt;|;&amp;()=,]+/)) {
+        const abs = resolve(dir ?? cwd, expand(word));
+        if (abs.startsWith(`${root}/`)) out.add(abs.slice(root.length + 1));
+      }
+    }
+  }
+  return out;
+}
+
+/** For each file a rule predicts and the change left out, the strongest rule that predicts it. */
+export function holes(root: string, change: Set&lt;string&gt;, all: Map&lt;string, Rule[]&gt;, ok: Accepted[], floor = BLOCK): Rule[] {
+  const best = new Map&lt;string, Rule&gt;();
+  for (const a of change) {
+    for (const r of all.get(a) ?? []) {
+      if (r.conf &lt; floor || change.has(r.b) || !existsSync(join(root, r.b)) || isAccepted(ok, a, r.b)) continue;
+      if ((best.get(r.b)?.conf ?? 0) &lt; r.conf) best.set(r.b, r);
+    }
+  }
+  return [...best.values()].sort((x, y) =&gt; y.conf - x.conf);
+}
+
+/** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the find step&#39;s first candidates. */
+export function seed(root: string, since = &quot;90.days&quot;) {
+  const commits = history(root, 5000, since);
+  const fixes = new Map&lt;string, string[]&gt;();
+  for (const c of commits) if (FIX.test(c.subject)) for (const f of c.files) fixes.set(f, [...(fixes.get(f) ?? []), `${c.sha} ${c.subject}`]);
+  const pairs = [...rules(commits).values()].flat().sort((x, y) =&gt; y.conf - x.conf);
+  return {
+    fixes: [...fixes].sort((x, y) =&gt; y[1].length - x[1].length).slice(0, 25).map(([file, cs]) =&gt; ({ file, count: cs.length, commits: cs.slice(0, 5) })),
+    pairs: pairs.slice(0, 25).map(({ a, b, co, n, conf }) =&gt; ({ a, b, co, n, conf: Math.round(conf * 100) / 100 })),
+    clones: scan(root).clones.sort((x, y) =&gt; y.lines - x.lines).slice(0, 40).map((c) =&gt; `${c.a.name}:${c.a.start}-${c.a.end} ~ ${c.b.name}:${c.b.start}-${c.b.end} (${c.lines} lines)`),
+  };
+}
+
+if (import.meta.main) {
+  const top = probe(process.cwd(), &quot;rev-parse&quot;, &quot;--show-toplevel&quot;);
+  const root = top.ok ? top.out : process.cwd();
+  const [cmd, ...rest] = Bun.argv.slice(2);
+  const since = rest[rest.indexOf(&quot;--since&quot;) + 1];
+  if (cmd === &quot;seed&quot;) console.log(JSON.stringify(seed(root, rest.includes(&quot;--since&quot;) ? since : undefined), null, 1));
+  else if (cmd === &quot;holes&quot;) console.log(JSON.stringify(holes(root, changed(root), rules(history(root)), accepted(root)), null, 1));
+  else { console.error(&quot;usage: bun cochange.ts &lt;seed [--since 90.days]|holes&gt;&quot;); process.exit(2); }
+}
+</pre></details></div></details></div></div></main>
+</div>
+<script>
+const v = document.getElementById("view"), f = {};
+const apply = () => { let c = 0; for (const r of v.querySelectorAll("#holds-log tbody tr")) { const on = Object.entries(f).every(([k, x]) => !x || r.dataset[k] === x); r.hidden = !on; c += on; } v.querySelector("#holds .dp-aside").textContent = c; };
+const set = (k, x) => { f[k] = x; const s = v.querySelector(`select[name="${k}"]`); if (s) s.value = x; };
+v.addEventListener("change", (e) => { if (e.target.matches(".fbar select")) { f[e.target.name] = e.target.value; apply(); } });
+v.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.closest(".seg[data-name]")) { for (const x of b.parentElement.children) x.setAttribute("aria-pressed", x === b); f[b.parentElement.dataset.name] = b.dataset.value; apply(); }
+  else if (b.dataset.show !== undefined) { f.who = ""; for (const x of v.querySelectorAll(".seg[data-name=who] button")) x.setAttribute("aria-pressed", x.dataset.value === ""); if (b.dataset.show) set("hook", b.dataset.show); set("kind", b.dataset.kind ?? ""); set("out", ""); apply(); document.getElementById("holds").scrollIntoView({ behavior: "smooth" }); }
+});
+</script>
+</body></html>

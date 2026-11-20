@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>aleph commands · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<link rel="stylesheet" href="app.css">
+<style>.o-caught{background:var(--done)}.o-handoff{background:var(--done);opacity:.55}.o-held{background:var(--muted)}.o-false{background:var(--error)}.o-none{background:var(--need)}.o-dead{background:var(--rule)}.hooks .tbl td.wide .meter{min-width:160px}.hooks details.src{margin-top:var(--sp-8)}.hooks details.src summary{cursor:pointer;display:flex;gap:var(--sp-10);align-items:baseline}.hooks details.src pre{max-height:40em;overflow:auto;margin:var(--sp-6) 0 0;padding:var(--sp-8) var(--sp-10);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-tag);font:var(--fs-xs)/1.5 var(--mono);white-space:pre}</style></head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Views"><a class="mark" href="#/"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/><circle cx="35.5" cy="64.5" r="20" fill="currentColor"/></svg>aleph</a><div id="nav"><ul><li class="head">Factory</li><li><a href="#/" title="Status"><wa-icon name="gauge-high" aria-hidden="true"></wa-icon><span class="lbl">Status</span></a></li><li><a href="#/automation" title="Automation"><wa-icon name="shield-halved" aria-hidden="true"></wa-icon><span class="lbl">Automation</span></a></li><li><a href="#/factory/agents" title="Agents"><wa-icon name="robot" aria-hidden="true"></wa-icon><span class="lbl">Agents</span></a></li><li><a href="#/issues" title="Issues"><wa-icon name="list-check" aria-hidden="true"></wa-icon><span class="lbl">Issues</span></a></li><li><a href="#/factory/jobs" title="Jobs"><wa-icon name="stopwatch" aria-hidden="true"></wa-icon><span class="lbl">Jobs</span></a></li><li><a href="#/ideas" title="Ideas"><wa-icon name="lightbulb" aria-hidden="true"></wa-icon><span class="lbl">Ideas</span></a></li><li><a href="#/explore" title="Explore"><wa-icon name="magnifying-glass-chart" aria-hidden="true"></wa-icon><span class="lbl">Explore</span></a></li><li class="head">Claude</li><li><a href="#/sessions" title="Sessions"><wa-icon name="comments" aria-hidden="true"></wa-icon><span class="lbl">Sessions</span></a></li><li><a href="#/memory" title="Memory"><wa-icon name="brain" aria-hidden="true"></wa-icon><span class="lbl">Memory</span></a></li><li><a href="#/hooks" title="Hooks" aria-current="page"><wa-icon name="plug" aria-hidden="true"></wa-icon><span class="lbl">Hooks</span></a></li></ul></div></nav>
+<main><div id="view"><div class="page dp-page hooks"><nav class="crumb" aria-label="Breadcrumb"><a href="index.html" aria-label="Back">«</a> <a href="index.html">hooks</a> / <span>SessionStart</span> / <span>aleph commands</span></nav><header class="ph"><h1>aleph commands</h1><span class="count">SessionStart</span><div class="aside">Last 7 days</div></header><dl class="facts"><div><dt>Event</dt><dd>SessionStart</dd></div><div><dt>Matcher</dt><dd>all</dd></div><div><dt>Command</dt><dd><code>bun cli/cli.ts help --brief</code></dd></div><div><dt>Mode</dt><dd>sync</dd></div><div><dt>Timeout</dt><dd>10 s</dd></div><div><dt>Workers</dt><dd><span class="badge run">runs</span></dd></div></dl><details class="dp-panel dp-fold" open><summary><span>Holds</span><span class="dp-aside">0</span></summary><div class="dp-body"><div class="empty"><p>No data</p></div></div></details><details class="dp-panel dp-fold" open><summary><span>Errors</span><span class="dp-aside">63</span></summary><div class="dp-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Cause</th><th>Event</th><th class="num">Errors (all hooks)</th><th class="num">Sessions</th><th>Fix</th><th>Last</th></tr></thead><tbody><tr><td>Moved hook file</td><td>SessionStart, UserPromptSubmit</td><td class="num">53</td><td class="num">10</td><td>Stub or stable entry</td><td class="time">Nov 19, 9:13 AM</td></tr><tr><td>No bun on PATH</td><td>SessionStart, Stop, UserPromptSubmit</td><td class="num">10</td><td class="num">1</td><td>Probe session</td><td class="time">Nov 15, 12:12 PM</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Source</span><span class="dp-aside">0</span></summary><div class="dp-body"><div class="empty"><p>The whole CLI</p></div></div></details></div></div></main>
+</div>
+<script>
+const v = document.getElementById("view"), f = {};
+const apply = () => { let c = 0; for (const r of v.querySelectorAll("#holds-log tbody tr")) { const on = Object.entries(f).every(([k, x]) => !x || r.dataset[k] === x); r.hidden = !on; c += on; } v.querySelector("#holds .dp-aside").textContent = c; };
+const set = (k, x) => { f[k] = x; const s = v.querySelector(`select[name="${k}"]`); if (s) s.value = x; };
+v.addEventListener("change", (e) => { if (e.target.matches(".fbar select")) { f[e.target.name] = e.target.value; apply(); } });
+v.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.closest(".seg[data-name]")) { for (const x of b.parentElement.children) x.setAttribute("aria-pressed", x === b); f[b.parentElement.dataset.name] = b.dataset.value; apply(); }
+  else if (b.dataset.show !== undefined) { f.who = ""; for (const x of v.querySelectorAll(".seg[data-name=who] button")) x.setAttribute("aria-pressed", x.dataset.value === ""); if (b.dataset.show) set("hook", b.dataset.show); set("kind", b.dataset.kind ?? ""); set("out", ""); apply(); document.getElementById("holds").scrollIntoView({ behavior: "smooth" }); }
+});
+</script>
+</body></html>

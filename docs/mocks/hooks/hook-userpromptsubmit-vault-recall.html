@@ -1,0 +1,1288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vault recall · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+<link rel="stylesheet" href="app.css">
+<style>.o-caught{background:var(--done)}.o-handoff{background:var(--done);opacity:.55}.o-held{background:var(--muted)}.o-false{background:var(--error)}.o-none{background:var(--need)}.o-dead{background:var(--rule)}.hooks .tbl td.wide .meter{min-width:160px}.hooks details.src{margin-top:var(--sp-8)}.hooks details.src summary{cursor:pointer;display:flex;gap:var(--sp-10);align-items:baseline}.hooks details.src pre{max-height:40em;overflow:auto;margin:var(--sp-6) 0 0;padding:var(--sp-8) var(--sp-10);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r-tag);font:var(--fs-xs)/1.5 var(--mono);white-space:pre}</style></head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Views"><a class="mark" href="#/"><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="39" fill="none" stroke="currentColor" stroke-width="12"/><circle cx="35.5" cy="64.5" r="20" fill="currentColor"/></svg>aleph</a><div id="nav"><ul><li class="head">Factory</li><li><a href="#/" title="Status"><wa-icon name="gauge-high" aria-hidden="true"></wa-icon><span class="lbl">Status</span></a></li><li><a href="#/automation" title="Automation"><wa-icon name="shield-halved" aria-hidden="true"></wa-icon><span class="lbl">Automation</span></a></li><li><a href="#/factory/agents" title="Agents"><wa-icon name="robot" aria-hidden="true"></wa-icon><span class="lbl">Agents</span></a></li><li><a href="#/issues" title="Issues"><wa-icon name="list-check" aria-hidden="true"></wa-icon><span class="lbl">Issues</span></a></li><li><a href="#/factory/jobs" title="Jobs"><wa-icon name="stopwatch" aria-hidden="true"></wa-icon><span class="lbl">Jobs</span></a></li><li><a href="#/ideas" title="Ideas"><wa-icon name="lightbulb" aria-hidden="true"></wa-icon><span class="lbl">Ideas</span></a></li><li><a href="#/explore" title="Explore"><wa-icon name="magnifying-glass-chart" aria-hidden="true"></wa-icon><span class="lbl">Explore</span></a></li><li class="head">Claude</li><li><a href="#/sessions" title="Sessions"><wa-icon name="comments" aria-hidden="true"></wa-icon><span class="lbl">Sessions</span></a></li><li><a href="#/memory" title="Memory"><wa-icon name="brain" aria-hidden="true"></wa-icon><span class="lbl">Memory</span></a></li><li><a href="#/hooks" title="Hooks" aria-current="page"><wa-icon name="plug" aria-hidden="true"></wa-icon><span class="lbl">Hooks</span></a></li></ul></div></nav>
+<main><div id="view"><div class="page dp-page hooks"><nav class="crumb" aria-label="Breadcrumb"><a href="index.html" aria-label="Back">«</a> <a href="index.html">hooks</a> / <span>UserPromptSubmit</span> / <span>vault recall</span></nav><header class="ph"><h1>vault recall</h1><span class="count">UserPromptSubmit</span><div class="aside">Last 7 days</div></header><dl class="facts"><div><dt>Event</dt><dd>UserPromptSubmit</dd></div><div><dt>Matcher</dt><dd>all</dd></div><div><dt>Command</dt><dd><code>bun hooks/vault-recall.ts</code></dd></div><div><dt>Mode</dt><dd>sync</dd></div><div><dt>Timeout</dt><dd>5 s</dd></div><div><dt>Workers</dt><dd><span class="badge run">runs</span></dd></div></dl><details class="dp-panel dp-fold" open><summary><span>Holds</span><span class="dp-aside">0</span></summary><div class="dp-body"><div class="empty"><p>No data</p></div></div></details><details class="dp-panel dp-fold" open><summary><span>Errors</span><span class="dp-aside">10</span></summary><div class="dp-body"><div class="tscroll"><table class="tbl"><thead><tr><th>Cause</th><th>Event</th><th class="num">Errors (all hooks)</th><th class="num">Sessions</th><th>Fix</th><th>Last</th></tr></thead><tbody><tr><td>No bun on PATH</td><td>SessionStart, Stop, UserPromptSubmit</td><td class="num">10</td><td class="num">1</td><td>Probe session</td><td class="time">Nov 15, 12:12 PM</td></tr></tbody></table></div></div></details><details class="dp-panel dp-fold" open><summary><span>Source</span><span class="dp-aside">10</span></summary><div class="dp-body"><details class="src" open><summary><code>hooks/vault-recall.ts</code><span class="quiet">106 lines</span></summary><pre>#!/usr/bin/env bun
+/**
+ * UserPromptSubmit, synchronous: Jev picks the wiki notes that bear on the
+ * prompt and they are injected as additionalContext. Silent when the prompt is
+ * short, nothing matches, no note reaches 0.85, Jev fails, or `aleph judge haiku`.
+ */
+import { readJsonOr } from &quot;../lib/json.ts&quot;;
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { judgeChoice, nouls, type Noul } from &quot;../lib/jev.ts&quot;;
+import { truncate } from &quot;../lib/otlp.ts&quot;;
+import { postTurnSpan } from &quot;./lib/trace.ts&quot;;
+import { claimLine, recallWiki } from &quot;../vault/lib/index.ts&quot;;
+import { noteRead, recordRun } from &quot;../vault/lib/vault.ts&quot;;
+import { scopeOfCwd, vaultDir } from &quot;../lib/paths.ts&quot;;
+import { errText } from &quot;../lib/errtext.ts&quot;;
+import { isAgent } from &quot;../lib/env.ts&quot;;
+
+const MIN_PROMPT = 20;
+// Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout,
+// so the candidates go in parallel requests of at most PER_REQUEST questions.
+const PER_REQUEST = 20;
+const MAX_ASKED = 100;
+const MAX_INJECTED = 3;
+const CUT = 0.85;
+const JEV_TIMEOUT_MS = 1500;
+const SEEN_DAYS = 7;
+
+/** The notes this session&#39;s hook already injected, in `&lt;vault&gt;/.index/seen/&lt;session&gt;.json`. */
+const seenFile = (root: string, session: string) =&gt; join(root, &quot;.index&quot;, &quot;seen&quot;, `${session.replace(/[^\w-]/g, &quot;_&quot;)}.json`);
+
+function readSeen(root: string, session: string | undefined): Set&lt;string&gt; {
+  if (!session) return new Set();
+  return new Set(readJsonOr&lt;string[]&gt;(seenFile(root, session), []));
+}
+
+/** Add `rels` to the session&#39;s list, and delete the lists older than SEEN_DAYS. */
+function writeSeen(root: string, session: string | undefined, seen: Set&lt;string&gt;, rels: string[]) {
+  const dir = join(root, &quot;.index&quot;, &quot;seen&quot;);
+  mkdirSync(dir, { recursive: true });
+  try {
+    for (const f of readdirSync(dir)) if (statSync(join(dir, f)).mtimeMs &lt; Date.now() - SEEN_DAYS * 86400_000) rmSync(join(dir, f), { force: true });
+  } catch (e) { recordRun(root, &quot;seen prune&quot;, &quot;failed&quot;, errText(e)); throw e; }
+  recordRun(root, &quot;seen prune&quot;, &quot;ok&quot;);
+  if (session) writeFileSync(seenFile(root, session), JSON.stringify([...seen, ...rels]));
+}
+
+/** One `vault-recall` span on the turn&#39;s trace. A failed post changes nothing. */
+async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean; error?: string }, offered: string[], context: string, askedPaths: string[] = []) {
+  await postTurnSpan(input, &quot;vault-recall&quot;, start, {
+    &quot;langfuse.observation.type&quot;: &quot;span&quot;,
+    &quot;langfuse.observation.output&quot;: context ? truncate(context) : undefined,
+    &quot;langfuse.observation.metadata.candidates&quot;: meta.candidates,
+    &quot;langfuse.observation.metadata.asked&quot;: meta.asked,
+    &quot;langfuse.observation.metadata.kept&quot;: meta.kept,
+    &quot;langfuse.observation.metadata.capped&quot;: meta.capped,
+    &quot;langfuse.observation.metadata.error&quot;: meta.error,
+    &quot;langfuse.observation.metadata.askedPaths&quot;: askedPaths.length ? askedPaths.join(&quot;\n&quot;) : undefined,
+    &quot;langfuse.observation.metadata.offered&quot;: offered.length ? offered.join(&quot;\n&quot;) : undefined,
+  });
+}
+
+async function main() {
+  if (isAgent()) return;
+  const input = JSON.parse((await Bun.stdin.text()) || &quot;{}&quot;);
+  const prompt: string = typeof input.prompt === &quot;string&quot; ? input.prompt.trim() : &quot;&quot;;
+  if (prompt.length &lt; MIN_PROMPT || judgeChoice() === &quot;haiku&quot;) return;
+  const start = Date.now();
+  const root = vaultDir();
+  const seen = readSeen(root, input.session_id);
+  const { ranked, core } = await recallWiki(root, prompt, scopeOfCwd(input.cwd ?? process.cwd()));
+  // A core note&#39;s line is already in the start context.
+  const skip = new Set([...seen, ...core.map((n) =&gt; n.rel)]);
+  const all = ranked.map((r) =&gt; r.note).filter((n) =&gt; !skip.has(n.rel));
+  const candidates = all.slice(0, MAX_ASKED);
+  const meta: Parameters&lt;typeof postSpan&gt;[2] = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length &gt; MAX_ASKED };
+  if (!candidates.length) { await postSpan(input, start, meta, [], &quot;&quot;); return; }
+  const criteria = { true: &quot;The note&#39;s subject is something the prompt asks about or depends on.&quot;, false: &quot;The note is about something else.&quot; };
+  const batches = Array.from({ length: Math.ceil(candidates.length / PER_REQUEST) }, (_, b) =&gt; candidates.slice(b * PER_REQUEST, (b + 1) * PER_REQUEST));
+  const settled = await Promise.allSettled(batches.map((batch) =&gt; {
+    const questions: Record&lt;string, Noul&gt; = {};
+    batch.forEach((n, i) =&gt; {
+      questions[`n${i}`] = { type: &quot;noul&quot;, instructions: `Does note \`${n.title}\` (its claim line: ${claimLine(n)}) bear on \`prompt\`?`, criteria };
+    });
+    return nouls({ prompt }, questions, JEV_TIMEOUT_MS);
+  }));
+  const errors: string[] = [];
+  const scored: { n: (typeof all)[number]; p: number }[] = [];
+  settled.forEach((s, b) =&gt; {
+    if (s.status === &quot;rejected&quot;) { errors.push(errText(s.reason)); return; }
+    batches[b].forEach((n, i) =&gt; scored.push({ n, p: s.value.p[`n${i}`] }));
+  });
+  if (errors.length) meta.error = errors.join(&quot;; &quot;);
+  const picked = scored.filter((x) =&gt; x.p &gt;= CUT).sort((a, b) =&gt; b.p - a.p).slice(0, MAX_INJECTED);
+  meta.kept = picked.length;
+  const lines = picked.map(({ n }) =&gt; `- ${n.title} (${join(root, n.rel)}): ${claimLine(n)}`);
+  const additionalContext = picked.length ? [&quot;Vault notes that may bear on this prompt (Jev):&quot;, ...lines].join(&quot;\n&quot;) : &quot;&quot;;
+  await postSpan(input, start, meta, picked.map(({ n }) =&gt; n.rel), additionalContext, candidates.map((n) =&gt; n.rel));
+  if (!picked.length) return;
+  writeSeen(root, input.session_id, seen, picked.map(({ n }) =&gt; n.rel));
+  noteRead(root, picked.map(({ n }) =&gt; n.title), prompt, false);
+  console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: &quot;UserPromptSubmit&quot;, additionalContext } }));
+}
+
+if (import.meta.main) await main().catch((e) =&gt; console.error(&quot;vault-recall:&quot;, errText(e)));
+</pre></details><details class="src"><summary><code>lib/json.ts</code><span class="quiet">26 lines</span></summary><pre>// The factory&#39;s JSON state files. The only module that parses one: a missing file is the caller&#39;s fallback, a file
+// that does not parse is a bug and throws. The write goes through a rename, so a reader never sees half a file.
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from &quot;node:fs&quot;;
+import { dirname } from &quot;node:path&quot;;
+
+/** The JSON in `file`, or `fallback` when there is no file. A file that does not parse throws. */
+export function readJsonOr&lt;T&gt;(file: string, fallback: T): T {
+  let text: string;
+  try { text = readFileSync(file, &quot;utf8&quot;); } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === &quot;ENOENT&quot;) return fallback;
+    throw e;
+  }
+  return JSON.parse(text);
+}
+
+/** The temp file a writer fills beside `file` before it renames it over `file`: named by pid, so two processes do not collide. */
+export const tmpName = (file: string): string =&gt; `${file}.${process.pid}.tmp`;
+
+/** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. `mode` sets the new file&#39;s permissions. */
+export function writeJson(file: string, value: unknown, mode?: number): void {
+  mkdirSync(dirname(file), { recursive: true });
+  const tmp = tmpName(file);
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + &quot;\n&quot;, { mode });
+  renameSync(tmp, file);
+}
+</pre></details><details class="src"><summary><code>lib/jev.ts</code><span class="quiet">67 lines</span></summary><pre>/**
+ * Jev, TypeSafe&#39;s decision model, through OpenRouter&#39;s decisions endpoint.
+ * It answers typed questions (choice, noul, score) with probabilities and no
+ * text, at $0.042 per million input tokens (OpenRouter, 27 Oct 2026). It
+ * cannot be called through chat/completions.
+ */
+import { conn, getJson, putJson } from &quot;./db.ts&quot;;
+import { openRouterKey } from &quot;./env.ts&quot;;
+import { logSetting } from &quot;./layout.ts&quot;;
+
+const JEV_MODEL = &quot;typesafe/jev-1.13&quot;;
+type JudgeChoice = &quot;jev&quot; | &quot;haiku&quot;;
+
+/**
+ * Whether Jev screens before Haiku, everywhere aleph uses it: ALEPH_JUDGE,
+ * else the `judge` setting that `aleph judge` writes, else jev.
+ */
+export function judgeChoice(): JudgeChoice {
+  const v = process.env.ALEPH_JUDGE ?? getJson(&quot;settings&quot;, &quot;judge&quot;, &quot;&quot;);
+  return v === &quot;haiku&quot; ? &quot;haiku&quot; : &quot;jev&quot;;
+}
+
+export function setJudgeChoice(choice: JudgeChoice) {
+  putJson(&quot;settings&quot;, &quot;judge&quot;, choice);
+  logSetting(`judge is ${choice}`);
+}
+const URL = () =&gt; process.env.ALEPH_JEV_URL ?? &quot;https://openrouter.ai/api/alpha/decisions&quot;;
+
+export type Noul = { type: &quot;noul&quot;; instructions: string; criteria?: { true: string; false: string } };
+export type Question = { type: &quot;choice&quot;; instructions: string; criteria: Record&lt;string, string&gt; } | Noul;
+type Answer =
+  | { type: &quot;choice&quot;; choice: string; probabilities?: Record&lt;string, number&gt;; confidence?: number }
+  | { type: &quot;noul&quot;; noul: number };
+export interface Decision { answers: Record&lt;string, Answer&gt;; cost: number; model: string; ms: number }
+
+/** One request: the state and the questions in, typed answers out. Throws on any failure. */
+export async function decide(state: unknown, questions: Record&lt;string, Question&gt;, timeoutMs = 15_000): Promise&lt;Decision&gt; {
+  const key = openRouterKey();
+  if (!key) throw new Error(&quot;no OPENROUTER_API_KEY&quot;);
+  const started = performance.now();
+  const res = await fetch(URL(), {
+    method: &quot;POST&quot;,
+    headers: { authorization: `Bearer ${key}`, &quot;content-type&quot;: &quot;application/json&quot; },
+    body: JSON.stringify({ model: JEV_MODEL, state, questions }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body: any = await res.json().catch(() =&gt; null);
+  if (!res.ok) throw new Error(`jev ${res.status}: ${JSON.stringify(body?.error ?? body).slice(0, 200)}`);
+  for (const id of Object.keys(questions)) {
+    const a = body?.answers?.[id];
+    if (a?.type !== questions[id].type) throw new Error(`jev: no ${questions[id].type} answer for ${id}`);
+  }
+  const cost = body.usage?.cost ?? 0;
+  // One row per call in `jev`: OpenRouter bills Jev on aleph&#39;s key, and its calls are in no transcript, so the OpenRouter rate (models.ts) subtracts them.
+  if (cost &gt; 0) {
+    try { conn().query(&quot;INSERT INTO jev (time, cost) VALUES (?, ?)&quot;).run(new Date().toISOString(), cost); } catch { /* a lost row costs cents */ }
+  }
+  return { answers: body.answers, cost, model: body.model ?? JEV_MODEL, ms: performance.now() - started };
+}
+
+/** decide() for yes-or-no questions: each question&#39;s probability of yes, by id. */
+export async function nouls(state: unknown, questions: Record&lt;string, Noul&gt;, timeoutMs?: number): Promise&lt;{ p: Record&lt;string, number&gt;; cost: number }&gt; {
+  const d = await decide(state, questions, timeoutMs);
+  const p = Object.fromEntries(Object.keys(questions).map((id) =&gt; [id, (d.answers[id] as { noul: number }).noul]));
+  return { p, cost: d.cost };
+}
+</pre></details><details class="src"><summary><code>lib/otlp.ts</code><span class="quiet">110 lines</span></summary><pre>/**
+ * OTLP/HTTP JSON straight to Langfuse. No SDK: a hook is a fresh process that
+ * lives for one event, so the whole exporter is one fetch.
+ */
+import { createHash, randomBytes } from &quot;node:crypto&quot;;
+import type { LangfuseConfig } from &quot;./env.ts&quot;;
+import { auth } from &quot;./langfuse.ts&quot;;
+
+const MAX_FIELD = 4096;
+
+export type AttrValue = string | number | boolean | string[];
+type OtlpAttr = { key: string; value: Record&lt;string, unknown&gt; };
+
+export interface Span {
+  traceId: string;
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  startTimeUnixNano: string;
+  endTimeUnixNano: string;
+  attributes: OtlpAttr[];
+  kind: number;
+  status?: { code: number; message?: string };
+}
+
+/** A trace id from any string; the live test uses it for a throwaway session. */
+export function traceIdFor(seed: string): string {
+  return createHash(&quot;sha256&quot;).update(seed).digest(&quot;hex&quot;).slice(0, 32);
+}
+
+/** One turn, one trace: the id is a pure function of the prompt id, so every hook lands in the same trace. */
+export function turnTraceIdFor(promptId: string): string {
+  return traceIdFor(`turn:${promptId}`);
+}
+
+export function spanId(): string {
+  return randomBytes(8).toString(&quot;hex&quot;);
+}
+
+/** The turn span id is a pure function of the prompt id, so any hook can parent to it. */
+export function turnSpanIdFor(promptId: string): string {
+  return createHash(&quot;sha256&quot;).update(`turn:${promptId}`).digest(&quot;hex&quot;).slice(0, 16);
+}
+
+export function nano(ms: number): string {
+  return `${BigInt(Math.round(ms))}000000`;
+}
+
+export function truncate(value: unknown, max = MAX_FIELD): string {
+  const text = typeof value === &quot;string&quot; ? value : JSON.stringify(value) ?? &quot;&quot;;
+  if (text.length &lt;= max) return text;
+  return `${text.slice(0, max)}…[+${text.length - max} chars]`;
+}
+
+function encode(value: AttrValue): Record&lt;string, unknown&gt; {
+  if (Array.isArray(value)) return { arrayValue: { values: value.map((item) =&gt; ({ stringValue: String(item) })) } };
+  if (typeof value === &quot;boolean&quot;) return { boolValue: value };
+  if (typeof value === &quot;number&quot;) return Number.isInteger(value) ? { intValue: String(value) } : { doubleValue: value };
+  return { stringValue: value };
+}
+
+export function attrs(record: Record&lt;string, AttrValue | undefined | null&gt;): OtlpAttr[] {
+  return Object.entries(record)
+    .filter(([, value]) =&gt; value !== undefined &amp;&amp; value !== null &amp;&amp; value !== &quot;&quot;)
+    .map(([key, value]) =&gt; ({ key, value: encode(value as AttrValue) }));
+}
+
+interface PostResult { ok: boolean; status?: number; error?: string }
+
+export async function postSpans(cfg: LangfuseConfig, spans: Span[], timeoutMs = 8000): Promise&lt;PostResult&gt; {
+  const body = {
+    resourceSpans: [{
+      resource: { attributes: attrs({ &quot;service.name&quot;: &quot;aleph&quot;, &quot;service.version&quot;: &quot;0.1.0&quot; }) },
+      scopeSpans: [{ scope: { name: &quot;aleph-hooks&quot; }, spans }],
+    }],
+  };
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/public/otel/v1/traces`, {
+      method: &quot;POST&quot;,
+      headers: {
+        &quot;content-type&quot;: &quot;application/json&quot;,
+        authorization: auth(cfg),
+        &quot;x-langfuse-ingestion-version&quot;: &quot;4&quot;,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, error: res.ok ? undefined : (await res.text()).slice(0, 300) };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+
+export type Score = ({ traceId: string; sessionId?: never } | { sessionId: string; traceId?: never }) &amp; { name: string; value: number; comment?: string; environment?: string };
+
+/** A score on a trace or on a session, through the scores API: OTLP has no score. */
+export async function postScore(cfg: LangfuseConfig, score: Score, timeoutMs = 3000): Promise&lt;PostResult&gt; {
+  try {
+    const res = await fetch(`${cfg.baseUrl}/api/public/scores`, {
+      method: &quot;POST&quot;,
+      headers: { &quot;content-type&quot;: &quot;application/json&quot;, authorization: auth(cfg) },
+      body: JSON.stringify({ ...score, dataType: &quot;NUMERIC&quot;, comment: score.comment?.slice(0, 500) }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return { ok: res.ok, status: res.status, error: res.ok ? undefined : (await res.text()).slice(0, 300) };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+}
+</pre></details><details class="src"><summary><code>hooks/lib/trace.ts</code><span class="quiet">42 lines</span></summary><pre>/**
+ * The trace attributes of a turn, and one span posted on the turn&#39;s trace.
+ * Every span carries the trace attributes: a span without trace.name, tags and
+ * cwd lets Langfuse rename the trace after its root span.
+ */
+import { basename } from &quot;node:path&quot;;
+import { langfuseConfig, sessionEnvironment } from &quot;../../lib/env.ts&quot;;
+import { attrs, nano, postSpans, spanId, turnSpanIdFor, turnTraceIdFor, type AttrValue } from &quot;../../lib/otlp.ts&quot;;
+import { session } from &quot;./handshake.ts&quot;;
+
+type Attrs = Record&lt;string, AttrValue | undefined | null&gt;;
+
+/** Session, user, environment, trace name, tags and cwd (from the SessionStart handshake), and the hook event. */
+export function traceAttrs(input: Record&lt;string, any&gt;): Attrs {
+  const s = input.session_id ? session(input.session_id).get() : null;
+  return {
+    &quot;langfuse.session.id&quot;: input.session_id,
+    &quot;langfuse.user.id&quot;: &quot;chris&quot;,
+    &quot;langfuse.environment&quot;: sessionEnvironment(),
+    &quot;langfuse.trace.name&quot;: s?.name ?? (input.cwd ? basename(input.cwd) : undefined),
+    &quot;langfuse.trace.tags&quot;: s?.tags,
+    &quot;langfuse.trace.metadata.cwd&quot;: s?.cwd ?? input.cwd,
+    &quot;aleph.event&quot;: input.hook_event_name,
+  };
+}
+
+/** One span under the turn of `input.prompt_id`, from `start` to now. A failed post changes nothing. */
+export async function postTurnSpan(input: Record&lt;string, any&gt;, name: string, start: number, extra: Attrs): Promise&lt;void&gt; {
+  const cfg = langfuseConfig();
+  if (!cfg || !input.prompt_id) return;
+  await postSpans(cfg, [{
+    traceId: turnTraceIdFor(input.prompt_id),
+    spanId: spanId(),
+    parentSpanId: turnSpanIdFor(input.prompt_id),
+    name,
+    kind: 1,
+    startTimeUnixNano: nano(start),
+    endTimeUnixNano: nano(Math.max(Date.now(), start)),
+    attributes: attrs({ ...traceAttrs(input), ...extra }),
+  }], 3000);
+}
+</pre></details><details class="src"><summary><code>vault/lib/index.ts</code><span class="quiet">164 lines</span></summary><pre>/**
+ * The derived search index and the one ranker that `vault recall` and the
+ * UserPromptSubmit hook share.
+ *
+ * The index is an FTS5 table at `&lt;vault&gt;/.index/vault.sqlite`, kept out of git.
+ * It is rebuilt when the vault HEAD differs from the HEAD stored in it. A vault
+ * that is not a git repo has no HEAD, so its index is rebuilt on each open.
+ */
+import { Database } from &quot;bun:sqlite&quot;;
+import { existsSync, mkdirSync, renameSync, rmSync } from &quot;node:fs&quot;;
+import { join } from &quot;node:path&quot;;
+import { coreNotes, loadWiki, scopeOf, screenWords as words, type Note } from &quot;./vault.ts&quot;;
+import { probe } from &quot;../../lib/git.ts&quot;;
+import { tmpName } from &quot;../../lib/json.ts&quot;;
+
+/** The reciprocal rank fusion constant. */
+const K = 60;
+/** The bm25 hits one search reads. */
+const FTS_LIMIT = 200;
+
+/** The first paragraph of a note&#39;s body on one line. */
+export const claimLine = (n: Pick&lt;Note, &quot;body&quot;&gt;): string =&gt; n.body.trim().split(/\n\s*\n/)[0].replace(/\s+/g, &quot; &quot;).trim();
+
+/** A note as the index returns it: no path and no text. */
+type Hit = Pick&lt;Note, &quot;rel&quot; | &quot;title&quot; | &quot;fm&quot; | &quot;body&quot; | &quot;wiki&quot; | &quot;archived&quot;&gt;;
+
+const aliasesOf = (n: Pick&lt;Note, &quot;fm&quot;&gt;): string[] =&gt; {
+  const a = n.fm.aliases;
+  return (Array.isArray(a) ? a : a ? [a] : []).map((x) =&gt; String(x).toLowerCase());
+};
+
+function head(root: string): string {
+  const p = probe(root, &quot;rev-parse&quot;, &quot;HEAD&quot;);
+  return p.ok ? p.out : &quot;&quot;;
+}
+
+// The suffix names the columns of the table: an index at the same HEAD with fewer is rebuilt.
+const stamp = (at: string): string =&gt; (at ? `${at}:fm` : &quot;&quot;);
+
+/** The open index when it holds the vault HEAD `at`, else null. */
+function current(root: string, at: string): Database | null {
+  const file = join(root, &quot;.index&quot;, &quot;vault.sqlite&quot;);
+  if (!at || !existsSync(file)) return null;
+  const db = new Database(file);
+  try {
+    if ((db.query(&quot;select value from meta where key = &#39;head&#39;&quot;).get() as { value: string } | null)?.value === at) return db;
+  } catch (e) {
+    // A vault.sqlite with no meta table is rebuilt; a busy or corrupt file is not.
+    if (!/no such table/.test((e as Error).message)) { db.close(); throw e; }
+  }
+  db.close();
+  return null;
+}
+
+/** The index for `notes` at the vault HEAD `at`, built beside the file and renamed in. */
+function build(root: string, at: string, notes: Note[]): Database {
+  // A hook that reads at the same time sees the old index or the new one.
+  const dir = join(root, &quot;.index&quot;);
+  const file = join(dir, &quot;vault.sqlite&quot;);
+  mkdirSync(dir, { recursive: true });
+  const tmp = tmpName(file);
+  rmSync(tmp, { force: true });
+  const db = new Database(tmp);
+  db.run(&quot;create table meta (key text primary key, value text)&quot;);
+  db.run(`create virtual table notes using fts5(title, aliases, claim, body, rel unindexed, scope unindexed, kind unindexed, updated unindexed, fm unindexed, tokenize = &quot;porter unicode61&quot;)`);
+  const add = db.prepare(&quot;insert into notes values (?, ?, ?, ?, ?, ?, ?, ?, ?)&quot;);
+  db.transaction(() =&gt; {
+    for (const n of notes) add.run(n.title, aliasesOf(n).join(&quot; &quot;), claimLine(n), n.body, n.rel, scopeOf(n), String(n.fm.kind ?? &quot;&quot;), String(n.fm.updated ?? &quot;&quot;), JSON.stringify(n.fm));
+    db.run(&quot;insert into meta values (&#39;head&#39;, ?)&quot;, [at]);
+  })();
+  db.close();
+  renameSync(tmp, file);
+  return new Database(file);
+}
+
+/** The index for `notes`, rebuilt first when the vault HEAD moved. */
+function openIndex(root: string, notes: Note[]): Database {
+  const at = stamp(head(root));
+  return current(root, at) ?? build(root, at, notes);
+}
+
+/** The rel paths of the notes that match any query word, best bm25 first. A query with no word of four letters, such as `bun`, searches on all its tokens. */
+function search(db: Database, query: string): string[] {
+  const long = words(query);
+  const ws = [...new Set(long.length ? long : query.toLowerCase().match(/[a-z0-9]+/g) ?? [])];
+  if (!ws.length) return [];
+  const match = ws.map((w) =&gt; `&quot;${w}&quot;`).join(&quot; OR &quot;);
+  return (db.query(&quot;select rel from notes where notes match ? order by bm25(notes, 10, 5, 3, 1) limit ?&quot;).all(match, FTS_LIMIT) as { rel: string }[]).map((r) =&gt; r.rel);
+}
+
+/**
+ * How a note&#39;s title and aliases match the query: 0 the title is the query,
+ * 1 an alias is, 2 the title or an alias holds the query or one of its words.
+ * Undefined when none of these.
+ */
+function titleTier(n: Hit, q: string, want: Set&lt;string&gt;): { tier: number; hits: number } | undefined {
+  const title = n.title.toLowerCase(), aliases = aliasesOf(n);
+  if (title === q) return { tier: 0, hits: Infinity };
+  if (aliases.includes(q)) return { tier: 1, hits: Infinity };
+  if (title.includes(q) || aliases.some((a) =&gt; a.includes(q))) return { tier: 2, hits: Infinity };
+  const have = new Set(words([n.title, ...aliases].join(&quot; &quot;)));
+  const hits = [...want].filter((w) =&gt; have.has(w)).length;
+  return hits ? { tier: 2, hits } : undefined;
+}
+
+interface Ranked&lt;T = Note&gt; { note: T; rank: number }
+
+/**
+ * The index for `notes`, searched for `query` among `among` (all of `notes` by default) and closed again.
+ * The ranking is `rankNotes`&#39;s.
+ */
+export function recall(root: string, notes: Note[], query: string, scope?: string, among: Note[] = notes): Ranked[] {
+  return recallAll(root, notes, [query], scope, among)[0];
+}
+
+/** `recall` for each of `queries`, in order, on one open of the index. */
+export function recallAll(root: string, notes: Note[], queries: string[], scope?: string, among: Note[] = notes): Ranked[][] {
+  const db = openIndex(root, notes);
+  try { return queries.map((q) =&gt; rankNotes(db, among, q, scope)); } finally { db.close(); }
+}
+
+/**
+ * The notes that match `query`, fused by reciprocal rank (k = 60) over three
+ * lists: the title and alias matches, the bm25 hits, and, with `scope`, that
+ * scope&#39;s notes by `updated`, newest first. Only a note on one of the first
+ * two lists is returned; the third list orders them and adds none.
+ * `rank` is the title tier (0, 1 or 2), or 3 for a body-only hit.
+ */
+function rankNotes&lt;T extends Hit&gt;(db: Database, notes: T[], query: string, scope?: string): Ranked&lt;T&gt;[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const want = new Set(words(q));
+  const byRel = new Map(notes.map((n) =&gt; [n.rel, n]));
+  const tiers = new Map&lt;string, number&gt;();
+  const titled = notes.flatMap((n) =&gt; { const t = titleTier(n, q, want); return t ? [{ n, ...t }] : []; })
+    .sort((a, b) =&gt; a.tier - b.tier || b.hits - a.hits || a.n.title.localeCompare(b.n.title));
+  for (const { n, tier } of titled) tiers.set(n.rel, tier);
+  const lists: string[][] = [titled.map(({ n }) =&gt; n.rel), search(db, q).filter((rel) =&gt; byRel.has(rel))];
+  if (scope !== undefined) {
+    lists.push(notes.filter((n) =&gt; scopeOf(n) === scope)
+      .sort((a, b) =&gt; String(b.fm.updated ?? &quot;&quot;).localeCompare(String(a.fm.updated ?? &quot;&quot;)) || a.title.localeCompare(b.title)).map((n) =&gt; n.rel));
+  }
+  const matched = new Set([...lists[0], ...lists[1]]);
+  const score = new Map&lt;string, number&gt;();
+  for (const list of lists) list.forEach((rel, i) =&gt; { if (matched.has(rel)) score.set(rel, (score.get(rel) ?? 0) + 1 / (K + i + 1)); });
+  return [...matched]
+    .sort((a, b) =&gt; score.get(b)! - score.get(a)! || byRel.get(a)!.title.localeCompare(byRel.get(b)!.title))
+    .map((rel) =&gt; ({ note: byRel.get(rel)!, rank: tiers.get(rel) ?? 3 }));
+}
+
+/**
+ * The wiki notes that match `query`, as `recall` ranks them, and the core notes of `scope`, read from the index
+ * for the vault HEAD: a note file is read only when the index is stale.
+ */
+export async function recallWiki(root: string, query: string, scope: string): Promise&lt;{ ranked: Ranked&lt;Hit&gt;[]; core: Hit[] }&gt; {
+  const at = stamp(head(root));
+  const db = current(root, at) ?? build(root, at, await loadWiki(root));
+  try {
+    const rows = (db.query(&quot;select title, body, rel, fm from notes where rel like &#39;wiki/%&#39;&quot;).all() as { title: string; body: string; rel: string; fm: string }[])
+      .map((r): Hit =&gt; ({ ...r, fm: JSON.parse(r.fm), wiki: true, archived: false }));
+    return { ranked: rankNotes(db, rows, query, scope), core: coreNotes(rows, scope) };
+  } finally { db.close(); }
+}
+</pre></details><details class="src"><summary><code>vault/lib/vault.ts</code><span class="quiet">583 lines</span></summary><pre>/**
+ * The vault on disk: notes, links, validation, lint. Pure functions
+ * over a directory; the CLI decides what to write and commit.
+ */
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from &quot;node:fs&quot;;
+import { readFile, stat } from &quot;node:fs/promises&quot;;
+import { basename, dirname, join, relative } from &quot;node:path&quot;;
+import { clock, daysAgo, today } from &quot;../../lib/day.ts&quot;;
+import { readJsonOr, writeJson } from &quot;../../lib/json.ts&quot;;
+import { parseFrontmatter, splitFrontmatter, type Frontmatter } from &quot;../../lib/frontmatter.ts&quot;;
+import { errText } from &quot;../../lib/errtext.ts&quot;;
+
+export const KINDS = [&quot;decision&quot;, &quot;concept&quot;, &quot;entity&quot;, &quot;project&quot;, &quot;gotcha&quot;] as const;
+type Kind = (typeof KINDS)[number];
+const FOLDERS: Record&lt;Kind, string&gt; = { decision: &quot;decisions&quot;, concept: &quot;concepts&quot;, entity: &quot;entities&quot;, project: &quot;projects&quot;, gotcha: &quot;gotchas&quot; };
+const CONFIDENCE = [&quot;measured&quot;, &quot;reported&quot;, &quot;inferred&quot;] as const;
+const REQUIRED = [&quot;kind&quot;, &quot;scope&quot;, &quot;confidence&quot;, &quot;updated&quot;, &quot;supersedes&quot;, &quot;sources&quot;] as const;
+const LISTS = [&quot;aliases&quot;, &quot;supersedes&quot;, &quot;consistent_with&quot;, &quot;distinct&quot;, &quot;sources&quot;, &quot;tags&quot;] as const;
+const LINE_BUDGET = 150;
+
+/**
+ * Days before a note&#39;s claim wants a re-check, by kind. An architecture
+ * decision decays slowly and a transient gotcha decays fast; a project note
+ * describes current state, so it decays fastest of all.
+ */
+const DECAY_DAYS: Record&lt;Kind, number&gt; = { project: 30, gotcha: 60, decision: 180, concept: 365, entity: 365 };
+
+/**
+ * Freshness and authority are different axes. A six-month-old claim someone
+ * measured outlives a fresh one they guessed, so confidence widens or narrows
+ * the window rather than gating it, as the old `measured`-only rule did.
+ */
+const CONFIDENCE_FACTOR: Record&lt;string, number&gt; = { measured: 1.5, reported: 1, inferred: 0.5 };
+
+export interface Note {
+  path: string;      // absolute
+  rel: string;       // relative to the vault
+  title: string;     // filename stem
+  fm: Frontmatter;
+  hasFrontmatter: boolean;
+  body: string;
+  text: string;
+  wiki: boolean;     // lives under wiki/
+  archived: boolean; // lives under archive/; a link target, never linted or recalled
+}
+
+/** `other` is the second note of an `overlap` pair. */
+export interface Finding { note: string; rule: string; detail: string; other?: string }
+
+export type Run = { at: string; result: &quot;ok&quot; | &quot;failed&quot;; detail?: string };
+const runFile = (root: string, name: string) =&gt; join(root, &quot;.index&quot;, &quot;runs&quot;, `${name}.json`);
+
+/** The newest run of a vault process, one file each in `.index/runs` (outside git), so the record never grows. A failed write changes nothing. */
+export function recordRun(root: string, name: string, result: Run[&quot;result&quot;], detail?: string): void {
+  try { writeJson(runFile(root, name), { at: new Date().toISOString(), result, ...(detail ? { detail } : {}) }); } catch { /* the record must never fail its process */ }
+}
+
+/** The newest run of `name`, or null when it never ran. */
+export function readRun(root: string, name: string): Run | null {
+  return readJsonOr&lt;Run | null&gt;(runFile(root, name), null);
+}
+
+const compiledFile = (root: string) =&gt; join(root, &quot;.index&quot;, &quot;compiled.json&quot;);
+
+/** The days `aleph memory compile` ran, oldest first, each once. The file sits in `.index` (outside git). */
+export function compiledDays(root: string): string[] {
+  return readJsonOr&lt;string[]&gt;(compiledFile(root), []);
+}
+
+/** Adds `date` to the compiled days, unless it is there; a day compiled is no longer marked for retry. */
+export function recordCompiled(root: string, date: string): void {
+  const days = compiledDays(root);
+  if (!days.includes(date)) writeJson(compiledFile(root), [...days, date].sort());
+  markRetry(root, date, false);
+}
+
+const retryFile = (root: string) =&gt; join(root, &quot;.index&quot;, &quot;compile-retry.json&quot;);
+
+/** The days whose compile failed and that no compile of has succeeded since, oldest first. */
+export function retryDays(root: string): string[] {
+  return readJsonOr&lt;string[]&gt;(retryFile(root), []);
+}
+
+/** Marks `date` for a compile retry (`on`) or clears its mark. */
+export function markRetry(root: string, date: string, on: boolean): void {
+  const days = retryDays(root), marked = days.includes(date);
+  if (on !== marked) writeJson(retryFile(root), on ? [...days, date].sort() : days.filter((d) =&gt; d !== date));
+}
+
+/** Days the recall log keeps. */
+export const RECALL_DAYS = 30;
+const recallLog = (root: string) =&gt; join(root, &quot;.recall-log.jsonl&quot;);
+
+/** Appends one JSON line of date, title and query per returned title. Outside git; the CLI and the hook both append through here. */
+export function appendRecallLog(root: string, titles: string[], query: string): void {
+  appendFileSync(recallLog(root), titles.map((title) =&gt; JSON.stringify({ date: today(), title, query }) + &quot;\n&quot;).join(&quot;&quot;));
+}
+
+/** The logged returns dated `since` or later, oldest first; a line that does not parse is skipped. */
+export function readRecallLog(root: string, since = daysAgo(RECALL_DAYS)): { date: string; title: string; query: string }[] {
+  if (!existsSync(recallLog(root))) return [];
+  return readFileSync(recallLog(root), &quot;utf8&quot;).split(&quot;\n&quot;).flatMap((l) =&gt; {
+    try { const e = JSON.parse(l); return e.date &gt;= since ? [e] : []; } catch { return []; }
+  });
+}
+
+/** Rewrites the recall log without the lines older than `RECALL_DAYS`, and records the run. */
+export function trimRecallLog(root: string): void {
+  try {
+    if (existsSync(recallLog(root))) writeFileSync(recallLog(root), readRecallLog(root).map((e) =&gt; JSON.stringify(e) + &quot;\n&quot;).join(&quot;&quot;));
+  } catch (e) { recordRun(root, &quot;recall trim&quot;, &quot;failed&quot;, errText(e)); throw e; }
+  recordRun(root, &quot;recall trim&quot;, &quot;ok&quot;);
+}
+
+/** One op line of a daily note. `title` is a note&#39;s title for the ops that link it, else free text. */
+export type Op = { op: string; title: string; why: string };
+
+/** The ops whose line links the note as `[[title]]`. A delete does not: its note is gone, and the link would dangle. */
+const LINKED = [&quot;write&quot;, &quot;supersede&quot;, &quot;archive&quot;, &quot;adopt&quot;];
+
+const opText = ({ op, title, why }: Op): string =&gt; `${op} ${LINKED.includes(op) ? `[[${title}]]` : title} — ${why}`;
+
+/** The note op that `text` (an op line without its time) records, or null for any other line. A write line from before the `[[title]]` form reads `write Title — why`. */
+export function parseOp(text: string): Op | null {
+  const linked = /^(write|supersede|archive|adopt) \[\[(.+?)\]\]\s*(.*)$/.exec(text) ?? /^(delete|write) (.+?) — (.*)$/.exec(text);
+  return linked &amp;&amp; { op: linked[1], title: linked[2], why: linked[3].replace(/\[\[|\]\]/g, &quot;&quot;).replace(/^[—–-]\s*/, &quot;&quot;) };
+}
+
+/** Append `- HH:MM &lt;op&gt;` to today&#39;s daily note under `root`, making the note when it is new. Returns the note&#39;s path, which a commit of the line names. */
+export function appendDaily(root: string, op: Op): string {
+  const dir = join(root, &quot;daily&quot;);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${today()}.md`);
+  if (!existsSync(file)) writeFileSync(file, `# ${today()}\n\n`);
+  appendFileSync(file, `- ${clock()} ${opText(op)}\n`);
+  return file;
+}
+
+export function readNote(path: string, root: string): Note {
+  return parseNote(path, root, readFileSync(path, &quot;utf8&quot;));
+}
+
+function parseNote(path: string, root: string, text: string): Note {
+  const { frontmatter, body } = splitFrontmatter(text);
+  const rel = relative(root, path);
+  return { path, rel, title: basename(path, &quot;.md&quot;), fm: frontmatter === null ? {} : parseFrontmatter(frontmatter), hasFrontmatter: frontmatter !== null, body, text, wiki: rel.startsWith(&quot;wiki/&quot;), archived: rel.startsWith(&quot;archive/&quot;) };
+}
+
+function walk(dir: string, out: string[] = []): string[] {
+  if (!existsSync(dir)) return out;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith(&quot;.&quot;)) continue;
+    const p = join(dir, e.name);
+    // A symlink is followed, as statSync did.
+    const isDir = e.isSymbolicLink() ? statSync(p).isDirectory() : e.isDirectory();
+    if (isDir) walk(p, out);
+    else if (e.name.endsWith(&quot;.md&quot;)) out.push(p);
+  }
+  return out;
+}
+
+/** Parsed notes by root and path, valid while a file&#39;s mtime and size are unchanged. */
+const cache = new Map&lt;string, { mtimeMs: number; size: number; note: Note }&gt;();
+
+/** The notes under `dir`, parsed in parallel; a file whose mtime and size match the cache is not parsed again. */
+async function load(root: string, dir: string): Promise&lt;Note[]&gt; {
+  const seen = new Set&lt;string&gt;();
+  const notes = await Promise.all(
+    walk(dir).map(async (p) =&gt; {
+      const key = `${root}\0${p}`;
+      seen.add(key);
+      const st = await stat(p);
+      const hit = cache.get(key);
+      if (hit &amp;&amp; hit.mtimeMs === st.mtimeMs &amp;&amp; hit.size === st.size) return { ...hit.note };
+      const note = parseNote(p, root, await readFile(p, &quot;utf8&quot;));
+      cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, note });
+      return { ...note };
+    }),
+  );
+  for (const key of cache.keys()) if (key.startsWith(`${root}\0${dir}`) &amp;&amp; !seen.has(key)) cache.delete(key);
+  return notes;
+}
+
+/** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
+export const loadVault = (root: string): Promise&lt;Note[]&gt; =&gt; load(root, root);
+
+/**
+ * The notes under wiki/, read in parallel. Each read on a /mnt/c vault costs
+ * about 4 ms over 9P, so a serial loadVault of 700 notes takes 3-5 s.
+ */
+export const loadWiki = (root: string): Promise&lt;Note[]&gt; =&gt; load(root, join(root, &quot;wiki&quot;));
+
+export function wikiNotes&lt;T extends Pick&lt;Note, &quot;wiki&quot;&gt;&gt;(notes: T[]): T[] {
+  return notes.filter((n) =&gt; n.wiki);
+}
+
+const LINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/g;
+
+export function links(text: string): string[] {
+  const prose = text.replace(/```[\s\S]*?```/g, &quot;&quot;).replace(/`[^`\n]*`/g, &quot;&quot;);
+  return [...prose.matchAll(LINK)].map((m) =&gt; m[1].trim());
+}
+
+/** A note&#39;s frontmatter key as a list: a lone value is a list of one, a missing key is empty. */
+export function listOf(n: Note, key: string): string[] {
+  const v = n.fm[key];
+  return Array.isArray(v) ? v : v === undefined ? [] : [v];
+}
+
+/** A note&#39;s scope, empty when it has none. */
+export function scopeOf(n: Pick&lt;Note, &quot;fm&quot;&gt;): string {
+  return String(n.fm.scope ?? &quot;&quot;);
+}
+
+/** Titles and aliases that a [[link]] may resolve to. Every file stem counts, so daily notes resolve too. */
+export function linkTargets(notes: Note[]): Map&lt;string, Note&gt; {
+  const m = new Map&lt;string, Note&gt;();
+  for (const n of notes) {
+    m.set(n.title.toLowerCase(), n);
+    for (const a of listOf(n, &quot;aliases&quot;)) m.set(a.toLowerCase(), n);
+  }
+  return m;
+}
+
+/** The notes, other than `hit`, whose links resolve to `hit` by its title or an alias. */
+export function backlinks(notes: Note[], hit: Note): Note[] {
+  const targets = linkTargets(notes);
+  return notes.filter((n) =&gt; n !== hit &amp;&amp; links(n.body).some((t) =&gt; targets.get(t.toLowerCase()) === hit));
+}
+
+/** Every note a name resolves to, in note order: `linkTargets` keeps only the last of them. */
+function nameIndex(notes: Note[]): Map&lt;string, Note[]&gt; {
+  const m = new Map&lt;string, Note[]&gt;();
+  for (const n of notes) for (const name of [n.title, ...listOf(n, &quot;aliases&quot;)]) {
+    const k = name.toLowerCase();
+    m.set(k, [...(m.get(k) ?? []), n]);
+  }
+  return m;
+}
+
+export function folderFor(kind: string): string | null {
+  return (KINDS as readonly string[]).includes(kind) ? `wiki/${FOLDERS[kind as Kind]}` : null;
+}
+
+function validTitle(title: string): boolean {
+  return !/[\/\\:*?&quot;&lt;&gt;|]/.test(title) &amp;&amp; title.trim() === title &amp;&amp; title.length &gt; 0;
+}
+
+
+/** Refuse-class findings for one wiki note against the rest of the vault. */
+export function validateNote(note: Note, others: Note[], index: Map&lt;string, Note[]&gt; = nameIndex(others)): Finding[] {
+  const f: Finding[] = [];
+  const add = (rule: string, detail: string) =&gt; f.push({ note: note.title, rule, detail });
+  if (!validTitle(note.title)) add(&quot;title&quot;, `title has a forbidden character or surrounding whitespace: ${JSON.stringify(note.title)}`);
+  if (!note.hasFrontmatter) { add(&quot;schema&quot;, &quot;no frontmatter&quot;); return f; }
+  for (const key of REQUIRED) if (note.fm[key] === undefined) add(&quot;schema&quot;, `missing ${key}`);
+  const kind = String(note.fm.kind ?? &quot;&quot;);
+  if (note.fm.kind !== undefined &amp;&amp; !(KINDS as readonly string[]).includes(kind)) add(&quot;schema&quot;, `kind must be one of ${KINDS.join(&quot;|&quot;)}, got ${kind}`);
+  if (note.fm.confidence !== undefined &amp;&amp; !(CONFIDENCE as readonly string[]).includes(String(note.fm.confidence))) add(&quot;schema&quot;, `confidence must be one of ${CONFIDENCE.join(&quot;|&quot;)}, got ${note.fm.confidence}`);
+  if (note.fm.updated !== undefined &amp;&amp; !/^\d{4}-\d{2}-\d{2}$/.test(String(note.fm.updated))) add(&quot;schema&quot;, `updated must be YYYY-MM-DD, got ${note.fm.updated}`);
+  if (note.fm.scope !== undefined &amp;&amp; (Array.isArray(note.fm.scope) || !String(note.fm.scope).trim())) add(&quot;schema&quot;, &quot;scope must be a repo name or global&quot;);
+  for (const key of LISTS) if (note.fm[key] !== undefined &amp;&amp; !Array.isArray(note.fm[key])) add(&quot;schema&quot;, `${key} must be a list`);
+  if (note.fm.core !== undefined &amp;&amp; (typeof note.fm.core !== &quot;string&quot; || !note.fm.core.trim() || note.fm.core.length &gt; CORE_MAX)) add(&quot;schema&quot;, `core must be one line of 1 to ${CORE_MAX} characters`);
+  const folder = folderFor(kind);
+  if (folder &amp;&amp; dirname(note.rel) !== folder) add(&quot;folder&quot;, `kind ${kind} belongs in ${folder}/, note is in ${dirname(note.rel)}/`);
+
+  const mine = [note.title, ...listOf(note, &quot;aliases&quot;)].map((s) =&gt; s.toLowerCase());
+  for (const name of mine) {
+    const hit = index.get(name)?.filter((o) =&gt; o.path !== note.path).at(-1);
+    if (hit) add(&quot;duplicate&quot;, `&quot;${name}&quot; is already the title or an alias of ${hit.rel}`);
+  }
+  for (const target of links(note.body)) if (!index.has(target.toLowerCase()) &amp;&amp; !mine.includes(target.toLowerCase())) add(&quot;dangling&quot;, `[[${target}]] resolves to nothing`);
+
+  const body = note.body.replace(/^\s*#[^\n]*\n/, &quot;&quot;).trimStart();
+  const claim = body.split(/\n\s*\n/)[0];
+  if (!claim.startsWith(&quot;**Claim.**&quot;)) add(&quot;template&quot;, &quot;body must open with a paragraph beginning **Claim.**&quot;);
+  if (!/as of \d{4}-\d{2}-\d{2}/.test(claim)) add(&quot;template&quot;, &quot;the claim must carry an `as of YYYY-MM-DD` marker&quot;);
+  for (const h of [&quot;Details&quot;, &quot;Evidence&quot;, &quot;Related&quot;]) if (!new RegExp(`^## ${h}\\s*$`, &quot;m&quot;).test(note.body)) add(&quot;template&quot;, `missing section ## ${h}`);
+  return f;
+}
+
+export function budgetFindings(notes: Note[]): Finding[] {
+  const f: Finding[] = [];
+  for (const name of [&quot;MEMORY&quot;]) {
+    const n = notes.find((x) =&gt; x.rel === `${name}.md`);
+    if (!n) continue;
+    const lines = n.text.replace(/\n+$/, &quot;&quot;).split(&quot;\n&quot;).length;
+    if (lines &gt; LINE_BUDGET) f.push({ note: name, rule: &quot;budget&quot;, detail: `${name}.md is ${lines} lines; the budget is ${LINE_BUDGET}` });
+  }
+  return f;
+}
+
+const STOP = new Set(&quot;about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your&quot;.split(&quot; &quot;));
+export const screenWords = (s: string) =&gt; (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) =&gt; !STOP.has(w));
+
+const MAX_CANDIDATES = 20;
+
+/** Live wiki notes in the draft&#39;s scope that share a title or alias word with it, minus those it supersedes or says it is consistent with, at most `MAX_CANDIDATES`. */
+export function screenCandidates(draft: Note, notes: Note[]): Note[] {
+  const want = new Set(screenWords([draft.title, ...listOf(draft, &quot;aliases&quot;)].join(&quot; &quot;)));
+  const sup = new Set([...listOf(draft, &quot;supersedes&quot;), ...listOf(draft, &quot;consistent_with&quot;), ...listOf(draft, &quot;distinct&quot;)].map((t) =&gt; t.toLowerCase()));
+  return wikiNotes(notes)
+    .filter((n) =&gt; n.fm.scope === draft.fm.scope &amp;&amp; !sup.has(n.title.toLowerCase()))
+    .filter((n) =&gt; screenWords([n.title, ...listOf(n, &quot;aliases&quot;)].join(&quot; &quot;)).some((w) =&gt; want.has(w)))
+    .slice(0, MAX_CANDIDATES);
+}
+
+/** The draft&#39;s text with `written_by` and `session` added to its frontmatter where it has none. */
+export function stampProvenance(draft: Note, sessionId: string | undefined): string {
+  const add: string[] = [];
+  if (draft.fm.written_by === undefined) add.push(`written_by: ${sessionId ? &quot;claude&quot; : &quot;chris&quot;}`);
+  if (sessionId &amp;&amp; draft.fm.session === undefined) add.push(`session: ${sessionId}`);
+  if (!add.length) return draft.text;
+  return draft.text.replace(/^(---\r?\n[\s\S]*?\r?\n)(---)/, (_, head, close) =&gt; `${head}${add.join(&quot;\n&quot;)}\n${close}`);
+}
+
+function words(s: string): Set&lt;string&gt; {
+  return new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((w) =&gt; w.length &gt;= 4));
+}
+
+/**
+ * How stale a note&#39;s claim is, or null when it is inside its window.
+ *
+ * The window is the kind&#39;s decay budget, widened or narrowed by confidence,
+ * and it runs from `updated` only. A recall proves a note is used, not that it
+ * is true, so a read does not reset the window; the maintainer&#39;s re-check does.
+ */
+function staleness(note: Note, now = new Date()): string | null {
+  const kind = String(note.fm.kind ?? &quot;&quot;);
+  if (!(KINDS as readonly string[]).includes(kind)) return null;
+  const updated = String(note.fm.updated ?? &quot;&quot;);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(updated)) return null;
+  const window = Math.round(DECAY_DAYS[kind as Kind] * (CONFIDENCE_FACTOR[String(note.fm.confidence)] ?? 1));
+  const days = Math.floor((now.getTime() - Date.parse(updated)) / 86400_000);
+  if (days &lt;= window) return null;
+  return `${kind}/${note.fm.confidence} wants a re-check every ${window} days; updated ${updated}, ${days} days ago`;
+}
+
+interface LintOptions { overlap?: boolean; now?: Date; tracked?: string[]; templates?: boolean }
+
+export function lintVault(notes: Note[], { overlap = false, now = new Date(), tracked = [], templates = false }: LintOptions = {}): { refuse: Finding[]; warn: Finding[] } {
+  const refuse: Finding[] = [];
+  const warn: Finding[] = [];
+  const wiki = wikiNotes(notes);
+  // `write` is the gate and refuses on the template; `lint` reports a vault
+  // that already exists. A note on disk cannot be un-written, and the template
+  // rules are claims about prose that no repair can make true, so they warn
+  // here — one line per note, not one per missing heading.
+  const template: Finding[] = [];
+  const index = nameIndex(notes);
+  for (const n of wiki) {
+    const found = validateNote(n, notes, index);
+    refuse.push(...found.filter((f) =&gt; f.rule !== &quot;template&quot;));
+    const broken = found.filter((f) =&gt; f.rule === &quot;template&quot;);
+    if (broken.length) template.push({ note: n.title, rule: &quot;template&quot;, detail: broken.map((f) =&gt; f.detail).join(&quot;; &quot;) });
+  }
+  // 69 correct warnings are a wall, and the seventieth is the one that matters.
+  // The count goes in the list; the notes go behind `lint --template`.
+  if (templates || template.length &lt;= 1) warn.push(...template);
+  else warn.push({ note: `${template.length} notes`, rule: &quot;template&quot;, detail: `want an \`as of\` marker, a **Claim.** opening or a ## Details/Evidence/Related section; name them with: lint --template` });
+  refuse.push(...budgetFindings(notes));
+  const targets = linkTargets(notes);
+  for (const n of notes.filter((x) =&gt; !x.wiki &amp;&amp; !x.archived &amp;&amp; x.rel !== &quot;VAULT.md&quot;)) for (const t of links(n.body)) if (!targets.has(t.toLowerCase())) refuse.push({ note: n.title, rule: &quot;dangling&quot;, detail: `[[${t}]] resolves to nothing` });
+
+  // A note deleted by hand is gone from the filesystem, so nothing else here
+  // can see it, and no op commits the deletion any more. Say so and name the
+  // door: `archive` retires a note without destroying it.
+  const onDisk = new Set(notes.map((n) =&gt; n.rel));
+  for (const rel of tracked) {
+    // `loadVault` walks markdown only, so every other tracked file — a
+    // `.gitkeep`, an attachment — would look deleted.
+    if (!rel.endsWith(&quot;.md&quot;) || onDisk.has(rel)) continue;
+    warn.push({ note: basename(rel, &quot;.md&quot;), rule: &quot;deleted&quot;, detail: `${rel} is tracked but gone from disk; retire it with: aleph memory archive &quot;${basename(rel, &quot;.md&quot;)}&quot; --why &quot;&lt;one line&gt;&quot;` });
+  }
+
+  // The other half: a note on disk that git has never seen. No op commits a
+  // path it did not touch, so an unwritten draft sits in `wiki/` for ever,
+  // visible to lint and to [[links]] but absent from history. On 2026-09-26
+  // seven notes another session had drafted were waiting in the live vault and
+  // nothing had said so.
+  if (tracked.length) {
+    const known = new Set(tracked);
+    for (const n of wiki) {
+      if (known.has(n.rel)) continue;
+      warn.push({ note: n.title, rule: &quot;untracked&quot;, detail: `${n.rel} is on disk but git has never seen it; put it through: aleph memory write &quot;${n.rel}&quot; --why &quot;&lt;one line&gt;&quot;` });
+    }
+  }
+
+  for (const n of wiki) {
+    const s = staleness(n, now);
+    if (s) warn.push({ note: n.title, rule: &quot;stale&quot;, detail: s });
+  }
+
+  // The overlap check is off. It pairs notes on words their titles and aliases
+  // share inside one scope, and the scope already encodes the project name, so
+  // it fired 147 times across 62 of 138 notes and named no duplicate worth
+  // acting on. Dated series (`... Review 2026-09-19/-20/-23`) pair with each
+  // other by design. Word overlap also cannot see the thing that matters, a
+  // later note that quietly invalidates an earlier one; the published work on
+  // that uses embeddings plus fuzzy matching and still needs a labelled corpus
+  // to set the threshold. The code stays until a rule exists that finds
+  // something: turn it on with `lint --overlap`.
+  const pairs: (Finding &amp; { score: number })[] = [];
+  if (overlap) for (let i = 0; i &lt; wiki.length; i++) for (let j = i + 1; j &lt; wiki.length; j++) {
+    // By title, so which note of a pair is `note` does not depend on the order readdir gave them.
+    const [a, b] = wiki[i].title &lt; wiki[j].title ? [wiki[i], wiki[j]] : [wiki[j], wiki[i]];
+    if (a.fm.scope !== b.fm.scope) continue;
+    const sup = (x: Note, y: Note) =&gt; listOf(x, &quot;supersedes&quot;).some((t) =&gt; t.toLowerCase() === y.title.toLowerCase());
+    const agree = (x: Note, y: Note) =&gt; listOf(x, &quot;consistent_with&quot;).some((t) =&gt; t.toLowerCase() === y.title.toLowerCase());
+    const dist = (x: Note, y: Note) =&gt; listOf(x, &quot;distinct&quot;).some((t) =&gt; t.toLowerCase() === y.title.toLowerCase());
+    if (sup(a, b) || sup(b, a) || agree(a, b) || agree(b, a) || dist(a, b) || dist(b, a)) continue;
+    const wa = words([a.title, ...listOf(a, &quot;aliases&quot;)].join(&quot; &quot;));
+    const wb = words([b.title, ...listOf(b, &quot;aliases&quot;)].join(&quot; &quot;));
+    const shared = [...wa].filter((w) =&gt; wb.has(w));
+    if (shared.length &gt;= 2) pairs.push({ note: a.title, rule: &quot;overlap&quot;, other: b.title, detail: `shares &quot;${shared.join(&#39;&quot;, &quot;&#39;)}&quot; with ${b.title} in scope ${a.fm.scope}; neither supersedes the other`, score: shared.length / new Set([...wa, ...wb]).size });
+  }
+  // Most similar first (Jaccard of the word sets), ties by title, so a tied pair keeps one place and one
+  // direction however the filesystem lists the notes.
+  warn.push(...pairs.sort((x, y) =&gt; y.score - x.score || x.note.localeCompare(y.note) || x.other!.localeCompare(y.other!)).map(({ score, ...f }) =&gt; f));
+  return { refuse, warn };
+}
+
+export function citedTraces(notes: Note[]): string[] {
+  const ids = new Set&lt;string&gt;();
+  for (const n of notes) for (const s of listOf(n, &quot;sources&quot;)) if (s.startsWith(&quot;trace:&quot;)) ids.add(s.slice(6));
+  return [...ids].sort();
+}
+
+/**
+ * The repairs that need no judgement. `--fix` edits frontmatter and never the
+ * body: frontmatter is structural and each defect below has one right answer,
+ * where a missing `## Evidence` or `as of` marker is a claim about the world.
+ * Appending those headings would turn &quot;this claim is unbacked&quot; into a passing
+ * check and lose the only way to find an unbacked claim later.
+ *
+ * Edits are line-level, so a note keeps its own formatting and the diff stays
+ * readable. Returns null when there is nothing to repair.
+ */
+export function fixFrontmatter(note: Note, added: string | null): { text: string; repairs: string[] } | null {
+  if (!note.hasFrontmatter) return null;
+  const { frontmatter, body } = splitFrontmatter(note.text);
+  const lines = frontmatter!.split(/\r?\n/);
+  const repairs: string[] = [];
+
+  for (const key of LISTS) {
+    const v = note.fm[key];
+    if (v === undefined || Array.isArray(v)) continue;
+    const i = lines.findIndex((l) =&gt; new RegExp(`^${key}:\\s`).test(l));
+    // Rebuild the line from its own text, not from the parsed value, and only
+    // when the text is a plain scalar. A line the parser read as a string
+    // because it could not read it at all is a defect to report, not to wrap.
+    const raw = i &lt; 0 ? &quot;&quot; : lines[i].slice(key.length + 1).trim();
+    if (i &lt; 0 || !raw || /[&quot;&#39;\[\]#]/.test(raw)) continue;
+    lines[i] = `${key}: [${raw}]`;
+    repairs.push(`${key} wrapped in a list`);
+  }
+  if (note.fm.supersedes === undefined) { lines.push(&quot;supersedes: []&quot;); repairs.push(&quot;added supersedes: []&quot;); }
+  if (note.fm.updated === undefined &amp;&amp; added) { lines.push(`updated: ${added}`); repairs.push(`added updated: ${added}, the date the note entered git`); }
+
+  if (!repairs.length) return null;
+  return { text: `---\n${lines.join(&quot;\n&quot;)}\n---\n${body}`, repairs };
+}
+
+/** Body text that names a date the reader cannot resolve. Reported, never rewritten. */
+export function relativeDates(notes: Note[]): Finding[] {
+  const words = /\b(yesterday|today|tomorrow|last (?:night|week|month|year)|this (?:morning|week|month)|next week|a few days ago|recently|just now)\b/gi;
+  const out: Finding[] = [];
+  for (const n of wikiNotes(notes)) {
+    // Code names a word, it does not date anything: `today()` is a function.
+    const prose = n.body.replace(/```[\s\S]*?```/g, &quot;&quot;).replace(/`[^`\n]+`/g, &quot;&quot;);
+    const hits = [...new Set([...prose.matchAll(words)].map((m) =&gt; m[0].toLowerCase()))];
+    if (hits.length) out.push({ note: n.title, rule: &quot;relative-date&quot;, detail: `says ${hits.map((h) =&gt; `&quot;${h}&quot;`).join(&quot;, &quot;)}; give the date` });
+  }
+  return out;
+}
+
+/**
+ * Rewrite the `scope:` line of every note in one scope.
+ *
+ * Line-level, like `fixFrontmatter`, so a note keeps its own formatting. The
+ * vault carried five scope names for two projects, because a rename moved the
+ * repo and left every note behind: `voice-bridge` and `voice-bridge-mcp` are
+ * both Sidetone, and `caller` is Voiceover. Nothing catches that, because
+ * `scope` is free text.
+ *
+ * Returns the notes it would change, each with its new text. It touches no
+ * other line and invents no scope.
+ */
+export function renameScope(notes: Note[], from: string, to: string): { note: Note; text: string }[] {
+  const out: { note: Note; text: string }[] = [];
+  for (const n of wikiNotes(notes)) {
+    if (String(n.fm.scope) !== from) continue;
+    const { frontmatter, body } = splitFrontmatter(n.text);
+    if (frontmatter === null) continue;
+    const lines = frontmatter.split(/\r?\n/);
+    const i = lines.findIndex((l) =&gt; /^scope:\s/.test(l));
+    if (i &lt; 0) continue;
+    lines[i] = `scope: ${to}`;
+    out.push({ note: n, text: `---\n${lines.join(&quot;\n&quot;)}\n---\n${body}` });
+  }
+  return out.sort((a, b) =&gt; a.note.rel.localeCompare(b.note.rel));
+}
+
+/** The longest `core:` line, in characters. */
+const CORE_MAX = 160;
+/** The bytes the SessionStart context may take: Claude Code shows a 2 KB preview in place of hook output over about 10,000 characters. */
+export const START_BUDGET = 6000;
+
+const byNewest = (a: Pick&lt;Note, &quot;title&quot; | &quot;fm&quot;&gt;, b: Pick&lt;Note, &quot;title&quot; | &quot;fm&quot;&gt;) =&gt; String(b.fm.updated ?? &quot;&quot;).localeCompare(String(a.fm.updated ?? &quot;&quot;)) || a.title.localeCompare(b.title);
+
+/** The live notes whose `core:` line is always on in `scope`: those of `scope` and of `global`, newest first. */
+export function coreNotes&lt;T extends Pick&lt;Note, &quot;title&quot; | &quot;fm&quot; | &quot;wiki&quot; | &quot;archived&quot;&gt;&gt;(notes: T[], scope: string): T[] {
+  return wikiNotes(notes).filter((n) =&gt; !n.archived &amp;&amp; typeof n.fm.core === &quot;string&quot; &amp;&amp; [scope, &quot;global&quot;].includes(String(n.fm.scope))).sort(byNewest);
+}
+
+/**
+ * The SessionStart context for `scope`: MEMORY.md whole, then the core lines,
+ * cut at whole lines to START_BUDGET bytes. `cut` counts the core lines left
+ * out; the last line then points to the rest.
+ */
+export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
+  const memory = notes.find((n) =&gt; n.rel === &quot;MEMORY.md&quot;)?.text?.trim();
+  const lines = coreNotes(notes, scope).map((n) =&gt; `- ${String(n.fm.core).trim()} [[${n.title}]]`);
+  const render = (kept: string[]) =&gt; {
+    const cut = lines.length - kept.length;
+    return [`&lt;vault path=&quot;${root}&quot;&gt;`, ...(memory ? [memory, &quot;&quot;] : []), ...kept, ...(cut ? [`${cut} more core lines: aleph memory recall --scope ${scope}`] : []), &quot;&lt;/vault&gt;&quot;].join(&quot;\n&quot;);
+  };
+  let kept = lines;
+  while (kept.length &amp;&amp; Buffer.byteLength(render(kept)) &gt; START_BUDGET) kept = kept.slice(0, -1);
+  return { text: render(kept), cut: lines.length - kept.length };
+}
+
+/** Each daily note under `root` as its day and text, newest day first. */
+export function dailyNotes(root: string): { day: string; text: string }[] {
+  const dir = join(root, &quot;daily&quot;);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) =&gt; /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse()
+    .map((f) =&gt; ({ day: f.slice(0, 10), text: readFileSync(join(dir, f), &quot;utf8&quot;) }));
+}
+
+/**
+ * When `recall` or the recall hook last returned each note, by title. The Memory page shows it as use;
+ * staleness does not read it.
+ *
+ * It lives outside git: a read is not a change to memory, and committing one
+ * on every recall would bury the writes that matter. Losing the file only
+ * costs the Memory page&#39;s read dates, so every access here is best-effort.
+ */
+const readLogPath = (root: string) =&gt; join(root, &quot;.recall.json&quot;);
+export function noteRead(root: string, titles: string[], query: string, unlogged: boolean): void {
+  // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
+  // `ALEPH_RECALL_UNLOGGED`: a dry compile&#39;s model recalls without a flag it could leave out.
+  if (!titles.length || unlogged || process.env.ALEPH_RECALL_UNLOGGED) return;
+  try {
+    const log = readJsonOr&lt;Record&lt;string, string&gt;&gt;(readLogPath(root), {});
+    for (const t of titles) log[t] = today();
+    writeJson(readLogPath(root), log);
+    appendRecallLog(root, titles, query);
+  } catch { /* a read must never fail on its own bookkeeping */ }
+}
+
+/** The dates of `noteRead`, by title; empty when the file is absent. */
+export function recallSeen(root: string): Record&lt;string, string&gt; {
+  return readJsonOr(readLogPath(root), {});
+}
+
+/** Whether `root` has a VAULT.md, which is what makes a directory a vault. */
+export const isVault = (root: string): boolean =&gt; existsSync(join(root, &quot;VAULT.md&quot;));
+
+/** The path of MEMORY.md, the standing context that SessionStart loads. */
+export const memoryFile = (root: string): string =&gt; join(root, &quot;MEMORY.md&quot;);
+
+/** MEMORY.md&#39;s text and mtime (ISO), or null when the file is absent. */
+export function readMemoryMd(root: string): { text: string; mtime: string } | null {
+  const file = memoryFile(root);
+  return existsSync(file) ? { text: readFileSync(file, &quot;utf8&quot;), mtime: statSync(file).mtime.toISOString() } : null;
+}
+
+/** Replaces MEMORY.md in place; the caller checks it with `vault write`. */
+export function writeMemoryMd(root: string, text: string): void {
+  writeFileSync(memoryFile(root), text);
+}
+</pre></details><details class="src"><summary><code>lib/paths.ts</code><span class="quiet">64 lines</span></summary><pre>/**
+ * Where aleph&#39;s files live: under ~/.aleph unless an environment variable names the place. Home is
+ * HOME, else the OS&#39;s home folder, and a leading ~ in a variable is home; this module alone reads them.
+ * Each function reads at each call, and a path that a UI build reads touches its source (sources.ts).
+ */
+import { readFileSync } from &quot;node:fs&quot;;
+import { homedir } from &quot;node:os&quot;;
+import { basename, dirname, join, resolve } from &quot;node:path&quot;;
+import { readProjects } from &quot;./projects.ts&quot;;
+import { probe } from &quot;./git.ts&quot;;
+import { touch } from &quot;./sources.ts&quot;;
+
+/** HOME, else the OS&#39;s home folder. */
+export const home = (): string =&gt; process.env.HOME || homedir();
+
+/** `p` with a leading `~` as home. */
+export const expand = (p: string): string =&gt; (p === &quot;~&quot; || p.startsWith(&quot;~/&quot;) ? join(home(), p.slice(1)) : p);
+
+/**
+ * Chris&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
+ * `os.userInfo().homedir` follows HOME (Node&#39;s does not), so the file is read. Null when no entry is found.
+ */
+function passwdHome(): string | null {
+  const uid = String(process.getuid?.());
+  try {
+    const row = readFileSync(&quot;/etc/passwd&quot;, &quot;utf8&quot;).split(&quot;\n&quot;).map((l) =&gt; l.split(&quot;:&quot;)).find((f) =&gt; f[2] === uid);
+    return row?.[5] || null;
+  } catch { return null; }
+}
+const owner = passwdHome();
+const live = owner === null ? null : join(owner, &quot;.aleph&quot;);
+
+/**
+ * The variable `name`, expanded, else `rel` under ~/.aleph. Under `bun test` (NODE_ENV=test) a path in the live store
+ * throws: a test that reaches it, by a missing preload or an env restored to unset, wrote fixture events to the live log.
+ */
+export function alephPath(name: string, rel: string): string {
+  const p = expand(process.env[name] ?? join(home(), &quot;.aleph&quot;, rel));
+  if (process.env.NODE_ENV === &quot;test&quot; &amp;&amp; live !== null &amp;&amp; (p === live || p.startsWith(`${live}/`))) throw new Error(`a test reached the live store: ${name} unset, ${p}`);
+  return p;
+}
+
+/** The folder of Claude Code&#39;s transcripts, `&lt;project&gt;/&lt;session&gt;.jsonl`. */
+export const claudeProjects = (): string =&gt; expand(process.env.ALEPH_CLAUDE_PROJECTS ?? join(home(), &quot;.claude&quot;, &quot;projects&quot;));
+/** The vault folder. */
+export const vaultDir = (): string =&gt; { touch(&quot;vault&quot;); return alephPath(&quot;ALEPH_VAULT&quot;, &quot;vault&quot;); };
+/** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
+export const handoffsDir = (): string =&gt; { touch(&quot;handoffs&quot;); return expand(process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), &quot;handoffs&quot;)); };
+/** The paired devices of the UI: one `&lt;sha256-hex&gt; &lt;label&gt; &lt;iso-date&gt;` line each (ui/pair.ts). */
+export const uiTokensFile = (): string =&gt; alephPath(&quot;ALEPH_UI_TOKENS&quot;, &quot;ui-tokens&quot;);
+/** The notes pinned on UI pages, and the answers to them: the scope file of the aleph-tools notes handler (ui/server.ts) and of `shelf note --file`. */
+export const annotationsFile = (): string =&gt; { touch(&quot;annotations&quot;); return alephPath(&quot;ALEPH_ANNOTATIONS&quot;, &quot;annotations.json&quot;); };
+
+/** The registry key of the repo that `cwd` is in, a worktree of it too; else the folder name of the main checkout. With `git` false: the key whose path holds `cwd`, else &quot;&quot;, and no git run. */
+export function scopeOfCwd(cwd: string, git = true): string {
+  touch(&quot;registry&quot;);
+  const repos = readProjects().filter((p) =&gt; p.fields.path).map((p) =&gt; ({ key: p.name, path: expand(p.fields.path) }));
+  const at = (dir: string) =&gt; repos.find((r) =&gt; dir === r.path || dir.startsWith(`${r.path.replace(/\/+$/, &quot;&quot;)}/`));
+  if (!git) return at(cwd)?.key ?? &quot;&quot;;
+  const common = probe(cwd, &quot;rev-parse&quot;, &quot;--path-format=absolute&quot;, &quot;--git-common-dir&quot;);
+  const root = common.ok ? dirname(common.out) : cwd;
+  return (at(cwd) ?? at(root))?.key ?? basename(root);
+}
+</pre></details><details class="src"><summary><code>lib/errtext.ts</code><span class="quiet">5 lines</span></summary><pre>/** The text of a thrown value: an Error&#39;s message, else the value as a string. The one place that narrows a catch. */
+export function errText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+</pre></details><details class="src"><summary><code>lib/env.ts</code><span class="quiet">99 lines</span></summary><pre>import { readFileSync } from &quot;node:fs&quot;;
+import { alephPath } from &quot;./paths.ts&quot;;
+
+export interface LangfuseConfig {
+  baseUrl: string;
+  publicKey: string;
+  secretKey: string;
+}
+
+/** True in a factory agent: the agent settings in jobs/lib/routing/models.ts set ALEPH_AGENT for the claude process of each role. */
+export const isAgent = (): boolean =&gt; Boolean(process.env.ALEPH_AGENT);
+
+/** The id of the job this process runs for, if any: the unit sets ALEPH_JOB_ID (jobs/lib/roles/unit.ts), and its children inherit it. */
+export const jobId = (): string | undefined =&gt; process.env.ALEPH_JOB_ID;
+
+/** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
+const envFile = (): string =&gt; alephPath(&quot;ALEPH_ENV_FILE&quot;, &quot;.env&quot;);
+
+/** One key from the dotenv file, never copied to process.env; null when the file or the key is missing. */
+function dotenvKey(name: string): string | null {
+  let text: string;
+  try { text = readFileSync(envFile(), &quot;utf8&quot;); } catch { return null; }
+  const m = text.match(new RegExp(`^\\s*(?:export\\s+)?${name}=(.*)$`, &quot;m&quot;));
+  return m ? m[1].trim().replace(/^([&quot;&#39;])(.*)\1$/, &quot;$2&quot;) : null;
+}
+
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  return process.env.OPENROUTER_API_KEY || dotenvKey(&quot;OPENROUTER_API_KEY&quot;);
+}
+
+/** ANTHROPIC_API_KEY from the dotenv file only: a process that has it in its environment bills the API instead of the subscription. */
+export const anthropicKey = (): string | null =&gt; dotenvKey(&quot;ANTHROPIC_API_KEY&quot;);
+
+/**
+ * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
+ * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
+ * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
+ */
+export function loadDotenv(path = envFile()): void {
+  let text: string;
+  try { text = readFileSync(path, &quot;utf8&quot;); } catch { return; }
+  for (const raw of text.split(&quot;\n&quot;)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(&quot;#&quot;)) continue;
+    const eq = line.indexOf(&quot;=&quot;);
+    if (eq &lt; 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key.startsWith(&quot;LANGFUSE_&quot;)) continue;
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith(&#39;&quot;&#39;) &amp;&amp; value.endsWith(&#39;&quot;&#39;)) || (value.startsWith(&quot;&#39;&quot;) &amp;&amp; value.endsWith(&quot;&#39;&quot;))) value = value.slice(1, -1);
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+export function langfuseConfig(): LangfuseConfig | null {
+  loadDotenv();
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  if (!publicKey || !secretKey) return null;
+  return { baseUrl: (process.env.LANGFUSE_BASE_URL ?? &quot;http://127.0.0.1:3010&quot;).replace(/\/+$/, &quot;&quot;), publicKey, secretKey };
+}
+
+/**
+ * Langfuse environment for the session: `ALEPH_ENV` if set (the live tests
+ * say `test`), else `headless` when an ancestor is `claude -p`, else `interactive`.
+ * The parent chain is the only place a hook can see how claude was started.
+ */
+export function classifyEnvironment(ancestorArgvs: string[][], override = process.env.ALEPH_ENV): string {
+  if (override) return override;
+  // claude is argv[0], or argv[1] behind a shell wrapper; only flags after it count
+  const headless = ancestorArgvs.some((argv) =&gt; {
+    const at = argv.slice(0, 2).findIndex((arg) =&gt; arg === &quot;claude&quot; || arg.endsWith(&quot;/claude&quot;));
+    return at &gt;= 0 &amp;&amp; argv.slice(at + 1).some((arg) =&gt; arg === &quot;-p&quot; || arg === &quot;--print&quot;);
+  });
+  return headless ? &quot;headless&quot; : &quot;interactive&quot;;
+}
+
+const DEPTH = 6;
+
+function ancestorArgvs(): string[][] {
+  const out: string[][] = [];
+  let pid = process.ppid;
+  for (let i = 0; i &lt; DEPTH &amp;&amp; pid &gt; 1; i++) {
+    let cmdline: string, status: string;
+    try { cmdline = readFileSync(`/proc/${pid}/cmdline`, &quot;utf8&quot;); status = readFileSync(`/proc/${pid}/status`, &quot;utf8&quot;); } catch { break; }
+    out.push(cmdline.split(&quot;\0&quot;).filter(Boolean));
+    pid = Number(status.match(/^PPid:\s*(\d+)/m)?.[1] ?? 0);
+  }
+  return out;
+}
+
+export function sessionEnvironment(): string {
+  return classifyEnvironment(ancestorArgvs());
+}
+
+/** The command whose output is the user gh-guard compares owners with when `ALEPH_GH_USER` is unset. */
+export const GH_USER_CMD = [&quot;gh&quot;, &quot;api&quot;, &quot;user&quot;, &quot;-q&quot;, &quot;.login&quot;];
+</pre></details></div></details></div></div></main>
+</div>
+<script>
+const v = document.getElementById("view"), f = {};
+const apply = () => { let c = 0; for (const r of v.querySelectorAll("#holds-log tbody tr")) { const on = Object.entries(f).every(([k, x]) => !x || r.dataset[k] === x); r.hidden = !on; c += on; } v.querySelector("#holds .dp-aside").textContent = c; };
+const set = (k, x) => { f[k] = x; const s = v.querySelector(`select[name="${k}"]`); if (s) s.value = x; };
+v.addEventListener("change", (e) => { if (e.target.matches(".fbar select")) { f[e.target.name] = e.target.value; apply(); } });
+v.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.closest(".seg[data-name]")) { for (const x of b.parentElement.children) x.setAttribute("aria-pressed", x === b); f[b.parentElement.dataset.name] = b.dataset.value; apply(); }
+  else if (b.dataset.show !== undefined) { f.who = ""; for (const x of v.querySelectorAll(".seg[data-name=who] button")) x.setAttribute("aria-pressed", x.dataset.value === ""); if (b.dataset.show) set("hook", b.dataset.show); set("kind", b.dataset.kind ?? ""); set("out", ""); apply(); document.getElementById("holds").scrollIntoView({ behavior: "smooth" }); }
+});
+</script>
+</body></html>
