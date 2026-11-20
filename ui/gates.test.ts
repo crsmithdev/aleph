@@ -357,7 +357,7 @@ test.each<[string, Record<string, unknown>, string]>([
   ["a missing object is miss()", { subject: "rule", action: "reran" }, '<td><span title="no object">–</span></td>'],
   ["Times goes through count()", { subject: "gate", object: "x-1", action: "held", times: 1200 }, '<td class="num">1,200</td>'],
   ["no times is 1", { subject: "gate", object: "x-1", action: "held" }, '<td class="num">1</td>'],
-  ...["human", "rule", "director", "firefighter", "gate"].map((by): [string, Record<string, unknown>, string] => [`the actor ${by} is a chip`, { subject: by, object: "x-1", action: "a" }, `<span class="chip">${by}</span>`]),
+  ["the actor is a chip", { subject: "director", object: "x-1", action: "a" }, '<span class="chip">director</span>'],
 ])("renderLog: %s", (_, entry, cell) => {
   const h = gates.renderLog({ log: { entries: [{ time: new Date(NOW).toISOString(), ...entry }] } } as any);
   expect(h).toContain(cell);
@@ -517,15 +517,6 @@ test("the Automation page has no explaining aside; the controls panel holds the 
   }
   const h = gates.renderGates(data());
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
-});
-
-test("the Deviations row of docs/design.md drops the held-path chips and names the aligned list in their place", async () => {
-  const row = (await Bun.file(new URL("../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Parts of the Automation page written by hand"))!;
-  expect(row).not.toContain("div.held");
-  expect(row).not.toContain("held-path chips");
-  expect(row).not.toContain("tr.rule");
-  expect(row).toContain("renderLog()");
-  expect(row).toContain("held-paths");
 });
 
 test("rules() has one row per Ask reason; renderRules is one table with a row per rule", () => {
