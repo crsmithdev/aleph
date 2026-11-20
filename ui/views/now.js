@@ -21,7 +21,6 @@ export const view = {
   order: -3,
   icon: "gauge-high",
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
-  refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline and `s.memory` the Memory page's data, which `more` adds; the page draws without them first.
   render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderPipeline(f, q, (s.errored ?? []).length)}${renderIssues(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page, q)}</div></div>`; },

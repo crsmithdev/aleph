@@ -1,10 +1,12 @@
-import { expect, test } from "bun:test";
+import { expect, jest, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
 import { loader, keysOf, markOf, morph, moved } from "./router.js";
 // @ts-ignore plain JS, shared with the page
 import { view as issues } from "../issues.js";
 // @ts-ignore plain JS, shared with the page
 import { view as sessions } from "../sessions.js";
+// @ts-ignore plain JS, shared with the page
+import { view as status } from "../now.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { markLine } from "./format.js";
 
@@ -253,6 +255,25 @@ test("opening the stream of a live view loads it again, and draws only when the 
   FakeStream.last.onopen();
   await tick();
   p.answer(2, { n: 2 });
+  await tick();
+  expect(p.drawn).toEqual([{ n: 1 }, { n: 2 }]);
+});
+
+test("Status draws again only on a change: 3 minutes of fake time with no event draw nothing, a change of a key it read draws once", async () => {
+  jest.useFakeTimers();
+  const p = page();
+  // Each draw of the page renders the view once. Its `more` would fetch past the fake.
+  const shown = p.router.show({ ...p.route, view: { ...status, more: null } });
+  p.answer(0, { n: 1 }, "factory");
+  await shown;
+  jest.advanceTimersByTime(3 * 60_000);
+  jest.useRealTimers();
+  // Answer each load the 3 minutes started, so that a timed reload draws.
+  p.asked.slice(1).forEach((_, i) => p.answer(i + 1, { n: 1 }, "factory"));
+  await tick();
+  expect(p.drawn).toEqual([{ n: 1 }]);
+  FakeStream.last.send("change", { keys: ["factory"] });
+  p.answer(1, { n: 2 }, "factory");
   await tick();
   expect(p.drawn).toEqual([{ n: 1 }, { n: 2 }]);
 });

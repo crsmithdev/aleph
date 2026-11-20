@@ -45,10 +45,11 @@ async function dataOf(route, get) {
 /**
  * The one path for every load of the shown view: the first one, a `change`, the `refresh` timer and the reload after an action.
  * `env` is the page: fetch(url), EventSource, hidden(), focused() (an input has focus), armed() (a button waits for its
- * second click), ok(route), fail(route, error, first), draw(route, data, first) -> the mount's promise, event(ev).
+ * second click), ok(route), fail(route, error, first), draw(route, data, first) -> the mount's promise, event(ev),
+ * heard() (the stream delivered a message).
  */
 export function loader(env) {
-  let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, full = false, events = null, heardAt = 0, firstLoad = Promise.resolve();
+  let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, full = false, events = null, heardAt = 0, firstLoad = Promise.resolve(), timer = 0, okAt = 0;
   const read = new Set(); // the keys the shown view's loads returned
 
   const slots = new Map(); // a view's own load by name: the number of its newest call
@@ -91,7 +92,7 @@ export function loader(env) {
         raw = JSON.stringify(data);
         if (quiet && (mine !== seq || route !== shown || raw === route.raw)) return;
         if (quiet) mine = ++seq;
-        if (route === shown) env.ok(route);
+        if (route === shown) { okAt = Date.now(); env.ok(route); }
       } catch (e) {
         if (route !== shown || mine !== seq) return;
         env.fail(route, e, first);
@@ -145,7 +146,7 @@ export function loader(env) {
     if (!shown?.view || env.hidden()) return;
     const es = events = new env.EventSource(scope(shown.query).url("/api/events"));
     heardAt = Date.now();
-    const heard = () => { heardAt = Date.now(); };
+    const heard = () => { heardAt = Date.now(); env.heard?.(); };
     es.addEventListener("ping", heard);
     es.addEventListener("change", (m) => { heard(); change(JSON.parse(m.data).keys); });
     // An event of the event log, as it is written: a view with `event` shows it before the reload that `change` brings.
@@ -172,6 +173,11 @@ export function loader(env) {
     shown = route;
     read.clear();
     follow();
+    clearInterval(timer);
+    okAt = Date.now();
+    // `refresh` is a quiet timer: it reloads the view when no load came for that many seconds, for what changes with the
+    // clock and not with a file (liveness, ages, the next tick). A hidden tab does not load.
+    if (route.view?.refresh) timer = setInterval(() => { if (!env.hidden() && Date.now() - okAt >= route.view.refresh * 1000) reload(); }, 5000);
     return (firstLoad = route.view ? load(route, true) : Promise.resolve());
   }
 
@@ -215,7 +221,7 @@ export async function start() {
   const $ = (id) => document.getElementById(id);
   const typing = () => !!document.activeElement?.matches("input, textarea, select");
   const armed = () => !!$("view").querySelector("button.act.ask");
-  let views = [], redirects = [], timer = 0, viewsFailed = false;
+  let views = [], redirects = [], viewsFailed = false;
 
   // The page imports each view once; when the server restarts or a land changes a page file (the version header changes), reload to load it, unless the reader is typing.
   let version = null;
@@ -232,7 +238,7 @@ export async function start() {
     return res;
   }
 
-  // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response (or the route's start).
+  // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response or stream message (or the route's start).
   // A hidden tab loads nothing, so its time does not count: the clock starts again when the tab shows, and the reload
   // that the tab's return starts has the full span to land.
   let goodAt = Date.now(), shownAt = Date.now(), failed = false, wasOut = false;
@@ -281,6 +287,8 @@ export async function start() {
     focused: typing,
     armed,
     ok: () => { $("offline").hidden = true; goodAt = Date.now(); failed = false; },
+    // A message of the open stream says the shown state is current: a live view reloads on each change it names.
+    heard: () => { goodAt = Date.now(); },
     fail: ({ view }, e, first) => {
       failed = true;
       checkOut();
@@ -346,7 +354,6 @@ export async function start() {
     }
     const { path, query } = parseHash(location.hash);
     nav(path);
-    clearInterval(timer);
     // #view outlives its views, so a view's handlers on it must not reach the next one.
     $("view").onclick = $("view").onchange = $("view").onkeydown = $("view").oninput = null;
     $("aged").hidden = true;
@@ -362,9 +369,6 @@ export async function start() {
     $("view").innerHTML = loading(m.view.title);
     goodAt = Date.now(); failed = false; wasOut = false;
     page.show(m);
-    // `refresh` is a quiet timer: it reloads the view when no load came for that many seconds, for what changes with the
-    // clock and not with a file (liveness, ages, the next tick). A hidden tab does not load.
-    if (m.view.refresh) timer = setInterval(() => { if (!document.hidden && Date.now() - goodAt >= m.view.refresh * 1000) page.reload(); }, 5000);
   }
 
   setInterval(checkOut, 1000);

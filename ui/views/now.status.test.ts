@@ -141,6 +141,10 @@ test("the page has one head, built by pageHead: the time, the status sentence, t
   view.view.outOfDate(root, false);
 });
 
+test("the Status view has no timed reload: a change, an event or an action draws it again", () => {
+  expect(view.view.refresh).toBeUndefined();
+});
+
 test("the status line says attention is needed when the Issues section has an item", () => {
   const calm = { ...state, asks: [], errored: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
   for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {

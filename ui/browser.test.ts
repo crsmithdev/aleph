@@ -440,21 +440,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 90_000);
 
   /**
-   * Opens Status with its timed refresh in the test's hands. The shell reads the global setInterval when the route
-   * starts: keep the route's refresh as window.tick, and run it here. The refresh loads only after a quiet minute:
-   * window.later() moves the page's clock past it. A fetch of /api/factory waits for window.gate. A fetch of
-   * /api/flow, the last a Status load makes (its `more`), counts in window.fetched after the load that reads it ends.
-   * The test ends with page.reload(), which takes the patched timer and fetch away.
+   * Opens Status with its reloads in the test's hands. The page's stream is kept as window.es, and window.nudge() sends
+   * it a `change` of the keys the last /api/factory answer named, as the server does when it rebuilds them. A fetch of
+   * /api/factory waits for window.gate. A fetch of /api/flow, the last a Status load makes (its `more`), counts in
+   * window.fetched after the load that reads it ends. The page's clock runs window.skew ms ahead.
+   * The test ends with page.reload(), which takes the patched clock, stream and fetch away.
    */
-  const refreshRig = async () => {
+  const changeRig = async () => {
     await page.ev(`(() => {
       const now = Date.now;
       window.skew = 0;
       Date.now = () => now() + window.skew;
-      window.later = () => { window.skew += 61_000; window.tick(); };
-      window.setInterval = (f) => { window.tick = f; return 0; };
+      const ES = window.EventSource;
+      window.EventSource = class extends ES { constructor(...a) { super(...a); window.es = this; } };
+      window.nudge = () => window.es.dispatchEvent(new MessageEvent("change", { data: JSON.stringify({ keys: window.keys }) }));
       const rf = window.fetch;
-      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)) : !["/api/flow", "/api/memory"].some((p) => String(u).startsWith(p)) ? rf(u, o) : rf(u, o).then((r) => {
+      const keyed = (r) => { window.keys = r.headers.get("x-aleph-keys").split(" "); return r; };
+      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then(keyed) : !["/api/flow", "/api/memory"].some((p) => String(u).startsWith(p)) ? rf(u, o) : rf(u, o).then((r) => {
         const j = r.json.bind(r);
         const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
         r.json = () => j().then((d) => { setTimeout(count); return d; });
@@ -465,38 +467,38 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
     await page.when(buttons);
-    // The first load draws its buttons before its `more` (/api/flow, /api/memory and /api/memory/processes) ends: wait for those 3 counts, or a refresh's wait ends on them.
+    // The first load draws its buttons before its `more` (/api/flow, /api/memory and /api/memory/processes) ends: wait for those 3 counts, or a change's wait ends on them.
     await page.when("(window.fetched ?? 0) >= 3");
-    const refresh = async () => {
+    const change = async () => {
       const n = await page.ev("window.fetched ?? 0");
-      await page.ev("window.later()");
+      await page.ev("window.nudge()");
       await page.when(`(window.fetched ?? 0) >= ${n + 3}`);
     };
-    return { buttons, refresh, mark: () => page.ev('document.querySelector("#view > *").dataset.mark = "1"') };
+    return { buttons, change, mark: () => page.ev('document.querySelector("#view > *").dataset.mark = "1"') };
   };
 
-  test("a timed refresh re-renders the page", async () => {
-    const { refresh, mark } = await refreshRig();
+  test("a change re-renders the page", async () => {
+    const { change, mark } = await changeRig();
     await mark();
-    await refresh();
+    await change();
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined();
     await page.reload();
   }, 30_000);
 
-  test("what the reader opened comes back after a timed refresh", async () => {
-    const { refresh, mark } = await refreshRig();
+  test("what the reader opened comes back after a change", async () => {
+    const { change, mark } = await changeRig();
     await page.ev('document.querySelector("#view details[data-keep]").open = true');
     await mark();
-    await refresh();
+    await change();
     expect(await page.ev('[document.querySelector("#view details[data-keep]").open, !!document.querySelector("#view > *").dataset.mark]')).toEqual([true, false]);
     await page.reload();
   }, 30_000);
 
-  test("a timed refresh in flight when a button is armed does not render over it", async () => {
-    const { buttons, mark } = await refreshRig();
+  test("a change's reload in flight when a button is armed does not render over it", async () => {
+    const { buttons, mark } = await changeRig();
     await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; }))");
     const n = await page.ev("window.fetched ?? 0");
-    await page.ev("window.later()");
+    await page.ev("window.nudge()");
     await page.ev(`${buttons}.click()`);
     await mark();
     await page.ev("window.gate = null; window.release()");
@@ -506,13 +508,24 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a tab hidden past the out-of-date span does not say so while the reload on its return runs", async () => {
-    await refreshRig();
+    await changeRig();
     const stale = 'document.querySelector("#view .shead .say").textContent.includes("out of date")';
     await page.ev('Object.defineProperty(document, "hidden", { configurable: true, get: () => window.away === true }); window.away = true; document.dispatchEvent(new Event("visibilitychange"))');
     await page.ev("window.skew += 4 * 60_000");
     // The tab shows again, and the shell checks at once; its reload waits on the gate, as a slow server would.
     expect(await page.ev(`(() => { window.gate = new Promise((ok) => { window.release = ok; }); window.away = false; document.dispatchEvent(new Event("visibilitychange")); return ${stale}; })()`)).toBe(false);
     await page.ev("window.gate = null; window.release()");
+    await page.reload();
+  }, 30_000);
+
+  test("Status with its stream open does not say it is out of date after the clock moves 4 minutes", async () => {
+    await changeRig();
+    // Each out-of-date check reads document.hidden first: a read after the clock moved shows that a check ran since.
+    await page.ev('window.looks = 0; Object.defineProperty(document, "hidden", { configurable: true, get: () => (window.looks++, false) })');
+    // The clock moves and the stream delivers a ping in the same turn, as the server's ping every 25 s keeps doing.
+    await page.ev('window.skew += 4 * 60_000; window.looks = 0; window.es.dispatchEvent(new Event("ping"))');
+    await page.when("window.looks > 0");
+    expect(await page.ev('document.querySelector("#view .shead .say").textContent.includes("out of date")')).toBe(false);
     await page.reload();
   }, 30_000);
 
@@ -527,13 +540,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a slow first load does not draw over a newer one", async () => {
-    // Hold the fetch of the first /api/factory load, let a second (the refresh timer) answer, then release the first.
+    // Hold the fetch of the first /api/factory load, let a second (the reload after an action) answer, then release the first.
     // A read of /api/flow, the last a Status load makes (its `more`), sets window.flowRead after the load that reads it ends.
     await page.ev(`(() => {
-      const now = Date.now;
-      window.skew = 0;
-      Date.now = () => now() + window.skew;
-      window.setInterval = (f) => { window.tick = f; return 0; };
       const rf = window.fetch;
       let held = true;
       window.fetch = (u, o) => {
@@ -556,14 +565,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/issues");
     await page.ev('location.hash = "#/"');
     await page.when("window.release");
-    await page.ev("window.skew += 61_000; window.tick()");
+    await page.ev('void import("/views/lib/router.js").then((m) => m.redraw(true))');
     await page.when('document.querySelector("#view .page, #view > *") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
     await page.when("window.flowRead"); // The second load's `more` drew: only the old answer could draw now.
     await page.ev('document.querySelector("#view > *").dataset.mark = "1"');
     await page.ev("window.release()");
     await page.when("window.firstRead");
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1"); // The old answer did not redraw.
-    await page.reload(); // Takes the patched timer and fetch away.
+    await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
   test("a change that comes while an input has focus reloads the view after the input blurs", async () => {
