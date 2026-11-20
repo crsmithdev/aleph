@@ -520,7 +520,10 @@ export function coreNotes<T extends Pick<Note, "title" | "fm" | "wiki" | "archiv
  */
 export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
   const memory = notes.find((n) => n.rel === "MEMORY.md")?.text?.trim();
-  const lines = coreNotes(notes, scope).map((n) => `- ${String(n.fm.core).trim()} [[${n.title}]]`);
+  const lines = coreNotes(notes, scope).map((n) => {
+    const core = String(n.fm.core).trim();
+    return links(core).some((t) => t.toLowerCase() === n.title.toLowerCase()) ? `- ${core}` : `- ${core} [[${n.title}]]`;
+  });
   const render = (kept: string[]) => {
     const cut = lines.length - kept.length;
     return [`<vault path="${root}">`, ...(memory ? [memory, ""] : []), ...kept, ...(cut ? [`${cut} more core lines: aleph memory recall --scope ${scope}`] : []), "</vault>"].join("\n");

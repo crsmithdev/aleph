@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendDaily, appendRecallLog, listOf, parseOp, lintVault, loadVault, loadWiki, readRecallLog, readRun, scopeOf, screenCandidates, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
+import { appendDaily, appendRecallLog, listOf, parseOp, lintVault, loadVault, loadWiki, readRecallLog, readRun, scopeOf, screenCandidates, startContext, trimRecallLog, wikiNotes, type Note } from "./vault.ts";
 import { today } from "../../lib/day.ts";
 
 let root: string;
@@ -111,5 +111,17 @@ test("overlap pairs tie on Jaccard and break the tie by title, whatever order th
     ["Queue Order Extra", "Queue Order Gate"], ["Queue Order Extra", "Queue Order Shape"], ["Queue Order Gate", "Queue Order Shape"],
   ]);
   expect(pairs([...notes].reverse())).toEqual(pairs(notes));
+  rmSync(r, { recursive: true, force: true });
+});
+
+test("startContext shows a core line's own note link once, and adds it to a line without it", async () => {
+  const r = mkdtempSync(join(tmpdir(), "vault-core-"));
+  mkdirSync(join(r, "wiki", "concepts"), { recursive: true });
+  const w = (t: string, core: string) => writeFileSync(join(r, "wiki", "concepts", `${t}.md`), `---\nkind: concept\nscope: global\ncore: ${core}\nupdated: 2026-10-01\n---\n# ${t}\n\n**Claim.** as of 2026-10-01 x\n`);
+  w("Ours", "We ship from main [[Ours]]");
+  w("Other", "Times are Pacific");
+  const { text } = startContext(r, await loadVault(r), "aleph");
+  expect(text.split("[[Ours]]")).toHaveLength(2);
+  expect(text.split("\n")).toContain("- Times are Pacific [[Other]]");
   rmSync(r, { recursive: true, force: true });
 });
