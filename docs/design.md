@@ -234,6 +234,20 @@ The dock widgets in `aleph-tools` read these. Each points at a base token, so on
 | `--dock-code` | `--mono` | a dock widget's code font |
 | `--dock-z` | `--z-overlay` | a dock widget's stacking order |
 
+### Palettes
+
+The dock's theme picker sets `data-palette` on `<html>`. A palette in `ui/app.css` sets `--bg`, `--surface`, `--sunk`, `--raised`, `--ink`, `--ink-2`, `--muted`, `--rule`, `--rule-2` and `--focus`, for light and for dark. Every other token stays, so a state keeps its colour in each palette.
+
+| Palette | Accent |
+|---|---|
+| Lavender (no `data-palette`) | violet |
+| Slate | blue |
+| Sand | terracotta |
+| Forest | green |
+
+- Give a new palette all ten tokens, in light and in both dark blocks.
+- Do not give a palette a status or chart colour.
+
 ## Content
 
 ### Values

@@ -54,6 +54,8 @@ export function chart(el, option) {
     for (const [ev, fn] of handlers) c.on(ev, fn);
   };
   mq.addEventListener("change", retheme);
+  // The dock's theme picker sets the colour tokens again (aleph-tools theme-picker.js).
+  addEventListener("dock:theme", retheme);
   const ro = new ResizeObserver(() => { c.resize(); fitGrid(c); });
   ro.observe(el);
   return {
@@ -61,7 +63,7 @@ export function chart(el, option) {
     setOption: (o, ...rest) => c.setOption(o, ...rest),
     // Handlers are kept so a re-theme, which builds a new instance, attaches them again.
     on(ev, fn) { handlers.push([ev, fn]); c.on(ev, fn); },
-    dispose() { mq.removeEventListener("change", retheme); ro.disconnect(); c.dispose(); },
+    dispose() { mq.removeEventListener("change", retheme); removeEventListener("dock:theme", retheme); ro.disconnect(); c.dispose(); },
   };
 }
 /** The legend of every chart: at the top, wrapping onto more lines when its items do not fit on one; `fitGrid` moves the grid below it. */

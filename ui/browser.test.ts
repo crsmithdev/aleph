@@ -365,7 +365,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       return [...bare].filter((p) => !named.has(p));
     })()`)).toEqual([]);
     // Every heading of docs/design.md has a specimen, a group or a place in a specimen's rules, but the prose-only sections and the containers of specimens.
-    const exempt = ["Principles", "Rules", "The dock bridge", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
+    const exempt = ["Principles", "Rules", "The dock bridge", "Palettes", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
     expect(await page.ev(`fetch("/api/design").then((r) => r.json()).then((d) => {
       const have = new Set([...document.querySelectorAll(".design-spec h3, h2.design-h, .design-rules h4")].map((h) => h.textContent));
       return d.body.split("\\n").filter((l) => /^#{2,4} /.test(l)).map((l) => l.replace(/^#+ /, "")).filter((h) => !${JSON.stringify(exempt)}.includes(h) && !have.has(h));
@@ -810,10 +810,10 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
-  dockTest("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
+  dockTest("the dock holds the font picker, the theme picker, the annotations, the shelf and the chat", async () => {
     await page.width(1200);
     await page.go("#/");
-    expect(await page.ev('[...document.querySelectorAll("#dock-host > div")].map((d) => d.id)')).toEqual(["dock-fonts", "dock-annotate", "dock-shelf", "dock-chat"]);
+    expect(await page.ev('[...document.querySelectorAll("#dock-host > div")].map((d) => d.id)')).toEqual(["dock-fonts", "dock-theme", "dock-annotate", "dock-shelf", "dock-chat"]);
   });
 
   dockTest("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
