@@ -4,7 +4,9 @@
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
+import { DAY, WINDOWS } from "../../lib/windows.ts";
+import { panelOf } from "./lib/chart.js";
+import { badCount, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -54,12 +56,22 @@ function holdsBy(groups, hookCol = true) {
 /** A card with `detailPanel`'s arguments, for the list page. */
 const asCard = (title, n, body, id) => card(title, body, { count: n, id });
 
-/** The Holds by Day panel, drawn by `box`: a bar list, oldest first, the largest day marked, its head the day count. */
-function perDay(holds, box) {
-  if (!holds.length) return box("Holds by Day", "0", empty());
-  const days = [...Map.groupBy([...holds].reverse(), (h) => day(h.t)).entries()], most = Math.max(...days.map(([, xs]) => xs.length));
-  return box("Holds by Day", count(days.length), barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join("")));
-}
+/** The holds per day, one row per day that `window` up to `now` touches. The frame's window only names the x label format. */
+export const holdsFrame = (holds, window, now = Date.now()) => {
+  const per = Map.groupBy(holds, (h) => day(h.t));
+  // Local midnight `i` days after the window's first day: setHours rolls 24 h over to the next calendar day, DST or not.
+  const at = (i) => new Date(now - WINDOWS[window]).setHours(24 * i, 0, 0, 0);
+  return {
+    measure: { name: "Holds by Day", unit: "count", agg: "sum" },
+    over: { kind: "time", window: "week" },
+    by: { keys: [{ key: "holds", name: "Holds" }] },
+    legend: false,
+    rows: Array.from({ length: Math.floor((now - at(0)) / DAY) + 1 }, (_, i) => ({ at: at(i), holds: per.get(day(at(i)))?.length ?? 0 })),
+  };
+};
+
+/** The Holds by Day chart under `key`, in the window of the query `q`; with no holds, its card says so. */
+const perDay = (holds, q, key) => holds.length ? panelOf(key, holdsFrame(holds, scope(q).window)) : asCard("Holds by Day", "0", empty());
 
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
@@ -102,7 +114,7 @@ export function renderHooks(d, q) {
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
     card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length) }) +
-    perDay(d.holds, asCard) +
+    perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
     card("Hooks", dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv), { count: String(d.hooks.length) }) +
     holdsLog(d.holds, q, asCard) +
@@ -112,9 +124,11 @@ export function renderHooks(d, q) {
 /** Set the log's filters and page in the address and draw again. */
 const go = (changes) => { setQuery(changes); redraw(); };
 
-/** Wires the log's filters, its pager and the Show buttons that set its filters. */
-function mount(root) {
+/** Draws the Holds by Day chart and wires the log's filters, its pager and the Show buttons that set its filters. */
+function mount(root, d, q) {
   scope().wire(root);
+  const el = root.querySelector("aleph-chart");
+  if (el) el.frame = holdsFrame(d.holds, scope(q).window);
   root.onclick = (e) => {
     const b = e.target.closest?.("button");
     if (b?.matches("#holds .seg button")) return go({ [b.parentElement.dataset.name]: b.dataset.value, page: "" });
@@ -143,7 +157,7 @@ export function renderHook(d, q) {
     facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
-      perDay(xs, detailPanel) +
+      perDay(xs, q, `hooks/${d.event}/${d.name}`) +
       holdsLog(xs, q, detailPanel, false) : "") +
     (d.errors.length ? detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) : "") +
     `</div>`;

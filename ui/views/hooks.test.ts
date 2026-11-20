@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { view, renderHook, renderHooks } from "./hooks.js";
+import { view, holdsFrame, renderHook, renderHooks } from "./hooks.js";
 // @ts-ignore plain JS, shared with the page
 import { view as memory } from "./memory.js";
 // @ts-ignore plain JS, shared with the page
@@ -79,9 +79,22 @@ describe("the Hooks page", () => {
     expect(one).toContain('<span class="dp-k">No Effect</span>');
   });
 
-  test("the heads of Holds by Hook, Holds by Day and Errors by Cause count their own items", () => {
+  test("the heads of Holds by Hook and Errors by Cause count their own items", () => {
     const html = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
-    expect([head(html, "Holds by Hook"), head(html, "Holds by Day"), head(html, "Errors by Cause")]).toEqual(["1", "2", "1"]);
+    expect([head(html, "Holds by Hook"), head(html, "Errors by Cause")]).toEqual(["1", "1"]);
+  });
+
+  test("Holds by Day is a chart panel under its own key on each page, not a bar list", () => {
+    const one = renderHook({ event: "Stop", name: "verify gate", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: [], errors: [] }, new URLSearchParams());
+    const list = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
+    const keys = [list, one].map((html) => html.match(/<aleph-chart key="([^"]+)"><section class="card" aria-label="Holds by Day">/)?.[1]);
+    expect(keys).toEqual(["hooks/day", "hooks/Stop/verify gate"]);
+    for (const html of [list, one]) expect(html).not.toContain('class="bars"');
+  });
+
+  test("the Holds by Day frame has one row per day of the window, a day with no holds a row of 0", () => {
+    const gap = holds.map((h, i) => ({ ...h, t: i === 3 ? "2026-11-19T10:00:00Z" : "2026-11-17T10:00:00Z" }));
+    expect(holdsFrame(gap, "week", Date.parse("2026-11-19T10:00:00Z")).rows.map((r: { holds: number }) => r.holds)).toEqual([0, 0, 0, 0, 0, 3, 0, 1]);
   });
 
   test("the errors table puts Fix before the numbers, Last at the end, and a count above 0 in the bad tone", () => {
@@ -103,10 +116,10 @@ describe("the Hooks page", () => {
     expect([fixed, matched, async].map((td) => td.replace(/<[^>]+>/g, ""))).toEqual(["Stub or stable entry", "Bash", "async"]);
   });
 
-  test("a hook's Holds by Day head counts the days and Holds by Kind its rows", () => {
+  test("a hook's Holds by Kind head counts its rows", () => {
     const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
-    expect([head(html, "Holds by Day"), head(html, "Holds by Kind")]).toEqual(["2", "3"]);
+    expect(head(html, "Holds by Kind")).toBe("3");
     for (const c of ['class="page dp-page"', "dp-kpis", "<details"]) expect(html).toContain(c);
   });
 
