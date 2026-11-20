@@ -279,10 +279,13 @@ export function filterBar(groups) {
 /** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
 export const searchBox = (ui, value, placeholder, action = "") =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">${action}</div>`;
-/** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes. */
-export const tabs = (label, items, panes, on = items[0]?.[0]) =>
-  `<div class="tabs">${seg(label, items.map(([id, l]) => ({ label: l, on: id === on, attrs: ` data-tab="${esc(id)}"` })))}` +
-  items.map(([id]) => `<section data-pane="${esc(id)}"${id === on ? "" : " hidden"}>${panes[id] ?? ""}</section>`).join("") + `</div>`;
+/** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes.
+ * With `head`, the control is a card's head beside `head.aside`, and `head.top` sits between the head and the panes, so it shows on every tab. */
+export const tabs = (label, items, panes, on = items[0]?.[0], head) => {
+  const bar = seg(label, items.map(([id, l]) => ({ label: l, on: id === on, attrs: ` data-tab="${esc(id)}"` })));
+  return `<div class="tabs">${head ? `<div class="sh">${bar}<span class="aside">${head.aside}</span></div>${head.top}` : bar}` +
+    items.map(([id]) => `<section data-pane="${esc(id)}"${id === on ? "" : " hidden"}>${panes[id] ?? ""}</section>`).join("") + `</div>`;
+};
 /** Switch the panes of each `tabs()` under `root` on a click; `onTab(id, el)` (optional) hears it, to keep the pick. */
 export function wireTabs(root, onTab) {
   root._onTab = onTab;
@@ -454,9 +457,9 @@ export function onTile(el, fn) {
     if (b) fn(b.dataset.tile);
   });
 }
-/** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. */
+/** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. An empty title draws no head, for a body of `tabs()` with a card head. */
 export const card = (title, body, { count, aside, id, level, cls = "", label = title, lede } = {}) =>
-  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${sectionHead(title, { count, aside, id, level })}${lede ? `<p class="lede">${esc(lede)}</p>` : ""}${body}</section>`;
+  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${title ? sectionHead(title, { count, aside, id, level }) : ""}${lede ? `<p class="lede">${esc(lede)}</p>` : ""}${body}</section>`;
 /** A card split 3 : 1 by a rule: the head and `main` on the left, `side` on the right. */
 export const splitCard = (title, main, side, { aside, id, label = title } = {}) =>
   `<section class="card duo"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}"><div class="duo-main">${sectionHead(title, { aside })}${main}</div><div class="duo-side">${side}</div></section>`;

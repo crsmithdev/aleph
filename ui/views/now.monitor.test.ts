@@ -12,6 +12,7 @@ import { seed } from "../../jobs/job.testkit.ts";
 import { setCodes } from "../../lib/naming.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clock } from "./lib/format.js";
+import { job } from "../fixtures/status-state.ts";
 
 const calm = { ...withFactory({}), asks: [], errored: [] };
 /** The text of each body row of the Pipeline table, its cells joined by " | ". */
@@ -134,7 +135,6 @@ test("a Pipeline stage with an unusable run links its failed share to the unusab
 test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
   const h = view.renderHerald({ ...calm, asks: [ask], errored: [], running: [], runningIssues: [], done: [], queued: [] });
-  expect(h).toContain('<h2 id="h-herald">Herald</h2>');
   expect(h).toContain('<span class="badge need">Not OK</span>');
   expect(h).toContain('id="awaiting"');
   expect(h).not.toContain("Sticky Alerts");
@@ -167,6 +167,21 @@ test("a running job's row names its run's kind, and shows the size of a build on
   const r = view.renderHerald({ ...calm, running: [{ ...job, run: { kind: "review" } }], runningIssues: [] });
   expect(r).toContain('<span class="badge run">review</span>');
   expect(r).toContain('<span class="run-size"><span class="run-dot"></span></span>');
+});
+
+test("the Herald's tabs are its head and its alerts sit above every pane, outside each", () => {
+  const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
+  const h = view.renderHerald({ ...calm, asks: [ask], errored: [job({ name: "aleph-30", state: "failed" })] });
+  const needs = h.indexOf('<section id="needs"'), end = h.indexOf("</section>", needs);
+  const panes = [...h.matchAll(/<section data-pane="[^"]*"/g)].map((m) => m.index!);
+  expect(panes).toHaveLength(3);
+  expect(panes.every((p) => p > end)).toBe(true);
+  expect(h.slice(needs, end)).toContain('id="jobs-error"');
+  expect(h).toStartWith('<section class="card herald-card" id="herald" aria-label="Herald"><div class="tabs"><div class="sh"><div class="seg" role="group" aria-label="Herald"><button type="button" data-tab="events"');
+  const head = h.slice(h.indexOf('<div class="sh">'), needs);
+  expect(head).toContain('data-tab="inspector"');
+  expect(head).toContain('<span class="aside"><span class="badge error">Not OK</span></span>');
+  expect(h).not.toMatch(/<h\d[^>]*>Herald</);
 });
 
 test("the Herald panel shows an OK badge with no alerts and no alert row", () => {

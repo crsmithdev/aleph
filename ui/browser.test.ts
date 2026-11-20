@@ -968,6 +968,28 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.go("#/issues");
   }, 60_000);
 
+  test("the Herald's alerts show on each of its tabs", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    // The page's last state gets an open Ask; a stream event of `seq` 0 draws the Herald again from it.
+    await page.ev(`import("/views/now.js").then(({ view }) => fetch("/api/factory").then((r) => r.json()).then((s) => {
+      s.asks = [{ id: "tools-6", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Pick a format", situation: "Decide it.", escalated: true, actions: [] }];
+      view.render(s, {}, new URLSearchParams());
+      view.event(document.querySelector("#view"), { seq: 0, rows: [] });
+    }))`);
+    const seen = [];
+    for (const tab of ["events", "active", "inspector"]) {
+      await page.ev(`document.querySelector("#herald button[data-tab=${tab}]").click()`);
+      seen.push(await page.ev(`[document.querySelector("#herald section[data-pane=${tab}]").hidden, document.querySelector("#herald #needs")?.checkVisibility() ?? false]`));
+    }
+    expect(seen).toEqual([[false, true], [false, true], [false, true]]);
+    // The alerts keep their own size: the open pane, not the block above it, takes the card's free height.
+    expect(await page.ev(`(({ flexGrow, minHeight }) => [flexGrow, minHeight])(getComputedStyle(document.querySelector("#herald #needs")))`)).toEqual(["0", "auto"]);
+    expect(page.errors).toEqual([]);
+    await page.ev('localStorage.removeItem("aleph.herald.inspect")');
+    await page.go("#/issues");
+  }, 60_000);
+
   test("when the first of two running jobs ends, a redraw by morph fades a ghost of that job where its row was", async () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #herald")');

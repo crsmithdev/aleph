@@ -410,6 +410,7 @@ A card is one section of a list page. It has a head and a body.
 - Do not put a card in a card.
 - Give `lede` as one sentence that sums up the card. A failure goes to `notice()`, not to the lede.
 - A heading inside a card is `subHead()`.
+- Give an empty title to draw no head, when the body is a tab card.
 - Give an `id` when a link goes to the section.
 
 | Do | Don't |
@@ -1338,11 +1339,36 @@ Tabs show one pane of a page at a time. A segmented control picks the pane.
 - `wireTabs()` switches the panes without a redraw. A view that keeps the pick in `keep()` or in the address gives `onTab` and keeps it there. Wiring a root again adds no listener: the root keeps one, and the last `onTab` is the one it calls.
 - Name each tab in one or two words, as the title of its pane.
 - Put all the panes in the page, hidden. Do not fetch a pane on a click.
+- Give `head` as `{ aside, top }` to make the tab bar a card's head. See Tab card.
 
 | Do | Don't |
 |---|---|
 | `tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, tab)` | `seg()` plus `section` tags written by hand |
 | three tabs | a tab bar of nine tabs that scrolls |
+
+#### Tab card
+
+A tab card is a card whose head is its tabs. The segmented control takes the place of the title.
+
+**Use:** for a card of two to five panes, where the card's name adds nothing to its tab names. **Not for:** a card with one body; use a card with a title.
+
+| Helper | Reference |
+|---|---|
+| `card("", tabs(label, items, panes, on, { aside, top }), { id, cls, label })` | `ui/views/now.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Head | The tab bar from `seg()`, then the aside | | as the card head; the aside at the right |
+| 2 | Top | HTML that shows on every tab, such as alerts | yes | between the head and the panes, outside each pane |
+| 3 | Pane | The HTML of one tab, in a `section[data-pane]` | | as in tabs |
+
+- Give the card an empty title and its name as `label`. The card has no heading, so the label names it for assistive tech.
+- Give the group of buttons the card's name as `label` too.
+- Put what must show on every tab in `top`, not in each pane.
+
+| Do | Don't |
+|---|---|
+| `card("", tabs("Herald", items, panes, tab, { aside: badge, top: alerts }), { label: "Herald" })` | a title over the tab bar that repeats the card's name |
 
 #### Select
 
