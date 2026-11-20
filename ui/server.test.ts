@@ -3,7 +3,8 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { kit } from "./kit.ts";
-import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
+import { deviceCookie, withEnv, withServer, type TestServer } from "./server.testkit.ts";
+import { addDevice, dropDevice } from "./pair.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 
@@ -247,4 +248,24 @@ test.skipIf(!kit)("the shelf routes are served, and a send lands in the test's o
   const shelfDir = process.env.SHELF_DIR!;
   expect(shelfDir.startsWith(tmpdir())).toBe(true);
   expect(readFileSync(join(shelfDir, "inbox", "events.jsonl"), "utf8")).toContain(markdown);
+});
+
+test("a POST needs a paired device cookie, and /pair sets it only for a known token", async () => {
+  const post = (cookie?: string) => fetch(`http://127.0.0.1:${server.port}/api/_none`, { method: "POST", headers: { "x-aleph-ui": "1", ...(cookie ? { cookie } : {}) } });
+  const refused = await post();
+  expect(refused.status).toBe(401);
+  expect(await refused.json()).toEqual({ error: "pair this device: aleph ui pair" });
+  expect((await fetch(`http://127.0.0.1:${server.port}/shelf/send`, { method: "POST" })).status).toBe(401);
+  expect((await post(deviceCookie)).status).toBe(404);
+  const { token } = addDevice("phone");
+  const pair = (t: string) => fetch(`http://127.0.0.1:${server.port}/pair`, { method: "POST", body: t });
+  expect((await pair("nope")).status).toBe(401);
+  expect((await pair("nope")).headers.get("set-cookie")).toBeNull();
+  const ok = await pair(token);
+  expect(ok.headers.get("set-cookie")).toBe(`aleph_device=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=315360000`);
+  expect((await post(`aleph_device=${token}`)).status).toBe(404);
+  expect(dropDevice("phone")).toBe(true);
+  expect((await post(`aleph_device=${token}`)).status).toBe(401);
+  expect((await pair(token)).status).toBe(401);
+  expect(await (await fetch(`http://127.0.0.1:${server.port}/pair`)).text()).toContain("/pair");
 });

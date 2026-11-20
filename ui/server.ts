@@ -7,6 +7,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { kit } from "./kit.ts";
+import { gate, pairRoute } from "./pair.ts";
 import { skipFetches } from "../lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
 import { startPoller } from "./usage.ts";
@@ -108,6 +109,8 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
     // Bun closes a request after 10 s by default; /api/memory and /api/sessions take longer.
     idleTimeout: 120,
     async fetch(req) {
+      const refused = await pairRoute(req) ?? gate(req);
+      if (refused) return refused;
       const shelved = await kit?.shelf(req);
       if (shelved) return shelved;
       const url = new URL(req.url);

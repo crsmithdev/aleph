@@ -27,7 +27,7 @@ const vars: Record<string, string> = {
   ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_BACKUPS_DIR: join(dir, "backups"),
   ALEPH_SKILLS_STORE: join(dir, "skills-store.json"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
-  ALEPH_SESSIONS_DIR: join(dir, "sessions"), ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"), ALEPH_DB: join(dir, "aleph.db"),
+  ALEPH_SESSIONS_DIR: join(dir, "sessions"), ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"), ALEPH_UI_TOKENS: join(dir, "ui-tokens"), ALEPH_DB: join(dir, "aleph.db"),
   // The shelf (ui/server.ts passes /shelf/ to aleph-tools): a test that reaches it must not write Chris's store.
   SHELF_DIR: join(dir, "shelf"),
   // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.

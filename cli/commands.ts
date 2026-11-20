@@ -10,7 +10,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadRegistry, newsLine, repoOf, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
-import { workerCmd } from "../jobs/lib/infra/settings.ts";
+import { uiPort, workerCmd } from "../jobs/lib/infra/settings.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
 import { isLive } from "../jobs/lib/infra/process.ts";
 import { findJob, issue as issueOf, issueTitle, readFile, stateOf, view, type Job } from "../jobs/lib/records/job.ts";
@@ -23,6 +23,7 @@ import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../lib/todo.ts";
 import { yesterday } from "../lib/day.ts";
 import * as verbs from "../issues/lib/issues.ts";
+import { addDevice, devices, dropDevice } from "../ui/pair.ts";
 import { todoCmd } from "../issues/cli.ts";
 import { ideaCmd } from "../ideas/cli.ts";
 import * as notes from "../lib/annotations.ts";
@@ -74,6 +75,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   issue: { usage: `aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind ${issues.KINDS.join("|")}]`, purpose: "read and write a repo's issues" },
   idea: { usage: "aleph idea <add|list|show|edit|note|save|lens|built|drop> ...", purpose: "keep and develop ideas" },
   annotation: { usage: "aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>", purpose: "read and write notes on UI pages" },
+  ui: { usage: "aleph ui <pair [label]|unpair <label>|devices>", purpose: "pair a device with the UI, drop one, or list them" },
   tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
   director: { usage: "aleph director", purpose: "run one director step" },
   housekeep: { usage: "aleph housekeep", purpose: "review the parked issues a land touched, or every parked issue once a day" },
@@ -337,6 +339,21 @@ function statusRecent(ctx: Ctx): void {
   for (const { key, code, rows } of ofRepo) { ctx.log(key); for (const s of rows) ctx.log(issues.localRefs(key, `  ${stageLine(s)}`, code)); }
 }
 
+/** `aleph ui pair|unpair|devices`: the devices that may POST to the UI (ui/pair.ts). */
+function uiCmd(ctx: Ctx): void {
+  const [verb, label] = ctx.positional;
+  switch (verb) {
+    case "pair": {
+      const { token, label: name } = (() => { try { return addDevice(label); } catch (e) { return refuse((e as Error).message); } })();
+      ctx.log(`paired ${name}; open once:\nhttp://aleph.home/pair#${token}\nhttp://127.0.0.1:${uiPort()}/pair#${token}`);
+      return;
+    }
+    case "unpair": if (!label || !dropDevice(label)) refuse(`no device ${label ?? ""}`.trim()); ctx.log(`unpaired ${label}`); return;
+    case "devices": for (const d of devices()) ctx.log(`${d.label} ${d.date}`); return;
+    default: refuse(usage("ui"));
+  }
+}
+
 const ANNOTATION_USAGE = usage("annotation");
 
 /** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
@@ -428,6 +445,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "checked": ctx.out(checked(ctx.positional[0])); break;
     case "issue": await todoCmd(ctx, usage("issue")); break;
     case "annotation": await annotationCmd(ctx); break;
+    case "ui": uiCmd(ctx); break;
     case "idea": await ideaCmd(ctx, usage("idea")); break;
     case "tick": await tickCmd(ctx); break;
     case "director": ctx.out(await directorStep()); break;

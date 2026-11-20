@@ -46,6 +46,8 @@ export const claudeProjects = (): string => expand(process.env.ALEPH_CLAUDE_PROJ
 export const vaultDir = (): string => { touch("vault"); return alephPath("ALEPH_VAULT", "vault"); };
 /** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
 export const handoffsDir = (): string => { touch("handoffs"); return expand(process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs")); };
+/** The paired devices of the UI: one `<sha256-hex> <label> <iso-date>` line each (ui/pair.ts). */
+export const uiTokensFile = (): string => alephPath("ALEPH_UI_TOKENS", "ui-tokens");
 /** The notes pinned on UI pages, and the answers to them (lib/annotations.ts). */
 export const annotationsFile = (): string => { touch("annotations"); return alephPath("ALEPH_ANNOTATIONS", "annotations.json"); };
 

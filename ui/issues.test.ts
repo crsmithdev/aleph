@@ -9,7 +9,7 @@ import { add, noteOf, setStatus, type Doc } from "../lib/todo.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as todos from "../lib/todo.ts";
 import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
-import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
+import { deviceCookie, withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { updater } from "./updater.ts";
 import { state } from "./state.ts";
 import { run as alephRun } from "../cli/commands.ts";
@@ -54,7 +54,7 @@ function sh(cwd: string, ...args: string[]): string {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
   return p.stdout.toString().trim();
 }
-const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
+const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, { ...init, headers: { cookie: deviceCookie, ...init?.headers as Record<string, string> } });
 const getJson = async (p: string) => (await at(p)).json() as Promise<any>;
 /** The issue rows of `GET /api/issues`, of one project or of all. */
 const rowsOf = async (project?: string): Promise<any[]> => (await getJson(project ? `/api/issues?project=${project}` : "/api/issues")).issues;

@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { root } from "./kit.ts";
+import { hash } from "./pair.ts";
 
 const CHROME = "/usr/bin/google-chrome";
 
@@ -140,7 +141,10 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
     // The empty HOME would move the seam's default checkout, so name it.
     ALEPH_TOOLS: root,
     // A test that files or answers an issue must not start a real intake or dispatch.
-    ALEPH_DISPATCH: "off" };
+    ALEPH_DISPATCH: "off",
+    // The page is a paired device: its cookie (set in open) matches this file.
+    ALEPH_UI_TOKENS: join(base, "ui-tokens") };
+  writeFileSync(env.ALEPH_UI_TOKENS, `${hash("rig-device")} rig 2026-01-01T00:00:00.000Z\n`);
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
   if (prepare) await prepare(env);
   const serve = async (port: string) => {
@@ -162,6 +166,7 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
     start = hash;
     const errors: string[] = [];
     cdp.on((m) => { if (m.sessionId === sessionId && m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails?.exception?.description?.split("\n")[0] ?? m.params.exceptionDetails?.text); });
+    await cdp.send("Network.setCookie", { name: "aleph_device", value: "rig-device", url }, sessionId);
     await cdp.send("Page.enable", {}, sessionId);
     await cdp.send("Runtime.enable", {}, sessionId);
     /** `limit` 0 waits without end: the wait of `when` outlives the limit of a call a test makes. */

@@ -8,7 +8,7 @@ import { addPart } from "../issues/lib/parts.testkit.ts";
 import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { logEvent } from "../lib/layout.ts";
 import { state } from "./state.ts";
-import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
+import { deviceCookie, withEnv, withServer, type TestServer } from "./server.testkit.ts";
 // @ts-ignore plain JS, shared with the page
 import { refHits, renderIssue } from "./views/issues.js";
 import { seed } from "../jobs/job.testkit.ts";
@@ -104,7 +104,7 @@ describe("the Issue page", () => {
   });
 
   test("the page edits an issue and appends a note through the CLI", async () => {
-    const post = (path: string, body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/${path}`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body) });
+    const post = (path: string, body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/${path}`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1", cookie: deviceCookie }, body: JSON.stringify(body) });
     expect((await post("note", { text: " " })).status).toBe(400);
     const before = await getJson("/api/issues/fac-1");
     const edited = await post("edit", { title: "[Group] A new title", priority: "high", source: "worker", areas: "ui, bug", description: "New words." });
@@ -119,7 +119,7 @@ describe("the Issue page", () => {
 
   // Breaks if the edit route drops the picker's refs, clears them when the form sends none, or fails to clear an empty list.
   test("the page's edit sets refs from the picker, keeps them when it sends no refs, and an empty list clears them", async () => {
-    const post = (body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/edit`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body) });
+    const post = (body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/edit`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1", cookie: deviceCookie }, body: JSON.stringify(body) });
     const d = await getJson("/api/issues/fac-1");
     const same = { title: d.title, priority: d.priority ?? "medium", source: d.frontmatter.source ?? "chris", areas: d.labels.join(","), description: d.request ?? "" };
     expect((await post({ ...same, refs: ["issue.2"] })).status).toBe(200);
