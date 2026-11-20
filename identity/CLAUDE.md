@@ -69,6 +69,7 @@ Only Chris can say `skip verify`.
 
 Show a design draft as a mock with `/aleph:mock`.
 Open a URL in Chris's browser with `cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"`.
+For a local file, pass `$(wslpath -w <file>)` as the URL. Never type the UNC path, because the distro is `Ubuntu-24.04`, not `Ubuntu`.
 `wslview` fails here because this WSL registers `WSLInterop-late`, not `WSLInterop`.
 
 ## Memory
