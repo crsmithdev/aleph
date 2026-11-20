@@ -4,7 +4,7 @@
 import { setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { barList, barRow, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, tag } from "./lib/html.js";
+import { barList, barRow, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, tag } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -44,9 +44,9 @@ function holdsBy(groups, hookCol = true) {
   const rows = groups.map((g) => {
     const n = (k) => g.outcomes[k] ?? 0;
     const show = `<button type="button" class="link" data-kind="${esc(g.kind)}"${hookCol ? ` data-hook="${esc(g.hook)}"` : ""} title="Show these holds">${esc(hookCol ? g.hook : kindName(g.kind))}</button>`;
-    return `<tr><td>${show}</td>${hookCol ? `<td>${esc(kindName(g.kind))}</td>` : ""}<td class="num">${g.holds}</td><td class="num">${g.interactive}</td><td class="num">${g.workers}</td>` +
-      `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>` +
-      OUTS.map(([k]) => `<td class="num">${n(k) || ""}</td>`).join("") + `</tr>`;
+    return row([`<td>${show}</td>`, ...(hookCol ? [cell(kindName(g.kind))] : []), cell(g.holds, { num: true }), cell(g.interactive, { num: true }), cell(g.workers, { num: true }),
+      `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>`,
+      ...OUTS.map(([k]) => cell(n(k) || "", { num: true }))]);
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
   return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1])], nums), rows.join(""));
@@ -61,8 +61,8 @@ function perDay(holds) {
 
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Errors", "Sessions", "Fix", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
-  `<tr><td>${esc(e.cause)}</td><td class="wide" title="${esc(e.hooks.join(", "))}">${esc(e.hooks.join(", "))}</td><td>${esc(e.events.join(", "))}</td>` +
-  `<td class="num">${e.n}</td><td class="num">${e.sessions}</td><td>${esc(e.fix)}</td><td class="time">${esc(when(e.last))}</td></tr>`).join(""));
+  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")),
+    cell(e.n, { num: true }), cell(e.sessions, { num: true }), cell(e.fix), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 /** The filters of the holds log from the address. */
 const filtersOf = (q) => Object.fromEntries(["who", "hook", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));
@@ -74,8 +74,8 @@ function holdsLog(holds, q, hookCol = true) {
   const shown = holds.filter((h) => (!f.who || whoOf(h) === f.who) && (!f.hook || h.hook === f.hook) && (!f.kind || h.kind === f.kind) && (!f.out || h.out === f.out));
   const rows = shown.map((h) => {
     const [, , , tone] = OUTS.find((o) => o[0] === h.out);
-    return `<tr><td class="time lead">${esc(when(h.t))}</td><td>${idLink(h.sid.slice(0, 8), `#/sessions/${encodeURIComponent(h.sid)}`)}</td>${hookCol ? `<td>${esc(h.hook)}</td>` : ""}` +
-      `<td>${esc(kindName(h.kind))}</td><td>${esc(h.who)}</td><td>${tag(h.out, tone)}</td><td class="wide" title="${esc(h.why)}">${esc(h.why)}</td></tr>`;
+    return row([`<td class="time lead">${esc(when(h.t))}</td>`, `<td>${idLink(h.sid.slice(0, 8), `#/sessions/${encodeURIComponent(h.sid)}`)}</td>`, ...(hookCol ? [cell(h.hook)] : []),
+      cell(kindName(h.kind)), cell(h.who), `<td>${tag(h.out, tone)}</td>`, cell(h.why, { wide: true })]);
   });
   if (!holds.length) return detailPanel("Holds", "0", empty(), "holds");
   const page = pageOf(q ?? new URLSearchParams());
@@ -94,8 +94,8 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
-  const inv = d.hooks.map((h) => `<tr><td>${esc(h.event)}</td><td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td><td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>` +
-    `<td>${codeText(`\`${h.file}\``)}</td><td>${esc(h.mode)}</td><td class="num">${h.timeout}</td><td class="num">${h.holds || ""}</td></tr>`).join("");
+  const inv = d.hooks.map((h) => row([cell(h.event), `<td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
+    `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })])).join("");
   return `<div class="page dp-page">` +
     pageHead("Hooks", { aside: `Last ${d.days} days` }) +
     renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
