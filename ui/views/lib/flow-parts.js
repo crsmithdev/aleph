@@ -35,10 +35,11 @@ export function weekGone(resetsAt, now) {
   return Number.isNaN(left) ? null : Math.min(100, Math.max(0, 100 - (left / WEEK_MS) * 100));
 }
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
-/** A card's duration from seconds: as `dur` under 10m, whole minutes cut down under 1h, then whole hours rounded. */
+/** A card's duration from seconds: as `dur` under 10m, then whole minutes rounded, then whole hours rounded. */
 export function cardDur(s) {
   if (!(s >= 600)) return dur(s);
-  return s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.round(s / 3600)}h`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m}m` : `${Math.round(s / 3600)}h`;
 }
 
 /** The trend of one figure of `d` against the baseline of its own /api/flow answer; empty with no baseline. */

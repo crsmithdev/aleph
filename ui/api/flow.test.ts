@@ -201,8 +201,8 @@ test("the Usage card shows used over pace, with the percent off this machine in 
   expect(card({ now: { seven_day: 40 } })).not.toContain("<em>");
 });
 
-test("cardDur: as dur under 10m, whole minutes cut down under 1h, then whole hours rounded", () => {
-  const cases: [number | null, string][] = [[599, "9m 59s"], [632, "10m"], [3599, "59m"], [5520, "2h"], [5340, "1h"], [108000, "30h"], [null, "–"]];
+test("cardDur: as dur under 10m, then whole minutes rounded, then whole hours rounded", () => {
+  const cases: [number | null, string][] = [[599, "9m 59s"], [629, "10m"], [632, "11m"], [3569, "59m"], [3585, "1h"], [5520, "2h"], [5340, "1h"], [108000, "30h"], [null, "–"]];
   for (const [s, shown] of cases) expect(cardDur(s)).toBe(shown);
 });
 
@@ -210,7 +210,7 @@ test("the Status Completion card shows its durations through cardDur", () => {
   const d = { figures: { lost: null, hours: null, leadP50: 632, leadP90: 5520, asks: 0, landed: null, firstPass: null } };
   const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [] }, d, {});
   const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Completion"))!;
-  expect(card).toContain("<b>10m<em> / 2h</em></b>");
+  expect(card).toContain("<b>11m<em> / 2h</em></b>");
   expect(card).not.toContain("10m 32s");
 });
 
