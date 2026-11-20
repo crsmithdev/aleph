@@ -1,5 +1,5 @@
 // The housekeeper: a land reviews the parked issues that name a changed file, a daily run reviews every parked issue in
-// batches, and code checks and applies each typed action whatever the fake replies.
+// one run per repo, an issue it changed rests a day, and code checks and applies each typed action whatever the fake replies.
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -11,7 +11,7 @@ import { readEvents } from "../../../lib/layout.ts";
 import { lock } from "../../../lib/locks.ts";
 import { setModel } from "../routing/models.ts";
 import { setAsk, type Ask } from "../asks/ask.ts";
-import { BATCH, housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
+import { housekeep, housekeepDue, readState, review } from "./housekeeper.ts";
 import { base, branch, calls, fresh, item, key, repoPath, replyWith, sh, useDirectorFixture } from "./director.testkit.ts";
 
 useDirectorFixture();
@@ -36,18 +36,19 @@ function seed(items: { title: string; body?: string; open?: boolean; ask?: Ask }
   for (const [k, i] of items.entries()) if (i.ask) setAsk(`issue.${k + 1}`, i.ask);
 }
 
-test("the daily run reviews every parked issue in batches of BATCH, and no open one nor one with a core-change Ask", async () => {
-  seed([...Array.from({ length: BATCH + 2 }, (_, k) => ({ title: `Parked issue ${k + 1}` })), { title: "Open issue", open: true },
+test("the daily run reviews every parked issue in one run, and no open one nor one with a core-change Ask", async () => {
+  seed([...Array.from({ length: 12 }, (_, k) => ({ title: `Parked issue ${k + 1}` })), { title: "Open issue", open: true },
     { title: "Core note X", ask: { reason: "core-change", question: "Apply the archive verdict to the core note X?", options: [], why: [] } }]);
   act([]);
   expect(housekeepDue(NOW)).toBe(true);
   const out = await housekeep(NOW);
-  expect(out!.map((o) => o.ids.length)).toEqual([BATCH, 2]);
-  expect(calls()).toBe(2);
+  expect(out!.map((o) => o.ids.length)).toEqual([12]);
+  expect(calls()).toBe(1);
+  expect(prompt()).toContain(`### ${key}-1: Parked issue 1\n`);
   expect(prompt()).toContain(`### ${key}-12: Parked issue 12`);
   expect(prompt()).not.toContain(`### ${key}-13`);
   expect(prompt()).not.toContain(`### ${key}-14`);
-  expect(runs().map((e) => e.run.state)).toEqual(["done", "done"]);
+  expect(runs().map((e) => e.run.state)).toEqual(["done"]);
   // The daily review is done: nothing is due until a main moves or a day passes.
   expect(readState().main[key]).toBe(sh(repoPath(), "git", "rev-parse", "main"));
   expect(housekeepDue(NOW + 60_000)).toBe(false);
@@ -180,4 +181,20 @@ test("each applied change logs an event of its job on its issue, and a run with 
   const idle = runs().at(-1)!.id;
   expect(idle).not.toBe(job);
   expect(mine(idle)).toEqual([]);
+});
+
+test("an issue the housekeeper changed, or kept in a drop, is left out of its reviews for a day", async () => {
+  seed([{ title: "Retitle this one" }, { title: "Drop this one" }, { title: "Keep this one" }, { title: "Leave this one" }]);
+  act([]);
+  await housekeep(NOW);
+  act([
+    { do: "retitle", id: "1", why: "stale", title: "Retitle the stale issue" },
+    { do: "drop", id: "2", why: "same work", keep: "3" },
+  ]);
+  await review({ repo: repo(), items: readList(repo())!.items }, NOW + 3_600_000);
+  act([]);
+  const [o] = (await housekeep(NOW + 86_400_000))!;
+  expect(o.ids).toEqual(["4"]);
+  const [p] = (await housekeep(NOW + 2 * 86_400_000))!;
+  expect(p.ids).toEqual(["1", "3", "4"]);
 });

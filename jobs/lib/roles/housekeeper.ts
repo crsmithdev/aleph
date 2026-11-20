@@ -2,9 +2,10 @@
  * The housekeeper: it keeps the parked issues of every registry repo current. The tick starts `aleph housekeep` on two
  * triggers: a main that moved since the last sweep (a land, by the factory or by hand) and an hour has passed since the
  * last sweep or daily review started, which reviews the parked issues that name a changed file across all the lands since
- * that sweep, and once a day a review of every parked issue. Each batch of up to BATCH issues of one repo
- * is one read-only `claude -p` run, kind `housekeeper`, in the repo's checkout. Its reply is typed actions; code checks
- * each one and applies it through the issue verbs. It asks nobody: where it would ask, it notes the issue and moves on.
+ * that sweep, and once a day a review of every parked issue. An issue the housekeeper changed rests for a day. The
+ * issues of one repo are one read-only `claude -p` run, kind `housekeeper`, in the repo's checkout, and the runs of one
+ * call share an hour, so they end before the next call can start. Its reply is typed actions; code checks each one and
+ * applies it through the issue verbs. It asks nobody: where it would ask, it notes the issue and moves on.
  */
 import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -25,10 +26,6 @@ import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { detailOf, issueKey, PRIORITIES } from "../../../lib/naming.ts";
 
-/** Issues per run: a bad reply costs one batch. */
-export const BATCH = 10;
-/** One batch's time box, in seconds. */
-const SECONDS = 1800;
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
 /** The lock that both triggers share. */
@@ -38,21 +35,22 @@ const ALLOWED = ["Read", "Grep", "Glob", ...["log", "show", "diff", "ls-files", 
 /** A file name in free text, with or without its directories: `tick.ts`, `jobs/lib/transitions/tick.ts`. */
 const PATH = /(?:[\w.-]+\/)*[\w-]+\.[a-z]{1,4}\b/g;
 
-/** When the daily review last started, when the last sweep or daily review started, and the main commit of each repo at its last sweep. */
-export interface State { daily?: string; last?: string; main: Record<string, string> }
-export const readState = (): State => ({ main: {}, ...getJson<Partial<State>>("state", "housekeeper", {}) });
+/** When the daily review last started, when the last sweep or daily review started, the main commit of each repo at its last sweep, and when the housekeeper last changed each issue, by `<repo>-<id>`. */
+export interface State { daily?: string; last?: string; main: Record<string, string>; changed: Record<string, string> }
+export const readState = (): State => ({ main: {}, changed: {}, ...getJson<Partial<State>>("state", "housekeeper", {}) });
 
 /** One batch: parked issues of one repo, and the land that touched them, if a land is the trigger. */
 export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: string; to: string; files: string[] } }
 
 const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", mainRef(repo.path, repo.main)).out;
-/** The parked issues of `repo`, but those whose Ask waits for Chris: the housekeeper must not close or drop them. */
-const parked = (repo: Repo): issues.Issue[] =>
-  (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)));
+/** Whether the housekeeper changed issue `id` of `repo` in the day before `now`. */
+const resting = (s: State, repo: Repo, id: number | string, now: number): boolean => now - Date.parse(s.changed[`${repo.key}-${id}`] ?? "") < DAY;
+/** The parked issues of `repo`, but those whose Ask waits for Chris, which the housekeeper must not close or drop, and those resting. */
+const parked = (s: State, repo: Repo, now: number): issues.Issue[] =>
+  (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)) && !resting(s, repo, i.id, now));
 const textOf = (i: issues.Issue): string => [i.title, i.request, i.spec, ...i.notes].join("\n");
 /** Whether `file` is one of the names in `text`: the whole path, or its tail after a slash. */
 const names = (text: string, file: string): boolean => (text.match(PATH) ?? []).some((t) => file === t || file.endsWith(`/${t}`));
-const chunks = <T>(xs: T[], n: number): T[][] => Array.from({ length: Math.ceil(xs.length / n) }, (_, k) => xs.slice(k * n, k * n + n));
 
 /** The registry repos with an issue list and a main the housekeeper can read. A repo has its list for good, so this reads the lists as last fetched: the tick does no fetch. */
 const repos = (): Repo[] => Object.values(loadRegistry()).filter((r) => readFetched(r) && headOf(r));
@@ -75,11 +73,11 @@ export function housekeepDue(now: number): boolean {
 }
 
 /** The batches of a land: the parked issues of each moved repo that name a changed file. */
-function landBatches(s: State, rs: Repo[]): Batch[] {
+function landBatches(s: State, rs: Repo[], now: number): Batch[] {
   return moved(s, rs).flatMap(({ repo, from, to }) => {
     const files = git(repo.path, "diff", "--name-only", from, to).out.split("\n").filter(Boolean);
-    const hit = parked(repo).filter((i) => files.some((f) => names(textOf(i), f)));
-    return chunks(hit, BATCH).map((items) => ({ repo, items, land: { from, to, files } }));
+    const items = parked(s, repo, now).filter((i) => files.some((f) => names(textOf(i), f)));
+    return items.length ? [{ repo, items, land: { from, to, files } }] : [];
   });
 }
 
@@ -210,12 +208,12 @@ const WORD = [["close", "closed"], ["drop", "dropped"], ["retitle", "retitled"],
 
 export interface Outcome { repo: string; ids: string[]; applied: string[]; refused: string[]; error?: string }
 
-/** One run on one batch: its reply's actions, each applied or refused. A failed run applies nothing. */
-export async function review(b: Batch, now: number): Promise<Outcome> {
+/** One run on one batch, time-boxed to `seconds`: its reply's actions, each applied or refused. A failed run applies nothing. */
+export async function review(b: Batch, now: number, seconds = HOUR / 1000): Promise<Outcome> {
   const ids = b.items.map((p) => String(p.id));
   const out: Outcome = { repo: b.repo.key, ids, applied: [], refused: [] };
   const run = openRun({
-    role: "housekeeper", who: "the housekeeper", model: readModels().housekeeper.model, seconds: SECONDS, cwd: b.repo.path, repo: b.repo.key, schema: SCHEMA,
+    role: "housekeeper", who: "the housekeeper", model: readModels().housekeeper.model, seconds, cwd: b.repo.path, repo: b.repo.key, schema: SCHEMA,
     flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")],
     name: `housekeeper-${b.repo.key}`, command: `housekeep ${b.repo.key}${b.land ? ` after ${b.land.to.slice(0, 7)}` : ""}: ${ids.join(", ")}`, shown: true,
   });
@@ -239,6 +237,10 @@ export async function review(b: Batch, now: number): Promise<Outcome> {
     }
     (why ? out.refused : out.applied).push(why ? `${describe(a)}: refused: ${why}` : describe(a));
   }
+  const s = readState(), at = new Date(now).toISOString();
+  const kept = Object.entries(s.changed).filter(([, t]) => now - Date.parse(t) < DAY);
+  const changed = did.flatMap((a) => (a.do === "drop" ? [a.id, a.keep] : [a.id])).map((id) => [`${b.repo.key}-${id}`, at]);
+  putJson("state", "housekeeper", { ...s, changed: Object.fromEntries([...kept, ...changed]) });
   writeFileSync(runFile(run.folder, "result.md"), [`# Applied`, ...out.applied.map((l) => `- ${l}`), "", `# Refused`, ...out.refused.map((l) => `- ${l}`), ""].join("\n"));
   const tally = { reviewed: ids.length, ...Object.fromEntries(WORD.map(([k, w]) => [w, did.filter((a) => a.do === k).length])), refused: out.refused.length };
   run.end(`${out.applied.length} applied, ${out.refused.length} refused`, {
@@ -260,10 +262,15 @@ export async function housekeep(now: number): Promise<Outcome[] | null> {
     const s = readState();
     const daily = dailyDue(s, now);
     const rs = repos();
-    const batches = daily ? rs.flatMap((repo) => chunks(parked(repo), BATCH).map((items) => ({ repo, items }))) : landBatches(s, rs);
-    putJson("state", "housekeeper", { daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(rs.map((r) => [r.key, headOf(r)])) } });
+    const batches = daily ? rs.map((repo) => ({ repo, items: parked(s, repo, now) })).filter((b) => b.items.length) : landBatches(s, rs, now);
+    putJson("state", "housekeeper", { ...s, daily: daily ? new Date(now).toISOString() : s.daily, last: new Date(now).toISOString(), main: { ...s.main, ...Object.fromEntries(rs.map((r) => [r.key, headOf(r)])) } });
+    const end = Date.now() + HOUR;
     const out: Outcome[] = [];
-    for (const b of batches) out.push(await review(b, now));
+    for (const b of batches) {
+      const left = Math.floor((end - Date.now()) / 1000);
+      if (left <= 0) break;
+      out.push(await review(b, now, left));
+    }
     return out;
   } finally {
     release();
