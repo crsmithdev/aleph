@@ -1340,7 +1340,7 @@ Tabs show one pane of a page at a time. A segmented control picks the pane.
 
 | Do | Don't |
 |---|---|
-| `tabs("Herald", [["events", "Events"], ["inspector", "Inspector"]], panes, tab)` | `seg()` plus `section` tags written by hand |
+| `tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, tab)` | `seg()` plus `section` tags written by hand |
 | three tabs | a tab bar of nine tabs that scrolls |
 
 #### Select

@@ -4,7 +4,7 @@
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
-import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
+import { actButton, seg, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf, title as chartTitle } from "./lib/chart.js";
 import { feedRow, heraldRow } from "./lib/feed.js";
@@ -30,12 +30,13 @@ export const view = {
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root); wireInspect(root);
-    // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it.
+    // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it. A button of the Active toggle keeps its choice.
     root.onclick = (e) => {
-      const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x");
+      const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x, #herald [data-active]");
       if (!b) return;
       e.preventDefault();
-      keep(WORD, b.matches(".ref-x") ? null : b.textContent);
+      if (b.dataset.active) keep(ACTIVE, b.dataset.active);
+      else keep(WORD, b.matches(".ref-x") ? null : b.textContent);
       redrawHerald(root);
     };
     if (usable(s.flow)) { root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow); root.querySelector('aleph-chart[key="status/speed"]').frame = speedFrame(s.flow); }
@@ -193,6 +194,9 @@ const WORD = "herald.word";
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
+/** A job's ID linked to its page; a job with no ID links its item. */
+const jobLink = (j) => (j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j));
+
 /** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, a build's size with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
 function runNow(s) {
   const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}" id="${rowId(`job ${id}`)}"`,
@@ -201,9 +205,22 @@ function runNow(s) {
   const rows = s.runningIssues.map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat(s.running.map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
     const size = run.kind === "build" ? j.size : "";
-    return row(j.id ?? j.name, j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j), runWord(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
+    return row(j.id ?? j.name, jobLink(j), runWord(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
   }));
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
+}
+
+/** The key of the Active pane's toggle in keep(): "issues" or "jobs". */
+const ACTIVE = "herald.active";
+
+/** The Active pane: a toggle between issues and jobs over the Running and Queued sections, each row linked to its page. The state holds no queued job apart from the queued issues, so Queued lists those in either mode. */
+function active(s) {
+  const mode = kept(ACTIVE, "issues");
+  const toggle = seg("Show", [["issues", "Issues"], ["jobs", "Jobs"]].map(([k, label]) => ({ label, on: k === mode, attrs: ` data-active="${k}"` })));
+  const part = (name, rows) => `<section aria-label="${name}">${subHead(name)}${rows.length ? dataTable("", rows.map(([id, title]) => row([`<td>${id}</td>`, cell(title, { wide: true })])).join("")) : empty()}</section>`;
+  const running = mode === "jobs" ? s.running.map((j) => [jobLink(j), j.item?.title || j.name]) : s.runningIssues.map((i) => [repoIdLink(i.id, i.href), i.title]);
+  const queued = (s.queued ?? []).map((q) => { const id = `${q.repo}-${q.id}`; return [repoIdLink(id, issueHref(id)), q.title]; });
+  return toggle + part("Running", running) + part("Queued", queued);
 }
 
 /** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class", or "failures" with no target. */
@@ -243,7 +260,7 @@ function wireInspect(root) {
   });
 }
 
-/** The Herald panel: an Events tab with sticky alerts on top and the rolling event history stream below, and an Inspector tab. `st` is the state it keeps between draws; `q` the page's query, the address's by default. */
+/** The Herald panel: an Events tab with sticky alerts on top and the rolling event history stream below, an Active tab and an Inspector tab. `st` is the state it keeps between draws; `q` the page's query, the address's by default. */
 export function renderHerald(s, st = page, q) {
   const cur = verdict(s, st.stale);
   // An error is not pinned: the newest event already says it.
@@ -283,9 +300,9 @@ export function renderHerald(s, st = page, q) {
   const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
 
   const at = kept(INSPECT, { tab: "events" });
-  const panes = { events: `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, inspector: inspector(s.flow, at, q) };
+  const panes = { events: `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, active: active(s), inspector: inspector(s.flow, at, q) };
   const chipHtml = word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : "";
-  return card("Herald", tabs("Herald", [["events", "Events"], ["inspector", "Inspector"]], panes, at.tab), { id: "herald", cls: "herald-card", aside: `${chipHtml}${badgeHtml}` });
+  return card("Herald", tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, at.tab), { id: "herald", cls: "herald-card", aside: `${chipHtml}${badgeHtml}` });
 }
 
 /** The Herald's animated rows: the running jobs and the feed's top rows. */

@@ -945,6 +945,29 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(page.errors).toEqual([]);
   }, 60_000);
 
+  test("the Herald's tabs read Events, Active, Inspector, the Active tab shows its pane, and its toggle switches the rows between issues and jobs through a redraw", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    // The page's last state gets a running issue, a running job and a queued issue; a stream event draws the Herald again from it. Its `seq` of 0 leaves the state's feed rows for the next test.
+    await page.ev(`import("/views/now.js").then(({ view }) => fetch("/api/factory").then((r) => r.json()).then((s) => {
+      view.render({ ...s, runningIssues: [{ id: "aleph-9", title: "Sort it", href: "#/issues/aleph/9" }], running: [{ id: "job.0", name: "aleph-7", item: { title: "Fix it" } }], queued: [{ repo: "aleph", id: 12, title: "Wait" }] }, {}, new URLSearchParams());
+      window.beat = () => view.event(document.querySelector("#view"), { seq: 0, rows: [] });
+      window.beat();
+    }))`);
+    expect(await page.ev('[...document.querySelectorAll("#herald button[data-tab]")].map((b) => b.textContent)')).toEqual(["Events", "Active", "Inspector"]);
+    await page.ev('document.querySelector("#herald button[data-tab=active]").click()');
+    const running = () => page.ev('[document.querySelector("#herald section[data-pane=active]").hidden, ...[...document.querySelectorAll("#herald [data-pane=active] [aria-label=Running] a")].map((a) => a.getAttribute("href"))]');
+    expect(await running()).toEqual([false, "#/issues/aleph/9"]);
+    await page.ev('document.querySelector("#herald [data-active=jobs]").click()');
+    expect(await running()).toEqual([false, "#/jobs/job.0"]);
+    await page.ev("window.beat()");
+    expect(await running()).toEqual([false, "#/jobs/job.0"]);
+    expect(page.errors).toEqual([]);
+    // Drop the kept tab and toggle, and leave Status, so the next visit draws its own data on the Events tab.
+    await page.ev('localStorage.removeItem("aleph.herald.inspect"); localStorage.removeItem("aleph.herald.active")');
+    await page.go("#/issues");
+  }, 60_000);
+
   test("when the first of two running jobs ends, a redraw by morph fades a ghost of that job where its row was", async () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #herald")');

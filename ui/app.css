@@ -1310,10 +1310,10 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; animation: breathe 2s var(--ease) infinite; }
 @keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
 .run-size { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
-/* The tabs and the open pane fill the card, so the feed and the Inspector list scroll inside it. */
+/* The tabs and the open pane fill the card, so the feed and the Active and Inspector lists scroll inside it. */
 .herald-card > .tabs, .herald-card > .tabs > section:not([hidden]) { display: flex; flex-direction: column; gap: var(--sp-8); flex: 1; min-height: 0; }
-.herald-card > .tabs > .seg { align-self: flex-start; margin-bottom: 0; }
-.herald-card section[data-pane="inspector"] { overflow-y: auto; }
+.herald-card > .tabs > .seg, .herald-card section[data-pane="active"] > .seg { align-self: flex-start; margin-bottom: 0; }
+.herald-card section[data-pane="active"], .herald-card section[data-pane="inspector"] { overflow-y: auto; }
 .inspect-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-8); }
 .inspect-head .sub-head { margin: 0; }
 /* A feed row's chip word filters the feed to its word. */

@@ -71,11 +71,12 @@ const inspected = (at: object | null, d: object = flow) => {
 /** The issue IDs of an Inspector list, in order. */
 const listed = (h: string) => [...h.slice(h.indexOf('data-pane="inspector"')).matchAll(/class="idl" href="[^"]*">([^<]*)</g)].map((m) => m[1]);
 
-test("the Herald opens on its Events tab, with the feed shown and the failed issues in the Inspector, newest failure first", () => {
+test("the Herald's tabs read Events, Active, Inspector, and it opens on Events, with the feed shown and the failed issues in the Inspector, newest failure first", () => {
   // when() gives the month and day of a time in the year of now.
   setSystemTime(new Date(2026, 10, 20, 15));
   const h = inspected(null);
   setSystemTime();
+  expect([...h.matchAll(/data-tab="\w+" aria-pressed="\w+">(\w+)</g)].map((m) => m[1])).toEqual(["Events", "Active", "Inspector"]);
   expect(h).toContain('<button type="button" data-tab="events" aria-pressed="true">Events</button>');
   expect(h).toMatch(/<section data-pane="events">.*class="herald-feed"/);
   expect(h).toContain('<section data-pane="inspector" hidden><div class="inspect-head"><h3 class="sub-head">Failures</h3></div>');
@@ -88,6 +89,21 @@ test("with no failure in the window, the Inspector is empty", () => {
   const h = inspected(null, { ...flow, failures: [] });
   expect(h).toContain('<h3 class="sub-head">Failures</h3></div><div class="empty">');
   expect(listed(h)).toEqual([]);
+});
+
+test("the Active pane lists the running and queued issues, or the running jobs with a kept jobs toggle, each row linked to its page", () => {
+  const s = { ...calm, runningIssues: [{ id: "aleph-9", title: "Sort it", href: "#/issues/aleph/9" }], running: [{ id: "job.0", name: "aleph-7", item: { title: "Fix it" } }], queued: [{ repo: "aleph", id: 12, title: "Wait" }] };
+  /** Each section of the Active pane with the hrefs of its rows, drawn with `mode` as the kept toggle. */
+  const active = (mode: string | null) => {
+    (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.active" && mode ? JSON.stringify(mode) : null), setItem() {} };
+    try {
+      const h = view.renderHerald(s);
+      const pane = h.slice(h.indexOf('data-pane="active"'), h.indexOf('data-pane="inspector"'));
+      return [...pane.matchAll(/<section aria-label="(\w+)">(.*?)<\/section>/g)].map((m) => [m[1], [...m[2].matchAll(/href="([^"]*)"/g)].map((x) => x[1])]);
+    } finally { delete (globalThis as any).localStorage; }
+  };
+  expect(active(null)).toEqual([["Running", ["#/issues/aleph/9"]], ["Queued", ["#/issues/aleph/12"]]]);
+  expect(active("jobs")).toEqual([["Running", ["#/jobs/job.0"]], ["Queued", ["#/issues/aleph/12"]]]);
 });
 
 test("a kept Inspector tab on the build stage lists its issues, failed first, under an All jobs link to the stage's Jobs in the window and project", () => {
