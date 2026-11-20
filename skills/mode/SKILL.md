@@ -22,6 +22,7 @@ The factory does every piece of work. You file each one and do not build it.
 - File each request, fix, follow-up and TODO as an open issue: `aleph issue add <repo> "<title>" --spec -`, with
   the spec on stdin. Trivial items go too. One issue holds one change.
 - Do not edit code, and do not start a worktree or a background agent to build.
+- Agent instruction files are the exception. Change them yourself, as the Work mode section of CLAUDE.md says.
 - Read code, answer questions, and write the spec. A question is not work, so answer it.
 - Before you file, run `aleph status <repo>` and look for an issue that already covers the work. If one exists,
   add a note to it with `aleph issue note`.

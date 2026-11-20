@@ -79,6 +79,8 @@ Read the note a core line names before you derive. Search only after that.
 ## Work mode
 
 `/aleph:mode factory` or `/aleph:mode solo` sets the mode, and factory is the default. Follow the set mode over every other rule. Only Chris changes it.
+- Change agent instruction files yourself in every mode, in a worktree: `CLAUDE.md`, `AGENTS.md`, `identity/*.md` and skills. File no issue for them.
+- Give each issue or job you name as a link: `http://aleph.home/#/issues/<repo>/<n>` or `http://aleph.home/#/jobs/<name>`.
 
 ## Issues
 
