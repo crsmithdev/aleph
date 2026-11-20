@@ -13,7 +13,7 @@ import { reviewer } from "./review.ts";
 let root = "";
 let repo: Repo;
 let folder = "", id = "", run: Run;
-const saved = { ALEPH_ITEMS: process.env.ALEPH_ITEMS, ALEPH_RULE_CMD: process.env.ALEPH_RULE_CMD, GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL, ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_DB: process.env.ALEPH_DB, ALEPH_REVIEWER_CMD: process.env.ALEPH_REVIEWER_CMD };
+const saved = { ALEPH_ITEMS: process.env.ALEPH_ITEMS, GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL, ALEPH_JOBS_DIR: process.env.ALEPH_JOBS_DIR, ALEPH_DB: process.env.ALEPH_DB, ALEPH_REVIEWER_CMD: process.env.ALEPH_REVIEWER_CMD };
 const commit = (path: string, file: string, text: string, msg: string) => {
   writeFileSync(join(path, file), text);
   git(path, "add", "."); git(path, "commit", "-qm", msg);
@@ -53,7 +53,7 @@ beforeEach(() => {
   git(root, "clone", "-q", bare, join(root, "items"));
   git(join(root, "items"), "commit", "-q", "--allow-empty", "-m", "start");
   git(join(root, "items"), "push", "-q", "origin", "main");
-  Object.assign(process.env, { ALEPH_ITEMS: join(root, "items"), ALEPH_RULE_CMD: "false", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
+  Object.assign(process.env, { ALEPH_ITEMS: join(root, "items"), GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" });
 });
 afterEach(() => {
   rmSync(root, { recursive: true, force: true });

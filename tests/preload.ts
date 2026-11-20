@@ -34,8 +34,6 @@ const vars: Record<string, string> = {
   ALEPH_MONITOR_CMD: "false",
   // Nor through the maintainer's compile.
   ALEPH_MAINTAINER_CMD: "false",
-  // Nor through the title writer: `false` fails, so a title that breaks the rule is cut.
-  ALEPH_RULE_CMD: "false",
   XDG_RUNTIME_DIR: join(dir, "run"),
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;

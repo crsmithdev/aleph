@@ -141,8 +141,6 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_INTAKE_CAP: "0",
     // Nor does it start a director run on an Ask: no test reaches the live director.
     ALEPH_DIRECTOR_CAP: "0",
-    // The title writer's model fails, so a follow-up or a check gets cutTitle's title and no test reaches Haiku.
-    ALEPH_RULE_CMD: "false",
     // No Langfuse unless a test points one at the fake server.
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     // The vault is empty and under base, so no test reads or writes the real ~/.aleph/vault.

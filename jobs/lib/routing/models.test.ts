@@ -1,14 +1,12 @@
-import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
 import { judge } from "../roles/judge.ts";
-import { writeLine } from "../roles/title.ts";
 import { MODELS } from "../../../lib/models.ts";
 import { putJson } from "../../../lib/db.ts";
 import { allRuns } from "../records/record.ts";
-import { gpuSlot } from "../gates/gpu.ts";
 import { AGENT_SETTINGS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf, viaOfRun } from "./models.ts";
 
 let dir: string;
@@ -142,7 +140,6 @@ test("the compact window fits the server's context and leaves a usable threshold
 // Each slot that calls `claude -p` itself: its command's env var, the result its stand-in prints, and one call.
 const SLOTS = [
   { slot: "judge", cmd: "ALEPH_JUDGE_CMD", result: JSON.stringify({ verdict: "pass", reason: "ok" }), call: () => judge("TURN: x", "x") },
-  { slot: "title", cmd: "ALEPH_RULE_CMD", result: "A title", call: () => writeLine("Write a rule.", "a quote", 200) },
 ] as const;
 for (const { slot, cmd, result, call } of SLOTS) {
   test(`a ${slot} slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku`, async () => {
@@ -181,25 +178,4 @@ test("a judge call keeps one run of the judge with its model and its end, out of
   expect(runs).toHaveLength(1);
   expect(runs[0]).toMatchObject({ role: "judge", model: "deepseek-v4.1-flash", state: "done", shown: true });
   expect(runs[0].ended).toBeTruthy();
-});
-
-test("a title call on the local model whose GPU slot stays taken keeps its run on haiku, the model it ran on", async () => {
-  const env = { ALEPH_RULE_CMD: join(dir, "fake"), ALEPH_JOBS_DIR: join(dir, "jobs"), XDG_RUNTIME_DIR: join(dir, "run") };
-  const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
-  Object.assign(process.env, env);
-  writeFileSync(env.ALEPH_RULE_CMD, `#!/bin/sh\nprintf '%s' '{"type":"result","is_error":false,"result":"A title"}'\n`, { mode: 0o755 });
-  const T0 = Date.parse("2026-11-04T00:00:00Z"), before = new Set(allRuns().map((e) => e.id));
-  setSystemTime(T0);
-  const release = (await gpuSlot(0))!;
-  try {
-    expect(setModel("title", { model: "gpt-oss-20b" })).toBeNull();
-    const line = writeLine("Write a rule.", "a quote", 200);
-    setSystemTime(T0 + 31_000); // the 30 s box ends while the slot stays taken
-    expect(await line).toBe("A title");
-  } finally {
-    release();
-    setSystemTime();
-    for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
-  }
-  expect(allRuns().filter((e) => !before.has(e.id)).map((e) => e.run.model)).toEqual(["haiku"]);
 });

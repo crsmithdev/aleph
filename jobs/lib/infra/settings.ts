@@ -126,7 +126,6 @@ export const chatIdleMs = (): number => Number(process.env.ALEPH_CHAT_IDLE_MS ??
 /** The time limit in seconds for an agent role, given the call's own default. */
 export const roleSeconds = (role: string, dflt: number): number => num(`ALEPH_${role}_TIMEOUT`, dflt);
 export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOWS_TIME_CMD;
-export const ruleCmd = () => process.env.ALEPH_RULE_CMD ?? "claude";
 export const doctorClockMs = () => num("ALEPH_DOCTOR_CLOCK_MS", 15_000);
 export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
 export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(home(), ".config", "systemd", "user");

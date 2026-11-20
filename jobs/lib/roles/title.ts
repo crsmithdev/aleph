@@ -1,28 +1,9 @@
 /**
  * The one title writer: generated text that is not yet an issue title (a worker's
  * `FOLLOWUP:` line, a lesson, a landing's manual check) is cut to a title mechanically, with no model call.
- * `writeLine` is the one-shot call that the rule writer makes.
  */
-import { errText } from "../../../lib/errtext.ts";
-import { ruleCmd } from "../infra/settings.ts";
-import { oneShot } from "./one-shot.ts";
 
 const TITLE = 60;
-/** The time box of one call, and of its wait for the GPU slot. */
-const BOX = 30_000;
-
-/**
- * One line of text from a nested Haiku `claude -p` given a system prompt and an input.
- * "" when it finds nothing; `{ err }` with the cause when the call fails.
- */
-export async function writeLine(system: string, input: string, max: number): Promise<string | { err: string }> {
-  try {
-    const { code, stderr, result } = await oneShot("title", ruleCmd(), system, input, BOX);
-    return code !== 0 ? { err: stderr.trim().split("\n")[0] || `exit ${code}` } : result.trim().split("\n")[0].trim().slice(0, max);
-  } catch (e) {
-    return { err: errText(e) };
-  }
-}
 
 /** The source with each leading `<words>: ` removed, cut to `max` characters at a word boundary, with no final period. */
 export function cutTitle(source: string, max = TITLE): string {

@@ -12,7 +12,6 @@ This page states which model or command does each piece of work, with which tool
 | Reviewer | `claude-opus-5-5` | Read, Grep, Glob, Bash | A detached worktree at the branch tip | `ALEPH_REVIEW_TIMEOUT` (600 s) | `REVIEW_SCHEMA`: `pass` or `hold` |
 | Director | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
 | Monitor | `deepseek-v4.1-flash` | None | | 600 s | Numbered findings |
-| Rule writer | `haiku`, or the `title` role model | None, 1 turn | | 30 s | One line |
 | Judge | Jev, then `haiku` or the `judge` role model | None, 1 turn | | 30 s | `{verdict, reason}` |
 
 The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `jobs/lib/roles/judge.ts`.
@@ -21,7 +20,7 @@ The maintainer's daily compile starts one read-only `claude -p` run (role model 
 
 ## How a run starts
 
-`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the rule writer and the judge through `oneShot`:
+`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the judge through `oneShot`:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -128,7 +127,6 @@ Intake routes an issue, not a model. Code decides first: a `flake` issue becomes
 | The reviewer command, the worker command | `ALEPH_REVIEWER_CMD` |
 | The command and time box for `INTAKE`, `DIRECTOR`, `MONITOR` | `ALEPH_<ROLE>_CMD`, `ALEPH_<ROLE>_TIMEOUT` |
 | The judge's Haiku command | `ALEPH_JUDGE_CMD` |
-| The rule writer's command | `ALEPH_RULE_CMD` |
 | The Jev endpoint | `ALEPH_JEV_URL` |
 
 Tests use these to put in a fake.

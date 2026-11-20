@@ -34,9 +34,8 @@ function listIn(): { dir: string; restore: () => void } {
   sh(dir, "git", "clone", "-q", "items.git", "items");
   sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
-  const saved = Object.fromEntries(Object.keys(env).concat("ALEPH_ITEMS", "ALEPH_DB", "ALEPH_RULE_CMD").map((k) => [k, process.env[k]]));
-  // The title writer's model fails, so each follow-up gets cutTitle's title.
-  Object.assign(process.env, env, { ALEPH_ITEMS: join(dir, "items"), ALEPH_DB: join(dir, "aleph.db"), ALEPH_RULE_CMD: "false" });
+  const saved = Object.fromEntries(Object.keys(env).concat("ALEPH_ITEMS", "ALEPH_DB").map((k) => [k, process.env[k]]));
+  Object.assign(process.env, env, { ALEPH_ITEMS: join(dir, "items"), ALEPH_DB: join(dir, "aleph.db") });
   return { dir, restore: () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } rmSync(dir, { recursive: true, force: true }); } };
 }
 

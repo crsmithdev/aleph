@@ -121,8 +121,6 @@ export function useDirectorFixture(): void {
       ALEPH_ITEMS: join(base, "items"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
       ALEPH_VAULT: join(base, "vault"),
       ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
-      // The title writer's model fails, so a red-main add gets cutTitle's title.
-      ALEPH_RULE_CMD: "false",
       XDG_RUNTIME_DIR: join(base, "run"),
       // Not the factory's ~/.aleph/sandbox: a concurrent copy of this file names its land folder the same in the same second, and removes it.
     });
