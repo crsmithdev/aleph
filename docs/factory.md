@@ -92,7 +92,6 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 | `ALEPH_MONITOR` | on | `off` turns off the tick's daily monitor step |
 | `ALEPH_RESCUE` | on | `off` leaves a returned or failed run as it is, so its open job keeps its issue not ready |
-| `ALEPH_NEEDS_YOU_LOG` | `needs-you-log.md` next to the vault directory | The file of what reached Chris and why |
 | `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A project's own `env` wins |
 | `ALEPH_HOME_URL` | `http://aleph.home/` | The address that `aleph doctor` checks |
 | `ALEPH_UNIT_DIR` | `~/.config/systemd/user` | The directory of the systemd user units |

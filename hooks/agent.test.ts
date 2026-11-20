@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// A factory agent (ALEPH_AGENT) gets identity/AGENT.md in place of MEMORY.md.
+// A factory agent (ALEPH_AGENT) gets identity/AGENT.md and identity/VOICE.md, and nothing from the vault.
 const ROOT = join(import.meta.dir, "..");
 const vault = mkdtempSync(join(tmpdir(), "aleph-agent-"));
 mkdirSync(join(vault, "wiki", "decisions"), { recursive: true });
@@ -22,13 +22,16 @@ async function hook(argv: string[], payload: object, agent: boolean): Promise<st
   return out.trim();
 }
 
-test("an agent's start context is AGENT.md and the core lines, without MEMORY.md", async () => {
+test("an agent's start context is AGENT.md and VOICE.md, with no MEMORY.md and no core lines", async () => {
   const start = { hook_event_name: "SessionStart", cwd: vault };
   const chris = await hook([join(ROOT, "hooks", "vault-context.ts")], start, false);
   expect(chris).toContain("Chris's profile.");
   const agent = JSON.parse(await hook([join(ROOT, "hooks", "vault-context.ts")], start, true)).hookSpecificOutput.additionalContext;
   expect(agent).toContain("# Aleph factory agent");
-  expect(agent).toContain("Names are short.");
+  expect(chris).toContain("Names are short.");
+  expect(agent).not.toContain("Names are short.");
+  expect(agent).not.toContain("<vault");
+  expect(agent).not.toContain("aleph memory recall");
   expect(agent).toContain("# Voice");
   expect(chris).not.toContain("# Voice");
   expect(agent).not.toContain("Chris's profile.");

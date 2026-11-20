@@ -119,8 +119,7 @@ export function useDirectorFixture(): void {
     server = Bun.serve({ port: 0, fetch: async (req) => { told.push(await req.text()); return new Response("ok"); } });
     Object.assign(process.env, gitEnv, {
       ALEPH_ITEMS: join(base, "items"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
-      // The director's prompt names the vault and the needs-you log; both are under base, never ~/.aleph.
-      ALEPH_VAULT: join(base, "vault"), ALEPH_NEEDS_YOU_LOG: join(base, "needs-you-log.md"),
+      ALEPH_VAULT: join(base, "vault"),
       ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
       // The title writer's model fails, so a red-main add gets cutTitle's title.
       ALEPH_RULE_CMD: "false",

@@ -484,7 +484,7 @@ async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, s
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(aleph memory recall:*),Bash(git log:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: issueKey(id) });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", "Bash", "--allowedTools", "Bash(git log:*)", ...(mediaOf(item).length ? ["--add-dir", join(itemsDir(), "issues", String(item.id))] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, target: issueKey(id) });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.

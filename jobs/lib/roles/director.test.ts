@@ -27,7 +27,6 @@ const TEXT = { situation: "The issue asks for page A or B.", effects: [{ action:
 
 test("a decided Ask: code applies the answer, clears the Ask, and logs a Director decision and its record", async () => {
   fresh([{ title: "product", ask: choice() }]);
-  writeFileSync(join(base, "needs-you-log.md"), "- 2026-11-01: NEEDS-MARK Chris chose A\n");
   reply([{ do: "answer", option: "A", note: "page A, as before" }]);
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "decided", ref: `issue.1`, reason: "question", applied: ["answer: A: page A, as before"] });
@@ -37,10 +36,9 @@ test("a decided Ask: code applies the answer, clears the Ask, and logs a Directo
   expect(readRecord()).toEqual([expect.objectContaining({ ref: `issue.1`, outcome: "decided" })]);
   const [r] = directorRuns();
   expect(r.run).toMatchObject({ state: "done", model: "claude-opus-5-5", target: `issue.1` });
-  // The prompt names the vault decisions and the needs-you log under the test's base, never ~/.aleph.
-  expect(prompt()).toContain(join(base, "vault", "wiki", "decisions"));
-  expect(prompt()).toContain(join(base, "needs-you-log.md"));
-  expect(prompt()).toContain("NEEDS-MARK Chris chose A");
+  // Factory agents run on their prompts alone: no vault path and no needs-you log reach the director.
+  expect(prompt()).not.toContain(join(base, "vault"));
+  expect(prompt()).not.toContain("needs-you");
   // Decided: the next sweep opens no run.
   await direct();
   expect(calls()).toBe(1);

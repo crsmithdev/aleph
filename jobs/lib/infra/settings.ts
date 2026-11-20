@@ -7,8 +7,8 @@
  * every ALEPH_* variable to the units it starts.
  */
 import { availableParallelism } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
+import { join } from "node:path";
+import { alephPath, expand, home } from "../../../lib/paths.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 
 /** A numeric setting: an empty or missing variable is unset and gives the default. */
@@ -118,9 +118,6 @@ export const rescueOn = () => process.env.ALEPH_RESCUE !== "off";
 
 export const workerCmd = () => process.env.ALEPH_WORKER_CMD ?? "claude";
 export const reviewerCmd = () => process.env.ALEPH_REVIEWER_CMD ?? workerCmd();
-
-/** Chris's log of what reached him and why: the director reads it, and code does not. */
-export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join(dirname(resolve(vaultDir())), "needs-you-log.md");
 
 /** The command for an agent role (`worker`, `reviewer`, ...), `claude` by default. */
 export const roleCmd = (role: string): string => process.env[`ALEPH_${role}_CMD`] ?? "claude";

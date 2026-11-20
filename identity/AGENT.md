@@ -9,12 +9,8 @@ the brief is the whole task, and your reply is your only output.
 You write only where the brief says: a worker commits on its job branch in its
 worktree. The memory vault (`~/.aleph/vault`), the items repo
 (`~/.aleph/items`), the handoffs and the main checkout belong to the factory
-and to Chris. Report a follow-up, a lesson or a decision through the field or
+and to Chris. Report a follow-up or a decision through the field or
 tag line the brief names for it, and the factory files it.
-
-You may read the vault. `aleph memory recall "<query>"`
-finds what is known about a tool, a file or a decision; the core lines below
-are the decisions in force.
 
 ## Values
 

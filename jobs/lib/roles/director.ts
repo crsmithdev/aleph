@@ -13,7 +13,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
-import { basename, dirname, join } from "node:path";
+import { join } from "node:path";
 import { dispatchDetached } from "../transitions/launch.ts";
 import { afterFiling } from "../transitions/filing.ts";
 import * as issues from "../../../lib/todo.ts";
@@ -37,8 +37,7 @@ import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { because, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
-import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
-import { vaultDir } from "../../../lib/paths.ts";
+import { DIRECTOR_CAP } from "../infra/settings.ts";
 import { readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
 import { readSection } from "../records/run-files.ts";
@@ -255,11 +254,9 @@ const pastLines = (rec: Decision[]): string =>
 
 function prompt(c: Case, escalated: string | null, rec: Decision[] = readRecord()): string {
   const acts = actionsOf(c);
-  const decisions = join(vaultDir(), "wiki", "decisions");
   const head = `You are the factory's director. Every Ask, a stop where the factory would wait for Chris, comes to you first. You decide it as Chris would, on your own judgement, or you escalate it to Chris with your recommendation. You have read-only tools: Read, Grep, Glob, and Bash for \`git status|log|show|diff|ls-files\`, \`ls\`, \`aleph jobs\` and \`aleph issue show|list\`. Change nothing yourself: you propose actions, and the code checks and applies them. Your working directory is the repo${c.repo ? ` ${c.repo.key}` : ""}.
 
-What informs your judgement: Chris's decisions in the vault (${decisions}: read the ones that bear on this case), the tail of his needs-you log below, and your past decisions with their outcomes below. A case with no precedent is still yours to decide. Read the files the case names before you write about them.
-${section(`The tail of Chris's needs-you log (${needsYouLog()})`, tail(dirname(needsYouLog()), basename(needsYouLog())) ?? "(none)")}`;
+What informs your judgement: your past decisions with their outcomes below. A case with no precedent is still yours to decide. Read the files the case names before you write about them.`;
   const reply = `# Your reply
 
 Text over a limit moves to "details" by sentence: "headline" is at most ${LIMITS.headline} words, "situation" at most ${LIMITS.situation.words} words, and each effect "text" at most ${LIMITS.choice.words} words. Write for Chris in short plain sentences, with no file paths in "headline", "situation" or the effects: paths go in "details". "details" holds only risks, gaps and the technical facts (paths, commits, rules), not a second summary. Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. State only what you read; where you did not read something, say "I did not check X". "recommend" is null when you cannot tell.`;
@@ -664,10 +661,9 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     if (escalatedBefore(c, rec)) return escalate(c, base, undefined, "the director escalated this Ask before");
     const listed = escalation(c, rec);
     const cwd = c.repo && existsSync(c.repo.path) ? c.repo.path : undefined;
-    const dirs = ["--add-dir", join(vaultDir(), "wiki", "decisions")];
     const run = openRun({
       role: "director", who: "the director", model: DIRECTOR_MODEL(), seconds: SECONDS,
-      flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs], schema: DIRECTOR_SCHEMA,
+      flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")], schema: DIRECTOR_SCHEMA,
       cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, target: subjectOfCase(c),
     });
     jobRecord.patchRun(run.id, { question: questionOf(c) });

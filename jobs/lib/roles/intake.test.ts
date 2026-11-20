@@ -395,7 +395,7 @@ test("the prompt tells intake to cover the whole request and to name what it lea
 test("the intake run may run git log, and the prompt has it search history before a spec that adds something back", async () => {
   reset([{ title: "a", body: "VERDICT:build" }]);
   await run();
-  expect(calls()[0]).toContain("--allowedTools Bash(aleph memory recall:*),Bash(git log:*)");
+  expect(calls()[0]).toContain("--allowedTools Bash(git log:*)");
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Before you write a spec that adds back, re-enables or widens something");
   expect(p).toContain("`git log -S<text>`");
