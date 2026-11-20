@@ -55,6 +55,21 @@ describe("the Hooks page", () => {
     expect(logIds("out=no%20effect")).toEqual(["bbbbbbbb2", "cccccccc3"]);
   });
 
+  test("writes an outcome as a state in lower case, and in Title Case as a KPI or a column header", () => {
+    const xs = [holds[1], hold("eeeeeeee5", "one way", "boundary", "interactive", "held up")];
+    const byKind = [{ kind: "boundary", holds: 2, interactive: 1, workers: 1, outcomes: { "no effect": 1, "held up": 1 } }];
+    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 30, holds: xs, byKind, errors: [] }, new URLSearchParams());
+    for (const html of [renderHooks({ ...data, holds: xs }, new URLSearchParams()), one]) {
+      for (const [s, cls, tone] of [["no effect", "o-dead", "parked"], ["held up", "o-held", "quiet"]]) {
+        expect(html).toContain(`<li><i class="${cls}"></i>${s}</li>`);
+        expect(html).toContain(`<span class="badge ${tone}">${s}</span>`);
+      }
+      for (const h of ["Held Up", "No Reply", "No Effect"]) expect(html).toContain(`<th class="num">${h}</th>`);
+      expect(html).not.toMatch(/No effect|Held up/);
+    }
+    expect(one).toContain('<span class="dp-k">No Effect</span>');
+  });
+
   test("the heads of Holds by Hook, Holds by Day and Errors by Cause count their own items", () => {
     const html = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
     expect([head(html, "Holds by Hook"), head(html, "Holds by Day"), head(html, "Errors by Cause")]).toEqual(["1", "2", "1"]);

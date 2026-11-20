@@ -18,15 +18,15 @@ export const view = {
   mount,
 };
 
-// A hold's outcome, in the order the meter draws them, the useful first: key, label, meter class, badge tone.
+// A hold's outcome, in the order the meter draws them, the useful first: key (the state, in lower case), label, meter class, badge tone.
 // prettier-ignore
 const OUTS = [
   ["caught",    "Caught",    "o-caught",  "done"],
   ["handoff",   "Handoff",   "o-handoff", "done"],
-  ["held up",   "Held up",   "o-held",    "quiet"],
+  ["held up",   "Held Up",   "o-held",    "quiet"],
   ["false",     "False",     "o-false",   "error"],
-  ["no reply",  "No reply",  "o-none",    "need"],
-  ["no effect", "No effect", "o-dead",    "parked"],
+  ["no reply",  "No Reply",  "o-none",    "need"],
+  ["no effect", "No Effect", "o-dead",    "parked"],
 ];
 // A hold's kind as the page names it (ui/api/hooks.ts `kindOf`).
 const KIND = { "unbacked hash": "hash", "doc-claim": "doc claim", "new-copy": "new copy", "boundary+new-copy": "both", "compacted, handoff": "compacted" };
@@ -36,7 +36,7 @@ const whoOf = (h) => (h.who === "interactive" ? "interactive" : "workers");
 const hookHref = (h) => `#/hooks/${encodeURIComponent(h.event)}/${encodeURIComponent(h.name)}`;
 
 /** The outcome legend, labelled a guide: the outcomes come from a keyword pass over each hold's reply. */
-const legend = legendHtml(OUTS.map(([, name, cls]) => [name, cls])) + note("Guide only");
+const legend = legendHtml(OUTS.map(([k, , cls]) => [k, cls])) + note("Guide only");
 
 /** A table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook. A name sets the log's filters. */
 function holdsBy(groups, hookCol = true) {
@@ -45,7 +45,7 @@ function holdsBy(groups, hookCol = true) {
     const n = (k) => g.outcomes[k] ?? 0;
     const show = `<button type="button" class="link" data-kind="${esc(g.kind)}"${hookCol ? ` data-hook="${esc(g.hook)}"` : ""} title="Show these holds">${esc(hookCol ? g.hook : kindName(g.kind))}</button>`;
     return `<tr><td>${show}</td>${hookCol ? `<td>${esc(kindName(g.kind))}</td>` : ""}<td class="num">${g.holds}</td><td class="num">${g.interactive}</td><td class="num">${g.workers}</td>` +
-      `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k, name]) => `${name} ${n(k)}`).join(", "))}</td>` +
+      `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>` +
       OUTS.map(([k]) => `<td class="num">${n(k) || ""}</td>`).join("") + `</tr>`;
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
@@ -72,9 +72,9 @@ function holdsLog(holds, q, hookCol = true) {
   const f = filtersOf(q);
   const shown = holds.filter((h) => (!f.who || whoOf(h) === f.who) && (!f.hook || h.hook === f.hook) && (!f.kind || h.kind === f.kind) && (!f.out || h.out === f.out));
   const rows = shown.map((h) => {
-    const [, name, , tone] = OUTS.find((o) => o[0] === h.out);
+    const [, , , tone] = OUTS.find((o) => o[0] === h.out);
     return `<tr><td class="time lead">${esc(when(h.t))}</td><td>${idLink(h.sid.slice(0, 8), `#/sessions/${encodeURIComponent(h.sid)}`)}</td>${hookCol ? `<td>${esc(h.hook)}</td>` : ""}` +
-      `<td>${esc(kindName(h.kind))}</td><td>${esc(h.who)}</td><td>${tag(name, tone)}</td><td class="wide" title="${esc(h.why)}">${esc(h.why)}</td></tr>`;
+      `<td>${esc(kindName(h.kind))}</td><td>${esc(h.who)}</td><td>${tag(h.out, tone)}</td><td class="wide" title="${esc(h.why)}">${esc(h.why)}</td></tr>`;
   });
   if (!holds.length) return detailPanel("Holds", "0", empty(), "holds");
   const page = pageOf(q ?? new URLSearchParams());
