@@ -102,3 +102,24 @@ describe("dark theme --muted", () => {
     });
   }
 });
+
+describe("the .o-dead fill", () => {
+  const fill = (cls: string) => {
+    const m = new RegExp(`\\.${cls} \\{ background: var\\(--([\\w-]+)\\); \\}`).exec(html);
+    if (!m) throw new Error(`no .${cls} fill in app.css`);
+    return m[1];
+  };
+  const light = /:root\s*\{([^}]*)\}/.exec(html);
+  if (!light) throw new Error("no light :root block in app.css");
+  const blocks = [{ name: "light", body: light[1] }, ...darkBlocks()];
+  for (const block of blocks) {
+    for (const name of ["sunk", "surface"]) {
+      test(`${block.name} block meets 3:1 on --${name}`, () => {
+        expect(contrast(token(block.body, fill("o-dead")), token(block.body, name))).toBeGreaterThanOrEqual(3);
+      });
+    }
+  }
+  test("differs from the .o-held fill", () => {
+    expect(fill("o-dead")).not.toBe(fill("o-held"));
+  });
+});

@@ -1412,9 +1412,9 @@ button.barrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -
 .meter > b { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink); }
 .barrow.top .meter > i:not([class]) { background: var(--hot); }
 .tbl td:has(> .meter) { width: 40%; }
-/* A hook hold's outcome (ui/views/hooks.js), in a meter and its legend. Held up is a pass that cost a turn, so it stays quiet. */
+/* A hook hold's outcome (ui/views/hooks.js), in a meter and its legend. Held up is a pass that cost a turn, so it stays quiet. No effect is --ink: neutral, and 3:1 on --sunk and --surface. */
 .o-caught { background: var(--done); } .o-handoff { background: var(--done); opacity: var(--dim); } .o-held { background: var(--muted); }
-.o-false { background: var(--error); } .o-none { background: var(--need); } .o-dead { background: var(--rule); }
+.o-false { background: var(--error); } .o-none { background: var(--need); } .o-dead { background: var(--ink); }
 /* A row's fold chevron (button.fold): a bare muted mark. The Roles table writes an empty span.fold in a row with none, so its Model cells line up. */
 .tbl .fold { display: inline-block; width: var(--sp-16); text-align: center; }
 .tbl button.fold { padding: 0; border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer; }
