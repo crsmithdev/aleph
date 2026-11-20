@@ -141,7 +141,7 @@ test("renderIdea draws an empty log with empty(), built issues with repoIdLink()
   expect(h).toContain(statusRow('<span class="badge run">exploring</span>', "", chips(["aleph"])));
   expect(h).toContain(renderKpis([{ k: "Results", v: "2" }, { k: "Running", v: "0" }, { k: "Built", v: repoIdLink("aleph-12", "#/issues/aleph/12"), text: true }]));
   expect(h).toContain('<h3 class="sub-head">Older Results</h3><div class="list"><a href="/api/ideas/alpha/lenses/o.html" target="_blank">');
-  expect(h).toContain('11/01 09:00</a></div><button class="act" type="button" data-lens="prior-art">Queue job</button>');
+  expect(h).toContain(`${when("2026-11-01T09:00")}</a></div><button class="act" type="button" data-lens="prior-art">Queue job</button>`);
 });
 
 test("a queue that fails says the act name, then failed:, then the reason", async () => {
