@@ -11,6 +11,10 @@ const job = { id: "string", name: "string", repo: "string", state: "string", sta
 const row = { id: "string", subject: "string", name: "string", repo: "string", kind: "string", actor: "string?", state: "string", title: "string?", issue: "string?", started: "time", ended: "time?", seconds: "number?", cost: "number?", model: "string?" };
 const issue = { id: "number", ref: "string", repo: "string", title: "string", href: "string", kind: "string", status: "string", priority: "string", stage: "string", createdTime: "string?" };
 const turn = { n: "number", traceId: "string", start: "time", seconds: "number?", cost: "number" };
+const hook = { event: "string", name: "string", matcher: "string", file: "string", mode: "string", timeout: "number" };
+const hold = { t: "time", sid: "string", hook: "string", event: "string", kind: "string", who: "string", out: "string", why: "string" };
+const holdsBy = { hook: "string", kind: "string", holds: "number", interactive: "number", workers: "number", outcomes: { "*": "number" } };
+const hookError = { cause: "string", fix: "string", n: "number", sessions: "number", hooks: ["string"], events: ["string"], last: "time" };
 
 export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/factory": {
@@ -73,6 +77,8 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     prompt: "string", output: "string", cost: "number", seconds: "number?", observations: "array",
   },
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
+  "/api/hooks": { days: "number", holds: [hold], byHook: [holdsBy], errors: [hookError], hooks: [{ ...hook, holds: "number" }] },
+  "/api/hooks/:event/:name": { ...hook, holds: [hold], byKind: [holdsBy], errors: [hookError] },
   "/api/design": { body: "string" },
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/ideas": [{ slug: "string", title: "string", "target?": "string", status: "string", lenses: ["string"], last: "string", questions: "number", spent: "number" }],

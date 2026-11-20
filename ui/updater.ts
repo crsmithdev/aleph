@@ -44,6 +44,7 @@ export const KEYED = new Set([
   "/api/factory", "/api/status", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/jobs", "/api/jobs/:id",
   "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
   "/api/memory", "/api/memory/log", "/api/memory/processes", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key", "/api/context",
+  "/api/hooks", "/api/hooks/:event/:name",
 ]);
 
 /** The key of a request: its path and its non-empty query parameters, sorted. */
