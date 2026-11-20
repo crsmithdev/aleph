@@ -4,7 +4,7 @@
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
-import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, chip, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
+import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { feedRow, heraldRow } from "./lib/feed.js";
@@ -22,12 +22,12 @@ export const view = {
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(f)}${renderPipeline(f, q)}${renderActive(f)}</div>${renderHerald(s, page, q)}</div></div>`; },
   more: async (s, q) => ({ ...s, flow: await flowOf(scope(q).window, q, true) }),
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
-    scope(q).wire(root); wireHeraldJump(root);
+    scope(q).wire(root); wireHeraldJump(root); wireInspect(root);
     // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it.
     root.onclick = (e) => {
       const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x");
@@ -114,7 +114,7 @@ export function renderPipeline(d, q = new URLSearchParams()) {
   if (d.error) return box(error(d.error));
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
   const queue = d.phases?.queue;
-  const go = (k, tip, body) => `<a class="pgo" href="${esc(drillHref(k, q))}" title="${esc(tip)}">${body}</a>`;
+  const go = (k, tip, body) => `<button type="button" class="pgo" data-inspect="stage" data-target="${esc(k)}" title="${esc(tip)}">${body}</button>`;
   const node = ([k, name]) => {
     if (k === "queue") {
       const has = queue?.count > 0;
@@ -156,8 +156,40 @@ function runNow(s) {
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
 
-/** The Herald panel: sticky alerts on top, rolling event history stream below. `st` is the state it keeps between draws. */
-export function renderHerald(s, st = page) {
+/** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class". */
+const INSPECT = "herald.inspect";
+
+/** The Inspector pane: the issues of the kept stage or class in `d`, /api/flow for the window; `at` is the kept target. */
+function inspector(d, at, q) {
+  if (!at.target) return empty();
+  if (!d) return loadingLine("the issues");
+  if (d.error) return error(d.error);
+  const id = (x) => `<td>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`;
+  const table = (head, rows) => (rows.length ? dataTable(head, rows.join("")) : empty());
+  if (at.kind === "stage") {
+    const rows = d.stages.issues[at.target].map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(count(x.runs), { num: true }), cell(dur(x.secs), { num: true }), `<td>${x.failed ? tag("failed", tone("failed")) : ""}</td>`]));
+    return `<div class="inspect-head">${subHead(PIPE[at.target])}<a href="${esc(drillHref(at.target, q))}">All jobs</a></div>` + table(heads(["Issue", "Title", "Runs", "Time", ""], ["Runs", "Time"]), rows);
+  }
+  const rows = d.classes.find((c) => c.key === at.target).top.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(hours(x.hours), { num: true })]));
+  return `<div class="inspect-head">${subHead(at.target)}</div>` + table(heads(["Issue", "Title", "Hours"], ["Hours"]), rows);
+}
+
+/** Open the Inspector on a click of a Pipeline stage or an Agent Time line, and keep the tab a click opens. */
+function wireInspect(root) {
+  const el = root.querySelector(".page");
+  wireTabs(el, (tab) => keep(INSPECT, { ...kept(INSPECT, {}), tab }));
+  if (el._inspect) return;
+  el._inspect = true;
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-inspect]");
+    if (!b) return;
+    keep(INSPECT, { tab: "inspector", kind: b.dataset.inspect, target: b.dataset.target });
+    redrawHerald(root);
+  });
+}
+
+/** The Herald panel: an Events tab with sticky alerts on top and the rolling event history stream below, and an Inspector tab. `st` is the state it keeps between draws; `q` the page's query, the address's by default. */
+export function renderHerald(s, st = page, q) {
   const cur = verdict(s, st.stale);
   // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks).map((i) => askCard(i, s.now));
@@ -195,7 +227,10 @@ export function renderHerald(s, st = page) {
   // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
 
-  return card("Herald", `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: `${word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : ""}${badgeHtml}` });
+  const at = kept(INSPECT, { tab: "events" });
+  const panes = { events: `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, inspector: inspector(s.flow, at, q) };
+  const chipHtml = word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : "";
+  return card("Herald", tabs("Herald", [["events", "Events"], ["inspector", "Inspector"]], panes, at.tab), { id: "herald", cls: "herald-card", aside: `${chipHtml}${badgeHtml}` });
 }
 
 /** The Herald's animated rows: the running jobs and the feed's top rows. */

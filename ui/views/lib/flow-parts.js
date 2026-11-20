@@ -88,15 +88,16 @@ function usageProps(s, link = { href: "#/factory/agents" }) {
 }
 export const usageCard = (s, link) => statCard(usageProps(s, link));
 
-/** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost. `d` is /api/flow for the window. */
+/** The kept share of agent time, for the Status card: the share that reached main as the figure, a thin bar, and a legend of two columns, kept then lost, each line an Inspector target. `d` is /api/flow for the window. */
 export function share(d) {
   const { kept, hours: lostH } = d.figures;
   if (lostH === null) return empty();
   const total = kept + lostH, cs = d.classes.filter((c) => c.hours > 0), good = cs.filter((c) => !c.lost), lost = cs.filter((c) => c.lost);
   const seg = (c) => `<i class="seg-${esc(c.key)}" style="flex:${c.hours / total}" title="${esc(`${c.key} ${hours(c.hours)}${c.text ? `: ${c.text}` : ""}`)}"></i>`;
   const gap = good.length && lost.length ? `<i class="ogap" title="Left of the gap reached main; right of it did not"></i>` : "";
-  const line = (c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)}</span><span>${esc(hours(c.hours))}</span><span class="m">${esc(cardPct(c.hours / total))}</span>`;
-  const col = (xs) => `<div>${xs.map(line).join("")}</div>`;
+  // The button covers the line's grid row, `n` from 1: a line is three cells of its column's grid.
+  const line = (c, n) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.key)}</span><span>${esc(hours(c.hours))}</span><span class="m">${esc(cardPct(c.hours / total))}</span><button type="button" class="oline" data-inspect="class" data-target="${esc(c.key)}" aria-label="${esc(c.key)}" style="grid-row:${n} / span 1"></button>`;
+  const col = (xs) => `<div>${xs.map((c, i) => line(c, i + 1)).join("")}</div>`;
   return `<div class="ohead"><b class="num">${esc(cardPct(kept / total))}</b><span>reached main</span></div>` +
     `<div class="obar thin" role="img" aria-label="${esc(cs.map((c) => `${c.key} ${hours(c.hours)}`).join(", "))}">${good.map(seg).join("")}${gap}${lost.map(seg).join("")}</div>` +
     `<div class="oledger num">${col(good)}${col(lost)}</div>`;

@@ -1248,7 +1248,7 @@ pre.stat b { color: var(--need); }
 .pnode.alert .ring { box-shadow: inset 0 0 0 5px var(--error); color: var(--error); }
 .pnode.wait .ring { font-size: var(--fs-xs); font-weight: var(--fw-text); color: var(--muted); }
 .pnode.idle .ring { background: var(--sunk); box-shadow: none; border: 2px dashed var(--rule); color: var(--muted); }
-.pgo { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); color: inherit; text-decoration: none; border-radius: var(--r-ctl); }
+.pgo { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); border-radius: var(--r-ctl); cursor: pointer; }
 .pgo:hover .ring { background: var(--rule-2); }
 .pgo:hover .pn { text-decoration: underline; }
 .pgo:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -1326,6 +1326,12 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; animation: breathe 2s var(--ease) infinite; }
 @keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
 .run-size { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
+/* The tabs and the open pane fill the card, so the feed and the Inspector list scroll inside it. */
+.herald-card > .tabs, .herald-card > .tabs > section:not([hidden]) { display: flex; flex-direction: column; gap: var(--sp-8); flex: 1; min-height: 0; }
+.herald-card > .tabs > .seg { align-self: flex-start; margin-bottom: 0; }
+.herald-card section[data-pane="inspector"] { overflow-y: auto; }
+.inspect-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-8); }
+.inspect-head .sub-head { margin: 0; }
 /* A feed row's chip word filters the feed to its word. */
 .herald-feed .event-line > .badge:first-child { cursor: pointer; }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; padding-right: var(--sp-4); }
@@ -1579,9 +1585,15 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 .obar.thin > .ogap { flex: none; width: var(--sp-4); min-width: 0; }
 .oledger { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-24); margin-top: var(--sp-12); font-size: var(--fs-xs); color: var(--ink-2); }
 .oledger > div { display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-4) var(--sp-12); align-content: start; }
-.oledger span:nth-child(3n+1) { display: inline-flex; align-items: center; gap: var(--sp-6); }
+.oledger span:nth-of-type(3n+1) { display: inline-flex; align-items: center; gap: var(--sp-6); }
 .oledger i { width: 10px; height: 10px; border-radius: var(--r-hair); }
 .oledger .m { color: var(--muted); }
+/* A ledger line's Herald Inspector button sits behind its row's cells, which pass their clicks to it. */
+.oledger > div { position: relative; isolation: isolate; }
+.oledger > div > span { pointer-events: none; }
+.oline { all: unset; position: absolute; inset: calc(-1 * var(--sp-2)) calc(-1 * var(--sp-4)); grid-column: 1 / -1; z-index: calc(-1 * var(--z-rowlink)); cursor: pointer; border-radius: var(--r-hair); }
+.oline:hover { background: var(--sunk); }
+.oline:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .obar button { cursor: pointer; }
 .obar button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
 .seg-landed { background: var(--seg-landed); }
