@@ -110,15 +110,25 @@ describe("the Hooks page", () => {
     for (const c of ['class="page dp-page"', "dp-kpis", "<details"]) expect(html).toContain(c);
   });
 
-  test("the list page with no holds keeps the Holds by Day card, empty", () => {
+  test("the list page with no holds and no errors keeps each card, empty", () => {
     const html = renderHooks({ ...data, holds: [], byHook: [], errors: [] }, new URLSearchParams());
-    const card = html.split('aria-label="Holds by Day"')[1]?.split("</section>")[0];
-    expect(card).toContain(empty());
+    for (const t of ["Holds by Hook", "Holds by Day", "Errors by Cause", "Holds"]) expect(html.split(`aria-label="${t}"`)[1]?.split("</section>")[0]).toContain(empty());
   });
 
-  test("a hook with no holds and no errors shows the empty state", () => {
+  test("a hook with no holds and no errors draws neither panel", () => {
     const html = renderHook({ event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
-    expect(html.split(empty()).length - 1).toBe(2);
+    expect(html).not.toContain(empty());
+    expect(html).not.toContain('id="holds"');
+    expect(html).not.toContain("<summary><span>Errors</span>");
+  });
+
+  test("a hook draws its Holds panel with holds and its Errors panel only with errors", () => {
+    const hook = { event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: [] };
+    for (const [errors, shown] of [[data.errors, true], [[], false]] as const) {
+      const html = renderHook({ ...hook, errors }, new URLSearchParams());
+      expect(html).toContain('id="holds"');
+      expect(html.includes("<summary><span>Errors</span>")).toBe(shown);
+    }
   });
 
   test("a hook's page head shows its name with no count, its event in the crumb and facts", () => {

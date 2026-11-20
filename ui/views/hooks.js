@@ -144,9 +144,9 @@ export function renderHook(d, q) {
     facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
-      perDay(xs, detailPanel) : "") +
-    holdsLog(xs, q, detailPanel, false) +
-    detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) +
+      perDay(xs, detailPanel) +
+      holdsLog(xs, q, detailPanel, false) : "") +
+    (d.errors.length ? detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) : "") +
     `</div>`;
 }
 
