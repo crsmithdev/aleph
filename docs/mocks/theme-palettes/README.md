@@ -15,3 +15,9 @@ of the dock's theme picker.
 - Each theme section has `data-annotate="theme/<n>"`, so a note pins to a theme.
 
 The hex values come from memory of each theme's published palette. They were not fetched from the theme repos.
+
+## Round 2
+
+Chris picked 1 to 4, 6, 8, 17, 21, 22 and 25, and asked for Nord and Palenight variations. Entries 28 to 34 add them.
+Their values were read from each theme's source file, which `build.py` names; muted text is lifted where the
+source's comment colour is too faint for body text. Nordic and Nordfox are dark only and pair with Nord Light.

@@ -87,6 +87,36 @@ T = [
 # Tokyo Night's dark map, kept apart above so the light tuple reads first.
 T[7] = T[7] + (("#16161E","#1A1B26","#13131A","#24283B","#C0CAF5","#A9B1D6","#7F86AA","#292E42","#1F2335","#7AA2F7"),)
 
+
+# Variations (Chris, 2026-11-20: "look up some nord and palenight variations"). Values read from each theme's source:
+# Nord Light (github.com/nord-light/vscode README), Nordic (AlexvZyl/nordic.nvim colors/nordic.lua), Nordfox
+# (EdenEast/nightfox.nvim palette/nordfox.lua), Palenight Mild Contrast (whizkydee/vscode-palenight-theme
+# palenight-mild-contrast.json), Palenightfall (JoosepAlviste/palenightfall.nvim init.lua). Muted text is lifted where
+# the source's comment colour is too faint for body text.
+V = [
+ ("Nord + Nord Light", "official Nord dark; Nord Light's own darkened accents for light",
+  ("#E5E9F0","#ECEFF4","#D8DEE9","#D8DEE9","#2E3440","#3B4252","#4C566A","#D8DEE9","#E5E9F0","#3B5E85"),
+  ("#2E3440","#3B4252","#272C36","#434C5E","#ECEFF4","#D8DEE9","#9AA4B8","#4C566A","#434C5E","#88C0D0")),
+ ("Nord Aurora", "the same neutrals, Aurora purple for the accent",
+  ("#E5E9F0","#ECEFF4","#D8DEE9","#D8DEE9","#2E3440","#3B4252","#4C566A","#D8DEE9","#E5E9F0","#865B7F"),
+  ("#2E3440","#3B4252","#272C36","#434C5E","#ECEFF4","#D8DEE9","#9AA4B8","#4C566A","#434C5E","#B48EAD")),
+ ("Nordic", "a darker Nord; dark only (pairs with Nord Light)",
+  None,
+  ("#1E222A","#242933","#191D24","#2E3440","#D8DEE9","#BBC3D4","#8B99AD","#3B4252","#2E3440","#88C0D0")),
+ ("Nordfox", "Nightfox's Nord; dark only (pairs with Nord Light)",
+  None,
+  ("#232831","#2E3440","#1D2129","#39404F","#CDCECF","#ABB1BB","#8A93A3","#444C5E","#39404F","#81A1C1")),
+ ("Palenight Mild Contrast", "the official variant with more panel contrast; Lavender light",
+  ("#F4F3FA","#FFFFFF","#ECEAF6","#ECEAF6","#292D3E","#4A4F6A","#62688A","#DCD9EC","#E8E6F3","#7E57C2"),
+  ("#25293A","#292D3E","#1F2232","#313850","#EEF1F8","#BFC7D5","#959DCB","#2C2F40","#2C2F40","#7E57C2")),
+ ("Palenightfall", "a cooler, flatter Palenight; Lavender light",
+  ("#F4F3FA","#FFFFFF","#ECEAF6","#ECEAF6","#292D3E","#4A4F6A","#62688A","#DCD9EC","#E8E6F3","#4F6FD8"),
+  ("#232534","#252837","#1D1F2B","#343A51","#D4D8EE","#A6ACCD","#8C93BC","#2E2E41","#2B2F40","#82AAFF")),
+ ("Palenight Blue", "Lavender's neutrals with Palenight's blue for the accent",
+  ("#F4F3FA","#FFFFFF","#ECEAF6","#ECEAF6","#292D3E","#4A4F6A","#62688A","#DCD9EC","#E8E6F3","#3B5FC8"),
+  ("#202331","#292D3E","#191C28","#32374D","#EEF1F8","#BFC7D5","#9AA2C6","#3A3F58","#2E3245","#82AAFF")),
+]
+
 # Status colours stay in every palette (docs/design.md, Palettes); these are aleph's own.
 STATUS = {"light": ("#C0304C", "#437018", "#8A5A00"), "dark": ("#F07178", "#A9C77D", "#FFCB6B")}
 KEYS = ("bg", "surface", "sunk", "raised", "ink", "ink2", "muted", "rule", "rule2", "focus")
@@ -106,13 +136,18 @@ def page(c, mode):
     f'<div class="row"><span class="chip" style="color:{warn};background:{v["sunk"]}">needs you</span><a style="color:{v["focus"]}">a3348</a></div>'
     f'<button style="background:{v["focus"]};color:{v["surface"]}">Pause</button></div></div></div>')
 
-cards = []
-for i, (name, note, light, dark) in enumerate(T, 1):
+def section(i, name, note, light, dark):
   dots = "".join(f'<i style="background:{x}"></i>' for x in ((dark or light)[1], (dark or light)[4], (dark or light)[9], (light or dark)[1]))
   cards.append(f'<section class="theme" id="t{i}" data-annotate="theme/{i}"><h2><span class="n">{i}</span> {html.escape(name)}'
     f'<span class="dots">{dots}</span></h2><p class="note">{html.escape(note)}</p>'
     f'<div class="pair"><figure>{page(light, "light")}<figcaption>Light</figcaption></figure>'
     f'<figure>{page(dark, "dark")}<figcaption>Dark</figcaption></figure></div></section>')
+  return cards[-1]
+
+cards = []
+for i, t in enumerate(T, 1): section(i, *t)
+cards.append('<header class="sub"><h1>Nord and Palenight variations</h1><p>Read from each theme\'s source file. Numbers go on from the list above.</p></header>')
+for i, t in enumerate(V, len(T) + 1): section(i, *t)
 
 head = pathlib.Path(__file__).with_name("head.html").read_text()
 pathlib.Path(__file__).with_name("index.html").write_text(head + "\n".join(cards) + "\n</main></body></html>\n")
