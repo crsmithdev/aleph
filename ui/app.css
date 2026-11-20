@@ -1245,6 +1245,7 @@ pre.stat b { color: var(--need); }
 .pf.error { color: var(--error); font-weight: var(--fw-strong); }
 input:where(:not([type="checkbox"], [type="radio"])), select, textarea { font: var(--fs-sm) var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-4) var(--sp-8); }
 input[type="search"] { background: var(--sunk); }
+select:hover { border-color: var(--ink-2); }
 form.stack { display: grid; gap: var(--sp-8); max-width: 640px; margin-top: var(--sp-8); }
 form.stack label, .field { display: grid; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--muted); }
 form.stack label:has(input[type="checkbox"]), .field:has(input[type="checkbox"]) { display: flex; align-items: center; gap: var(--sp-6); }

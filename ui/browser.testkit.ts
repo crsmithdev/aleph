@@ -116,6 +116,8 @@ export interface Page {
   reload(): Promise<void>;
   /** Presses and releases one key ("Tab" or "Enter") on the keyboard of the page. */
   key(name: "Tab" | "Enter"): Promise<void>;
+  /** Moves the mouse to the centre of the first element that matches `selector`, scrolled into view. */
+  hover(selector: string): Promise<void>;
   /** Sets the viewport width, in CSS pixels. */
   width(px: number): Promise<void>;
   /** Saves a PNG of the viewport at its current width to `path` (folders made). */
@@ -208,6 +210,10 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
         const k = name === "Tab" ? { key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 } : { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" };
         await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", ...k }, sessionId);
         await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...k }, sessionId);
+      },
+      hover: async (selector) => {
+        const [x, y] = await ev<number[]>(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); e.scrollIntoView({ block: "center" }); const b = e.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2]; })()`);
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y }, sessionId);
       },
       reload: async () => { const [done, off] = load(); await cdp.send("Page.reload", {}, sessionId); await done; off(); await when(loaded); },
     };

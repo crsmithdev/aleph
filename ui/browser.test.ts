@@ -322,6 +322,19 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector(".event-dot")).borderRadius')).toBe("999px");
   }, 30_000);
 
+  test("a hovered select takes the --ink-2 border, and the others keep --rule", async () => {
+    // The fixture has no transcripts, so /api/hooks answers with one hold: the log draws its filter bar only with a hold.
+    const hold = { t: "2026-11-20T10:00:00.000Z", sid: "aaaaaaaa", project: "demo", hook: "gate", event: "Stop", kind: "judged", who: "interactive", out: "caught", why: "x" };
+    await page.ev(`(() => { window.__f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/hooks") ? Promise.resolve(Response.json({ days: 7, holds: [${JSON.stringify(hold)}], byHook: [], errors: [], hooks: [] })) : window.__f(u, o); })()`);
+    await page.go("#/hooks");
+    await page.when('document.querySelectorAll("#holds .fbar select").length > 1');
+    const token = (name: string) => page.ev<string>(`(() => { const e = document.createElement("i"); e.style.color = "var(${name})"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
+    const border = (n: number) => page.ev<string>(`getComputedStyle(document.querySelectorAll("#holds .fbar select")[${n}]).borderTopColor`);
+    await page.hover("#holds .fbar select");
+    expect([await border(0), await border(1)]).toEqual([await token("--ink-2"), await token("--rule")]);
+    await page.ev("window.fetch = window.__f");
+  }, 30_000);
+
   test("Design: every specimen draws and the charts draw from fixtures", async () => {
     await page.width(1200);
     await page.go("#/design");
