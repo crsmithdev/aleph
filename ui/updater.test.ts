@@ -239,6 +239,28 @@ test("a Langfuse poll builds the kept keys that read it and signals only those w
   expect(u.gens.langfuse).toBe(4);
 });
 
+test("when the stopped-tick verdict flips with no source change, the clock check builds each key that shows it again, kept or not, and signals each once", async () => {
+  const f = fake(), u = createUpdater(f);
+  const at = () => new Date(f.now()).toISOString();
+  const status = () => ({ now: at(), factory: { paused: false, nextTick: "1970-01-01T00:16:40.000Z", tickInProgress: false }, errored: [] });
+  const keys = ["/api/factory", "/api/factory?project=p"];
+  for (const k of keys) f.world[k] = { body: status(), sources: ["records"] };
+  f.world["/api/status"] = { body: { tone: "fine" }, sources: ["records"] };
+  for (const k of [...keys, "/api/status"]) await u.get(k);
+  const heard: string[][] = [];
+  u.onChange((keys) => heard.push(keys));
+  await u.clock();
+  expect(heard).toEqual([]);
+  // Past the 5 min grace of a next tick, and past the 10 min a key is kept: a dead tick writes nothing, so the page asks nothing.
+  f.tick(KEEP_MS);
+  for (const k of keys) f.world[k].body = status();
+  f.world["/api/status"].body = { tone: "alert" };
+  await u.clock();
+  await u.clock();
+  expect(heard.flat().sort()).toEqual([...keys, "/api/status"]);
+  expect((await u.get("/api/status")).answer.body).toEqual({ tone: "alert" });
+});
+
 test("a failed fetch of the work store marks the keys that read the store until a fetch works", async () => {
   const f = fake();
   let error: string | null = "could not resolve host";

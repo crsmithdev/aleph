@@ -13,6 +13,10 @@
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
  * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row sends the `ev` rows and changes the source `events`.
+ *   A write that logs no event (a job row, usage, tick) changes the source `records`, which Status reads.
+ * - The stopped-tick verdict reads the clock, which no source changes: every 30 s, when a Status key's verdict flipped
+ *   since its build, each Status key and the sidebar's /api/status are built again, kept or not: a dead tick writes
+ *   nothing, so the page asks nothing.
  * - The annotations file is watched: a note written by the page or by `shelf note --file` sends `change` for
  *   /api/annotations at once. That route is not kept; the page reads it whole.
  * - The skills folder is watched: a skill folder added or removed, or a SKILL.md written, rebuilds the keys that read the skills.
@@ -34,6 +38,7 @@ import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { fetchStore, registryDir, storeRefDir } from "../lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 import { errText } from "../lib/errtext.ts";
+import { verdict, type Facts } from "../lib/status-words.ts";
 import { checkStatus, logOnce } from "./state.ts";
 
 const SETTLE_MS = 500;
@@ -216,6 +221,17 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       for (const k of keys) due(slots.get(k)!);
       await refresh(keys.filter((k) => kept(slots.get(k)!)));
     },
+    /** One check of the clock: when a Status key's verdict flipped since its build, each key that shows it is built again, kept or not. */
+    async clock(): Promise<void> {
+      const flipped = (a: Answer) => a.status === 200 && verdict(a.body as Facts).text !== verdict({ ...(a.body as Facts), now: iso() }).text;
+      const keys = keysWith((k, s) => k.split("?")[0] === "/api/factory" && !!s.answer && flipped(s.answer));
+      if (!keys.length) return;
+      // The sidebar's tone is the same verdict, but its answer lacks the facts to check.
+      if (slots.has("/api/status")) keys.push("/api/status");
+      // The Status body is kept until a source it reads changes (ui/api/now.ts), and the clock is none of them.
+      bump("action");
+      await refresh(keys);
+    },
     /** One fetch of the work store while a kept key reads it; a failure marks those keys until a fetch works. */
     async fetchStore(): Promise<void> {
       const keys = keysWith((_, s) => kept(s) && s.sources.has("store"));
@@ -289,8 +305,8 @@ function follow(dir: string, counts: (file: string) => boolean, source: string, 
 
 /**
  * `data_version` moves when another connection commits: the CLI, a job, or this process's own writes, which go through the
- * other connection of lib/db.ts. When it moves and an event row is new, the `ev` stream sends the rows and the source `events` changes.
- * A write that logs no event (usage, tick, a job row) waits for the quiet refresh timer.
+ * other connection of lib/db.ts. When it moves and an event row is new, the `ev` stream sends the rows and the source `events` changes;
+ * with no new event row, the source `records` changes.
  */
 function followEvents(): void {
   conn();
@@ -302,7 +318,7 @@ function followEvents(): void {
     if (v === seen) return;
     seen = v;
     const n = (newest.get() as { n: number }).n;
-    if (n === last) return;
+    if (n === last) return updater.changed("records");
     last = n;
     for (const tail of eventTails) tail();
     updater.changed("events");
@@ -338,6 +354,7 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   follow(dirname(notes), (f) => f === basename(notes), "annotations");
   const every = (ms: number, f: () => unknown) => { const t = setInterval(f, ms); t.unref?.(); stops.push(() => clearInterval(t)); };
   every(POLL_MS, () => updater.poll());
+  every(POLL_MS, () => updater.clock());
   // No watcher: ~/.claude/projects holds thousands of folders. The sessions of /api/context are due every poll instead.
   every(POLL_MS, () => updater.changed("transcripts"));
   every(FETCH_MS, () => updater.fetchStore());

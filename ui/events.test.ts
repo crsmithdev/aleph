@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { countsInFactory, countsInSkills } from "./updater.ts";
+import { pings } from "./api/events.ts";
 import { seed, reseed, type Seed } from "../jobs/job.testkit.ts";
 import { newItems, writeRepos } from "../tests/projects.testkit.ts";
 import { writeList } from "../lib/store.ts";
@@ -12,9 +13,12 @@ import { git } from "../lib/git.ts";
 import { logEvent } from "../lib/layout.ts";
 
 let base: string, runs: string, factory: string, ref: string, main: string;
-let server: TestServer, stop: () => void, restoreEnv: () => void;
+let server: TestServer, stop: () => void, restoreEnv: () => void, pingMs: number;
 
 beforeAll(async () => {
+  // Set before the first stream starts the pings: ten pings in a row are a quiet second.
+  pingMs = pings.ms;
+  pings.ms = 100;
   base = mkdtempSync(join(tmpdir(), "aleph-ui-events-"));
   runs = join(base, "runs"); factory = join(base, "factory");
   ref = join(base, "issues", ".git", "refs", "remotes", "origin");
@@ -34,6 +38,7 @@ beforeAll(async () => {
 const get = (path: string) => fetch(`http://127.0.0.1:${server.port}${path}`);
 
 afterAll(() => {
+  pings.ms = pingMs;
   stop();
   restoreEnv();
   rmSync(base, { recursive: true, force: true });
@@ -77,13 +82,25 @@ test("a run's write to its job row sends a change naming the kept key, and the r
   expect(JSON.stringify(await (await get("/api/factory")).json())).toContain(second);
 });
 
-// AC1: the 3 s is the test's time limit, from the stream's first ping to the change. A job row write that logs no event
-// sends none: it waits for the quiet refresh timer.
+// AC1: the 3 s is the test's time limit, from the stream's first ping to the change.
 test("an event written by another process sends its change within 3 s", async () => {
   const code = `import { logEvent } from "./lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
   const text = await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); });
   expect(text).toMatch(/event: ev\ndata: .*"key":"issue:settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
 }, 3_000);
+
+/** Ten pings in a row end the text: a second with no change, longer than a change takes to settle. */
+const QUIET = /(event: ping\ndata: .*\n\n){10}$/;
+
+test("a job row write that logs no event sends a change naming Status's key, and with no write the stream sends only pings", async () => {
+  // The writes of the tests before settle first, so the change is the job row's.
+  expect(await streamUntil(() => {}, (text) => QUIET.test(text))).not.toBeNull();
+  const text = await streamUntil(() => reseed(first, { phase: "reviewer" }), (t) => CHANGE.test(t) && QUIET.test(t));
+  expect(text).toMatch(/event: change\ndata: \{"keys":\[[^\]]*"\/api\/factory"/);
+  expect(text).not.toContain("event: ev");
+  const quiet = (await streamUntil(() => {}, (t) => t.split("event: ").length > 10))!;
+  expect(quiet.match(/^event: \w+/gm)?.slice()).toEqual(Array(10).fill("event: ping"));
+}, 15_000);
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
   expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""))).not.toBeNull();

@@ -13,8 +13,8 @@ import { heraldNow } from "./now.ts";
 import type { Routes } from "../server.ts";
 import { eventTails, updater } from "../updater.ts";
 
-/** Under the server's idle timeout, so that it keeps a quiet stream open. */
-const PING_MS = 25_000;
+/** The time between pings (ms): under the server's idle timeout, so that it keeps a quiet stream open. A test sets less to read a quiet stream. */
+export const pings = { ms: 25_000 };
 
 const encoder = new TextEncoder();
 const event = (name: string, data: string) => encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
@@ -52,7 +52,7 @@ eventTails.push(tail);
 function start(): void {
   sent = lastSeq();
   // The sidebar reads /api/status on every page: asking it at each ping keeps its key built, so `change` names it.
-  ping = setInterval(() => { send(event("ping", JSON.stringify({ at: Date.now() }))); void updater.get("/api/status"); }, PING_MS);
+  ping = setInterval(() => { send(event("ping", JSON.stringify({ at: Date.now() }))); void updater.get("/api/status"); }, pings.ms);
 }
 
 function stop(): void {
