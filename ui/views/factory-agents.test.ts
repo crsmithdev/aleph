@@ -236,10 +236,11 @@ const entries = (small: string, medium: string) => ({
   maintainer: { enabled: true, model: "sonnet" },
   housekeeper: { enabled: true, model: "opus" },
   judge: { enabled: true, model: "haiku" },
+  investigator: { enabled: true, model: "opus" },
 });
 
 test("the Roles table holds a select per size and role model in its Model cell, a checkbox on each size only, and no Models card", () => {
-  const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Housekeeper: "housekeeper", Judge: "judge" };
+  const keys: Record<string, string> = { Small: "small", Medium: "medium", Large: "large", Reviewer: "review", Intake: "intake", Director: "director", Monitor: "monitor", Maintainer: "maintainer", Housekeeper: "housekeeper", Judge: "judge", Investigator: "investigator" };
   // The second offer of each key is configured, so a select that kept its first option fails.
   const want = Object.fromEntries(Object.values(keys).map((k) => [k, (OFFERS as any)[k][1]]));
   const models = Object.fromEntries(Object.entries(want).map(([k, model]) => [k, { enabled: true, model }]));
@@ -265,7 +266,7 @@ test("a down local server shows one alert, an up one shows nothing, and the Role
   const down = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
   expect(down).toMatch(/role="alert"[^>]*>Local server down</);
   // Medium is off, so it has no select.
-  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(9);
+  expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(10);
   const up = renderFactoryAgents(S, D, "live", "week", { models: entries("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(up).not.toContain("Local server");
   expect(up).not.toContain("role=\"alert\"");
@@ -338,7 +339,7 @@ test("the Workers group holds Small, Medium and Large and no Unsized row, and th
   expect(workers).toContain('<tr class="grp"><th colspan="10">Workers</th></tr>');
   expect([...workers.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Small", "Medium", "Large"]);
   expect(h).not.toContain('title="Unsized"');
-  expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Housekeeper", "Judge"]);
+  expect([...rolesPart.matchAll(/<td title="([^"]+)">/g)].map((x) => x[1])).toEqual(["Reviewer", "Intake", "Director", "Monitor", "Maintainer", "Housekeeper", "Judge", "Investigator"]);
 });
 
 test("no Agent cell stretches; the Output column takes the spare width and holds its whole text", () => {

@@ -136,3 +136,8 @@ export function housekeeperDetached(): void {
   if (!dispatchOn()) return;
   detached(["housekeep"], join(factoryDir(), "housekeeper.log"));
 }
+
+/** Start `aleph investigate <subject>` detached, for Chris's click: no dispatch gate, because he started it. */
+export function investigatorDetached(subject: string): void {
+  detached(["investigate", subject], join(factoryDir(), "investigator.log"));
+}

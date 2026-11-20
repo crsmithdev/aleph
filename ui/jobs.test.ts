@@ -371,7 +371,7 @@ describe("render", () => {
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
   });
   test("the head shows the escaped title and the nav links as aside", () => {
-    expect(v.renderJob(job)).toContain('<header class="ph"><h1>Fix &lt;it&gt;</h1><div class="aside"><a class="act" href="http://lf/sessions/s">Trace</a></div></header>');
+    expect(v.renderJob(job)).toContain('<header class="ph"><h1>Fix &lt;it&gt;</h1><div class="aside"><a class="act" href="http://lf/sessions/s">Trace</a>');
   });
   test("the head of a job with no item title is its short id, not its full name", () => {
     setCodes({ fac: "f" });
@@ -420,15 +420,15 @@ describe("render", () => {
     expect(css.match(/^details\.dp-fold \{[^}]*\}/m)![0]).not.toContain("border-top");
     expect(css.match(/^\.dp-panel \{[^}]*\}/m)![0]).toContain("box-shadow: var(--card-lift)");
   });
-  test("an open job on an issue shows the lifecycle buttons of its state, and a closed job shows none", () => {
+  test("an open job on an issue shows the lifecycle buttons of its state, and a closed job none; each shows Investigate", () => {
     const head = (o: object) => { const h = v.renderJob({ ...job, ...o }); return h.slice(0, h.indexOf("</header>")); };
     const labels = (h: string) => [...h.matchAll(/<button class="act[^"]*" type="button"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
-    expect(labels(head({ open: true, state: "waiting" }))).toEqual(["Land", "Recheck", "Park", "Cancel", "Cancel job"]);
-    expect(labels(head({ open: true, state: "running" }))).toEqual(["Park", "Cancel", "Cancel job"]);
-    expect(labels(head({ open: true, state: "waiting", parked: true }))).toEqual(["Recheck", "Unpark", "Cancel", "Cancel job"]);
+    expect(labels(head({ open: true, state: "waiting" }))).toEqual(["Land", "Recheck", "Park", "Cancel", "Cancel job", "Investigate"]);
+    expect(labels(head({ open: true, state: "running" }))).toEqual(["Park", "Cancel", "Cancel job", "Investigate"]);
+    expect(labels(head({ open: true, state: "waiting", parked: true }))).toEqual(["Recheck", "Unpark", "Cancel", "Cancel job", "Investigate"]);
     expect(head({ open: true, state: "running" })).toContain('data-path="/api/jobs/fac-9%233/park"');
-    expect(head({ open: false })).not.toContain("<button");
-    expect(head({ open: true, item: undefined })).not.toContain("<button");
+    expect(labels(head({ open: false }))).toEqual(["Investigate"]);
+    expect(labels(head({ open: true, item: undefined }))).toEqual(["Investigate"]);
   });
   test("a job whose issue's gate binds shows the button disabled with the gate's text", () => {
     const h = v.renderJob({ ...job, runNow: "Waits on issue.3" });

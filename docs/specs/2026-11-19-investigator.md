@@ -1,6 +1,6 @@
 # Investigator
 
-Status: draft 2026-11-19, for Chris's review. Source: a session on 2026-11-19 that traced issue.3350 by hand (a merge
+Status: v1 built 2026-11-20 (`jobs/lib/roles/investigator.ts`). Source: a session on 2026-11-19 that traced issue.3350 by hand (a merge
 conflict, an OpenRouter 402, a recheck that could not fix a conflict, and a stale credit hold), and a survey of
 investigator agents elsewhere (Sentry Seer, GitLab Duo Root Cause Analysis, Factory.ai Reliability Droid).
 
@@ -40,15 +40,16 @@ needs. Each pointer is a path, a command or a query.
 
 | Kind | Pointers |
 |---|---|
-| `issue.<n>` | `aleph issue show`, `aleph status`, every job and run of the issue (`aleph jobs <name>` and each run folder: `log.txt`, `result.md`, `transcript.jsonl`, `check.out`, `diff.patch`), the issue's events, the commits that name it (`Issue: issue.<n>`), and the settings changes in the issue's window. |
-| `job.<n>` | The job's runs and their folders, the job's events, its branch and its diff against main, and the issue it belongs to as context. |
+| `issue.<n>` | `aleph issue show`, `aleph status`, every run of the issue with its folder and the files there of `log.txt`, `prompt.md`, `transcript.jsonl`, `result.md` and `review.json`, the events of the issue and of each run, the commits that name it (`Issue: issue.<n>`), and the settings changes while its runs ran. |
+| `job.<n>` | The job's runs and their folders, their events, its branch and its diff against main, and the issue it belongs to as context. A later run of the job names the job: the first run of its chain. |
 
 Later kinds, not in v1: a session, a memory note, a day's monitor reading, a failed suite run.
 
 ## The run
 
 - Tools: `Read`, `Grep`, `Glob`, and `Bash` limited to read-only commands: `git log|show|diff|blame`, `aleph status`,
-  `aleph jobs`, `aleph issue show|list`, `aleph models`. No write tool, no web.
+  `aleph issue show|list`, and `aleph models` with no arguments. No write tool, no web. `aleph jobs` is left out:
+  `aleph jobs --news` marks runs told, and the case already lists each run with its folder.
 - The prompt names the subject, its case, and the question: what happened, why, and what change would stop it from
   happening again.
 - The agent must cite evidence for each claim: a `path:line`, a run id with a file, an event time, or a commit.
@@ -78,12 +79,13 @@ issue that already covers the change. The panel then offers Note in place of Fil
   the causes with their evidence, then the recommended issues. Each issue row has its title, kind, the three scores,
   the spec in a fold, and File, Dismiss (or Note when `existing` is set). A filed row shows its issue link. Older runs
   sit in a fold under it.
-- **News:** one line when a run ends: `investigated issue.3350: 3 causes, 2 issues`, linked to the panel.
+- **News:** one line when a run ends, through `aleph jobs --news`: `job.N investigated issue.3350: 3 causes, 2 issues`.
+  The news is plain text, so the line has no link.
 - **Runs:** the run is a job run like any other, so the Jobs page lists it and the Agents page has an Investigator row.
 - **Not a Needs-you item:** Chris started it, so its result does not ask for attention beyond the news line.
 
-A dismissed or filed row is a field on `result.json` (`issues[i].fate`: `filed <key>` or `dismissed`), written by the
-API that files it.
+A filed, noted or dismissed row is a field on `result.json` (`issues[i].fate`: `filed <key>`, `noted <key>` or
+`dismissed`), written by the API that files it. A note is one line: the title, the spec, the evidence and the run.
 
 ## Limits
 

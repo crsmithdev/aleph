@@ -5,6 +5,7 @@ import { bytes, count, dur, plural, money, span, when } from "./lib/format.js";
 import { actButton, runNowButton, fold, pageHead, badCount, blockersHtml, chip, codeText, tag, tone, badge, error, miss, note, shaLink, statusRow, crumb, heads, pagedTable, empty, esc, idLink, linkButton, loadDiff, loadingLine, md, priorityBadge, wkHtml } from "./lib/html.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "./lib/timeline.js";
 import { shortText, issueHref } from "../../lib/naming.ts";
+import { investigateButton, investigationPanel } from "./lib/investigation.js";
 
 /** The Job view, routed at `#/jobs/<job ID>`. */
 export const view = {
@@ -127,11 +128,11 @@ export function renderJob(j) {
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) + (j.open ? "" : runNowButton(j.repo, j.item?.id, j.runNow)) }) + `${pills}${next}${blocked}` +
+    pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) + (j.open ? "" : runNowButton(j.repo, j.item?.id, j.runNow)) + investigateButton(j.subject, j.investigations) }) + `${pills}${next}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? note(j.reason) : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
-    (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
+    (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") + investigationPanel(j.investigations, j.repo) +
     `<div class="dp-detail">` +
     (j.review ? detailPanel("Review", verdict ? badge(verdict === "pass" ? "passed" : "returned") : "", `<div class="md">${md(j.review)}</div>`) : "") +
     (j.checks ? detailPanel("Checks", tag(`${passed} / ${j.checks.length}`, tone(passed === j.checks.length ? "passed" : "failed")), checks) : "") +

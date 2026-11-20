@@ -13,7 +13,7 @@ export type RunFile =
   | "pid" | "exit"
   | "prompt.md" | "transcript.jsonl" | "result.md" | "log.txt"
   | "spec.md" | "result.html" | "review.json" | "batch.json" | "paused-next"
-  | "gh" | "notes";
+  | "gh" | "notes" | "result.json";
 
 /** The parts of `log.txt`: the command that started the job, then what each step wrote. */
 export type Section = "command" | "setup" | "stderr" | "dispatch" | "checks" | "land";

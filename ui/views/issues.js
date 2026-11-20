@@ -10,6 +10,7 @@ import { buckets, DAY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
 import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
 import { askCard } from "./lib/ask-cards.js";
+import { investigateButton, investigationPanel } from "./lib/investigation.js";
 import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
 
 export const view = {
@@ -461,7 +462,7 @@ const FORM = 'form="issue-edit"';
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead("", {
   after: `<h1>${editable(esc(d.title), inputBox("title", d.title, { attrs: ` class="title-edit" ${FORM} required aria-label="Title"` }))}</h1>`,
-  aside: runNowButton(d.repo, ref, d.runNow) + actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
+  aside: runNowButton(d.repo, ref, d.runNow) + investigateButton(issueKey(d.id), d.investigations) + actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
   `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */
@@ -644,11 +645,11 @@ export function renderIssue(d) {
     : "";
   const segments = issueSegments(d), timeline = renderTimeline(segments);
   // An entry for each panel the view shows: an empty Description or Spec shows only while editing.
-  const contents = [timeline && ["h-timeline", "Timeline"], d.request && ["h-request", "Description"], d.spec && ["h-spec", "Spec"],
+  const contents = [timeline && ["h-timeline", "Timeline"], d.request && ["h-request", "Description"], d.spec && ["h-spec", "Spec"], d.investigations?.length && ["h-investigation", "Investigation"],
     ["issue-media", "Media"], ["issue-notes", "Notes"], commits && ["issue-commits", "Commits"]].filter(Boolean);
   return `<div class="page dp-page issue-page editable">${crumb(inventory, place)}` + issueHead(d, ref) + pills + toc(contents, fields + blocked + references + undecided(d.ask ? [d.ask] : [], [`${d.repo}-${ref}`]).map((a) => askCard(a)).join("") +
     issueKpis(d, segments) + timeline +
-    part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
+    part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) + investigationPanel(d.investigations, d.repo) +
     `<div class="dp-detail">${detailPanel("Media", esc(count((d.media ?? []).length)), renderMedia(d, ref), "issue-media")}${detailPanel("Notes", esc(count(d.notes.length)), notes, "issue-notes")}${commits && detailPanel("Commits", esc(count(d.commits.length)), commits, "issue-commits")}</div>`) + `</div>`;
 }
 

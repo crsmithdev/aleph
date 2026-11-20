@@ -1477,6 +1477,7 @@ tr.mrow:focus-visible { outline-offset: -2px; }
 .dp-page .toc-body > section { margin: 0; }
 .dp-page > .ph h1 { flex: 1 1 32rem; min-width: 0; }
 .dp-panel { background: var(--surface); border: 1px solid transparent; box-shadow: var(--card-lift); border-radius: var(--r-card); min-width: 0; }
+.dp-panel.dp-marked { border-left: 3px solid var(--focus); }
 .dp-ph { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-6) var(--sp-12); padding: var(--sp-14) var(--sp-18) var(--sp-4); }
 .dp-ph h2 { margin: 0; font: var(--fw-strong) var(--fs-lg)/1.3 var(--sans); }
 .dp-prose { padding-bottom: var(--sp-14); }

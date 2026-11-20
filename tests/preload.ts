@@ -34,6 +34,7 @@ const vars: Record<string, string> = {
   ALEPH_MONITOR_CMD: "false",
   // Nor through the maintainer's compile.
   ALEPH_MAINTAINER_CMD: "false",
+  ALEPH_INVESTIGATOR_CMD: "false",
   XDG_RUNTIME_DIR: join(dir, "run"),
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;

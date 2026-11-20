@@ -12,7 +12,7 @@ This page is the standard for the names, keys and status words that aleph shows 
 | Job | One execution: an intake, build, review, land, recheck, monitor, housekeeper, maintainer or plain run. It has a role, a state, a cost and a folder. |
 | Role | What a job does. A job has one role. |
 | Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. A build's job row and its start event hold the size word in `size`. |
-| Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `housekeeper`, `maintainer` or `judge`. Each has an entry in the `models` setting. |
+| Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `housekeeper`, `maintainer`, `judge` or `investigator`. Each has an entry in the `models` setting. |
 | Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `related`. A hierarchy is a link, never part of a key. |
 | Issue state | The live machine state of one issue: its Ask and its CI result. It outlives each job on the issue. |
 | Event | One sentence of 6 fields that says who did what to which thing. |
@@ -139,7 +139,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
 | Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped |
-| Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, housekeeper, maintainer, judge |
+| Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, housekeeper, maintainer, judge, investigator |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
 | Flow class | derived | landed, returned, failed, reran, dropped |

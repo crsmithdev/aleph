@@ -36,11 +36,13 @@ import { setPaused } from "../jobs/lib/gates/pause.ts";
 import { maintainAll, runTick } from "../jobs/lib/transitions/tick.ts";
 import { isVault } from "../vault/lib/vault.ts";
 import { vaultDir } from "../lib/paths.ts";
-import { dispatchDetached } from "../jobs/lib/transitions/launch.ts";
+import { dispatchDetached, investigatorDetached } from "../jobs/lib/transitions/launch.ts";
 import { health } from "../jobs/lib/gates/factory-status.ts";
 import { flakeLines, renderTable, reportLine } from "../jobs/lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "../jobs/lib/roles/monitor.ts";
 import { housekeep } from "../jobs/lib/roles/housekeeper.ts";
+import { caseOf, investigate, lockOf } from "../jobs/lib/roles/investigator.ts";
+import { held } from "../lib/locks.ts";
 import { cutTitle } from "../jobs/lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, startJob, startPlain, type Start } from "../jobs/lib/transitions/transitions.ts";
 import type { Fate } from "../jobs/lib/records/outcome.ts";
@@ -77,6 +79,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
   director: { usage: "aleph director", purpose: "run one director step" },
   housekeep: { usage: "aleph housekeep", purpose: "review the parked issues a land touched, or every parked issue once a day" },
+  investigate: { usage: "aleph investigate <issue.N|job.N> [--detach]", purpose: "trace what happened to an issue or a job and recommend issues; --detach starts it as a unit" },
   suite: { usage: "aleph suite", purpose: "run one suite step" },
   monitor: { usage: "aleph monitor [--dry] [--day YYYY-MM-DD]", purpose: "write the monitor's table and reading of a day" },
   dispatch: { usage: "aleph dispatch [issue.N]", purpose: "start every ready issue up to the live cap, or one issue now" },
@@ -403,6 +406,13 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "tick": await tickCmd(ctx); break;
     case "director": ctx.out(await directorStep()); break;
     case "housekeep": ctx.out(await housekeep(Date.now()) ?? refuse("another housekeeper holds the lock")); break;
+    case "investigate": {
+      const subject = caseOf(ctx.positional[0] ?? refuse(usage("investigate")))?.subject ?? refuse(`no issue or job ${ctx.positional[0]}`);
+      if (held(lockOf(subject))) refuse(`an investigation of ${subject} is running`);
+      if (ctx.rest.includes("--detach")) { investigatorDetached(subject); ctx.out({ started: subject }); break; }
+      ctx.out(await investigate(subject) ?? refuse(`an investigation of ${subject} is running`));
+      break;
+    }
     case "suite": ctx.out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.

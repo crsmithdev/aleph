@@ -9,6 +9,7 @@ import { specs } from "./specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
 import { allRuns } from "../../jobs/lib/records/record.ts";
+import { investigations } from "../../jobs/lib/roles/investigator.ts";
 import { view } from "../../jobs/lib/records/job.ts";
 import { git } from "../../lib/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
@@ -155,7 +156,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const waiting = awaiting(repo.key, item, mine?.stage ?? "waiting");
   const ask = waiting && attend({ runs: [], issues: [waiting] }).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, investigations: investigations(issueKey(n)), specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

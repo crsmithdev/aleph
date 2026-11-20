@@ -24,9 +24,10 @@ import { runNowOf } from "./issues.ts";
 import { readList } from "../../lib/store.ts";
 import { parentOf, partsOf } from "../../lib/todo.ts";
 import * as todos from "../../lib/todo.ts";
+import { investigations, type Investigation } from "../../jobs/lib/roles/investigator.ts";
 
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */
-interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "housekeeper" | "maintainer" | "investigator"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 interface LogFile { name: string; size: number }
 /**
@@ -78,6 +79,10 @@ interface JobDetail extends Job {
   trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
   checkedBy?: string[]; look?: number;
+  /** The job's key, the first run of its chain: what an investigation of the job names. */
+  subject: string;
+  /** The investigator runs on this job, newest first. */
+  investigations: Investigation[];
   /** The item's spec, from the store. */
   spec?: string;
   /** Why the job waited: its hold records, oldest first. */
@@ -113,7 +118,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", housekeeper: "housekeeper", maintainer: "maintainer", judge: "worker" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", housekeeper: "housekeeper", maintainer: "maintainer", judge: "worker", investigator: "investigator" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
@@ -183,7 +188,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const fit = await currentFit();
   const projector = jobProjector();
   const job = projector.toJob(runs, v);
-  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]), open: isOpen(runs) };
+  const detail: JobDetail = { ...job, id, runs: runInfos(runs, fit), holds: readHolds([job.name]), open: isOpen(runs), subject: runs[0].run.job, investigations: investigations(runs[0].run.job) };
   const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
   if (blockers.length) detail.blockers = blockers;
   const step = stepOf(runs);

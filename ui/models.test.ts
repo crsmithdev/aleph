@@ -26,7 +26,7 @@ test("GET /api/models answers each size and role model under models with enabled
   conn().run("DELETE FROM settings WHERE key = 'models'");
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.models)).toEqual(["small", "medium", "large", "review", "intake", "director", "monitor", "housekeeper", "maintainer", "judge"]);
+  expect(Object.keys(b.models)).toEqual(["small", "medium", "large", "review", "intake", "director", "monitor", "housekeeper", "maintainer", "judge", "investigator"]);
   expect(b.models.medium).toEqual({ enabled: true, model: "sonnet" });
   expect(b).not.toHaveProperty("tiers");
   expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });

@@ -39,7 +39,7 @@ erDiagram
 | Issue | `items/issues/<n>/issue.md` | Request |
 | Sub-issue | `items/issues/<n>/issue.md` with `from` | Issue that intake split from a parent issue |
 | Idea | `items/ideas/<n>/idea.md` | Idea |
-| Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution: build, review, land, recheck, intake, director, monitor, housekeeper, maintainer or plain. A work is a `prev` chain of jobs |
+| Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution: build, review, land, recheck, intake, director, monitor, housekeeper, maintainer, investigator or plain. A work is a `prev` chain of jobs |
 | Job folder | `jobs/<n>/` | The files of a job |
 | Issue state | A row of `issue_state` | The Ask, the wait and the CI result of an issue |
 | Ask | `issue_state.ask` (`ask_job` names the job that holds it) | Decision that waits |
@@ -161,7 +161,7 @@ A change of the Ask logs `question` or `answered` on the key. The other events (
 
 | Field | Values |
 |---|---|
-| `role` | `build`, `plain`, `land`, `review`, `intake`, `recheck`, `director`, `monitor`, `housekeeper`, `maintainer` |
+| `role` | `build`, `plain`, `land`, `review`, `intake`, `recheck`, `director`, `monitor`, `housekeeper`, `maintainer`, `investigator` |
 | `state` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
 | `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `credit`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
 | `fate` | `duplicate`, `met`, `manual` |

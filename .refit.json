@@ -202,6 +202,14 @@
         "docs/mocks/file-search/app.css:782-900"
       ],
       "reason": "A mock keeps a frozen copy of app.css so it renders as drawn; the mock is a record, not a second style sheet."
+    },
+    {
+      "concept": "import lines that look like other import lines",
+      "copies": [
+        "jobs/lib/roles/investigator.ts:9",
+        "ui/api/issues.ts:10-18"
+      ],
+      "reason": "Import statements of different names from different modules: the token matcher pairs them with ui/memory-items.ts and skills/refit-code/hook.ts imports, but no code is copied (investigator, 2026-11-20)."
     }
   ]
 }

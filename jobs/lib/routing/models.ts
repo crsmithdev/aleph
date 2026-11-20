@@ -133,6 +133,7 @@ export const OFFERS = {
   housekeeper: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   maintainer: ["sonnet", "haiku", "claude-opus-5-5", ...OTHERS],
   judge: ["haiku", ...OTHERS],
+  investigator: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
 };
 /** A size (small, medium, large) or a role model. */
 export type Name = keyof typeof OFFERS;

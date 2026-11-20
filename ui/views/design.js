@@ -159,7 +159,7 @@ function renderDesign(d) {
 
     group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
-    spec("detail-panel", "Detail panel", panel("design-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
+    spec("detail-panel", "Detail panel", panel("design-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>") + panel("design-mark", "Investigation", `<div class="dp-body"><p>An agent's findings for Chris, marked.</p></div>`, "11/19 22:41 · opus", "dp-marked")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") }) +

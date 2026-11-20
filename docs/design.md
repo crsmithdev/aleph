@@ -65,7 +65,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--error` / `--error-bg` | #C0304C / #F9EAED | #F07178 / #3D2C39 | error, a failed job |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | an improving trend; the largest cause |
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
-| `--focus` | #7E57C2 | #C792EA | focus ring |
+| `--focus` | #7E57C2 | #C792EA | focus ring; the mark of a marked detail panel |
 | `--approve`, `--decide`, `--unstick` | see `--approve` in `ui/app.css` | dark block | Ask cards, each with `-bg` and `-ring` |
 | `--kind` / `--kind-bg` | `--error` / `--error-bg` | the same | an issue row's kind: the returned, failed and error cards |
 | `--k` / `--k-bg` / `--k-ring` | `--approve` / `--approve-bg` / `--approve-ring` | the same | an Ask card: `decide` and `unstick` set their own |
@@ -425,7 +425,7 @@ A detail panel is one section of a detail page. It has a head and a body.
 
 | Helper | Reference |
 |---|---|
-| `panel(id, title, body, aside)` and `detailPanel(title, aside, body)` in `ui/views/lib/timeline.js` | `ui/views/jobs.js` |
+| `panel(id, title, body, aside, cls)` and `detailPanel(title, aside, body)` in `ui/views/lib/timeline.js` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -434,10 +434,13 @@ A detail panel is one section of a detail page. It has a head and a body.
 | 3 | Aside | A note; in `detailPanel()`, text or a badge only | yes | `--fs-sm`, `--muted` |
 | 4 | Body | The content | | `detailPanel()`: padding `--sp-10` `--sp-18` `--sp-14`; `panel()`: the padding of its `.md` |
 | 5 | Code block | Logs or output | yes | `--mono` `--fs-xs`, `--ink-2` on `--sunk`, radius `--r-tag`; scrolls at 70% of the screen height |
+| 6 | Mark | An agent's findings for Chris: the Investigation | yes | left border 3px `--focus`, from `cls` `dp-marked` |
 
 - For prose (Spec, Result, Description), use `panel()`. Wrap the prose in `<div class="md">`: that wrapper gives the padding and the `--measure` (76ch) width.
 - For a section that the reader can close, use `detailPanel()`. It is open at first. Its aside is inside the summary, so a click there opens or closes the panel: put controls in the body.
 - When a section has no content, leave the panel out.
+- Mark a panel only when it holds an agent's findings that Chris acts on. Give `panel()` the `cls` `dp-marked`. A page has at most one marked panel.
+- For a panel body that is not prose, such as tables, wrap it in `<div class="dp-body">`.
 
 | Do | Don't |
 |---|---|

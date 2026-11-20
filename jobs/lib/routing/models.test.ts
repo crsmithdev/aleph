@@ -26,6 +26,7 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
     housekeeper: { enabled: true, model: "claude-opus-5-5" },
     maintainer: { enabled: true, model: "sonnet" },
     judge: { enabled: true, model: "haiku" },
+    investigator: { enabled: true, model: "claude-opus-5-5" },
   });
 });
 

@@ -40,6 +40,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph director` | Runs the director on the Asks that have no case text |
 | `aleph monitor` | Writes the monitor's report for a day |
 | `aleph housekeep` | Reviews the parked issues that a land touched, or every parked issue once a day |
+| `aleph investigate <issue.N\|job.N> [--detach]` | Traces what happened to an issue or a job and recommends issues; the Investigate button starts it detached |
 
 ## How an issue becomes a commit
 

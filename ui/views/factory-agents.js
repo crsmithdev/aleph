@@ -44,7 +44,7 @@ const MIN_ENDED = 20;
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
 /** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
-const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", housekeeper: "housekeeper", judge: "judge" };
+const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", housekeeper: "housekeeper", judge: "judge", investigator: "investigator" };
 
 /** The noun of each role's output; a role not named here counts its OK runs. */
 const NOUNS = { worker: "landed", reviewer: "verdict", intake: "triage", director: "step", monitor: "reading", housekeeper: "sweep", judge: "call" };

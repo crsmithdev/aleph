@@ -264,6 +264,8 @@ export function newsLine(e: Entry, note?: string): string {
     : run.state === "failed" ? causeOf(run) : undefined;
   // A failed check's name is the content. The arrow marks it.
   const check = failedCheckOf(run);
+  // An investigation's reason is its line: `investigated issue.3350: 3 causes, 2 issues`.
+  if (run.role === "investigator" && run.state === "done") return `${e.id} ${run.reason}`;
   const line = [`${e.id} ${run.state}`, sub, check && `→ ${check.split("/").at(-1)}`].filter(Boolean).join(" ");
   const said = run.state === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
   return said ? `${line}\n  ${said}` : line;
