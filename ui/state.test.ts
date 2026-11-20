@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as store from "../lib/store.ts";
+import * as systemd from "../jobs/lib/infra/systemd.ts";
 import { writeList } from "../lib/store.ts";
 import { add, setStatus } from "../lib/todo.ts";
 import { jobProjector, state } from "./state.ts";
@@ -375,6 +376,8 @@ describe("a live job on a parked issue", () => {
 describe("the Herald's status history", () => {
   test("holds a red aleph CI and its recovery as two entries across a restart of the server", async () => {
     const red = { aleph: { repo: "aleph", ok: false, sha: "a1", url: "u", sinceSha: "a0", since: "2026-11-04T10:00:00Z", runs: 2 } };
+    // A host with no aleph-tick.timer reads as a stopped tick, and that sentence takes the place of one the test expects.
+    const tick = spyOn(systemd, "timer").mockReturnValue({ next: NOW + 60_000, running: false, err: null });
     try {
       putJson("state", "ci", red);
       state(now);
@@ -385,6 +388,6 @@ describe("the Herald's status history", () => {
       const [recovered, broken] = restarted.state(now).herald!.history;
       expect(broken.text).toBe("Alert: GitHub CI is broken; jobs are unhealthy; attention is needed.");
       expect(recovered.text).toBe("Alert: Jobs are unhealthy; attention is needed.");
-    } finally { putJson("state", "ci", {}); }
+    } finally { tick.mockRestore(); putJson("state", "ci", {}); }
   });
 });
