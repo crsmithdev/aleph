@@ -15,7 +15,7 @@ test("an issue's events are one row: the newest event heads it, the older ones a
   const [r, ...rest] = rows([e("2026-11-09T11:00:00Z", "aleph-9", "done", ["job.1"]), e("2026-11-09T12:00:00Z", "aleph-9", "done", ["job.2"]), e("2026-11-09T10:30:00Z", "aleph-9", "started", [])],
     { titles: { "aleph-9": "Fix the footer" }, runs: { "job.1": "intake", "job.2": "build" } });
   expect(rest).toEqual([]);
-  expect([r.key, r.kind, r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["issue:aleph-9", "work", "closed", 3, "a9", "Fix the footer"]);
+  expect([r.key, r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["issue:aleph-9", "closed", 3, "a9", "Fix the footer"]);
   expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["implement", "j2 ✓"], ["intake", "j1 ✓"], ["started", "by the gate"]]);
 });
 
@@ -48,7 +48,7 @@ test("a routine run with changes is one factory row that counts its edits by the
   const change = (at: string, issue: string, note: string) => row({ at, by: "job.57", subject: issue, action: "changed", note });
   const [r, ...rest] = rows([hk("2026-11-15T13:10:00Z", "done"), change("2026-11-15T13:07:00Z", "aleph-9", "note: second look"), change("2026-11-15T13:06:00Z", "aleph-8", "note: first look"), change("2026-11-15T13:05:00Z", "aleph-5", "retitle: New title"), hk("2026-11-15T13:00:00Z", "running")], { reviewed: { "job.57": 3 } });
   expect(rest).toEqual([]);
-  expect([r.kind, r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["factory", "ended", 3, "j57", "reviewed 3 · retitled 1 · commented 2"]);
+  expect([r.word, r.more, plain(r.id), plain(r.text)]).toEqual(["ended", 3, "j57", "reviewed 3 · retitled 1 · commented 2"]);
   expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["retitled", "a5 New title"], ["commented", "a8 first look"], ["commented", "a9 second look"]]);
 });
 

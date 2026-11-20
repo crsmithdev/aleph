@@ -6,8 +6,6 @@ import { error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
 import { full, heraldOf, row, section, withAttn } from "../now.testkit.ts";
-// @ts-ignore plain JS, shared with the page
-import { kept } from "./lib/address.js";
 
 afterEach(() => setCodes({}));
 
@@ -186,31 +184,10 @@ test("the Active Issues chart follows Pipeline: loading, error, and a chart pane
   expect(f.form).toBe("area");
 });
 
-test("the Factory toggle off hides the rows of events with no issue target, and the choice is kept through keep() for the next render", () => {
-  const store = new Map<string, string>(), was = globalThis.localStorage;
-  (globalThis as any).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
-  try {
-    const events = [row({ at: "2026-11-15T13:00:00Z", by: "gate", subject: "aleph-5", action: "landed", on: ["aleph-5#1"] }), row({ at: "2026-11-15T13:05:00Z", by: "gate", subject: "housekeeper", action: "running", on: ["job.57"] })];
-    const s = { ...state, now: "2026-11-15T14:00:00Z", herald: heraldOf(events) };
-    view.view.render(s, {}, new URLSearchParams());
-    const both = view.renderHerald(s);
-    expect(both).toContain('href="#/issues/aleph/5"');
-    expect(both).toContain('href="#/jobs/job.57"');
-    expect(both).toContain('name="show" value="factory" checked');
-    // The reader unticks Factory: the page keeps it and draws the Herald again without its rows.
-    let html = "";
-    const root: any = { querySelector: (q: string) => (q === "#herald" ? { querySelectorAll: () => [], set outerHTML(v: string) { html = v; } } : null) };
-    view.view.mount(root, s, new URLSearchParams());
-    root.onchange({ target: { matches: () => true, value: "factory", checked: false } });
-    expect(kept("herald.show")).toEqual({ work: true, factory: false });
-    expect(html).toContain('href="#/issues/aleph/5"');
-    expect(html).not.toContain("job.57");
-    // The next render reads it back.
-    const next = view.renderHerald(s);
-    expect(next).not.toContain("job.57");
-    expect(next).toContain('name="show" value="work" checked');
-    expect(next).not.toContain('name="show" value="factory" checked');
-  } finally {
-    (globalThis as any).localStorage = was;
-  }
+test("the Herald shows the rows of issues and of jobs together, with no toggles", () => {
+  const events = [row({ at: "2026-11-15T13:00:00Z", by: "gate", subject: "aleph-5", action: "landed", on: ["aleph-5#1"] }), row({ at: "2026-11-15T13:05:00Z", by: "gate", subject: "housekeeper", action: "running", on: ["job.57"] })];
+  const html = view.renderHerald({ ...state, now: "2026-11-15T14:00:00Z", herald: heraldOf(events) });
+  expect(html).toContain('href="#/issues/aleph/5"');
+  expect(html).toContain('href="#/jobs/job.57"');
+  expect(html).not.toContain('name="show"');
 });

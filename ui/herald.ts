@@ -1,5 +1,5 @@
 // The Herald's event rows, built on the server from event rows and the maps they need: /api/factory sends them, the `ev` stream sends them
-// again when an event is added, and the terminal panel (herdr/status.ts) reads them. The page only draws them and applies the Work and Factory filter.
+// again when an event is added, and the terminal panel (herdr/status.ts) reads them. The page only draws them.
 // An issue's rows are one per attempt (`attempts`: the first job of a job's `prev` chain), its older events in the fold;
 // a routine's run is one row that says "N changes", each change a line in its fold. A hold is an issue's state, not an event, so no row has it.
 import { EDITS, HOLDS, OLD_HOLDS, factsOf, issueHref, jobHref, parseId, parseKey, runWord, sayRest, shownId, targetOf, whoOf, wordOf, type EventRow } from "../lib/naming.ts";
@@ -14,8 +14,6 @@ export interface Line { at: string; action: string; label: string; text: Piece[]
 /** A row of the Herald: the newest event of its group with the older ones in `lines`. `key` names the row for a redraw; `fold` names its fold. */
 export interface Row {
   key: string; fold?: string; at: string; by: string;
-  /** Work: an issue's row. Factory: any other. */
-  kind: "work" | "factory";
   /** A routing choice: a system row of its text only. */
   sys?: true;
   /** What happened, never who: the chip's word. */
@@ -117,7 +115,7 @@ function rowOf(head: EventRow, ctx: Context, key: string, lines: Line[], more: n
   const { lead, rest } = route ? { lead: [], rest: [] } : parts(head), title = route ? "" : ctx.titles[tgt] ?? "";
   const id = isIssue(tgt) ? [issuePiece(tgt, head.project)] : job ? [{ id: shownId(job), to: jobHref(job) }] : lead;
   const text: Piece[] = route ? [head.detail ?? ""] : said ? [said] : title ? [title] : !isRouting(head) && plain(rest) !== head.action ? rest : [];
-  return { key, ...(fold ? { fold } : {}), at: head.time, by: head.subject, kind: isIssue(tgt) ? "work" : "factory", ...(route ? { sys: true as const } : {}), word: stateWord(head), id: route ? [] : id, text, more, lines };
+  return { key, ...(fold ? { fold } : {}), at: head.time, by: head.subject, ...(route ? { sys: true as const } : {}), word: stateWord(head), id: route ? [] : id, text, more, lines };
 }
 
 /** The Herald's rows for `events` (oldest first), newest first. */

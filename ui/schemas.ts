@@ -15,7 +15,7 @@ const turn = { n: "number", traceId: "string", start: "time", seconds: "number?"
 export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
-    herald: { history: [{ at: "time", tone: "string", text: "string" }], seq: "number", rows: [{ key: "string", at: "time", by: "string", kind: "string", word: "string", id: "array", text: "array", more: "number", lines: "array" }] },
+    herald: { history: [{ at: "time", tone: "string", text: "string" }], seq: "number", rows: [{ key: "string", at: "time", by: "string", word: "string", id: "array", text: "array", more: "number", lines: "array" }] },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     errored: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],

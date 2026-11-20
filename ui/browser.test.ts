@@ -1019,7 +1019,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   const drawRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
     const root = document.querySelector("#view");
     window.view = view; window.root = root;
-    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: ids.map((id, i) => ({ key: "row " + id, at: "2026-11-15T10:0" + (9 - i) + ":00Z", by: "gate", kind: "work", word: "filed", id: [], text: ["row " + id], more: 0, lines: [] })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
+    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: ids.map((id, i) => ({ key: "row " + id, at: "2026-11-15T10:0" + (9 - i) + ":00Z", by: "gate", word: "filed", id: [], text: ["row " + id], more: 0, lines: [] })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
     window.rows = () => Object.fromEntries([...root.querySelectorAll("#herald .herald-feed > [data-key]")].map((r) => [r.dataset.key, r]));
     window.herald(["a", "b", "c"]);
   })`;

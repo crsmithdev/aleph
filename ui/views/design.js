@@ -114,8 +114,8 @@ const ASK = {
   actions: [{ label: "Oct 28", act: "design", path: "/api/design-act", primary: true }, { label: "10/28", act: "design", path: "/api/design-act" }, { label: "Deny", act: "design", path: "/api/design-act", input: { name: "reason" } }],
 };
 const FEED = [
-  { key: "design 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i1700", to: "#/design" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
-  { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
+  { key: "design 1", at: "2026-11-10T16:58:00Z", by: "job.1", word: "landed", id: [{ id: "i1700", to: "#/design" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
+  { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }], figures: { kept: 52, hours: 9 } };
 

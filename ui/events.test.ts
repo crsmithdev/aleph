@@ -107,7 +107,7 @@ test("a run that starts sends the Herald's rows as an ev, before the change, wit
   expect(ev).not.toBeNull();
   const { seq, rows } = JSON.parse(ev![1]);
   expect(seq).toBeGreaterThan(0);
-  expect(rows.find((r: any) => r.id[0]?.to === "#/issues/p/3")).toMatchObject({ by: "gate", word: "started", kind: "work" });
+  expect(rows.find((r: any) => r.id[0]?.to === "#/issues/p/3")).toMatchObject({ by: "gate", word: "started" });
   expect(JSON.stringify(rows)).toContain(`#/jobs/${id}`);
   expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
 });

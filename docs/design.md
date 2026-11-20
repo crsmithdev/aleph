@@ -899,7 +899,6 @@ A feed row shows one event in a feed on one line. The newest event is first.
 - A routine's run is one row, a job like any other: its Id is the run's job (`j6802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
 - A status row has the time and the new status text only. It is drawn where the text changes after the page loaded, as the old text gives way to the new; the first render has none.
 - A routing event is a quiet system row: the size, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
-- The Work and Factory toggles above the feed show or hide the rows: an issue's events are Work, any other is Factory.
 
 **Running line:** the jobs and issues in progress sit above the feed, on its grid. Each row has the start time, the chip (`implement`, or the run's kind), the Id, the title, and a build's size with a breathing dot. A job that ends leaves the line; its row appears in the feed.
 

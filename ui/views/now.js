@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
-import { keep, kept, scope } from "./lib/address.js";
+import { scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
 import { actButton, fold, recordState, restoreState, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
@@ -28,11 +28,6 @@ export const view = {
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root);
-    root.onchange = (e) => {
-      if (!e.target.matches?.('#herald input[name="show"]')) return;
-      keep(SHOW, { ...kept(SHOW, ALL), [e.target.value]: e.target.checked });
-      redrawHerald(root);
-    };
     if (usable(s.flow)) root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow);
   },
   // The stream sends the Herald's rows when an event is added; the page draws them at once, until a state with a newer or equal `seq` replaces them.
@@ -134,9 +129,6 @@ const rowId = (key) => esc(`h-${key.replace(/\s+/g, "-")}`);
 /** A short hash of a text, to key a row by its text. */
 const hash = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0).toString(36);
 
-/** The key of the Herald's Work and Factory toggles in keep(): whether each shows its events. */
-const SHOW = "herald.show", ALL = { work: true, factory: true };
-
 /** A status text without the "health: " of each health line, which older history entries carry. */
 const statusText = (t) => t.replace(/(^|: |; )health: /gi, "$1");
 
@@ -182,17 +174,16 @@ export function renderHerald(s, st = page) {
   // A status row's key is its tone and text, numbered from the oldest, so a new status on top does not rename the rows below it.
   const seen = new Map();
   for (const r of [...status].reverse()) { const n = (seen.get(r.key) ?? 0) + 1; seen.set(r.key, n); r.key += ` ${n}`; }
-  // The Work and Factory toggles: a row of an issue is Work, any other is Factory. The stream's rows stand in for the state's while they are newer.
-  const show = kept(SHOW, ALL);
+  // The stream's rows stand in for the state's while they are newer.
   const live = st.live && st.live.seq > (s.herald?.seq ?? 0) ? st.live : s.herald;
-  const events = (live?.rows ?? []).filter((r) => show[r.kind]).map((r) => ({ at: r.at, key: r.key, html: heraldRow(r) }));
+  const events = (live?.rows ?? []).map((r) => ({ at: r.at, key: r.key, html: heraldRow(r) }));
   const rows = [...status, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
   const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
 
-  return card("Herald", `${sticky}${runNow(s)}<div class="herald-show">${["work", "factory"].map((k) => `<label><input type="checkbox" name="show" value="${k}"${show[k] ? " checked" : ""}> ${k === "work" ? "Work" : "Factory"}</label>`).join("")}</div><div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
+  return card("Herald", `${sticky}${runNow(s)}<div class="herald-feed">${feed}</div>`, { id: "herald", cls: "herald-card", aside: badgeHtml });
 }
 
 /** The Herald's animated rows: the running jobs and the feed's top rows. */
