@@ -88,6 +88,12 @@ describe("events", () => {
     expect(() => n.event({ subject: "gate", action: "refused", object: "aleph-1" })).toThrow(/action/);
     expect(n.event({ time: "t", subject: "job.6802", action: "stalled", object: "issue.2072", detail: "no output" })).toEqual({ time: "t", subject: "job.6802", action: "stalled", object: "issue.2072", detail: "no output" });
   });
+  test("a status event takes the verdict's tone as its detail word; a word outside the tones throws", () => {
+    const detail = n.detailOf("status", "alert", "Alert: GitHub CI is broken.");
+    expect(n.event({ time: "t", subject: "gate", action: "status", object: "status", detail })).toEqual({ time: "t", subject: "gate", action: "status", object: "status", detail: "alert: Alert: GitHub CI is broken." });
+    expect(() => n.detailOf("status", "red", "x")).toThrow(/detail word "red"/);
+    expect(() => n.event({ subject: "gate", action: "verdict", object: "status" })).toThrow(/action/);
+  });
   test("clip cuts at a word end", () => expect(n.clip("the hold is right on the letter", 16)).toBe("the hold is…"));
 });
 

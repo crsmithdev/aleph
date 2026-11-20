@@ -3,8 +3,8 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { logEvent, readEvents } from "../lib/layout.ts";
-import { type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
+import { eventsOf, logEvent, readEvents } from "../lib/layout.ts";
+import { detailOf, type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot } from "../jobs/lib/gates/factory-status.ts";
 import { decider } from "../jobs/lib/gates/decider.ts";
@@ -469,22 +469,32 @@ function doneOf(slots: Slot[], { ofItem, pickedUp }: Pickups, { toJob }: Project
   return { done, doneStamps: items.map(({ at, id }) => ({ id, at })) };
 }
 
-/** The state at `now`. */
-export function state(now = new Date()): State {
+/** The status verdict at `now` of `jobs`, and the parts of the state it reads. */
+function statusOf(now: Date, jobs: Runs[]) {
   const registry = loadRegistry();
-  // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
-  const jobs = allJobs();
   const projector = jobProjector(registry, jobs);
   const partOf = partsByKey(registry, projector);
   const { needs, errored, running } = jobCards(jobs, registry, projector, partOf);
   const slots = slotsOf(registry, projector, partOf), picks = pickups(jobs);
-  const awaitingItems = awaitingOf(slots, picks);
-  const { done, doneStamps } = doneOf(slots, picks, projector);
-
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
-  const att = attend({ runs: needs, issues: awaitingItems });
+  const att = attend({ runs: needs, issues: awaitingOf(slots, picks) });
   const timers = tickTimer();
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, errored, asks: att.items, usage: summary(now.getTime()) });
+  return { projector, errored, running, slots, picks, gated, factory, att, timers, v };
+}
+
+/** Logs a `status` event when the verdict at `now` differs in tone or text from the last one logged. The events table holds the last one, so it outlives a restart. */
+export function checkStatus(now = new Date()): void {
+  const { v } = statusOf(now, allJobs()), detail = detailOf("status", v.tone, v.text);
+  if (eventsOf("status", "status").at(-1)?.detail !== detail) logEvent({ time: now.toISOString(), subject: "gate", action: "status", object: "status", detail });
+}
+
+/** The state at `now`. */
+export function state(now = new Date()): State {
+  // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
+  const jobs = allJobs();
+  const { projector, errored, running, slots, picks, gated, factory, att, timers, v } = statusOf(now, jobs);
+  const { done, doneStamps } = doneOf(slots, picks, projector);
   const history = recordStatusTransition({ at: now.toISOString(), tone: v.tone, label: v.label, text: v.text, reason: v.errors[0]?.text });
   const events = heraldEvents(now.getTime());
   return {

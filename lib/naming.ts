@@ -12,7 +12,7 @@ const ASKS = ["protected", "question", "incomplete", "capped", "proposal"] as co
 /** The verbs of an Ask card, each pair the verb that goes ahead and then the verb that drops the issue: the only actions an Ask offers, a rule grants or a timeout takes. */
 export const ASK_ACTIONS = ["approve", "disapprove", "resolve", "dismiss", "continue", "discontinue"] as const;
 export type AskAction = (typeof ASK_ACTIONS)[number];
-export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled", "reopened"];
+export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled", "reopened", "status"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
 /** The subjects that are not a job: code (`gate`, `rule`), Chris and an interactive session. */
@@ -158,6 +158,8 @@ const WORDS: Record<string, readonly string[]> = {
   landed: ["held"],
   routed: ["classifier"],
   missed: ["start", "land", "intake", "Ask", "rescue", "rerun"],
+  // The tones of the status verdict (lib/status-words.ts): `alert: Alert: GitHub CI is broken.`
+  status: ["alert", "warning", "ask", "fine"],
 };
 /** The detail `<word>: <facts>` of an event of `action`, or the bare word with no facts; throws on a word outside `words`, the set of `action` by default. The one writer of a detail word: a later `word` column changes only this and `wordOf`. */
 export function detailOf(action: string, word: string, facts?: string | number, words: readonly string[] | undefined = WORDS[action]): string {

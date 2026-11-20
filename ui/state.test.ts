@@ -6,7 +6,7 @@ import * as store from "../lib/store.ts";
 import * as systemd from "../jobs/lib/infra/systemd.ts";
 import { writeList } from "../lib/store.ts";
 import { add, setStatus } from "../lib/todo.ts";
-import { jobProjector, state } from "./state.ts";
+import { checkStatus, jobProjector, state } from "./state.ts";
 import { withEnv } from "./server.testkit.ts";
 import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";
 import { seed, reseed, unseed } from "../jobs/job.testkit.ts";
@@ -17,8 +17,9 @@ import { state as fixture } from "./fixtures/status-state.ts";
 import { rows, withAttn } from "./now.testkit.ts";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
-import { logEvent } from "../lib/layout.ts";
+import { logEvent, readEvents } from "../lib/layout.ts";
 import { putJson } from "../lib/db.ts";
+import { factsOf, wordOf } from "../lib/naming.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -388,6 +389,31 @@ describe("the Herald's status history", () => {
       const [recovered, broken] = restarted.state(now).herald!.history;
       expect(broken.text).toBe("Alert: GitHub CI is broken; jobs are unhealthy; attention is needed.");
       expect(recovered.text).toBe("Alert: Jobs are unhealthy; attention is needed.");
+    } finally { tick.mockRestore(); putJson("state", "ci", {}); }
+  });
+});
+
+describe("the status events", () => {
+  test("a new verdict logs one status event with its tone and text, and an unchanged one logs none, across a restart of the server", async () => {
+    const red = { aleph: { repo: "aleph", ok: false, sha: "a1", url: "u", sinceSha: "a0", since: "2026-11-04T10:00:00Z", runs: 2 } };
+    // A host with no aleph-tick.timer reads as a stopped tick, and that sentence takes the place of one the test expects.
+    const tick = spyOn(systemd, "timer").mockReturnValue({ next: NOW + 60_000, running: false, err: null });
+    const said = () => readEvents().filter((e) => e.action === "status").map((e) => [wordOf(e), factsOf(e)]);
+    const broken = ["alert", "Alert: GitHub CI is broken; jobs are unhealthy; attention is needed."], recovered = ["alert", "Alert: Jobs are unhealthy; attention is needed."];
+    try {
+      putJson("state", "ci", red);
+      checkStatus(now);
+      expect(said()).toEqual([broken]);
+      checkStatus(now);
+      expect(said()).toEqual([broken]);
+      putJson("state", "ci", {});
+      checkStatus(now);
+      expect(said()).toEqual([broken, recovered]);
+      // A land restarts the server: a fresh copy of the module is the restarted one.
+      const copy = "./state.ts?status";
+      const restarted: typeof import("./state.ts") = await import(copy);
+      restarted.checkStatus(now);
+      expect(said()).toEqual([broken, recovered]);
     } finally { tick.mockRestore(); putJson("state", "ci", {}); }
   });
 });

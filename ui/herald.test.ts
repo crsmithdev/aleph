@@ -111,3 +111,9 @@ test("an answered line says the Ask's reason and answer, then who answered, a ru
   const [r] = rows([e("2026-11-13T10:05:00Z", "aleph-7", "landed", ["job.2"]), row({ at: "2026-11-13T10:00:00Z", by: "rule", subject: "aleph-7", action: "answered", note: "held-path: approve" })], { runs: { "job.2": "land" } });
   expect(r.lines.map((l) => [l.label, plain(l.text)])).toContainEqual(["answered", "held-path: approve · by an Always rule"]);
 });
+
+test("each status event is a row of its own: the verdict's text, its chip in the verdict's tone", () => {
+  const status = (at: string, note: string) => row({ at, by: "gate", subject: "status", action: "status", note });
+  const out = rows([status("2026-11-20T10:00:00Z", "alert: Alert: GitHub CI is broken."), status("2026-11-20T11:00:00Z", "fine: Everything is fine.")]);
+  expect(out.map((r) => [r.word, r.tone, plain(r.text)])).toEqual([["status", "fine", "Everything is fine."], ["status", "alert", "Alert: GitHub CI is broken."]]);
+});

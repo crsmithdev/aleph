@@ -19,6 +19,7 @@
  * - Langfuse is polled every 30 s (2 min for skills) while a key that reads it is kept; the work store is fetched
  *   every 30 s while a key that reads it is kept.
  * - The keys are saved to `<aleph>/ui/keys.json`; a restart builds them again at once, and requests share the builds.
+ * - The status verdict is checked every 30 s; a new tone or text logs a `status` event (ui/state.ts `checkStatus`).
  * - Every POST that succeeds counts as a change of the source `action`, which every key reads: an action can write
  *   what no watcher sees (a systemd timer).
  */
@@ -33,6 +34,7 @@ import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";
 import { fetchStore, registryDir, storeRefDir } from "../lib/store.ts";
 import { build as workerBuild, onLater, type Answer, type Built } from "./build.ts";
 import { errText } from "../lib/errtext.ts";
+import { checkStatus, logOnce } from "./state.ts";
 
 const SETTLE_MS = 500;
 export const KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
@@ -340,6 +342,8 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
   every(POLL_MS, () => updater.changed("transcripts"));
   every(FETCH_MS, () => updater.fetchStore());
   every(SWEEP_MS, () => updater.sweep());
+  // No page need be open: a red CI is logged as a status event all the same. A throw in a timer would end the server.
+  every(POLL_MS, () => { try { checkStatus(); } catch (e) { logOnce("status", e); } });
   if (restore) updater.restore();
 }
 

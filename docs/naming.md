@@ -104,6 +104,7 @@ Every event has 6 fields: a log row, a job's end, a Status card line, a report l
 - A run's state change is one event by `gate` on the job. A returned job that the reviewer sent back has the reviewer's job as subject, and the sentence reads "returned by review".
 - An Ask set logs `question` and an Ask cleared logs `answered`. Each new issue logs `filed`. Each close logs `done` or `dropped`.
 - A change of a setting (pause, resume, an Always rule, a model, the judge) logs `changed` on object `settings`.
+- A new tone or text of the status sentence logs `status` on object `status`, its detail the tone and the sentence: `alert: Alert: GitHub CI is broken.`
 - A `vault write` that the contradiction screen refuses logs no event.
 - Keys and paths in the detail are linked by the page: every `(project|issue|idea|job).<n>` and each old issue ID.
 - The detail of a cause is its phrase from `because` in `lib/naming.ts`: `timeout` is "past its time box", `override` is "over review".
@@ -134,7 +135,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
+| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened, status |
 | Hold | yes | factory gates: pause, credit, cap; issue holds: after, job, file, red, credit |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |

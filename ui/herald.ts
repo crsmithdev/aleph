@@ -18,6 +18,8 @@ export interface Row {
   sys?: true;
   /** What happened, never who: the chip's word. */
   word: string;
+  /** A status row: the verdict's tone, which the chip takes. */
+  tone?: string;
   /** The ID that leads the row: its issue, else its job. */
   id: Piece[];
   text: Piece[];
@@ -122,14 +124,15 @@ function rowOf(head: EventRow, ctx: Context, key: string, lines: Line[], more: n
 
 /** The Herald's rows for `events` (oldest first), newest first. */
 export function heraldRows(events: EventRow[], ctx: Context): Row[] {
-  const issues = new Map<string, EventRow[]>(), routine = new Map<string, EventRow[]>(), first = new Map<string, string>();
+  const issues = new Map<string, EventRow[]>(), routine = new Map<string, EventRow[]>(), first = new Map<string, string>(), status: EventRow[] = [];
   const add = (m: Map<string, EventRow[]>, k: string, e: EventRow) => m.set(k, [e, ...(m.get(k) ?? [])]);
   const live = events.filter((e) => !WAITS.has(e.action)), attemptOf = (e: EventRow) => ctx.attempts[jobOf(e) ?? ""] ?? "";
   for (const e of live) if (isIssue(targetOf(e)) && attemptOf(e) && !first.has(targetOf(e))) first.set(targetOf(e), attemptOf(e));
   const runIds = new Set(live.filter((e) => !isIssue(targetOf(e)) && jobOf(e)).map(jobOf)), now = new Map(first);
   for (const e of live) {
     const tgt = targetOf(e);
-    if (e.action === "changed" && runIds.has(e.subject)) add(routine, e.subject, e);
+    if (e.action === "status") status.push(e);
+    else if (e.action === "changed" && runIds.has(e.subject)) add(routine, e.subject, e);
     else if (isIssue(tgt)) { now.set(tgt, attemptOf(e) || now.get(tgt) || ""); add(issues, `${tgt}${now.get(tgt) ? `:${now.get(tgt)}` : ""}`, e); }
     else if (jobOf(e)) add(routine, jobOf(e)!, e);
     else add(issues, tgt, e);
@@ -152,5 +155,7 @@ export function heraldRows(events: EventRow[], ctx: Context): Row[] {
     const lines = briefs([head, ...evs.filter((e) => e !== head)], ctx.runs);
     return rowOf(head, ctx, `issue:${k}`, lines, lines.length, "", lines.length ? `issue:${k}` : undefined);
   });
-  return [...groupRows, ...runRows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  // Each status change is a row of its own: its text is the verdict's sentence.
+  const statusRows = status.map((e): Row => ({ key: `status ${hash(`${e.time} ${e.detail}`)}`, at: e.time, by: e.subject, word: e.action, tone: wordOf(e), id: [], text: [factsOf(e)], more: 0, lines: [] }));
+  return [...groupRows, ...runRows, ...statusRows].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
