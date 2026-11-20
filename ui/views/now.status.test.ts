@@ -235,3 +235,28 @@ test("a status row is drawn where the text changes, with the new text only; the 
   expect(statusRows(h)).toEqual([paused]);
   expect(h).not.toContain("health: x");
 });
+
+test("a kept word filters the Herald's event rows, keeps the status and running rows, and puts its chip in the aside", async () => {
+  const v = await fresh();
+  const fine = "Everything is fine.", paused = "The factory is paused.";
+  const ev = (n: number, word: string) => ({ key: `row ${n}`, at: at(n), by: "gate", word, id: [], text: [`row ${n}`], more: 0, lines: [] });
+  const s = { ...at_(30, [entry(25, "warning", paused), entry(0, "fine", fine)], true), runningIssues: [{ id: "aleph-3", title: "Three", stage: "implement", at: at(2) }], running: [] };
+  s.herald.rows = [ev(21, "landed"), ev(22, "failed"), ev(23, "landed")];
+  const keys = (h: string) => [...h.matchAll(/data-key="([^"]*)"/g)].map((m) => m[1].replace(/ .*/, ""));
+  const store: Record<string, string> = {};
+  (globalThis as any).localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, x: string) => { store[k] = x; } };
+  try {
+    v.renderHerald(at_(10, [entry(0, "fine", fine)]));
+    const all = v.renderHerald(s);
+    expect(all.match(/data-key="row/g)).toHaveLength(3);
+    expect(all).not.toContain("ref-x");
+    store["aleph.herald.word"] = JSON.stringify("landed");
+    const h = v.renderHerald(s);
+    expect([...h.matchAll(/data-key="(row \d+)"/g)].map((m) => m[1])).toEqual(["row 23", "row 21"]);
+    expect(keys(h)).toContain("status");
+    expect(h).toContain('data-job="aleph-3"');
+    expect(h.match(/<span class="aside">([^]*?)<\/span><\/div>/)![1]).toMatch(/landed <button type="button" class="ref-x" aria-label="Clear">×<\/button>/);
+  } finally {
+    delete (globalThis as any).localStorage;
+  }
+});

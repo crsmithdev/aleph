@@ -1075,6 +1075,37 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(bg).not.toBe("rgba(0, 0, 0, 0)");
     expect(["clip", "hidden"]).toContain(overflow);
   }, 60_000);
+
+  test("a click on a feed row's chip word filters the Herald to that word until a click on the chip's X", async () => {
+    await page.go("#/");
+    await page.when('document.querySelector("#view #herald")');
+    // Stream rows in two words; a stream event draws them, as `event` does for a new event.
+    const seen = await page.ev<[string[], string][]>(`Promise.all([import("/views/now.js"), import("/views/lib/feed.js")]).then(([{ view }, { eventRow }]) => {
+      const root = document.querySelector("#view"), out = [];
+      const ev = (id, word) => ({ key: "row " + id, at: "2026-11-15T10:0" + id + ":00Z", by: "gate", word, id: [], text: ["row " + id], more: 0, lines: [] });
+      const rows = [ev(1, "landed"), ev(2, "failed"), ev(3, "landed")];
+      const beat = (seq) => view.event(root, { seq, rows });
+      const look = () => out.push([[...root.querySelectorAll("#herald .herald-feed > [data-key^='row']")].map((r) => r.dataset.key), root.querySelector("#herald .herald-word")?.textContent ?? ""]);
+      const word = (key) => root.querySelector('#herald [data-key="' + key + '"] .event-line > .badge').click();
+      beat(1e9); look();
+      word("row 1"); look();
+      // Every row in the feed has the filter's word, so a row of another word is put in to take the click.
+      root.querySelector("#herald .herald-feed").insertAdjacentHTML("afterbegin", eventRow(ev(2, "failed")).replace("<div", '<div data-key="row x"'));
+      word("row x"); look();
+      beat(1e9 + 1); look();
+      root.querySelector("#herald .herald-word .ref-x").click(); look();
+      return out;
+    })`);
+    expect(seen).toEqual([
+      [["row 3", "row 2", "row 1"], ""],
+      [["row 3", "row 1"], "landed ×"],
+      [["row 2"], "failed ×"],
+      [["row 2"], "failed ×"],
+      [["row 3", "row 2", "row 1"], ""],
+    ]);
+    // The stream rows are made up: leave Status, so the next visit draws its own data.
+    await page.go("#/issues");
+  }, 60_000);
 });
 
 describe.skipIf(!chromeUsable)("Ideas", () => {

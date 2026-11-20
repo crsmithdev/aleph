@@ -1326,6 +1326,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .run-dot { width: var(--dot-s); height: var(--dot-s); border-radius: var(--r-pill); background: var(--run); flex: none; align-self: center; animation: breathe 2s var(--ease) infinite; }
 @keyframes breathe { 50% { opacity: .35; transform: scale(.8); } }
 .run-size { display: inline-flex; align-items: center; gap: var(--sp-4); color: var(--run); font-size: var(--fs-2xs); font-weight: var(--fw-strong); white-space: nowrap; }
+/* A feed row's chip word filters the feed to its word. */
+.herald-feed .event-line > .badge:first-child { cursor: pointer; }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; padding-right: var(--sp-4); }
 .event-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) var(--sp-8) var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-sm); background: var(--surface); }
 .event-row:last-child { border-bottom: none; }
