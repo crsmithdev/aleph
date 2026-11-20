@@ -11,18 +11,12 @@ import { onLater } from "./build.ts";
 import { items } from "./memory-items.ts";
 import { writeList } from "../lib/store.ts";
 import { add } from "../lib/todo.ts";
-// @ts-ignore plain JS, shared with the page
-import { scope } from "./views/lib/address.js";
-// @ts-ignore plain JS, shared with the page
-import { badge, dataTable, empty, heads, md, pageHead, priorityBadge } from "./views/lib/html.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
 import { needs, writeWeeks } from "./views/lib/memory-health.js";
 // @ts-ignore
 import { renderMemoryJobs } from "./views/lib/processes.js";
-// @ts-ignore
-import { panel } from "./views/lib/timeline.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
 import { writeRepos } from "../tests/projects.testkit.ts";
@@ -46,6 +40,29 @@ function ended(...names: string[]): Promise<void> {
   }));
 }
 const today = new Date(NOW).toISOString().slice(0, 10);
+
+/** The words a page shows: the markup's tags dropped, its spaces collapsed. */
+const text = (h: string) => h.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+type Found = { attrs: Record<string, string | undefined>; text: string };
+/** Each element of `h` that the CSS selector `sel` matches, in page order: its attributes and the words it holds. */
+function find(h: string, sel: string): Found[] {
+  const found: Found[] = [], open: Found[] = [];
+  new HTMLRewriter()
+    .on("*", { element: () => { for (const n of open) n.text += " "; } })
+    .on(sel, {
+      element(el) {
+        const n = { attrs: Object.fromEntries(el.attributes), text: "" };
+        found.push(n);
+        if (!el.canHaveContent || el.selfClosing) return;
+        open.push(n);
+        el.onEndTag(() => { open.splice(open.indexOf(n), 1); });
+      },
+    })
+    .onDocument({ text: (t) => { for (const n of open) n.text += t.text; } })
+    .transform(h);
+  return found.map((n) => ({ ...n, text: n.text.replace(/\s+/g, " ").trim() }));
+}
+const words = (xs: Found[]) => xs.map((n) => n.text);
 
 /** The registry: a project filter names a key in it, or it matches nothing. */
 const REPOS = JSON.stringify({ other: { path: "/nonexistent/other" } });
@@ -243,14 +260,14 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x", links: [], backlinks: [] };
   const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
   const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
+  const f = v.recallFrame(hist);
+  expect([f.measure.name, f.by.keys[0].name]).toEqual(["Offers per Day", "offers"]);
+  expect(f.rows.map((r: any) => r.recalls)).toEqual(hist);
   const h = v.renderInspector(note, n, "use", hist);
-  expect(h).toContain('<aleph-chart key="memory/recall"');
-  expect(h).toContain('aria-label="Offers per Day: offers 3"');
-  expect(h).not.toContain("mhist");
-  expect(h).not.toContain("<i title=");
-  expect(v.recallFrame(hist).by.keys[0].name).toBe("offers");
-  expect(v.recallFrame(hist).rows.map((r: any) => r.recalls)).toEqual(hist);
-  expect(v.renderInspector(note, n, "use", Array(30).fill(0))).not.toContain("aleph-chart");
+  expect(find(h, "aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/recall"]);
+  expect(find(h, "aleph-chart [role=img]").map((c) => c.attrs["aria-label"])).toEqual(["Offers per Day: offers 3"]);
+  expect(find(h, ".mhist, i[title]")).toEqual([]);
+  expect(find(v.renderInspector(note, n, "use", Array(30).fill(0)), "aleph-chart")).toEqual([]);
 });
 
 test("/api/memory lint still gives a stale finding to an old note that the read log shows read lately", async () => {
@@ -344,44 +361,48 @@ const page = { exists: true, total: 1, scopes: ["aleph", "other"], lint: { refus
   start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
 
 test("the Notes tab is the kind filter, the search, the freshness filter, the results and the inspector, with no health", () => {
-  const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);
-  for (const t of ['data-ui="mem-search"', 'value="work"', "Offered in 7 days", 'id="mem-inspector"', '<div class="msearch">', '<datalist id="mem-titles"><option value="N"><option value="Never"></datalist>', '<option value="other">other</option>'])
-    expect(h).toContain(t);
-  expect(h).not.toContain("<h2>Health</h2>");
+  const rs = [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })];
+  const status = new Map(v.noteRows(page, NOW).map((n: any) => [n.title, n.status]));
+  expect(v.options(new URLSearchParams("q=work"))).toEqual({ q: "work", type: "", fresh: "", item: "", kind: "" });
+  expect(v.typeCounts(rs, v.options(), status)).toEqual({ semantic: 1, procedural: 0, episodic: 0, working: 1, prospective: 0 });
+  expect(v.keepRows(rs, v.options(new URLSearchParams("fresh=never")), status)).toEqual([]);
+  const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), rs);
+  expect(find(h, ".msearch [data-ui=mem-search]").map((n) => n.attrs.value)).toEqual(["work"]);
+  expect(find(h, "#mem-inspector")).toHaveLength(1);
+  expect(find(h, "#mem-titles option").map((n) => n.attrs.value)).toEqual(["N", "Never"]);
+  expect(words(find(h, "h2"))).not.toContain("Health");
   // The page head's filter is scope().bar(): the Project select, then the window control.
-  expect(h).toContain(`<div class="page sp memory">${pageHead("Memory", { aside: scope().bar({ project: "", more: page.scopes }) })}`);
-  expect(h).toContain('aria-label="Window" data-name="window"');
+  expect(words(find(h, "header select[name=project] option"))).toEqual(["All Projects", "aleph", "other"]);
+  expect(find(h, "header [data-name=window]").map((n) => n.attrs["aria-label"])).toEqual(["Window"]);
   // Page head, kind filter, search, freshness filter, then the results.
-  const at = ["<h1>Memory</h1>", 'name="project"', 'id="mem-kind"', 'data-ui="mem-search"', 'id="mem-fresh"', 'id="mem-results"'].map((t) => h.indexOf(t));
-  expect(at).toEqual([...at].sort((x, y) => x - y));
-  expect(at[0]).toBeGreaterThanOrEqual(0);
-  const kinds = h.slice(h.indexOf('data-name="type"'), h.indexOf("</div>", h.indexOf('data-name="type"')));
-  expect([...kinds.matchAll(/data-value="(\w*)"/g)].map((m) => m[1])).toEqual(["", "semantic", "procedural", "episodic", "working", "prospective"]);
-  expect(kinds).toContain('data-value="" aria-pressed="true">All 2</button>');
-  expect(kinds).toContain('data-value="working" aria-pressed="false">Working 1</button>');
-  expect(h).toContain('data-value="never" aria-pressed="false">Never offered 0</button>');
+  expect(find(h, "h1, [name=project], #mem-kind, [data-ui=mem-search], #mem-fresh, #mem-results").map((n) => n.attrs.id ?? n.attrs.name ?? n.text))
+    .toEqual(["Memory", "project", "mem-kind", "q", "mem-fresh", "mem-results"]);
+  // mount() sets the query from the pressed option's data-value.
+  expect(find(h, "#mem-kind button").map((b) => [b.attrs["data-value"], b.attrs["aria-pressed"], b.text])).toEqual([
+    ["", "true", "All 2"], ["semantic", "false", "Semantic 1"], ["procedural", "false", "Procedural 0"],
+    ["episodic", "false", "Episodic 0"], ["working", "false", "Working 1"], ["prospective", "false", "Prospective 0"],
+  ]);
+  expect(find(h, "#mem-fresh button").map((b) => [b.attrs["data-value"], b.attrs["aria-pressed"], b.text]).slice(1, 3))
+    .toEqual([["use", "false", "Offered in 7 days 1"], ["never", "false", "Never offered 0"]]);
   const loading = v.renderMemory(page, v.options(), null);
-  expect(loading).toContain("Loading memory");
-  expect(loading).toContain('aria-pressed="true">All</button>');
+  expect(text(loading)).toContain("Loading memory");
+  expect(words(find(loading, "#mem-kind button[aria-pressed=true]"))).toEqual(["All"]);
   expect(v.view.api({}, new URLSearchParams("project=aleph"))).toEqual(["/api/memory?project=aleph", "/api/memory/processes"]);
   expect(v.view.api({}, new URLSearchParams("tab=health"))).toEqual(["/api/memory", "/api/memory/processes", "/api/memory/log"]);
   expect(v.view.combine([{ notes: [] }, { steps: [] }, { rows: [1] }])).toEqual({ notes: [], processes: { steps: [] }, rows: [1] });
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha", written_by: "w", last_verified: "2026-11-01" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
-  expect(nh).toContain('href="#/memory/U"');
+  expect(find(nh, "section[aria-labelledby=h-note] .md a").map((a) => a.attrs.href)).toEqual(["#/memory/U"]);
   const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
   // A section with no links is left out: neither its detailPanel() nor a card.
-  for (const t of ["<span>Links to</span>", "<span>Linked from</span>", 'class="card"']) expect(none).not.toContain(t);
-  expect(nh).not.toContain("<span>Links to</span>");
-  expect(nh).not.toContain('<section class="card" id="backlinks"');
-  expect(nh).toContain('<details class="dp-panel dp-fold" open><summary><span>Linked from</span><span class="dp-aside">1</span></summary>');
+  expect(find(none, "details, .card")).toEqual([]);
+  expect(find(nh, ".card")).toEqual([]);
+  expect(words(find(nh, "details.dp-panel.dp-fold[open] > summary"))).toEqual(["Linked from 1"]);
   const out = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: {}, body: "x", links: [{ title: "U", kind: "gotcha", scope: "a" }], backlinks: [] });
-  expect(out).toContain('<details class="dp-panel dp-fold" open><summary><span>Links to</span><span class="dp-aside">1</span></summary><div class="dp-body"><ul><li><a href="#/memory/U">U</a>');
-  expect(out).not.toContain('<section class="card" id="links"');
-  expect(out).not.toContain("<span>Linked from</span>");
-  expect(nh).toContain(panel("note", "Note", `<div class="md">${md("see [[U]]")}</div>`));
-  for (const t of ["<dt>Kind</dt>", "<dt>Written by</dt>", "<dt>Last verified</dt>"]) expect(nh).toContain(t);
-  expect(nh).not.toContain("<dt>Last Verified</dt>");
-  expect(nh).not.toContain("<dt>kind</dt>");
+  expect(words(find(out, "details.dp-panel.dp-fold[open] > summary"))).toEqual(["Links to 1"]);
+  expect(find(out, "details .dp-body li a").map((a) => [a.attrs.href, a.text])).toEqual([["#/memory/U", "U"]]);
+  expect(find(out, ".card")).toEqual([]);
+  expect(words(find(nh, "section[aria-labelledby=h-note] .md"))).toEqual(["see U"]);
+  expect(words(find(nh, "dt"))).toEqual(["Kind", "Written by", "Last verified"]);
 });
 
 test("each type has its own layout, filters keep by type and freshness, and the kind counts come before the type filter", () => {
@@ -395,26 +416,29 @@ test("each type has its own layout, filters keep by type and freshness, and the 
   expect(keep("fresh=old")).toEqual(["skill vault"]);
   expect(v.typeCounts(rs, v.options(new URLSearchParams("type=procedural&fresh=never")), status)).toMatchObject({ semantic: 1, procedural: 0 });
   const h = v.renderResults(rs, v.options(), status);
-  expect(h).toContain("<th>Loaded When</th>");          // procedural: a table
-  expect(h).toContain('<th class="num">Updated</th>');
-  expect(h).toContain('<ul class="mrows tl">');           // episodic: a timeline
-  expect(h).toContain('<td class="wide" title="the vault">');  // procedural: the title cell's full text
-  expect(v.renderResults([it({ type: "episodic", source: "episode", key: "e.md", title: "e", at: "" })], v.options(), status)).toContain('<span class="time"><span title="No date">–</span></span>');
-  expect(h).toContain(priorityBadge("high"));             // prospective: cards with the priority
-  expect(h).toContain("offered never");                   // semantic: the offer date
-  expect(h.match(/<li class="mrow[^>]* tabindex="0"/g)?.length).toBeGreaterThan(0);
-  expect(v.renderResults(rs.slice(2, 3), v.options(), status)).toMatch(/<tr class="mrow" tabindex="0"/);
-  expect(v.renderResults([], v.options(new URLSearchParams("q=zz")), status)).toBe(empty());
+  // procedural: a table, its Updated column a number column
+  expect(find(h, "th").map((n) => [n.text, n.attrs.class])).toEqual([["Source", undefined], ["What It Says", undefined], ["Loaded When", undefined], ["Updated", "num"]]);
+  expect(find(h, "ul.mrows.tl > li").map((n) => n.attrs["data-id"])).toEqual(["episode:e.md"]);  // episodic: a timeline
+  expect(find(h, "td.wide").map((n) => n.attrs.title)).toEqual(["the vault"]);  // procedural: the title cell's full text
+  const undated = v.renderResults([it({ type: "episodic", source: "episode", key: "e.md", title: "e", at: "" })], v.options(), status);
+  expect(find(undated, ".time [title]").map((n) => [n.attrs.title, n.text])).toEqual([["No date", "–"]]);
+  expect(words(find(h, '[data-id="issue:a/1"] .badge'))).toEqual(["high"]);  // prospective: cards with the priority
+  expect(words(find(h, '[data-id="note:N"] .mm'))).toEqual(["written Oct 01 · offered never"]);  // semantic: the offer date
+  // Each row is a selectable stop: mount() reads its data-id on a click, Enter or Space.
+  expect(find(h, "li.mrow[tabindex='0'], tr.mrow[tabindex='0']").map((n) => n.attrs["data-id"])).toEqual(["note:N", "note:Never", "skill:vault", "episode:e.md", "issue:a/1"]);
+  expect(find(h, "tr.mrow[tabindex='0']").map((n) => n.attrs["data-id"])).toEqual(["skill:vault"]);
+  const nothing = v.renderResults([], v.options(new URLSearchParams("q=zz")), status);
+  expect(words(find(nothing, ".empty"))).toEqual([text(nothing)]);
   const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
-  expect(many).toContain("50 of 51");
-  expect(many.match(/<li hidden /g)).toHaveLength(1);
+  expect(text(many)).toContain("50 of 51");
+  expect(find(many, "li[hidden]").map((n) => n.attrs["data-id"])).toEqual(["note:n50"]);
 });
 
 test("the procedural table is dataTable's, so it has the tscroll wrapper, the tbl class and the heads", () => {
-  const o = v.options();
   const proc = it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" });
-  const h = v.renderResults([proc], o, new Map());
-  expect(h).toContain(dataTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), v.ruleRow(proc, o)));
+  const h = v.renderResults([proc], v.options(), new Map());
+  expect(words(find(h, ".tscroll > table.tbl > thead > tr > th"))).toEqual(["Source", "What It Says", "Loaded When", "Updated"]);
+  expect(words(find(h, ".tscroll > table.tbl > tbody > tr.mrow > td"))).toEqual(["skill vault", "the vault", "Reaches a session when vault recall returns it.", "Jan 01"]);
 });
 
 test("the Notes and Health tabs write their counts through count()", () => {
@@ -422,45 +446,49 @@ test("the Notes and Health tabs write their counts through count()", () => {
     start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, memory: 1000, core: [] } } };
   const rs = Array.from({ length: 1000 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
   const h = v.renderMemory(big, v.options(), rs);
-  expect(h).toContain('data-value="semantic" aria-pressed="false">Semantic 1,000</button>');
-  expect(h).toContain('<h3>Semantic</h3><span class="count">1,000</span>');
+  expect(words(find(h, "#mem-kind button[data-value=semantic]"))).toEqual(["Semantic 1,000"]);
+  expect(words(find(h, "#mem-results .sh"))).toEqual(["Semantic 1,000"]);
   const health = v.renderHealthTab(big);
-  for (const t of ["<dd>12,345</dd>", "<dd>1,000 of 12,345 (10%)</dd>", "2,048 B / 4,096 B", '<span class="count">1,200</span>', '<td class="num">1,200</td>', "<b>1,500<em> / 0</em></b>"]) expect(health).toContain(t);
+  expect(words(find(health, 'section[aria-label="Offer Quality"] dd')).slice(0, 2)).toEqual(["12,345", "1,000 of 12,345 (10%)"]);
+  expect(words(find(health, 'section[aria-label="Start Context"] .bv'))).toEqual(["2,048 B / 4,096 B"]);
+  expect(words(find(health, "section[aria-label=Lint] .count, section[aria-label=Lint] td.num"))).toEqual(["1,200", "1,200", "1,200"]);
+  expect(words(find(health, ".tile b"))).toContain("1,500 / 0");
 });
 
 test("the procedural table hides its 51st row and its pager says 50 of 51", () => {
-  const o = v.options();
   const procs = Array.from({ length: 51 }, (_, i) => it({ type: "procedural", source: "skill", key: `s${i}`, title: `s${i}` }));
-  const rows = procs.map((x, i) => v.ruleRow(x, o).replace("<tr ", i < 50 ? "<tr " : "<tr hidden ")).join("");
-  const h = v.renderResults(procs, o, new Map());
-  expect(h).toContain(dataTable(heads(["Source", "What It Says", "Loaded When", "Updated"], ["Updated"]), rows));
-  expect(h).toContain("50 of 51");
-  const trs = h.slice(h.indexOf("<tbody>") + 7, h.indexOf("</tbody>")).split("<tr ").slice(1);
-  expect(trs).toHaveLength(51);
-  expect(trs[50].startsWith("hidden ")).toBe(true);
-  expect(trs.filter((r: string) => r.startsWith("hidden "))).toHaveLength(1);
+  const h = v.renderResults(procs, v.options(), new Map());
+  expect(text(h)).toContain("50 of 51");
+  const trs = find(h, "tbody > tr");
+  expect(trs.map((r) => r.attrs["data-id"])).toEqual(procs.map((p) => `skill:${p.key}`));
+  expect(trs.map((r) => "hidden" in r.attrs)).toEqual(Array.from({ length: 51 }, (_, i) => i === 50));
 });
 
 test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {
   const n = { title: "N", path: "wiki/gotchas/N.md", frontmatter: { scope: "aleph", confidence: "measured", core: "the <core>" }, body: "**Claim.** x", text: "", links: [{ title: "L" }], backlinks: [{ title: "B" }] };
   const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
-  for (const t of ["How it reaches the agent", "Reaches a session when vault recall returns it.", 'value="the &lt;core&gt;"', 'data-mact="unlink" data-target="L"', 'data-mact="link"', 'data-mact="archive"', 'data-mact="delete"', "in use", "wiki/gotchas/N.md"])
-    expect(h).toContain(t);
+  expect(words(find(h, ".mreach > *")).slice(0, 2)).toEqual(["How it reaches the agent", "Reaches a session when vault recall returns it."]);
+  expect(find(h, "input[name=core]").map((i) => i.attrs.value)).toEqual(["the &lt;core&gt;"]);
+  // mount() runs the write that a button's or a form's data-mact names; unlink reads its data-target.
+  expect(find(h, "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["core", "unlink", "link", "edit", "archive", "delete"]);
+  expect(find(h, "button[data-mact]").map((b) => [b.attrs["data-mact"], b.attrs.class, b.attrs.type, b.attrs["data-target"], b.text])).toEqual([
+    ["unlink", "act small", "button", "L", "Unlink"], ["edit", "act primary", "button", undefined, "Edit"],
+    ["archive", "act", "button", undefined, "Archive"], ["delete", "act danger", "button", undefined, "Delete"],
+  ]);
   // No button of the page carries data-act, which router.js's own handler takes.
-  expect(h).not.toContain("data-act=");
-  expect(h).toContain(`· ${badge("in use")}`);
-  expect(h).toContain('<button class="act danger" type="button" data-mact="delete">Delete</button>');
-  expect(h).toContain('<button class="act small" type="button" data-mact="unlink" data-target="L">Unlink</button>');
+  expect(find(h, "[data-act]")).toEqual([]);
+  expect(words(find(h, ".mtype, .mtype .badge"))).toEqual(["Semantic · note · in use", "in use"]);
+  expect(words(find(h, ".hint code"))).toEqual(["wiki/gotchas/N.md"]);
   const bare = v.renderInspector(it({}), { ...n, links: [], backlinks: [] }, "use");
-  for (const t of ["Links to", "Linked from", "Recall history", empty()]) expect(bare).not.toContain(t);
+  expect(words(find(bare, ".sub-head"))).toEqual(["How it reaches the agent"]);
+  expect(find(bare, ".empty")).toEqual([]);
   const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
-  for (const t of ['data-mact="edit"', 'data-mact="file-delete"']) expect(hand).toContain(t);
-  expect(hand).not.toContain("Recall history");
-  expect(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1])).not.toContain("aleph-chart");
-  expect(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" }))).toContain("change it on a branch");
-  expect(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" }))).toContain('data-mact="drop"');
-  expect(v.renderInspector(it({ title: "<x>" }))).toContain("&lt;x&gt;");
-  expect(v.renderInspector(null)).toContain("Select a memory");
+  expect(find(hand, "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["edit", "file-delete"]);
+  expect(find(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1]), "aleph-chart")).toEqual([]);
+  expect(text(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" })))).toContain("change it on a branch");
+  expect(find(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" })), "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["drop"]);
+  expect(words(find(v.renderInspector(it({ title: "<x>" })), "h3")).slice(0, 1)).toEqual(["&lt;x&gt;"]);
+  expect(words(find(v.renderInspector(null), ".empty"))).toEqual(["Select a memory"]);
 });
 
 test("/api/memory/log lists writes and recalls newest first, one recall per call, and honours the project", async () => {
@@ -502,30 +530,33 @@ test("/api/memory/processes reads the tick and the stale notes", async () => {
     await fresh("factory");
     const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(1).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
-    const row = renderMemoryJobs(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
-    expect(row).toContain('<span class="badge error" title="no route">failed</span>');
+    const jobs = renderMemoryJobs(await (await at("/api/memory/processes")).json());
+    expect(find(jobs, "tr .badge.error").map((b) => [b.attrs.title, b.text])).toEqual([["no route", "failed"]]);
+    expect(words(find(jobs, "tbody tr")).find((t) => t.startsWith("vault push"))).toContain("failed");
   } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
 test("the tabs link Notes, Health and Log; the log row opens a recall to its notes; Episode pages filter alone", () => {
   const h = v.renderTabs("log", "aleph");
-  expect(h).toContain('<a href="#/memory?project=aleph">Notes</a>');
-  expect(h).toContain('<a href="#/memory?tab=log&project=aleph" aria-current="page">Log</a>');
-  expect(h).toContain('<a href="#/memory?tab=health&project=aleph">Health</a>');
-  expect(h.match(/<a /g)).toHaveLength(3);
-  expect(v.renderMemory(page)).toContain('<nav class="vtabs"');
+  expect(find(h, "a").map((a) => [a.attrs.href, a.attrs["aria-current"], a.text])).toEqual([
+    ["#/memory?project=aleph", undefined, "Notes"], ["#/memory?tab=health&project=aleph", undefined, "Health"], ["#/memory?tab=log&project=aleph", "page", "Log"],
+  ]);
+  expect(find(v.renderMemory(page), "nav.vtabs")).toHaveLength(1);
   const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
-  expect(v.logRow(r)).toContain('<details><summary title="q">q</summary><ol><li><a href="#/memory/A">A</a></li><li><a href="#/memory/B">B</a></li></ol></details>');
-  expect(v.logRow(r)).toContain("+1");
+  // The query opens to the notes it returned, in rank order.
+  const lr = v.logRow(r);
+  expect(find(lr, "details > summary").map((n) => [n.attrs.title, n.text])).toEqual([["q", "q"]]);
+  expect(find(lr, "details > ol > li > a").map((a) => [a.attrs.href, a.text])).toEqual([["#/memory/A", "A"], ["#/memory/B", "B"]]);
+  expect(words(find(lr, ".quiet"))).toEqual(["+1"]);
   const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
-  expect(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss")))).not.toContain("<details>");
-  expect(v.renderLog({ project: "", rows: [] })).toContain(empty());
+  expect(find(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss"))), "details")).toEqual([]);
+  expect(words(find(v.renderLog({ project: "", rows: [] }), "#log-rows .empty"))).toEqual(["No data"]);
   const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Ship", why: "episode of aleph-1", titles: [] };
   const w = { ...ep, note: "Use Bun", why: "a fix" };
-  const kept = (kind: string) => v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))).match(/<tr><td class="time lead">/g)?.length;
-  expect([kept("episode"), kept("write")]).toEqual([1, 1]);
-  const log = v.renderLog({ project: "", rows: [ep, w] });
-  for (const k of ["memory/writes", "memory/episode-writes", "memory/recalls"]) expect(log).toContain(`<aleph-chart key="${k}">`);
+  const kept = (kind: string) => words(find(v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))), "#log-rows tbody > tr a"));
+  expect([kept("episode"), kept("write")]).toEqual([["aleph-1 Ship"], ["Use Bun"]]);
+  // mountLog() sets each chart's frame by its key.
+  expect(find(v.renderLog({ project: "", rows: [ep, w] }), "aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/writes", "memory/episode-writes", "memory/recalls"]);
 });
 
 test("a day frame counts the rows it keeps per local day, oldest first, and writeWeeks takes the median of the 3 weeks before", () => {
@@ -541,8 +572,8 @@ test("the Needs-you strip shows each item only over its act-threshold, and nothi
   const m = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 }, global: { cut: 0 } }, misses: { unoffered_reads: 11 },
     processes: { decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
   const h = needs(m, NOW);
-  for (const t of ["2 core lines cut", "1 note refused", "11 reads nobody offered", "1 note over 30 d late"]) expect(h).toContain(t);
-  expect(h).toContain('<span class="badge error">refused</span>');
+  expect(words(find(h, ".mstrip a"))).toEqual(["start 2 core lines cut", "refused 1 note refused", "reads 11 reads nobody offered", "re-check 1 note over 30 d late"]);
+  expect(words(find(h, ".badge.error"))).toEqual(["refused"]);
   const calm = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
   expect(needs(calm, NOW)).toBe("");
 });
@@ -552,21 +583,20 @@ test("the Start Context card splits what the agent receives, lists the cut lines
   const m = { notes: [row({ title: "A", history: Array(30).fill(1) }), row({ title: "B" }), row({ title: "C" })], lint: { refuse: [], warn: [] },
     start: { aleph: { bytes: 1000, budget: 6000, cut: 1, memory: 600, core: [core("A", "aleph", 100, true), core("B", "global", 150, true), core("C", "aleph", 80, false)] } } };
   const h = v.renderHealthTab(m);
-  const text = (x: string) => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const sent = h.slice(h.indexOf("What the aleph agent receives"), h.indexOf("Cut lines"));
-  expect(sent.split("<tr>").slice(2).map(text)).toEqual(["MEMORY.md 600 B 60%", "Global core lines · 1 150 B 15%", "Aleph core lines · 1 100 B 10%", "Tags and pointer 150 B 15%", "Total sent 1,000 B 5,000 B left"]);
-  expect(h).toContain("Cut lines, 1");
-  const trim = h.slice(h.indexOf("Trim first"));
-  expect([...trim.matchAll(/href="#\/memory\/(\w)"/g)].map((x) => x[1])).toEqual(["B", "A"]);
+  const card = 'section[aria-label="Start Context"]';
+  expect(words(find(h, `${card} .sub-head`))).toEqual(["What the aleph agent receives", "Cut lines, 1", "Trim first: fewest offers, then oldest"]);
+  // The tables in card order: what the agent receives, the cut lines, then the lines to trim first.
+  const trs = words(find(h, `${card} tbody > tr`));
+  expect(trs.slice(0, 5)).toEqual(["MEMORY.md 600 B 60%", "Global core lines · 1 150 B 15%", "Aleph core lines · 1 100 B 10%", "Tags and pointer 150 B 15%", "Total sent 1,000 B 5,000 B left"]);
+  expect(trs.slice(6).map((t) => t.split(" ")[0])).toEqual(["B", "A"]);
 });
 
 test("Health's Offer Quality card gives the unoffered reads, the empty share of all recalls and the hook runs, or No data", () => {
   const rows = [3, 10, 10].map((n) => ({ at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: Array(n).fill("A") }));
   const h = v.renderHealthTab({ ...page, rows, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, missed: [{ query: "lit spike", at: "2026-11-13T08:49:00Z" }], hook: { runs: 1194, zero_candidates: 4, capped: 1100 } } });
-  const card = h.slice(h.indexOf('aria-label="Offer Quality"'));
-  for (const t of ["<strong>1,234</strong>", "<dd>0 of 7 (0.0%)</dd>", "<dd>7</dd>", "<dd>1,194: 4 with no candidate, 1,100 over 100</dd>", "<dd>p50 10, p95 10, n=3</dd>"]) expect(card.slice(0, card.indexOf("</section>"))).toContain(t);
-  expect(h).toContain('title="lit spike">lit spike</td>');
-  const none = v.renderHealthTab(page);
-  const body = none.slice(none.indexOf('aria-label="Offer Quality"'));
-  expect(body.slice(0, body.indexOf("</section>"))).toContain(empty());
+  const card = 'section[aria-label="Offer Quality"]';
+  expect(words(find(h, `${card} strong`))).toEqual(["1,234"]);
+  expect(find(h, `${card} dt, ${card} dd`).map((n) => n.text)).toEqual(["Recalls", "7", "Empty", "0 of 7 (0.0%)", "Reformulated", "0 turns", "Hook runs", "1,194: 4 with no candidate, 1,100 over 100", "Notes per offer", "p50 10, p95 10, n=3"]);
+  expect(find(h, 'section[aria-label="Empty Recalls"] td.wide').map((n) => [n.attrs.title, n.text])).toEqual([["lit spike", "lit spike"]]);
+  expect(words(find(v.renderHealthTab(page), `${card} .empty`))).toEqual(["No data"]);
 });
