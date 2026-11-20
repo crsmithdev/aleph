@@ -417,6 +417,8 @@ describe("render", () => {
     const css = readFileSync(join(import.meta.dir, "app.css"), "utf8");
     expect(css).not.toContain(".dp-detail > h2");
     expect(css).not.toContain(".dp-detail > .sh");
+    expect(css.match(/^details\.dp-fold \{[^}]*\}/m)![0]).not.toContain("border-top");
+    expect(css.match(/^\.dp-panel \{[^}]*\}/m)![0]).toContain("box-shadow: var(--card-lift)");
   });
   test("an open job on an issue shows the lifecycle buttons of its state, and a closed job shows none", () => {
     const head = (o: object) => { const h = v.renderJob({ ...job, ...o }); return h.slice(0, h.indexOf("</header>")); };
