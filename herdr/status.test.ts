@@ -48,11 +48,11 @@ test("the first line is the coloured status sentence and the sections follow in 
   expect(at).toEqual([...at].sort((a, b) => a - b));
 });
 
-test("the scorecard has its six labels, and the alerts and running jobs come before the events", () => {
+test("the scorecard has its five labels, and the alerts and running jobs come before the events", () => {
   const text = plain(render(state, flow, { width: 80, height: 60 }));
   const card = text.slice(text.indexOf("Scorecard"), text.indexOf("Agent Time"));
-  for (const label of ["Lost time", "Completion", "Landed", "Issues", "Jobs", "Usage"]) expect(card.some((l) => l.startsWith(label))).toBe(true);
-  expect(card.find((l) => l.startsWith("Lost time"))).toContain("▲");
+  for (const label of ["Efficiency", "Completion", "Issues", "Jobs", "Usage"]) expect(card.some((l) => l.startsWith(label))).toBe(true);
+  expect(card.find((l) => l.startsWith("Efficiency"))).toContain("▼");
   const herald = text.indexOf("Herald"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
   expect(herald).toBeLessThan(ask);
   expect(ask).toBeLessThan(errored);
@@ -64,7 +64,7 @@ test("with null figures the scorecard prints the card values of the page's card 
   const empty = { ...flow, figures: { lost: null, hours: null, kept: null, leadP50: null, leadP90: null, landed: null, firstPass: null }, baseline: undefined };
   const cards = cardList(state, empty, {});
   expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(cards.map((c: any) => [c.v, c.v2].flat().filter((x) => x !== undefined).join(" / ")));
-  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(["–", "– / –", "–", "– / – / 1", "1 / 1 / 1", "40% / 57%"]);
+  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(["– / –", "– / –", "– / – / 1", "1 / 1 / 1", "40% / 57%"]);
 });
 
 test("a three-value card prints its values and its labels each joined by a slash", () => {

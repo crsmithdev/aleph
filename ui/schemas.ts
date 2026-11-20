@@ -37,7 +37,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     buckets: [{ at: "time", runs: "number" }], active: [{ at: "time", intake: "number", queue: "number", running: "number", landed: "number" }], times: [{ id: "string", href: "string", outcome: "string", filed: "time?" }], slowest: "array",
     stages: "object", failures: [{ issue: "string", stage: "string", at: "time" }], wait: { count: "number", p50: "number?" }, builds: "array", issues: "object", classes: [{ key: "string", lost: "boolean", hours: "number", causes: "array", top: "array" }], notCounted: "any", lost: "any", agents: "any",
     "baseline?": "any",
-    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", firstPass: "number?", waitShare: "number?", followups: "number?", filed: "number?" },
+    figures: { lost: "number?", hours: "number?", leadP50: "number?", leadP90: "number?", asks: "number?", landed: "number?", dropped: "number?", waitShare: "number?", followups: "number?", filed: "number?" },
   },
   "/api/issues": { issues: [{ ...issue, runs: "number", cost: "number", everParked: "boolean" }], projects: ["string"] },
   "/api/issues/:id": {

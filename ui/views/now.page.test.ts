@@ -20,11 +20,11 @@ const WEEK = {
     { key: "reran", lost: true, hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
     { key: "dropped", lost: true, hours: 0, causes: [] },
   ],
-  figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, firstPass: 0.91 },
+  figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, dropped: 3 },
   filed: { followups: 5, all: 12 }, dropped: 3, open: { open: 4, parked: 2 }, failures: [],
 };
 
-const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
+const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, dropped: 1 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, dropped: 1 }, basis: "the previous 7 days" };
 const withBase = (d: any, asks = { count: 4, manual: 1 }) => ({ ...d, asks, figures: { ...d.figures, asks: asks.count }, baseline: BASE });
 
 const USAGE = { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
@@ -36,9 +36,9 @@ test("a card has no trend without a baseline or with a zero baseline of a count"
   expect(z).not.toContain("Previous 5;");
 });
 
-test("the scorecard before the data arrives: a spinner in the four flow cards, a count in Jobs, a dash for usage with no usage", () => {
+test("the scorecard before the data arrives: a spinner in the three flow cards, a count in Jobs, a dash for usage with no usage", () => {
   const h = view.renderTiles({ ...state, usage: undefined }, null);
-  expect(h.match(/<i class="spin" role="status"/g)?.length).toBe(4);
+  expect(h.match(/<i class="spin" role="status"/g)?.length).toBe(3);
   expect(h.match(/<b>–/g)?.length).toBe(1);
   expect(h).not.toContain('class="tr');
 });
@@ -54,12 +54,11 @@ test("the Jobs card shows live runs, queued and errored with no trend, and there
   expect(view.renderTiles({ ...s, queued: [] }, null, "week")).toContain("<b>3<em> / 0</em><em> / 1</em></b>");
 });
 
-test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {
-  const firstPass = Math.round((38 / 49) * 1e4) / 1e4;
-  const d = { ...WEEK, done: 49, issues: { ...WEEK.issues, landed: 49, firstPass }, figures: { ...WEEK.figures, landed: 49, firstPass }, baseline: BASE };
+test("the Efficiency card shows efficiency, then the landed share, and trends on efficiency in points", () => {
+  const d = { ...WEEK, figures: { ...WEEK.figures, lost: 0.22, landed: 3, dropped: 1 }, baseline: BASE };
   const h = view.renderTiles({ ...state, usage: undefined }, d);
-  expect(h).toContain("<b>78%<em> / 49</em></b>");
-  expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
+  expect(h).toContain("<b>78%<em> / 75%</em></b>");
+  expect(h).toContain("baseline 75%, the previous 7 days (change in percentage points)");
 });
 
 test("the scorecard is the tiles section Scorecard, with an Issues card", () => {
@@ -92,7 +91,7 @@ test("more fetches the week with its baseline, and the page fills the scorecard 
   const { urls, s } = await more({ ...WEEK, baseline: BASE });
   expect(urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes"]);
   const page = view.view.render(s, {}, new URLSearchParams());
-  expect(page).toContain("<b>38%<em> / 6.0h</em></b>");
+  expect(page).toContain("<b>62%<em> / 70%</em></b>");
   expect(page).toContain('class="seg-landed"');
   expect(page).not.toContain("Loading the pipeline");
 });

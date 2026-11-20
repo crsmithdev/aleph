@@ -13,7 +13,7 @@ import { CLASSES, classify } from "../flow/classes.ts";
 import { buckets } from "../../lib/windows.ts";
 import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { cardDur, statusCards, usageCard } from "../views/lib/flow-parts.js";
+import { cardDur, cardList, statusCards, usageCard } from "../views/lib/flow-parts.js";
 // @ts-ignore plain JS shared with the page
 import { statCard } from "../views/lib/html.js";
 // @ts-ignore plain JS shared with the page
@@ -135,8 +135,8 @@ test("the Status cards show the answer's figures and trend them against its base
   // The raw fields disagree with `figures`, so a card that read them would show 90% and 9.0h.
   const d = { classes: [{ hours: 9 }], lost: { share: 0.9, hours: 9 }, asks: { count: 1, manual: 0 }, figures: { lost: 0.2, hours: 2, leadP50: null, leadP90: null, asks: 3, landed: null, firstPass: null }, baseline: { prev: { lost: 0.4 }, base: { lost: 0.4 }, basis: "the previous 7 days" } };
   const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [] }, d, {});
-  expect(h).toContain("<b>20%<em> / 2.0h</em></b>");
-  expect(h).toContain("baseline 40%, the previous 7 days");
+  expect(h).toContain("<b>80%<em> / –</em></b>");
+  expect(h).toContain("baseline 60%, the previous 7 days");
   });
 
 test("figures: the follow-ups are the agent subjects' filed events in the window, and filed is all of them", () => {
@@ -779,15 +779,26 @@ test("a bucket's tokens per model are the saved tokens of the agent runs that st
   expect(d.buckets.find((b) => b.at === h(12))!.tokens).toEqual({});
 });
 
-test("every Status card with a second value has a qualifier, Lost time too, and none prints undefined", () => {
-  const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, firstPass: 0.8 } };
+test("the Efficiency card shows efficiency with a trend up as good, then landed over landed plus dropped", () => {
+  const d = { figures: { lost: 0.22, hours: 6, landed: 3, dropped: 1 }, baseline: { prev: { lost: 0.3 }, base: { lost: 0.3 }, basis: "the previous 7 days" } };
+  const cards = cardList({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [] }, d, {});
+  const eff = cards.find((c: any) => c.k === "Efficiency");
+  expect([eff.v, eff.v2, eff.q]).toEqual(["78%", "75%", ["efficient", "landed"]]);
+  expect(eff.trend).toContain('class="tr good"');
+  expect(cards.map((c: any) => c.k)).toEqual(["Efficiency", "Completion", "Issues", "Jobs", "Usage"]);
+});
+
+test("the Status scorecard has five cards, each second value has a qualifier, and none prints undefined", () => {
+  const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, dropped: 0 } };
   const s = { now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [], usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
-  for (const html of [statusCards(s, d, {}), statusCards({ now: s.now, factory: { liveRuns: 0 }, queued: [], errored: [] }, null, {})]) {
+  const none = { figures: { ...d.figures, landed: null, dropped: 0 } };
+  for (const html of [statusCards(s, d, {}), statusCards(s, none, {}), statusCards({ now: s.now, factory: { liveRuns: 0 }, queued: [], errored: [] }, null, {})]) {
     expect(html).not.toContain("undefined");
     const cards = html.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/);
+    expect(cards.length).toBe(5);
     for (const c of cards) if (c.includes("<em>")) expect(c).toContain('<span class="q">');
   }
-  expect(statusCards(s, d, {})).toContain('<b>30%<em> / 6.0h</em></b><span class="q"><span>lost</span><span class="m"> / hours</span>');
+  expect(statusCards(s, none, {})).toContain('<b>70%<em> / –</em></b><span class="q"><span>efficient</span><span class="m"> / landed</span>');
 });
 
 test("a stat card with three values draws the third as the second, and its label row names all three", () => {

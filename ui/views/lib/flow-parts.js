@@ -1,7 +1,7 @@
 // What the Status pages share: formats, the /api/flow load, tiles and the Usage card.
 import { get } from "./router.js";
 import { scope } from "./address.js";
-import { cardPct, count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
+import { cardPct, count, xLabel, day, dur, hourLabel, pct, plural, when } from "./format.js";
 import { cardTrend, statCard } from "./html.js";
 import { BUCKETS } from "../../../lib/windows.ts";
 
@@ -34,7 +34,6 @@ export function weekGone(resetsAt, now) {
   const left = Date.parse(resetsAt ?? "") - Date.parse(now);
   return Number.isNaN(left) ? null : Math.min(100, Math.max(0, 100 - (left / WEEK_MS) * 100));
 }
-export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 /** A card's duration from seconds: as `dur` under 10m, then whole minutes rounded, then whole hours rounded. */
 export function cardDur(s) {
   if (!(s >= 600)) return dur(s);
@@ -49,22 +48,22 @@ export function windowTrend(d, figure, value, o) {
   return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
-/** The props of the six cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
+/** The props of the five cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
 export function cardList(s, d, { performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null, loading = !d, failed = d?.error ?? "";
   const issues = new Set(s.errored.filter((j) => j.item).map((j) => `${j.repo}/${j.item.id}`)); // the issues with an errored job
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
+  const eff = (lost) => (lost == null ? null : 1 - lost), ended = f ? (f.landed ?? 0) + f.dropped : 0; // ended: the issues landed or dropped
   return [
-    { k: "Lost time", loading, failed, ...(f ? { v: cardPct(f.lost) } : {}), ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }) },
+    { k: "Efficiency", loading, failed, ...(f ? { v: cardPct(eff(f.lost)), v2: cardPct(ended ? (f.landed ?? 0) / ended : null) } : {}), q: ["efficient", "landed"], trend: f && base ? cardTrend(eff(f.lost), eff(base.lost), eff(prev?.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) : "" },
     { k: "Completion", loading, failed, ...(f ? { v: cardDur(f.leadP50), v2: cardDur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance },
-    { k: "Landed", loading, failed, ...(f ? { v: cardPct(f.firstPass) } : {}), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }) },
     { k: "Issues", loading, failed, ...(f ? { v: count(d.open?.open), v2: [count(f.landed), count(issues.size)] } : {}), q: ["active", "landed", "errored"] },
     { k: "Jobs", v: count(s.factory.liveRuns), v2: [count(s.queued.length), count(s.errored.length)], q: ["running", "queued", "error"], href: "#/factory/jobs" },
     usageProps(s),
   ];
 }
-/** The Status scorecard's six cards as HTML. */
+/** The Status scorecard's five cards as HTML. */
 export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
 
 /** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. `link` is `{href}` or `{key, on}`. */
