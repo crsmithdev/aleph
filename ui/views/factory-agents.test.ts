@@ -9,7 +9,7 @@ import { label, option } from "./lib/chart.js";
 // @ts-ignore plain JS shared with the page
 import { dur, shortModel } from "./lib/format.js";
 // @ts-ignore plain JS shared with the page
-import { pace, usageCard, weekGone } from "./lib/flow-parts.js";
+import { usageCard, weekGone } from "./lib/flow-parts.js";
 
 const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5, liveLocal: 1, localCap: 1 } };
 const agents = {
@@ -27,8 +27,6 @@ test("the share of the week gone comes from seven_day_resets_at", () => {
   expect(weekGone("2026-11-07T08:00:00Z", "2026-11-01T08:00:00Z")).toBeCloseTo(14.29, 1);
   expect(weekGone("2026-11-08T08:00:00Z", "2026-11-01T08:00:00Z")).toBe(0);
   expect(weekGone(undefined, S.now)).toBeNull();
-  expect(pace(S).word).toBe("under");
-  expect(pace({ ...S, usage: { now: { ...S.usage.now, seven_day: 50 } } }).word).toBe("over");
 });
 
 test("Per output is cost over built for a size, over verdicts for the reviewer and over OK runs for another role, and a worker OK under 70% has the warn tone", () => {

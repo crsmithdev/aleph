@@ -187,13 +187,18 @@ test("figures: before the filer is named, a filed event counts by the issue's so
   }
 });
 
-test("the Usage card note is the pace word, and the bar title holds the percent off this machine", () => {
+test("the Usage card shows used over pace, with the percent off this machine in its title", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
-  const h = usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: 12 } });
-  expect(h).toContain("40%");
-  expect(h).toContain('title="40% used, 14% of the week gone, 12% off this machine"');
-  expect(h).toContain('<span class="q m" title="over pace">over pace</span>');
-  expect(usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, off: null } })).not.toContain("off this machine");
+  const card = (usage: object) => usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, ...usage } });
+  const h = card({ off: 12 });
+  expect(h).toContain("<b>40%<em> / 14%</em></b>");
+  expect(h).toContain('<span class="q"><span>used</span><span class="m"> / pace</span></span>');
+  expect(h).toContain("40% used, 14% of the week gone, 12% off this machine");
+  expect(h).not.toContain("meter");
+  expect(h).not.toContain("over pace");
+  expect(card({ off: null })).not.toContain("off this machine");
+  expect(card({ stale: true })).toContain("stale");
+  expect(card({ now: { seven_day: 40 } })).not.toContain("<em>");
 });
 
 test("cardDur: as dur under 10m, whole minutes cut down under 1h, then whole hours rounded", () => {
@@ -207,12 +212,6 @@ test("the Status Completion card shows its durations through cardDur", () => {
   const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Completion"))!;
   expect(card).toContain("<b>10m<em> / 2h</em></b>");
   expect(card).not.toContain("10m 32s");
-});
-
-test("the Status Usage meter fill takes the default fill", () => {
-  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } }, null, {});
-  expect(h).toContain('<span class="meter" role="img"');
-  expect(h).not.toContain("c-use");
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {

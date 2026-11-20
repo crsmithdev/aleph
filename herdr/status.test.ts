@@ -64,7 +64,7 @@ test("with null figures the scorecard prints the card values of the page's card 
   const empty = { ...flow, figures: { lost: null, hours: null, kept: null, leadP50: null, leadP90: null, landed: null, firstPass: null }, baseline: undefined };
   const cards = cardList(state, empty, {});
   expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(cards.map((c: any) => [c.v, c.v2].filter((x) => x !== undefined).join(" / ")));
-  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(["–", "– / –", "–", "1 / 1", "40%"]);
+  expect(data(state, empty).scorecard.map((c) => c.value)).toEqual(["–", "– / –", "–", "1 / 1", "40% / 57%"]);
 });
 
 test("the height fills the pane, and the cut drops the oldest events", () => {

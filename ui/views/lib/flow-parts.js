@@ -1,8 +1,8 @@
-// What the Status pages share: formats, the /api/flow load, tiles and the usage pace.
+// What the Status pages share: formats, the /api/flow load, tiles and the Usage card.
 import { get } from "./router.js";
 import { scope } from "./address.js";
 import { cardPct, count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
-import { cardTrend, meter, statCard } from "./html.js";
+import { cardTrend, statCard } from "./html.js";
 import { BUCKETS } from "../../../lib/windows.ts";
 
 /** The period an answer covers, in words. */
@@ -34,12 +34,6 @@ export function weekGone(resetsAt, now) {
   const left = Date.parse(resetsAt ?? "") - Date.parse(now);
   return Number.isNaN(left) ? null : Math.min(100, Math.max(0, 100 - (left / WEEK_MS) * 100));
 }
-/** The pace sentence, or null when the usage or the reset time is unknown. */
-export function pace(s) {
-  const cur = s.usage?.now, gone = cur && weekGone(cur.seven_day_resets_at, s.now);
-  if (gone === null || gone === undefined) return null;
-  return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
-}
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 /** A card's duration from seconds: as `dur` under 10m, whole minutes cut down under 1h, then whole hours rounded. */
 export function cardDur(s) {
@@ -70,15 +64,14 @@ export function cardList(s, d, { performance }) {
 /** The Status scorecard's five cards as HTML. */
 export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
 
-/** The props of the Usage card: the 7-day value, the bar with the mark for the week gone, and a one- or two-word note. `link` is `{href}` or `{key, on}`. */
+/** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. `link` is `{href}` or `{key, on}`. */
 function usageProps(s, link = { href: "#/factory/agents" }) {
-  const cur = s.usage?.now, p = pace(s), off = s.usage?.off;
+  const cur = s.usage?.now, off = s.usage?.off, stale = s.usage?.stale;
   if (!cur) return { k: "Usage", v: "–", ...link };
-  const note = s.usage.stale ? "stale" : p ? `${p.word} pace` : "live";
   const gone = weekGone(cur.seven_day_resets_at, s.now);
-  const tip = [`${pct(cur.seven_day)} used`, gone !== null && `${pct(gone)} of the week gone`, off != null && `${pct(off)} off this machine`].filter(Boolean).join(", ");
-  const bar = meter([{ pct: Math.min(100, cur.seven_day) }], tip, { mark: gone });
-  return { k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link };
+  const title = [`${pct(cur.seven_day)} used`, gone !== null && `${pct(gone)} of the week gone`, off != null && `${pct(off)} off this machine`, stale && "stale"].filter(Boolean).join(", ");
+  const shown = gone === null ? { note: stale ? "stale" : "live" } : { v2: pct(gone), q: ["used", "pace"] };
+  return { k: "Usage", v: pct(cur.seven_day), ...shown, title, ...link };
 }
 export const usageCard = (s, link) => statCard(usageProps(s, link));
 

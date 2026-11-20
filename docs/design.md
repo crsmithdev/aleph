@@ -317,7 +317,7 @@ Every displayed value goes through its helper in `ui/views/lib/format.js` or `ui
 - Write a state, a priority and a chart key in lower case. States come from [Naming](naming.md); priorities are `critical`, `high`, `medium`, `low`.
 - Show a count as a muted number after its title, not in brackets.
 - Write an empty state with `empty()`: `No data`, with no hint. Give it another line only for a state that is not missing data, such as `Langfuse off` or `Select a row`, in at most three words.
-- Write a note, a qualifier or a caption in one or two words: `over pace`, `p50 weekly`. Put more in a `title` tooltip.
+- Write a note, a qualifier or a caption in one or two words: `stale`, `p50 weekly`. Put more in a `title` tooltip.
 - Write an error line as `Could not load X.`, with no hint. Put the upstream message in a Technical details fold (`error()` with `detail`).
 - Offline, the page says "The server is unreachable. Showing the last data." (`ui/index.html`).
 
@@ -328,7 +328,7 @@ Every displayed value goes through its helper in `ui/views/lib/format.js` or `ui
 | `Next 50` | `Click here to load more results` |
 | `running`, `landed`, `critical` | `Running`, `LANDED` |
 | `empty()`, which shows `No data` | `No agent job on an issue ended in the last hour.` with the hint `Widen the window or clear the project.` |
-| `over pace`, with the off-machine share in the bar's tooltip | `2% off this machine, under pace, live` |
+| `stale`, with the off-machine share in the card's tooltip | `2% off this machine, stale data` |
 | `Could not load the agents.` and the upstream message in a Technical details fold | `Error: fetch failed`, or a hint such as `Check that aleph-ui is running, then reload.` |
 | `Loading Jobs…` with the spinner before it | a spinner with no text, or `No data` before the first fetch returns |
 
@@ -628,7 +628,7 @@ A metric card shows one headline number of a list page, with its key.
 | `k: "Worker slots"` | `k: "Worker slots in use right now"` |
 | `v: "–"` | `v: "0"` for an unknown value |
 | `statCard({ k: "Success", q, loading: !d, failed: d?.error ?? "" })` | `v: "–"` while the fetch waits or after it failed |
-| `note: "over pace"` | `note: "2% off this machine, under pace, live"` |
+| `note: "stale"` | `note: "2% off this machine, stale data"` |
 
 #### Table
 
