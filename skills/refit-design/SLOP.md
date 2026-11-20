@@ -37,5 +37,5 @@ Leave a part that the doc names.
 
 ## Guard
 
-Rule (write-code RULES.md, UI): a new note, label or caption in a plan is at most two words. No tool guard yet.
+Rule (write-design RULES.md): a new note, label or caption in a plan is at most two words. No tool guard yet.
 

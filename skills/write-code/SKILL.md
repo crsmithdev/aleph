@@ -20,3 +20,5 @@ diff against them.
   [diagnosing-bugs](../diagnosing-bugs/SKILL.md) before you change code.
 - When the diff adds or changes a test, call the Read tool on [write-tests/RULES.md](../write-tests/RULES.md) before you
   end: its rules apply too.
+- When the diff changes a view, a style rule or UI text, call the Read tool on
+  [write-design](../write-design/SKILL.md) before the first edit: its steps and rules apply too.

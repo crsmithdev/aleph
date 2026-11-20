@@ -39,7 +39,7 @@ state in `ui/app.css` from tokens.
 
 ## Guard
 
-Rule (write-code RULES.md, UI): a new component in a plan names its empty, loading and error state. Tool: the Design page
+Rule (write-design RULES.md): a new component in a plan names its empty, loading and error state. Tool: the Design page
 test in `ui/browser.test.ts` fails when `#design-states`, `#design-table-empty` or `#design-chart-empty` stops drawing its
 empty or loading line.
 

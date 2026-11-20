@@ -38,5 +38,5 @@ Delete the override rule.
 
 ## Guard
 
-Rule (write-code RULES.md, UI): stop a plan that styles a design class in a view, or writes design markup by hand. No tool guard yet.
+Rule (write-design RULES.md): stop a plan that styles a design class in a view, or writes design markup by hand. No tool guard yet.
 

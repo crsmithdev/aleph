@@ -36,6 +36,6 @@ Add the guard the doc names: a clamp with the full text in `title`, `miss(reason
 
 ## Guard
 
-Rule (write-code RULES.md, UI): a new list, table or text field in a plan names its limit for long text and many rows. No tool
+Rule (write-design RULES.md): a new list, table or text field in a plan names its limit for long text and many rows. No tool
 guard yet.
 

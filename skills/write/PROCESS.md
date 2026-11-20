@@ -1,6 +1,6 @@
 # Writer process
 
-The steps of the five writer skills: write-code, write-tests, write-docs, write-agents and write-data. A writer
+The steps of the six writer skills: write-code, write-tests, write-docs, write-agents, write-data and write-design. A writer
 supplies its `RULES.md` and its own steps. Its SKILL.md says only what differs from this file.
 
 Each domain has one writer and one auditor (`docs/specs/2026-11-14-refit-at-write-time.md`). The writer owns how to
@@ -40,7 +40,8 @@ write: its `RULES.md`. The auditor, `refit-<domain>`, owns how to find a break i
 
    | The diff changes | Read |
    |---|---|
-   | code | [write-code/RULES.md](../write-code/RULES.md), its New things and, for a view or style, its UI rules |
+   | code | [write-code/RULES.md](../write-code/RULES.md), its New things |
+   | a view, a style rule or UI text | [write-design/RULES.md](../write-design/RULES.md) |
    | a test | [write-tests/RULES.md](../write-tests/RULES.md) |
    | a doc | [write-docs/RULES.md](../write-docs/RULES.md) |
    | an agent file | [write-agents/RULES.md](../write-agents/RULES.md) |

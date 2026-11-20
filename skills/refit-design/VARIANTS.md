@@ -34,5 +34,5 @@ build, report a proposal to amend the doc and change no code.
 
 ## Guard
 
-Rule (write-code RULES.md, UI): stop a plan that draws a component a second way from its specimen. No tool guard yet.
+Rule (write-design RULES.md): stop a plan that draws a component a second way from its specimen. No tool guard yet.
 

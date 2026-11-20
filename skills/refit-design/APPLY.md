@@ -54,5 +54,5 @@ One change per finding, in the view or style file. Use the token, helper or comp
 
 Tool: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
 `literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` is unchecked: it is not yet
-a test. Rule (write-code RULES.md, UI): a new component has a section in the doc and a specimen on `#/design`.
+a test. Rule (write-design RULES.md): a new component has a section in the doc and a specimen on `#/design`.
 
