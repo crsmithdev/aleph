@@ -1546,6 +1546,7 @@ button.clamp-btn { font-size: var(--fs-xs); }
 .dp-logs { display: block; margin-top: var(--sp-2); font-size: var(--fs-xs); }
 button.link { all: unset; cursor: pointer; color: var(--run); }
 button.link:hover, button.link:focus-visible { text-decoration: underline; }
+button.link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-tag); }
 .dp-logs .logbody { margin: var(--sp-6) 0; max-height: 70vh; overflow: auto; }
 .dp-logs .step { margin: var(--sp-6) 0; }
 .dp-detail { display: flex; flex-direction: column; gap: var(--sp-10); }
