@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { heraldRows, plain, type Context } from "./herald.ts";
 import { row } from "./now.testkit.ts";
-import { missedOf, setCodes } from "../lib/naming.ts";
+import { detailOf, missedOf, setCodes } from "../lib/naming.ts";
 
 beforeEach(() => setCodes({ aleph: "a" }));
 afterAll(() => setCodes({}));
@@ -61,6 +61,11 @@ test("a routine run that ended with no change has no row, and one that is still 
 test("a routing event with no size is a system row with its note, and a hold is no row", () => {
   const out = rows([row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", note: "small by classifier jev-1.13" }), row({ at: "2026-11-09T11:00:00Z", by: "gate", subject: "aleph-9", action: "after", on: ["aleph-7"] })], { titles: { "aleph-9": "Fix it" } });
   expect(out.map((r) => [r.sys, r.id, plain(r.text)])).toEqual([[true, [], "small by classifier jev-1.13"]]);
+});
+
+test("a routed line in an issue's fold names the size and the classifier from the event's size and detail", () => {
+  const [r] = rows([row({ at: "2026-11-09T10:00:00Z", by: "rule", subject: "aleph-9", action: "routed", size: "small", note: detailOf("routed", "classifier", "jev-1.13") }), e("2026-11-09T11:00:00Z", "aleph-9", "started", [])]);
+  expect(r.lines.map((l) => [l.label, plain(l.text)])).toEqual([["routed", "small · classifier jev-1.13"]]);
 });
 
 test("a routing choice shows a cost under half a cent as money() does", () => {

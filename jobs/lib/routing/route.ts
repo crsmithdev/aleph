@@ -1,5 +1,6 @@
 /** Jev picks the size (small, medium or large) of a factory run, from the item's spec. */
 import { logEvent } from "../../../lib/layout.ts";
+import { detailOf } from "../../../lib/naming.ts";
 import { decide, judgeChoice } from "../../../lib/jev.ts";
 import { readModels } from "./models.ts";
 
@@ -25,7 +26,7 @@ export async function route(spec: string, subject = "route"): Promise<Size | nul
     const a = d.answers.size;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;
-    try { logEvent({ subject: "rule", action: "routed", object: subject, detail: `${a.choice} by classifier ${d.model.split("/").pop()}` }); } catch { /* the cost event is a note; it never changes the size */ }
+    try { logEvent({ subject: "rule", action: "routed", object: subject, detail: detailOf("routed", "classifier", d.model.split("/").pop()), size: a.choice }); } catch { /* the cost event is a note; it never changes the size */ }
     if (!(SIZES as readonly string[]).includes(a.choice) || p < CUT) return null;
     const models = readModels();
     const i = SIZES.indexOf(a.choice as Size);

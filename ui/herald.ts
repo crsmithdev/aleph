@@ -48,8 +48,8 @@ const stateWord = (e: EventRow) => (e.action === "done" ? (isIssue(targetOf(e)) 
 
 const issuePiece = (issue: string, project?: string | null): Piece => ({ id: shownId(issue, project), to: issueHref(issue, project) });
 
-/** What a routing event chose, "medium · sonnet · $0.50", from its job's fields. */
-const routeText = (e: EventRow) => [e.size, e.model, e.cost != null && money(e.cost)].filter(Boolean).join(" · ");
+/** What a routing event chose, "medium · sonnet · $0.50", from its job's fields, then the classifier that chose it: "small · classifier jev-1.13". */
+const routeText = (e: EventRow) => [e.size, e.model, e.cost != null && money(e.cost), wordOf(e) === "classifier" && `classifier ${factsOf(e)}`].filter(Boolean).join(" · ");
 
 /** Whether an event is a routing choice: it names a size, or is a start whose detail is `model: <model>`, "default" when routing picked no size. */
 const isRouting = (e: EventRow) => Boolean(e.size) || (e.action === "started" && wordOf(e) === "model");

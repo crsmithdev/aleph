@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEvents } from "../../../lib/layout.ts";
+import { factsOf, wordOf } from "../../../lib/naming.ts";
 import { startIssue } from "../transitions/transitions.ts";
 import { raise, route } from "./route.ts";
 import { setModel } from "./models.ts";
@@ -29,10 +30,12 @@ test("a Jev 500 gives no model and logs no event", async () => {
   expect(readEvents()).toEqual([]);
 });
 
-test("a medium pick at p >= 0.6 gives medium and logs a routed event on the issue key", async () => {
-  reply = { status: 200, body: { answers: { size: { type: "choice", choice: "medium", probabilities: { medium: 0.7 } } }, cost: 0, model: "m" } };
+test("a medium pick at p >= 0.6 gives medium and logs a routed event on the issue key with its size and the classifier's model", async () => {
+  reply = { status: 200, body: { answers: { size: { type: "choice", choice: "medium", probabilities: { medium: 0.7 } } }, cost: 0, model: "jev/m" } };
   expect(await route("x", "issue.2958")).toBe("medium");
-  expect(readEvents().find((e) => e.action === "routed")).toMatchObject({ subject: "rule", object: "issue.2958", detail: "medium by classifier m" });
+  const routed = readEvents().find((e) => e.action === "routed")!;
+  expect(routed).toMatchObject({ subject: "rule", object: "issue.2958", size: "medium" });
+  expect([wordOf(routed), factsOf(routed)]).toEqual(["classifier", "m"]);
 });
 
 test("a small pick gives medium when small is disabled, and large when both are disabled", async () => {

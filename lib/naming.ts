@@ -155,6 +155,7 @@ const WORDS: Record<string, readonly string[]> = {
   held: ["after", "job", "red", "file", "credit", "paused", "gpu", "full", "waiting", "done"],
   changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge", ...Object.keys(EDITS)],
   started: ["model"],
+  routed: ["classifier"],
   missed: ["start", "land", "intake", "Ask", "rescue", "rerun"],
 };
 /** The detail `<word>: <facts>` of an event of `action`, or the bare word with no facts; throws on a word outside `words`, the set of `action` by default. The one writer of a detail word: a later `word` column changes only this and `wordOf`. */
