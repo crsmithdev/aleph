@@ -201,7 +201,7 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 
 ## Machine state tables: `aleph.db`
 
-`PRAGMA user_version` is 6. Version 2 added `state`, `usage`, `openrouter`, `jev`, `suite_history` and `flaky` to the tables of version 1, version 3 added the size of a start to `events`, and version 6 named that column and the job column `size` (`SCHEMAS` in `lib/db.ts`). Version 6 maps an old tier or a build's model to its size: `haiku` and `worker-low` to `small`, `sonnet` and `worker-medium` to `medium`, `opus` to `large`. A job that is not a build gets a null size. A file at version 1 runs only the entries after it when a process opens it.
+`PRAGMA user_version` is 9. Version 2 added `state`, `usage`, `openrouter`, `jev`, `suite_history` and `flaky` to the tables of version 1, version 3 added the size of a start to `events`, version 6 named that column and the job column `size`, and version 9 added `suggestions` (`SCHEMAS` in `lib/db.ts`). Version 6 maps an old tier or a build's model to its size: `haiku` and `worker-low` to `small`, `sonnet` and `worker-medium` to `medium`, `opus` to `large`. A job that is not a build gets a null size. A file at version 1 runs only the entries after it when a process opens it.
 
 | Table | Holds | Writer |
 |---|---|---|
@@ -212,7 +212,8 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 | `openrouter` | `seq`, `time`, `usage`, `factor`: the key's lifetime USD and the rate per list dollar | `pollOpenRouter` in `ui/usage.ts` |
 | `jev` | `seq`, `time`, `cost`: one row per Jev call | `decide` in `lib/jev.ts` |
 | `suite_history` | `seq`, `time`, `repo`, `commit_sha`, `ran`, `passed`, `failed`, `skipped`, `rerun_passed`: one row per suite run | `aleph suite` |
-| `flaky` | `seq`, `time`, `repo`, `check_name`, `run`, `tests` (a JSON array or null): a check that passed on the rerun | Checks |
+| `flaky` | `seq`, `time`, `repo`, `check_name`, `run`, `tests` (a JSON array or null): a check that passed on the rerun, or a worker's flake line (`check_name` `worker`) | Checks, workers |
+| `suggestions` | `seq`, `time`, `repo`, `run`, `who` (`worker` or `reviewer`), `title`, `location`, `saw`, `why`, `impact`, `risk`, `effort`: one row per follow-up | Workers, reviewers |
 
 ## Factory directory: `factory/`
 

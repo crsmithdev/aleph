@@ -1,12 +1,20 @@
 /** The factory's tables: flakes, baselines, suite history, stalls and the tick, with the red-main readers. */
 import { conn, getJson, putJson, tx } from "../../../lib/db.ts";
 import { ciLine, redCi } from "./ci.ts";
+import type { Followup } from "./gate.ts";
 import type { Repo } from "../records/ledger.ts";
 
 /** Add a row to the `flaky` table. */
 export const recordFlake = (row: Flake): void => {
   conn().query("INSERT INTO flaky (time, repo, check_name, run, tests) VALUES (?, ?, ?, ?, ?)").run(row.at, row.repo, row.check, row.run, row.tests ? JSON.stringify(row.tests) : null);
 };
+
+/** Add a row to the `suggestions` table for each follow-up a worker or reviewer met in a run. */
+export function recordSuggestions(repo: string, run: string, who: "worker" | "reviewer", followups: Followup[]): void {
+  const add = conn().query("INSERT INTO suggestions (time, repo, run, who, title, location, saw, why, impact, risk, effort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+  const at = new Date().toISOString();
+  for (const f of followups) add.run(at, repo, run, who, f.title, f.location, f.saw, f.why, f.impact, f.risk, f.effort);
+}
 
 export interface Flake { repo: string; check: string; run: string; at: string; tests?: string[] }
 export const flakes = (): Flake[] =>

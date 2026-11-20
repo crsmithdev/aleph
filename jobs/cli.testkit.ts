@@ -256,8 +256,6 @@ case $action in
   already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"","structured_output":{"summary":"Looked.","defaults":[],"followups":[],"flakes":[],"already_met":{"evidence":"main has the change"},"question":null}}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[{"choice":"which colour?","chose":"blue"}],"followups":[{"title":"paint the fence","location":"a.ts:3","saw":"it fails","why":"it breaks a run","impact":3,"risk":2,"effort":3}],"flakes":[],"already_met":null,"question":null}}'; exit 0 ;;
-  flake-followup) echo f > fu.txt; git add fu.txt; git commit -qm "add fu.txt"
-    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[],"followups":[{"title":"Fix the flaky paint test in a.test.ts","location":"a.ts:3","saw":"it fails","why":"it breaks a run","impact":3,"risk":2,"effort":3}],"flakes":[],"already_met":null,"question":null}}'; exit 0 ;;
   flake) echo f > fl.txt; git add fl.txt; git commit -qm "add fl.txt"
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[],"followups":[{"title":"mend the gate","location":"a.ts:3","saw":"it fails","why":"it breaks a run","impact":3,"risk":2,"effort":3}],"flakes":[{"file":"a.test.ts","name":"slow one","what":"timed out, passed alone"}],"already_met":null,"question":null}}'; exit 0 ;;
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt

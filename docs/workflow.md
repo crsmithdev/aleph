@@ -86,7 +86,6 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 - A run with no reply retries at once. After `ALEPH_INTAKE_TRIES` (2), it sets an `intake-failed` Ask, or applies the Always rule (`continue` or `discontinue`).
 - A `close` or `done` route on a `red-main` issue while main is still red becomes a `question` Ask.
 - A `close` route on an issue with no request and no media becomes a `question` Ask that names the reason.
-- A worker follow-up whose Edit surface is only test files is dropped as a test-only follow-up.
 
 ## 2. Dispatch and its gates
 
@@ -123,8 +122,8 @@ The worker is `claude -p` in `<repo>/.worktrees/job-<name>` on the branch `facto
 | Field | Becomes |
 |---|---|
 | `summary` | The run's `result.md` |
-| `followups[]` | New parked issues with `source: worker` |
-| `flakes[]` | Notes on the flake tracker |
+| `followups[]` | Rows in the `suggestions` table of `aleph.db` |
+| `flakes[]` | Rows in the `flaky` table, with `check_name` `worker` |
 | `defaults[]` | Lines in the report |
 | `already_met` | A claim that the issue holds on main; the baseline decides it |
 | `question` | A question on the Oracle; with no commit, the issue waits for a spec edit |

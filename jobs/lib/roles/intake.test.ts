@@ -51,7 +51,6 @@ const VERDICTS: Record<string, object> = {
   missing: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "nope.ts", new: false }] }) },
   leftout: { route: "build", reason: "one run", left_out: "the page head and the audit", spec: spec() },
   removal: { route: "build", reason: "it undoes a removal", removal: { sha: "abc1234", subject: "drop the old gate", reason: "it was too slow to keep" } },
-  testonly: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "x.test.ts", new: false }] }) },
   bad: { route: "maybe", reason: "x" },
 };
 
@@ -212,15 +211,6 @@ test("an issue of kind flake is a note on the flake tracker with no run", async 
   expect(issues.status(item(1))).toBe("done");
   const tracker = readList(repo)!.items.find((i) => i.fm.tracker === "true")!;
   expect(tracker.notes.join("\n")).toContain("a.test.ts times out under load");
-});
-
-test("a worker's follow-up whose Edit surface is only test files is closed as test-only", async () => {
-  reset([{ title: "a", body: "VERDICT:testonly", source: "worker" }, { title: "b", body: "VERDICT:testonly" }]);
-  await run();
-  expect(issues.status(item(1))).toBe("dropped");
-  expect(item(1).fm.closed_why).toBe("test-only follow-up");
-  expect(issues.status(item(2))).toBe("open");
-  expect(item(2).spec).toContain("x.test.ts");
 });
 
 test("parts are filed in the intake run as new issues from the issue; each waits on what the issue waits on and on its earlier parts", async () => {

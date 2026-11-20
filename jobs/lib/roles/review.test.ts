@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { conn } from "../../../lib/db.ts";
 import { git } from "../../../lib/git.ts";
 import * as store from "../../../lib/store.ts";
 import { type Repo, type Run } from "../records/ledger.ts";
@@ -97,18 +98,16 @@ test("a reply with no verdict holds the run, and its review job ends failed", as
 });
 
 const minor = { title: "Rename the loose helper in a.ts", location: "a.ts:3", saw: "a wording nit", why: "it reads wrong", impact: 1, risk: 1, effort: 1 };
-const filed = () => store.readList(repo)?.items ?? [];
+const rows = () => conn().query("SELECT repo, run, who, title, location FROM suggestions").all();
 
-test("a pass files its follow-up as one parked worker task that names the review job; no follow-up, or a hold, files none", async () => {
+test("a pass records its follow-up as a suggestion by the reviewer; a hold records none and files no issue", async () => {
   const main = git(repo.path, "rev-parse", "main").out;
   await review(run, main);
   fake({ verdict: "hold", summary: "no", failures: [{ clause: "c", observed: "o" }], followups: [minor] });
   expect((await review(run, main)).call.reason).toBe("reviewer: c");
-  expect(filed()).toHaveLength(0);
+  expect(rows()).toHaveLength(0);
   fake({ verdict: "pass", summary: "fine", failures: [], followups: [minor] });
-  const { call, job } = await review(run, main);
-  expect(call.reason).toBeNull();
-  expect(filed()).toHaveLength(1);
-  expect(filed()[0]).toMatchObject({ fm: { kind: "task", source: "worker", parked: "true" } });
-  expect(filed()[0].request).toContain(`the reviewer found in review ${job.id}`);
+  expect((await review(run, main)).call.reason).toBeNull();
+  expect(rows()).toEqual([{ repo: repo.key, run: run.name, who: "reviewer", title: minor.title, location: "a.ts:3" }]);
+  expect(store.readList(repo)?.items ?? []).toHaveLength(0);
 });

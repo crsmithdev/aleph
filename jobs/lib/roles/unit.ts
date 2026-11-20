@@ -22,6 +22,7 @@ import type { Cause } from "../records/outcome.ts";
 import { openJob } from "../records/job.ts";
 import { checkEnv as checksEnv, checksAt, shell, runChecks, stopFields, type CheckExec, type CheckTask } from "../gates/checks.ts";
 import { paused } from "../gates/pause.ts";
+import { recordFlake, recordSuggestions } from "../gates/tables.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { conflictsOf, land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { readModels, SIZE_OF } from "../routing/models.ts";
@@ -31,7 +32,6 @@ import { runLogged, runPath, startUnit } from "../transitions/launch.ts";
 import { start } from "../transitions/kept.ts";
 import { agentEnv } from "./agent-run.ts";
 import { reviewer } from "./review.ts";
-import { fileFollowups } from "./followups.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, runEnvFile } from "../infra/settings.ts";
 import { jobOfFolder, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -298,7 +298,8 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const facts: Partial<Outcome> = w.cost !== undefined ? { cost: w.cost } : {};
   if (typeof reply !== "string") {
     Object.assign(facts, { defaults: reply.defaults, followups: reply.followups.map((f) => f.title) }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
-    await fileFollowups(repo, run, reply.followups, reply.flakes);
+    recordSuggestions(repo.key, run.name, "worker", reply.followups);
+    for (const line of reply.flakes) recordFlake({ repo: repo.key, check: "worker", run: run.name, at: new Date().toISOString(), tests: [line] });
   }
   if (w.cause) return stop(w.cause.kind, w.cause.reason, { ...facts, limit: w.cause.limit });
   if (typeof reply === "string") return stop("other", `worker: ${reply}`, facts);

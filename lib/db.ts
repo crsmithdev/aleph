@@ -78,6 +78,9 @@ ALTER TABLE issue_state DROP COLUMN wait_since;
 `, `
 ALTER TABLE usage DROP COLUMN five_hour;
 ALTER TABLE jobs DROP COLUMN was;
+`, `
+CREATE TABLE suggestions (seq INTEGER PRIMARY KEY, time TEXT NOT NULL, repo TEXT NOT NULL, run TEXT NOT NULL, who TEXT NOT NULL, title TEXT NOT NULL,
+  location TEXT NOT NULL, saw TEXT NOT NULL, why TEXT NOT NULL, impact INTEGER NOT NULL, risk INTEGER NOT NULL, effort INTEGER NOT NULL);
 `];
 const VERSION = SCHEMAS.length;
 

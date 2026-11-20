@@ -31,7 +31,7 @@ import { readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
 import type { Decider } from "../gates/decider.ts";
 import { filing } from "../transitions/filing.ts";
-import { jsTestFilesInText, siblingTestFile, testFileInText } from "../../../lib/test-files.ts";
+import { jsTestFilesInText, testFileInText } from "../../../lib/test-files.ts";
 import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -317,8 +317,6 @@ Never ask Chris how to build it: code structure, which module, naming, test shap
 
 Before you write a spec that adds back, re-enables or widens something (a check, a gate, a slot, a path in a list, a test), search the history for the commit that removed or narrowed it: \`git log -S<text>\` (or \`git log -G<regex>\`) over the paths it names, and read the message it prints. When that message gives a reason, write no spec: give the commit as "removal" in the build verdict, with its short "sha", its "subject" and its "reason" from the message, and code asks Chris whether to undo that removal. When history holds no such commit, or its message gives no reason, build as before.
 
-When the source is \`worker\` and all the issue asks for is a new test of behaviour that works today, a rerun of a check elsewhere, or a screenshot or a measurement with no change behind it: "close", with the reason "test-only follow-up". A worker issue that names a defect still builds.
-
 A fresh request from Chris that goes against the current design or its tests is not stale: "build" it, or "ask" Chris, and do not "close" it.
 
 # The spec
@@ -355,12 +353,6 @@ export function addParts(file: File, issue: issues.Issue, parts: Part[], after: 
   issue.spec = "";
   return refs;
 }
-
-/** Whether the build route is a worker's test-only follow-up: every path of its Edit surfaces is a test file. */
-const testOnly = (item: issues.Issue, v: Extract<Route, { route: "build" }>): boolean => {
-  const paths = [...(v.parts?.flatMap((p) => p.spec.surface) ?? v.spec?.surface ?? [])].map((p) => p.path);
-  return sourceOf(item) === "worker" && issues.kindOf(item) !== "bug" && paths.length > 0 && paths.every((p) => siblingTestFile.test(p));
-};
 
 /** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
 function stillRed(repo: Repo, item: issues.Issue): string | null {
@@ -508,7 +500,6 @@ async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, s
       }
       let v: Route = got;
       if (v.route === "done") v.commit = commitOnMain(repo, v.commit)!.slice(0, 12);
-      if (v.route === "build" && testOnly(item, v)) v = { route: "close", reason: "test-only follow-up" };
       const red = stillRed(repo, item);
       if (red && (v.route === "close" || v.route === "done")) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `Main is still red (${red}), and intake would close this issue: ${v.reason}`) };
       else if (v.route === "close" && !item.request.trim() && !mediaOf(item).length) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `This issue has no request, and intake would close it: ${v.reason}`) };

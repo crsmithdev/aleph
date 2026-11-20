@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../../cli.testkit";
-import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../../flow.testkit.ts";
+import { actionJob, drop, issueList } from "../../flow.testkit.ts";
+import { conn } from "../../../lib/db.ts";
+import { flakes } from "../gates/tables.ts";
 import { AGENT_SETTINGS } from "../routing/models.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
@@ -48,27 +50,16 @@ describe("a factory run", () => {
   });
 });
 
-describe("a worker's FOLLOWUP line (criterion 15)", () => {
-  const titles = async () => (await issueList("fac")).json as any[];
-
-  test("a line on the topic of an open issue is a note on it, and files no issue", async () => {
-    await issueAdd("fac", "paint the fence");
-    const open = (await titles()).find((i) => i.title === "paint the fence");
-    const count = (await titles()).length;
-    const r = await actionJob("fsame", "defaults", {}, "fac");
+describe("a worker's follow-ups and flakes", () => {
+  test("each follow-up is a row in suggestions and each flake line a row in flaky, and no issue is filed", async () => {
+    const before = ((await issueList("fac")).json as any[]).length;
+    const r = await actionJob("fsugg", "flake", {}, "fac");
     expect(r.code, r.stderr).toBe(0);
-    expect((await titles()).length).toBe(count);
-    expect(JSON.stringify((await issueShow("fac", open.id)).json)).toContain("also met in run fsame: paint the fence");
-    await issueClose("fac", open.id, "done", "test over");
-    await drop("fsame");
-  });
-
-  test("a FOLLOWUP line about a flake is a tracker note and files no issue", async () => {
-    const line = "Fix the flaky paint test in a.test.ts";
-    expect((await actionJob("fflakeup", "flake-followup", {}, "fac")).code).toBe(0);
-    const all = await titles();
-    expect(all.map((i) => i.title)).not.toContain(line);
-    const tracker = all.find((i) => i.tracker);
-    expect((await issueShow("fac", tracker.id)).json.notes.join("\n")).toContain(`job fflakeup: ${line}`);
+    expect(conn().query("SELECT repo, run, who, title, location, saw, why, impact, risk, effort FROM suggestions WHERE run = 'fsugg'").all()).toEqual([
+      { repo: "fac", run: "fsugg", who: "worker", title: "mend the gate", location: "a.ts:3", saw: "it fails", why: "it breaks a run", impact: 3, risk: 2, effort: 3 },
+    ]);
+    expect(flakes().filter((f) => f.run === "fsugg")).toMatchObject([{ repo: "fac", check: "worker", tests: ["a.test.ts > slow one: timed out, passed alone"] }]);
+    expect(((await issueList("fac")).json as any[]).length).toBe(before);
+    await drop("fsugg");
   }, 60_000);
 });

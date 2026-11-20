@@ -90,7 +90,7 @@ export function parseWorker(raw: any): WorkerReply | string {
 export const REVIEW_SCHEMA = {
   type: "object", additionalProperties: false, required: ["verdict", "summary", "failures"],
   properties: {
-    followups: { ...WORKER_SCHEMA.properties.followups, description: "On a pass, a minor finding to file instead of holding, at most 3: true, still meets every Goal clause and Oracle line, and breaks no caller. A hold files none." },
+    followups: { ...WORKER_SCHEMA.properties.followups, description: "On a pass, a minor finding to record as a suggestion instead of holding, at most 3: true, still meets every Goal clause and Oracle line, and breaks no caller. A hold records none." },
     verdict: { enum: ["pass", "hold"] },
     summary: { type: "string", minLength: 1, description: "The verdict in one sentence and the count of passes, in at most 80 words." },
     failures: {
