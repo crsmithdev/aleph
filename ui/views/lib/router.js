@@ -289,7 +289,7 @@ export async function start() {
     },
     draw,
     event: (ev) => page.shown?.view?.event?.($("view"), ev),
-    // The keys of each `change`, for code outside the views: the kit's note tool reloads on /api/annotations.
+    // The keys of each `change`, for code outside the views: the dock's note tool reloads on /api/annotations.
     changed: (keys) => { if (keys.includes("/api/status")) readTone(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
     opened: () => readTone(),
   });

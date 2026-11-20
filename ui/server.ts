@@ -6,7 +6,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { kit } from "./kit.ts";
+import { dock } from "./dock.ts";
 import { chatHooks } from "./chat-hooks.ts";
 import { sameSite } from "./http.ts";
 import { annotationsFile } from "../lib/paths.ts";
@@ -114,9 +114,9 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
     async fetch(req) {
       const refused = await pairRoute(req) ?? gate(req);
       if (refused) return refused;
-      const shelved = await kit?.shelf(req);
+      const shelved = await dock?.shelf(req);
       if (shelved) return shelved;
-      const handled = await kit?.notes(req, { file: annotationsFile(), base: "/api/annotations", allow: sameSite }) ?? await kit?.chat(req, chatHooks());
+      const handled = await dock?.notes(req, { file: annotationsFile(), base: "/api/annotations", allow: sameSite }) ?? await dock?.chat(req, chatHooks());
       if (handled) return handled;
       const url = new URL(req.url);
       const path = url.pathname;
@@ -149,9 +149,9 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       if (path === "/app.css") return new Response(Bun.file(join(dir, "app.css")), { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "no-cache" } });
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
       if (path === "/vendor/idiomorph.js") return new Response(Bun.file(join(dir, "vendor", "idiomorph.js")), { headers: JS });
-      // The kit widgets, served from the aleph-tools checkout.
-      const widget = path.match(/^\/vendor\/kit\/([a-z-]+\.js)$/);
-      const widgetFile = widget && kit?.kitFile(widget[1]);
+      // The dock widgets, served from the aleph-tools checkout.
+      const widget = path.match(/^\/vendor\/dock\/([a-z-]+\.js)$/);
+      const widgetFile = widget && dock?.dockFile(widget[1]);
       if (widgetFile) return new Response(Bun.file(widgetFile), { headers: JS });
       if (SHARED.has(path)) {
         const file = join(dir, SHARED.get(path)!);
@@ -179,6 +179,6 @@ if (import.meta.main) {
   }
   const server = await serve(port);
   // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it.
-  if (String(server.port) === uiPort()) await kit?.announce(`http://127.0.0.1:${server.port}`);
+  if (String(server.port) === uiPort()) await dock?.announce(`http://127.0.0.1:${server.port}`);
   console.log(`http://127.0.0.1:${server.port}/`);
 }

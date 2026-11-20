@@ -18,7 +18,7 @@ kind `literal` or `helper-bypass`, and each table column and component the view 
 helper, not a bypass. A row under Deviations or the Appendix of the doc is a known deviation: do not report it.
 
 **Drawn view.** Follow [verify-ui](../verify-ui/SKILL.md) and screenshot the route in light and dark, at desktop
-(1440 px) and phone (390 px) width: four PNGs. Do the same for the same component on `#/kit`. Compare the page with the specimen side by side: spacing, type size
+(1440 px) and phone (390 px) width: four PNGs. Do the same for the same component on `#/design`. Compare the page with the specimen side by side: spacing, type size
 and weight, tone, radius, alignment, row height, and what a table or chart does at phone width. Check each state the
 page can show (empty, loading, error), and the console errors.
 
@@ -27,7 +27,7 @@ page can show (empty, loading, error), and the console errors.
 A finding has all of:
 
 - the rule: its section and the line of `docs/design.md` that the page breaks;
-- the evidence: the `file:line` of the code that breaks it, or the screenshot where it shows, with the Kit
+- the evidence: the `file:line` of the code that breaks it, or the screenshot where it shows, with the Design page
   specimen that shows the rule kept;
 - one kind:
 
@@ -54,5 +54,5 @@ One change per finding, in the view or style file. Use the token, helper or comp
 
 Tool: the `guard:` test in `skills/refit-design/refit-design.test.ts` fails when the inventory count of kind
 `literal` over `ui` rises, so the count only shrinks. The count of kind `helper-bypass` is unchecked: it is not yet
-a test. Rule (write-code RULES.md, UI): a new component has a section in the doc and a specimen on `#/kit`.
+a test. Rule (write-code RULES.md, UI): a new component has a section in the doc and a specimen on `#/design`.
 

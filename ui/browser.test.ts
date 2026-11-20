@@ -2,15 +2,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } fro
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { kit, root } from "./kit.ts";
+import { dock, root } from "./dock.ts";
 import { annotationsFile } from "../lib/paths.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./browser.testkit.ts";
 
 /** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
 let last = { ok: true };
 const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name, async () => { const run = { ok: false }; last = run; await fn(); run.ok = true; }, timeout);
-/** A test of a kit widget: it skips when aleph-tools is not on this machine (ui/kit.ts). */
-const kitTest = (name: string, fn: () => unknown, timeout?: number) => (kit ? test : bunTest.skip)(name, fn, timeout);
+/** A test of a dock widget: it skips when aleph-tools is not on this machine (ui/dock.ts). */
+const dockTest = (name: string, fn: () => unknown, timeout?: number) => (dock ? test : bunTest.skip)(name, fn, timeout);
 /** `shelf note <verb> ...` of aleph-tools on the notes file of this run. */
 const shelfNote = ([verb, ...rest]: string[]) => Bun.spawnSync([process.execPath, join(root, "shelf.ts"), "note", verb, "--file", annotationsFile(), ...rest], { env: process.env, stdout: "pipe", stderr: "pipe" });
 
@@ -77,11 +77,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors.slice(before)).toEqual([]);
   }, 30_000);
 
-  kitTest("the font picker changes the --display font of the page, with no page error", async () => {
+  dockTest("the font picker changes the --display font of the page, with no page error", async () => {
     await page.go("#/");
     const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
     expect(await root()).toContain("Merriweather");
-    await page.ev('(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector("select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
+    await page.ev('(() => { const s = document.getElementById("dock-fonts").shadowRoot.querySelector("select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
     expect(await root()).toContain("Lora");
     expect(await page.ev<string>('getComputedStyle(document.querySelector(".mark")).fontFamily')).toContain("Merriweather");
     expect(page.errors).toEqual([]);
@@ -319,8 +319,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).not.toBe("none");
   }, 30_000);
 
-  test("Kit: the ask dot is 8px, the detail prose stops at 76ch, and a selected row has the Selected look", async () => {
-    await page.go("#/kit");
+  test("Design: the ask dot is 8px, the detail prose stops at 76ch, and a selected row has the Selected look", async () => {
+    await page.go("#/design");
     await page.when('document.querySelector(".ask-dot") && document.querySelector(".dp-prose > .md") && document.querySelector("tr.mrow[aria-selected=true]")');
     // A probe inside the prose, styled with the token, gives the computed form of 76ch, --sunk and the 2px --run bar.
     const r = await page.ev<any>(`(() => {
@@ -348,22 +348,22 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r.length).toBeGreaterThan(0);
     for (const [inner, h] of r) { expect(inner).toBeGreaterThanOrEqual(38); expect(h).toBe(inner); }
     await page.ev('document.documentElement.style.removeProperty("--ctl-h")');
-    // The Kit page draws the status light specimen: no page shows a live dot since the Agents scorecard dropped the OpenRouter light.
-    await page.go("#/kit");
+    // The Design page draws the status light specimen: no page shows a live dot since the Agents scorecard dropped the OpenRouter light.
+    await page.go("#/design");
     await page.when('document.querySelector(".event-dot")');
     expect(await page.ev('getComputedStyle(document.querySelector(".event-dot")).borderRadius')).toBe("999px");
   }, 30_000);
 
-  test("Kit: every specimen draws, the charts draw from fixtures, and its theme pick stays on the kit page", async () => {
+  test("Design: every specimen draws, the charts draw from fixtures, and its theme pick stays on the design page", async () => {
     await page.width(1200);
-    await page.go("#/kit?theme=dark");
-    await page.when('document.querySelector(".kit-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
+    await page.go("#/design?theme=dark");
+    await page.when('document.querySelector(".design-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
     const r = await page.ev<any>(`({
-      specimens: document.querySelectorAll('[data-annotate^="kit/"]').length,
-      swatches: document.querySelectorAll(".kit-swatch").length,
+      specimens: document.querySelectorAll('[data-annotate^="design/"]').length,
+      swatches: document.querySelectorAll(".design-swatch").length,
       charts: document.querySelectorAll("aleph-chart canvas").length,
-      noRules: [...document.querySelectorAll(".kit-spec")].filter((s) => !s.querySelector(".kit-rules")?.textContent.trim()).map((s) => s.querySelector("h3").textContent),
-      values: document.querySelectorAll("#kit-values .kit-specimen tbody tr").length,
+      noRules: [...document.querySelectorAll(".design-spec")].filter((s) => !s.querySelector(".design-rules")?.textContent.trim()).map((s) => s.querySelector("h3").textContent),
+      values: document.querySelectorAll("#design-values .design-specimen tbody tr").length,
       contrast: document.querySelectorAll('[data-tokens="contrast"] tbody tr').length,
       theme: document.documentElement.dataset.theme,
       error: !!document.querySelector("#view > .page > .error"),
@@ -374,47 +374,47 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(r).toMatchObject({ values: 22, contrast: 13 });
     // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Error colour.
     expect(await page.ev(`({
-      ids: ["kit-list", "kit-row-cell"].map((i) => !!document.querySelector("#" + i + ".kit-spec")),
-      list: !!document.querySelector("#kit-list .list > .card") && document.querySelectorAll("#kit-list .grp[id]").length,
-      gap: getComputedStyle(document.querySelectorAll("#kit-list .grp[id]")[1]).marginTop,
-      lede: document.querySelector("#kit-card .lede")?.textContent,
-      cell: document.querySelector("#kit-row-cell td.wide")?.title,
-      kinds: ["danger", "small", "always"].map((k) => !!document.querySelector("#kit-button .act." + k)),
-      acts: !!document.querySelector("#kit-row-actions tbody td.acts:last-child .act.small"),
-      failed: document.querySelector('aleph-chart[key="kit/category"]').frame.by.keys.map((k) => k.color).slice(1),
+      ids: ["design-list", "design-row-cell"].map((i) => !!document.querySelector("#" + i + ".design-spec")),
+      list: !!document.querySelector("#design-list .list > .card") && document.querySelectorAll("#design-list .grp[id]").length,
+      gap: getComputedStyle(document.querySelectorAll("#design-list .grp[id]")[1]).marginTop,
+      lede: document.querySelector("#design-card .lede")?.textContent,
+      cell: document.querySelector("#design-row-cell td.wide")?.title,
+      kinds: ["danger", "small", "always"].map((k) => !!document.querySelector("#design-button .act." + k)),
+      acts: !!document.querySelector("#design-row-actions tbody td.acts:last-child .act.small"),
+      failed: document.querySelector('aleph-chart[key="design/category"]').frame.by.keys.map((k) => k.color).slice(1),
     })`)).toEqual({ ids: [true, true], list: 2, gap: "16px", lede: "One sentence that sums up the card.", cell: "A title that takes the spare width, with its text as its title", kinds: [true, true, true], acts: true, failed: ["error", "error"] });
     expect(r.specimens).toBeGreaterThan(20);
     expect(r.swatches).toBeGreaterThan(20);
     // The empty and loading states are drawn: a line, a status line, a loading and a failed metric card, and the empty table and chart.
     expect(await page.ev(`({
-      states: ["#kit-states .empty", "#kit-states p[role=status]", "#kit-states .tile .spin[role=status]", "#kit-states .tile .spin.bad"].map((q) => !!document.querySelector(q)),
-      empties: ["kit-table-empty", "kit-chart-empty"].map((i) => !!document.querySelector("#" + i + " .empty")),
+      states: ["#design-states .empty", "#design-states p[role=status]", "#design-states .tile .spin[role=status]", "#design-states .tile .spin.bad"].map((q) => !!document.querySelector(q)),
+      empties: ["design-table-empty", "design-chart-empty"].map((i) => !!document.querySelector("#" + i + " .empty")),
     })`)).toEqual({ states: [true, true, true, true], empties: [true, true] });
-    // Every :root token (the --wa- and --kit- bridges aside) is named by a code element of a specimen, not of its rules.
+    // Every :root token (the --wa- and --dock- bridges aside) is named by a code element of a specimen, not of its rules.
     expect(await page.ev(`(() => {
-      const named = new Set([...document.querySelectorAll(".kit-specimen code")].flatMap((c) => c.textContent.match(/--[\\w-]+/g) ?? [])), bare = new Set();
-      for (const sheet of document.styleSheets) for (const r of (() => { try { return sheet.cssRules; } catch { return []; } })()) if (r.selectorText === ":root") for (const p of r.style) if (p.startsWith("--") && !/^--(wa|kit)-/.test(p)) bare.add(p);
+      const named = new Set([...document.querySelectorAll(".design-specimen code")].flatMap((c) => c.textContent.match(/--[\\w-]+/g) ?? [])), bare = new Set();
+      for (const sheet of document.styleSheets) for (const r of (() => { try { return sheet.cssRules; } catch { return []; } })()) if (r.selectorText === ":root") for (const p of r.style) if (p.startsWith("--") && !/^--(wa|dock)-/.test(p)) bare.add(p);
       return [...bare].filter((p) => !named.has(p));
     })()`)).toEqual([]);
     // Every heading of docs/design.md has a specimen, a group or a place in a specimen's rules, but the prose-only sections and the containers of specimens.
-    const exempt = ["Principles", "Rules", "The kit bridge", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
+    const exempt = ["Principles", "Rules", "The dock bridge", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
     expect(await page.ev(`fetch("/api/design").then((r) => r.json()).then((d) => {
-      const have = new Set([...document.querySelectorAll(".kit-spec h3, h2.kit-h, .kit-rules h4")].map((h) => h.textContent));
+      const have = new Set([...document.querySelectorAll(".design-spec h3, h2.design-h, .design-rules h4")].map((h) => h.textContent));
       return d.body.split("\\n").filter((l) => /^#{2,4} /.test(l)).map((l) => l.replace(/^#+ /, "")).filter((h) => !${JSON.stringify(exempt)}.includes(h) && !have.has(h));
     })`)).toEqual([]);
     // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.
-    expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.kit-h, .kit-spec[id]");
+    expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.design-h, .design-spec[id]");
       return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...nav.querySelectorAll("li:not(.sub) a")].map((a) => a.textContent) }; })()`)).toEqual({
       n: true, ok: true, groups: ["Every component", "Foundations", "Content", "Structure", "Data", "Lists of items", "Labels", "Actions", "Text", "Controls", "States"] });
-    await page.ev('document.querySelector(".toc a[href=\'#kit-table\']").click()');
+    await page.ev('document.querySelector(".toc a[href=\'#design-table\']").click()');
     await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Table"');
-    expect(await hash()).toMatch(/^#\/kit/);
+    expect(await hash()).toMatch(/^#\/design/);
     expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
-    // Mount the kit again through the theme pick: one click on the confirm button arms it and does not drop it.
+    // Mount the Design page again through the theme pick: one click on the confirm button arms it and does not drop it.
     await page.ev('document.querySelector("button[data-theme-pick=light]").click()');
-    await page.when('document.documentElement.dataset.theme === "light" && document.querySelector("[data-kit-confirm]")');
-    await page.ev('document.querySelector("[data-kit-confirm]").click()');
-    expect(await page.ev('document.querySelector("[data-kit-confirm]").textContent')).toBe("Drop a1700? Click again");
+    await page.when('document.documentElement.dataset.theme === "light" && document.querySelector("[data-design-confirm]")');
+    await page.ev('document.querySelector("[data-design-confirm]").click()');
+    expect(await page.ev('document.querySelector("[data-design-confirm]").textContent')).toBe("Drop a1700? Click again");
     await page.go("#/jobs");
     expect(await page.ev("document.documentElement.dataset.theme ?? null")).toBeNull();
     expect(page.errors).toEqual([]);
@@ -435,12 +435,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 60_000);
 
-  test("Kit: no two axis labels of the Timeline specimen intersect, at 390 px and at 1280 px", async () => {
+  test("Design: no two axis labels of the Timeline specimen intersect, at 390 px and at 1280 px", async () => {
     for (const w of [390, 1280]) {
       await page.width(w);
-      await page.go("#/kit");
-      await page.when('document.querySelector("#kit-timeline .dp-ticks span")');
-      const r = await page.ev<number[][]>('[...document.querySelectorAll("#kit-timeline .dp-ticks span")].map((s) => { const b = s.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; })');
+      await page.go("#/design");
+      await page.when('document.querySelector("#design-timeline .dp-ticks span")');
+      const r = await page.ev<number[][]>('[...document.querySelectorAll("#design-timeline .dp-ticks span")].map((s) => { const b = s.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; })');
       expect(r.length).toBeGreaterThan(1);
       for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) expect({ w, i, j, hit: r[i][0] < r[j][1] && r[j][0] < r[i][1] && r[i][2] < r[j][3] && r[j][2] < r[i][3] }).toEqual({ w, i, j, hit: false });
     }
@@ -449,7 +449,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("at 390 px each text cut by an ellipsis has its full text in a title, on itself or on an ancestor", async () => {
     await page.go("#/");
-    const hrefs = ["#/kit", "#/issues/demo/21", "#/memory?tab=health", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
+    const hrefs = ["#/design", "#/issues/demo/21", "#/memory?tab=health", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
     await page.width(390);
     const cut = `[...document.querySelectorAll("#view *")].filter((e) => getComputedStyle(e).textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth).filter((e) => { const t = e.innerText.replace(/\\s+/g, " ").trim(); for (let a = e; a && a.id !== "view"; a = a.parentElement) if (typeof a.title === "string" && a.title.replace(/\\s+/g, " ").includes(t)) return false; return true; }).map((e) => e.className + ": " + e.textContent.trim().slice(0, 40))`;
     for (const href of hrefs) {
@@ -816,15 +816,15 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
-  test("Kit: a warn button outside the page head has the warn style", async () => {
-    await page.go("#/kit");
-    await page.when('document.querySelector("#kit-button .act.warn")');
+  test("Design: a warn button outside the page head has the warn style", async () => {
+    await page.go("#/design");
+    await page.when('document.querySelector("#design-button .act.warn")');
     const r = await page.ev<any>(`(() => {
       const probe = document.createElement("i");
       document.body.append(probe);
       const val = (prop, v) => { probe.style.cssText = prop + ":" + v; return getComputedStyle(probe)[prop]; };
-      const s = getComputedStyle(document.querySelector("#kit-button .act.warn"));
-      const r = { in: !!document.querySelector("#kit-button .act.warn").closest(".shead"), got: [s.backgroundColor, s.color, s.borderTopColor], want: [val("background-color", "var(--need-bg)"), val("color", "var(--need)"), val("border-top-color", "var(--need)")] };
+      const s = getComputedStyle(document.querySelector("#design-button .act.warn"));
+      const r = { in: !!document.querySelector("#design-button .act.warn").closest(".shead"), got: [s.backgroundColor, s.color, s.borderTopColor], want: [val("background-color", "var(--need-bg)"), val("color", "var(--need)"), val("border-top-color", "var(--need)")] };
       probe.remove();
       return r;
     })()`);
@@ -832,12 +832,12 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(r.got).toEqual(r.want);
   }, 30_000);
 
-  test("Kit: at 390 px a key on two lines keeps the values of a metric row level, and the smallest value is the size floor", async () => {
+  test("Design: at 390 px a key on two lines keeps the values of a metric row level, and the smallest value is the size floor", async () => {
     await page.width(390);
-    await page.go("#/kit");
-    await page.when('document.querySelector("#kit-metric .tile b")');
+    await page.go("#/design");
+    await page.when('document.querySelector("#design-metric .tile b")');
     const r = await page.ev<any>(`(() => {
-      const tiles = [...document.querySelectorAll("#kit-metric .tile")];
+      const tiles = [...document.querySelectorAll("#design-metric .tile")];
       const rows = {};
       for (const t of tiles) (rows[Math.round(t.getBoundingClientRect().top)] ??= []).push(t);
       const probe = document.createElement("i");
@@ -862,38 +862,38 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 30_000);
 
-  kitTest("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
+  dockTest("the dock holds the font picker, the annotations, the shelf and the chat", async () => {
     await page.width(1200);
     await page.go("#/");
-    expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate", "kit-shelf", "kit-chat"]);
+    expect(await page.ev('[...document.querySelectorAll("#dock-host > div")].map((d) => d.id)')).toEqual(["dock-fonts", "dock-annotate", "dock-shelf", "dock-chat"]);
   });
 
-  kitTest("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
+  dockTest("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
     await page.width(1200);
     await page.go("#/");
-    const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("dock-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
     await pick("sans", "Inter");
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("'Inter', system-ui, sans-serif");
     // Charts read --chart-scale, which the picker sets from the Charts size step.
-    await page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="chart"][data-prop="size"]'); s.value = "1.08"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    await page.ev(`(() => { const s = document.getElementById("dock-fonts").shadowRoot.querySelector('select[data-role="chart"][data-prop="size"]'); s.value = "1.08"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
     expect(await page.ev('document.documentElement.style.getPropertyValue("--chart-scale")')).toBe("1.08");
-    await page.ev('document.getElementById("kit-fonts").shadowRoot.querySelector(".reset").click()');
+    await page.ev('document.getElementById("dock-fonts").shadowRoot.querySelector(".reset").click()');
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("");
   });
 
-  kitTest("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
+  dockTest("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
     await page.width(1200);
     await page.go("#/");
     // A click in pick mode opens a note instead of following the link; the saved note shows a pin and the Markdown names it.
-    await page.ev('document.getElementById("kit-annotate").shadowRoot.querySelector(".pick").click()');
+    await page.ev('document.getElementById("dock-annotate").shadowRoot.querySelector(".pick").click()');
     const before = await page.ev<string>("location.hash");
     await page.ev('document.querySelector("#nav li a").click()');
     expect(await page.ev<string>("location.hash")).toBe(before);
-    await page.ev('(() => { const l = document.getElementById("kit-annotate-layer").shadowRoot; l.querySelector("textarea.note").value = "rename this"; l.querySelector(".save").click(); })()');
-    await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "1"');
-    expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin").length')).toBe(1);
+    await page.ev('(() => { const l = document.getElementById("dock-annotate-layer").shadowRoot; l.querySelector("textarea.note").value = "rename this"; l.querySelector(".save").click(); })()');
+    await page.when('document.getElementById("dock-annotate").shadowRoot.querySelector(".count").textContent === "1"');
+    expect(await page.ev('document.getElementById("dock-annotate-layer").shadowRoot.querySelectorAll(".pin").length')).toBe(1);
     await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
-    // The note went to the server through the kit's notes handler, by you.
+    // The note went to the server through the dock's notes handler, by you.
     // The updater signals a change once the file is written: each change signal is a read.
     const server = () => page.ev<{ id: string; note: string; by: string }[]>('fetch("/api/annotations").then((r) => r.json())');
     const saved = await page.ev<{ note: string; by: string }[]>(`new Promise((done) => {
@@ -906,11 +906,11 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     // An agent's note, added with the CLI, reaches the open page through the change signal, with its own pin.
     const cli = shelfNote;
     expect(cli(["add", "--selector", ".mark", "--", "from the agent"]).exitCode).toBe(0);
-    await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "2"');
-    expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
+    await page.when('document.getElementById("dock-annotate").shadowRoot.querySelector(".count").textContent === "2"');
+    expect(await page.ev('document.getElementById("dock-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
     // The notes list of an open note offers both ways out: Terminal, from the `send` index.html gives annotate(), and Chat, from the tool.
-    await page.ev('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").click()');
-    expect(await page.ev('(() => { const u = document.getElementById("kit-annotate").shadowRoot; return [u.querySelector(".term").hidden, u.querySelector(".term").textContent, u.querySelector(".send").hidden, u.querySelector(".send").textContent]; })()')).toEqual([false, "Terminal", false, "Chat"]);
+    await page.ev('document.getElementById("dock-annotate").shadowRoot.querySelector(".count").click()');
+    expect(await page.ev('(() => { const u = document.getElementById("dock-annotate").shadowRoot; return [u.querySelector(".term").hidden, u.querySelector(".term").textContent, u.querySelector(".send").hidden, u.querySelector(".send").textContent]; })()')).toEqual([false, "Terminal", false, "Chat"]);
     for (const n of await server()) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 
@@ -922,7 +922,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
     await page.go("#/");
     const cli = shelfNote;
-    const chat = 'document.getElementById("kit-chat").shadowRoot', note = 'document.getElementById("kit-annotate")';
+    const chat = 'document.getElementById("dock-chat").shadowRoot', note = 'document.getElementById("dock-annotate")';
     await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
       ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response("event: end\\ndata: {}\\n\\n", { headers: { "content-type": "text/event-stream" } })))
       : realFetch(u, o); })()`);
@@ -945,7 +945,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     return { chat, note, say, navNote, done };
   };
 
-  kitTest("the chat sends a chosen note of the page with the next message only", async () => {
+  dockTest("the chat sends a chosen note of the page with the next message only", async () => {
     const { chat, say, navNote, done } = await chatRig();
     const old = await navNote();
     await page.ev(`${chat}.querySelector(".fab").click()`);
@@ -961,7 +961,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  kitTest("a note picked from the chat comes back as the chip and goes with the next message", async () => {
+  dockTest("a note picked from the chat comes back as the chip and goes with the next message", async () => {
     const { chat, note, say, navNote, done } = await chatRig();
     const old = await navNote();
     await page.ev(`${chat}.querySelector(".fab").click()`);
@@ -972,7 +972,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev(`${note}.shadowRoot.querySelector(".pick").getAttribute("aria-pressed")`)).toBe("true");
     await page.ev('document.querySelector("#nav li a").click()');
     expect(await page.ev(`${note}.shadowRoot.querySelector(".pick").getAttribute("aria-pressed")`)).toBe("false");
-    await page.ev('(() => { const l = document.getElementById("kit-annotate-layer").shadowRoot; l.querySelector("textarea.note").value = "this link"; l.querySelector(".save").click(); })()');
+    await page.ev('(() => { const l = document.getElementById("dock-annotate-layer").shadowRoot; l.querySelector("textarea.note").value = "this link"; l.querySelector(".save").click(); })()');
     await page.when(`!${chat}.querySelector(".pop").hidden && ${chat}.querySelector(".points").textContent.includes("#2 this link")`);
     const fresh = await say("what is this");
     expect(fresh.annotations).toHaveLength(1);
@@ -980,7 +980,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  kitTest("a cancelled pick attaches nothing", async () => {
+  dockTest("a cancelled pick attaches nothing", async () => {
     const { chat, done } = await chatRig();
     await page.ev(`${chat}.querySelector(".fab").click()`);
     await page.ev(`${chat}.querySelector(".point").click()`);
@@ -991,13 +991,13 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await done();
   }, 30_000);
 
-  kitTest("without the annotate tool the chat hides its point button and still sends", async () => {
+  dockTest("without the annotate tool the chat hides its point button and still sends", async () => {
     const { chat, note, say, done } = await chatRig();
-    await page.ev(`${note}.id = "kit-annotate-off"`);
+    await page.ev(`${note}.id = "dock-annotate-off"`);
     await page.ev(`${chat}.querySelector(".fab").click()`);
     expect(await page.ev(`${chat}.querySelector(".point").hidden`)).toBe(true);
     expect((await say("plain")).text).toBe("plain");
-    await page.ev('document.getElementById("kit-annotate-off").id = "kit-annotate"');
+    await page.ev('document.getElementById("dock-annotate-off").id = "dock-annotate"');
     await done();
   }, 30_000);
 

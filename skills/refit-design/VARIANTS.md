@@ -14,13 +14,13 @@ styles as a part. For each one, list its call sites and its hand-built copies, a
 - a copy of the markup with one part added, removed or renamed.
 
 **Drawn view.** Follow [verify-ui](../verify-ui/SKILL.md). Screenshot the same component on two routes and on
-`#/kit`, at desktop width. Compare height, spacing, type, tone, alignment and the parts present.
+`#/design`, at desktop width. Compare height, spacing, type, tone, alignment and the parts present.
 
 ## Proof
 
 A finding has all of:
 
-- the component, and its specimen on `#/kit`;
+- the component, and its specimen on `#/design`;
 - two builds, each with `file:line` or a screenshot, that differ in a way the doc does not name;
 - the build that the doc names, or the build that more call sites use when the doc is silent.
 

@@ -18,14 +18,14 @@ A state with no branch in the view, and no rule in `ui/app.css` for a control, i
 
 **Drawn view.** Follow [verify-ui](../verify-ui/SKILL.md). Force each state: fixture data with no rows, a fetch
 that waits, a fetch that fails, the keyboard on each control, and a 390 px window. Screenshot each state beside the
-same state on `#/kit`. Read the console too.
+same state on `#/design`. Read the console too.
 
 ## Proof
 
 A finding has all of:
 
 - the component and the state it lacks, or draws wrong;
-- the line of `docs/design.md` that gives the state, or the specimen on `#/kit` that draws it;
+- the line of `docs/design.md` that gives the state, or the specimen on `#/design` that draws it;
 - `file:line` that has no branch, or the screenshot that shows the fault.
 
 A state the doc leaves out is a proposal to amend the doc. A state that draws but breaks a value rule (a literal
@@ -39,7 +39,7 @@ state in `ui/app.css` from tokens.
 
 ## Guard
 
-Rule (write-code RULES.md, UI): a new component in a plan names its empty, loading and error state. Tool: the Kit
-test in `ui/browser.test.ts` fails when `#kit-states`, `#kit-table-empty` or `#kit-chart-empty` stops drawing its
+Rule (write-code RULES.md, UI): a new component in a plan names its empty, loading and error state. Tool: the Design page
+test in `ui/browser.test.ts` fails when `#design-states`, `#design-table-empty` or `#design-chart-empty` stops drawing its
 empty or loading line.
 

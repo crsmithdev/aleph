@@ -4,7 +4,7 @@ import { chatCommand } from "../jobs/lib/roles/agent-call.ts";
 import { chatIdleMs } from "../jobs/lib/infra/settings.ts";
 import { annotationsFile } from "../lib/paths.ts";
 import { sameSite } from "./http.ts";
-import { kit } from "./kit.ts";
+import { dock } from "./dock.ts";
 
 const system = (file: string) => `You are the chat agent of the aleph web UI. Chris writes to you from a panel on the page he is looking at.
 - File work with \`aleph issue add <repo> ...\`. Filing an issue starts a factory build, so file only what Chris asks for, and say the issue number.
@@ -13,7 +13,7 @@ const system = (file: string) => `You are the chat agent of the aleph web UI. Ch
 
 /** The notes with an id in `ids`, then the other open notes on `page` and those on no page, as blocks for the prompt; "" when there are none. */
 function notesOn(file: string, page: string | undefined, ids: string[]): string {
-  const all: any[] = kit!.readNotes(file);
+  const all: any[] = dock!.readNotes(file);
   const pointed = all.filter((n) => ids.includes(n.id));
   const open = page === undefined ? [] : all.filter((n) => n.status === "open" && (n.url === page || n.url === "") && !ids.includes(n.id));
   const line = (n: any) => `- ${n.id}${n.status === "open" ? "" : ` (${n.status})`} on \`${n.selector}\`${n.text ? ` ("${n.text.slice(0, 80)}")` : ""}: ${n.note}${n.replies.map((r: any) => `\n  - ${r.by}: ${r.text}`).join("")}`;

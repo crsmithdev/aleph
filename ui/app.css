@@ -11,7 +11,7 @@
   --rule: #DCD9EC;
   --lift: 0 1px 3px rgb(40 36 80 / .12), 0 2px 8px rgb(40 36 80 / .06);  /* the Ask card's shadow */
   --card-lift: 0 1px 2px rgb(40 36 80 / .10), 0 6px 20px -8px rgb(40 36 80 / .22);  /* a card, a metric card, a detail panel: their only edge */
-  --float: 0 6px 24px rgb(0 0 0 / .25);  /* the kit widgets: the font picker and the annotations */
+  --float: 0 6px 24px rgb(0 0 0 / .25);  /* the dock widgets: the font picker and the annotations */
   --on-fill: #fff;        /* text on a coloured bar */
   --rule-2: #E8E6F3;
   --need: #8A5A00;        /* needs you: yellow */
@@ -104,19 +104,19 @@
   --wa-font-family-heading: var(--sans);
   --wa-font-family-code: var(--mono);
 }
-/* The kit widgets (aleph-tools) read these; one block serves both themes, as above. */
+/* The dock widgets (aleph-tools) read these; one block serves both themes, as above. */
 :root {
-  --kit-bg: var(--surface);
-  --kit-field: var(--bg);
-  --kit-sunk: var(--sunk);
-  --kit-ink: var(--ink);
-  --kit-muted: var(--muted);
-  --kit-rule: var(--rule);
-  --kit-accent: var(--focus);
-  --kit-shadow: var(--float);
-  --kit-font: var(--sans);
-  --kit-code: var(--mono);
-  --kit-z: var(--z-overlay);
+  --dock-bg: var(--surface);
+  --dock-field: var(--bg);
+  --dock-sunk: var(--sunk);
+  --dock-ink: var(--ink);
+  --dock-muted: var(--muted);
+  --dock-rule: var(--rule);
+  --dock-accent: var(--focus);
+  --dock-shadow: var(--float);
+  --dock-font: var(--sans);
+  --dock-code: var(--mono);
+  --dock-z: var(--z-overlay);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -255,7 +255,7 @@ main { min-width: 0; }
 /* The contents (toc() in ui/views/lib/html.js): a rail at the right that stays in view, at 1100px and wider; a fold above the body under that. */
 .toc-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--sp-28); align-items: start; }
 .toc-body { grid-area: 1 / 1; min-width: 0; }
-/* The rail ends above the kit dock: 136px tall, 16px from the bottom, so 168px with the 16px at the top. */
+/* The rail ends above the dock: 136px tall, 16px from the bottom, so 168px with the 16px at the top. */
 .toc { grid-area: 1 / 2; position: sticky; top: var(--sp-16); max-height: calc(100vh - 168px); overflow-y: auto; font-size: var(--fs-sm); }
 .toc details { margin: 0; padding: 0; border: 0; }
 .toc summary { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); cursor: pointer; }
@@ -560,7 +560,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
   .card .sh .aside { flex-basis: 100%; margin-left: 0; }
   .shead .aside { order: 4; margin-left: 0; max-width: 100%; }
   .shead .fbar { flex-wrap: wrap; }
-  /* The kit dock (two 40px buttons, 8px apart, 16px from the edge) is fixed over the page; the end of the page clears it. */
+  /* The dock (two 40px buttons, 8px apart, 16px from the edge) is fixed over the page; the end of the page clears it. */
   .page { padding: var(--sp-20) var(--sp-16) calc(2 * (var(--gap) + var(--sp-16)) + var(--sp-8) + 2 * var(--sp-16)); }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }
@@ -1176,23 +1176,23 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .md table { border-collapse: collapse; margin: var(--sp-8) 0; font-size: var(--fs-xs); }
 .md th, .md td { border: 1px solid var(--rule); padding: var(--sp-4) var(--sp-8); text-align: left; }
 
-/* #/kit: the specimen page (ui/views/kit.js). */
-.kit-spec { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); margin-bottom: var(--sp-28); }
-.kit-spec > h3 { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); margin: 0; }
-.kit-spec > .kit-specimen { min-width: 0; }
+/* #/design: the specimen page (ui/views/design.js). */
+.design-spec { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); margin-bottom: var(--sp-28); }
+.design-spec > h3 { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); margin: 0; }
+.design-spec > .design-specimen { min-width: 0; }
 /* The doc's section, under its specimen: wide enough for the Parts table. */
-.kit-spec > .kit-rules { max-width: 72rem; font-size: var(--fs-sm); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: var(--sp-12); }
-.kit-rules ul { margin: 0; padding-left: var(--indent-list); }
-.kit-rules table { width: 100%; }
-.kit-h { font-family: var(--display); font-size: var(--fs-xl); margin: var(--sp-28) 0 var(--sp-12); }
-.kit-row { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: center; margin-bottom: var(--sp-12); }
-.kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-8); }
-.kit-swatch { display: grid; grid-template-columns: calc(2 * var(--ctl-h)) minmax(0, 1fr); column-gap: var(--sp-8); font-size: var(--fs-xs); }
+.design-spec > .design-rules { max-width: 72rem; font-size: var(--fs-sm); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: var(--sp-12); }
+.design-rules ul { margin: 0; padding-left: var(--indent-list); }
+.design-rules table { width: 100%; }
+.design-h { font-family: var(--display); font-size: var(--fs-xl); margin: var(--sp-28) 0 var(--sp-12); }
+.design-row { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: center; margin-bottom: var(--sp-12); }
+.design-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-8); }
+.design-swatch { display: grid; grid-template-columns: calc(2 * var(--ctl-h)) minmax(0, 1fr); column-gap: var(--sp-8); font-size: var(--fs-xs); }
 /* Light on the left, dark on the right. */
-.kit-swatch i { grid-row: span 2; display: flex; height: var(--ctl-h); overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-ctl); }
-.kit-swatch i b { flex: 1; }
-.kit-swatch .quiet { overflow-wrap: anywhere; }
-.kit-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); }
+.design-swatch i { grid-row: span 2; display: flex; height: var(--ctl-h); overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-ctl); }
+.design-swatch i b { flex: 1; }
+.design-swatch .quiet { overflow-wrap: anywhere; }
+.design-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); }
 /* Mock: ways to mark the current sidebar link. Each copy repeats the #nav base rules. */
 .navmocks { align-items: flex-start; gap: var(--sp-20); }
 .navmocks figure { margin: 0; }
@@ -1210,7 +1210,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .navmock[data-v="4"] a.on::before { content: ""; position: absolute; left: calc(-1 * var(--sp-16)); top: 0; bottom: 0; width: var(--sp-2); background: var(--ink); }
 .navmock[data-v="5"] a { color: var(--muted); }
 .navmock[data-v="5"] a.on { color: var(--ink); }
-.kit-row .meter { flex: 1 1 160px; }
+.design-row .meter { flex: 1 1 160px; }
 
 /* Browser surfaces take the palette. */
 ::selection { background: var(--sel); }

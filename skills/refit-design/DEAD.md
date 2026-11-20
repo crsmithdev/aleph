@@ -5,17 +5,17 @@ design, and still gets copied. This is the [refit-code](../refit-code/DEAD.md) l
 
 ## Signals
 
-**Code view.** List the candidates in `ui/app.css`, the views and `ui/views/kit.js`:
+**Code view.** List the candidates in `ui/app.css`, the views and `ui/views/design.js`:
 
 - a class selector that no view, helper or fixture writes into markup;
 - a custom property (`--name`) with a definition and no `var(--name)`;
 - a rule that a later rule of the same selector overrides in each property;
-- a specimen on `#/kit` that calls a helper no view calls, or draws a component the doc no longer names;
+- a specimen on `#/design` that calls a helper no view calls, or draws a component the doc no longer names;
 - a media query block whose rules are all in the list above.
 
 Grep the bare class and token name over `ui/` and `docs/design.md`.
 
-**Drawn view.** Open `#/kit` in light and dark. A specimen that draws nothing, or that draws a component no page
+**Drawn view.** Open `#/design` in light and dark. A specimen that draws nothing, or that draws a component no page
 shows, is a candidate.
 
 ## Proof
@@ -26,7 +26,7 @@ A candidate is dead when each of these is ruled out:
 |---|---|
 | Built name | A class made by string join in a helper, such as `` `tone-${state}` `` |
 | State class | A class that script adds on an event (`.open`, `.collapsed`, a `data-` attribute) |
-| Chart and kit reads | A token that `readTokens()` or the `--kit-*` bridge reads by name |
+| Chart and dock reads | A token that `readTokens()` or the `--dock-*` bridge reads by name |
 | Fixture data | A class that only a state of the data reaches, such as an error row |
 | Docs | A class or token that a section of `docs/design.md` names as part of the language |
 

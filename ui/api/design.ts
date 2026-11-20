@@ -1,5 +1,5 @@
 /**
- * `GET /api/design`: the text of docs/design.md, for the Kit page to show each component's rules beside its specimen.
+ * `GET /api/design`: the text of docs/design.md, for the Design page to show each component's rules beside its specimen.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

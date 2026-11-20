@@ -2,7 +2,7 @@
 
 The design language of `ui/`, read from the code by the design-language skill (`skills/design-language/SKILL.md`). It goes from principles to foundations, content and components, then to states and layout. A value that the rules do not allow is a deviation, listed at the end.
 
-The Kit page, `#/kit` (`ui/views/kit.js`), draws each token and component with its own helper from fixture data, in light and dark, and shows each component's section beside its specimen. A new component gets a section here and a specimen there.
+The Design page, `#/design` (`ui/views/design.js`), draws each token and component with its own helper from fixture data, in light and dark, and shows each component's section beside its specimen. A new component gets a section here and a specimen there.
 
 ## Principles
 
@@ -51,7 +51,7 @@ Allowed size literals: a width, a height, a position offset, a 1px hairline, and
 | `--rule`, `--rule-2` | #DCD9EC, #E8E6F3 | #3A3F58, #2E3245 | borders, row lines |
 | `--lift` | `0 1px 3px`, `0 2px 8px` | heavier | the Ask card |
 | `--card-lift` | `0 1px 2px`, `0 6px 20px -8px` | heavier | the only edge of a card, a metric card and a detail panel |
-| `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | kit widgets: the font picker, the annotations |
+| `--float` | `0 6px 24px rgb(0 0 0 / .25)` | the same | dock widgets: the font picker, the annotations |
 | `--on-fill` | #fff | #fff | text on a coloured bar |
 | `--sel` | `--focus` at 35% | the same | the `::selection` fill |
 
@@ -204,7 +204,7 @@ Weight 700 stays a literal on `.mark`.
 | `--dim` | .6 | opacity of a dimmed control |
 | `--z-rowlink` | 1 | `tr.rowlink` links |
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
-| `--z-overlay` | 50 | kit widgets: font picker, annotations |
+| `--z-overlay` | 50 | dock widgets: font picker, annotations |
 
 A current item (the sidebar link, the contents entry) has an inset 2px `--ink` bar at the left. A selected row (`aria-selected="true"`: `.mrow`) is `--sunk` with an inset 2px `--run` bar at the left. A parked item has a `box-shadow: inset` ring. A pipeline stage on the Status page is a 5px inset ring; its colour is the stage's failed share.
 
@@ -216,23 +216,23 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 | Container widths | two `@container` widths, literal: 560px (`pipeline`) and 420px (`.tile`, `.issue-row`) |
 | Motion | `.15s ease-out` on borders and backgrounds; no animation; ECharts `animation: false` |
 
-### The kit bridge
+### The dock bridge
 
-The kit widgets in `aleph-tools` read these. Each points at a base token, so one block serves both themes.
+The dock widgets in `aleph-tools` read these. Each points at a base token, so one block serves both themes.
 
 | Token | Value | Role |
 |---|---|---|
-| `--kit-bg` | `--surface` | a kit panel |
-| `--kit-field` | `--bg` | a kit field |
-| `--kit-sunk` | `--sunk` | a sunken area in a kit widget |
-| `--kit-ink` | `--ink` | text in a kit widget |
-| `--kit-muted` | `--muted` | secondary text in a kit widget |
-| `--kit-rule` | `--rule` | a kit widget's borders |
-| `--kit-accent` | `--focus` | a kit widget's accent |
-| `--kit-shadow` | `--float` | a kit widget's shadow |
-| `--kit-font` | `--sans` | a kit widget's text font |
-| `--kit-code` | `--mono` | a kit widget's code font |
-| `--kit-z` | `--z-overlay` | a kit widget's stacking order |
+| `--dock-bg` | `--surface` | a dock panel |
+| `--dock-field` | `--bg` | a dock field |
+| `--dock-sunk` | `--sunk` | a sunken area in a dock widget |
+| `--dock-ink` | `--ink` | text in a dock widget |
+| `--dock-muted` | `--muted` | secondary text in a dock widget |
+| `--dock-rule` | `--rule` | a dock widget's borders |
+| `--dock-accent` | `--focus` | a dock widget's accent |
+| `--dock-shadow` | `--float` | a dock widget's shadow |
+| `--dock-font` | `--sans` | a dock widget's text font |
+| `--dock-code` | `--mono` | a dock widget's code font |
+| `--dock-z` | `--z-overlay` | a dock widget's stacking order |
 
 ## Content
 
@@ -319,7 +319,7 @@ These rules apply to all components. The section of a component adds only its ow
 - When a component on a list page has nothing to show, put `empty()` in its place. Keep the card around it. On a detail page, leave the panel out.
 - Give each control the states that States gives.
 - Give text that can end in an ellipsis its full text in `title`. Give a control with only an icon an `aria-label` and the same `title`.
-- When you add a component or a state, add a section here and a specimen on `#/kit`.
+- When you add a component or a state, add a section here and a specimen on `#/design`.
 
 Each section below has the same parts, in this order:
 
@@ -518,7 +518,7 @@ A list stacks rows or cards. A group is a named part of a page or a card.
 
 | Helper | Reference |
 |---|---|
-| `list(html)`; `group(id, html)` | `ui/views/kit.js` |
+| `list(html)`; `group(id, html)` | `ui/views/design.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -544,7 +544,7 @@ The contents are a list of links to the sections of a long page, in a rail that 
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
-| 1 | Rail | The word "Contents" and the list, in a `nav` | | 220px at the right of the body, `--sp-28` apart; sticky `--sp-16` from the top; it ends above the kit dock and scrolls when taller |
+| 1 | Rail | The word "Contents" and the list, in a `nav` | | 220px at the right of the body, `--sp-28` apart; sticky `--sp-16` from the top; it ends above the dock and scrolls when taller |
 | 2 | Entry | An `<a href="#id">` to one section | | `--fs-sm`, `--muted`, on a `--rule` hairline at the left; a `sub` entry is indented `--sp-24` |
 | 3 | Current entry | The entry of the section at the top of the view | | `aria-current="location"`; `--ink`, `--fw-strong`, a 2px `--ink` bar at the left, as the sidebar's current link |
 
@@ -653,7 +653,7 @@ A row and a cell build the body of a `dataTable()`.
 
 | Helper | Reference |
 |---|---|
-| `row(cells)`; `cell(v, { num, wide, title })` | `ui/views/kit.js` |
+| `row(cells)`; `cell(v, { num, wide, title })` | `ui/views/design.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -693,7 +693,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - Set `measure.unit` to `count`, `usd` or `seconds`. The unit sets the format of the axis and the tooltip.
 - Set `measure.agg` to `sum` for a flow, and to `max` for a level. A flow opens as Columns. A level opens as Area.
 - Show one measure on one value axis. For two measures, use two panels.
-- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `error`. Two states can share a colour, such as Failed and Error, which are both `error` in the kit outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
+- A key in `by` with no `color` takes the next of `series-1` to `series-5`, `chart-6`, `chart-7`, by its place among the keys with a value. For a state, set `color` to the colour of `tone(state)`: `run`, `done`, `need` or `error`. Two states can share a colour, such as Failed and Error, which are both `error` in the Design page's outcome chart; the legend tells them apart. Other allowed values: `hot`, `muted`, `series-1` to `series-5`, `chart-6`, `chart-7`. `quiet` and `parked` are not chart colours.
 - Keep the colour of a key the same in all windows. If a key can have no value in a window, set `color` on each key, because the keys after it move up one colour.
 - Show at most seven keys. Fold the rest into one key, `Other`.
 - Show a legend. When the frame has one key and the title names it, set `legend: false`.
@@ -1015,7 +1015,7 @@ A link button goes to another page. It looks like a button.
 
 | Helper | Reference |
 |---|---|
-| `linkButton(label, href)` | `ui/views/kit.js` |
+| `linkButton(label, href)` | `ui/views/design.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1153,7 +1153,7 @@ A disclosure is a fold. It hides detail until the reader opens it.
 
 | Helper | Reference |
 |---|---|
-| `fold(summary, body, { open, keep, cls, head })`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/kit.js` |
+| `fold(summary, body, { open, keep, cls, head })`; `moreFold(items, row)`; `clamp(html)`; `wireFolds()`, `restoreFolds()` | `ui/views/design.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1572,7 +1572,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
 | The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
-| The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/kit.js` | allowed |
+| The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/design.js` | allowed |
 | The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |
 | The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
 | The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
@@ -1611,7 +1611,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `ui/activity.ts` (3), `ui/views/issues.js` (3) | date arithmetic, not display |
 | `ui/views/session.js` (2), `ui/views/lib/timeline.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
 | `ui/api/skills.ts` | a server log line |
-| `ui/views/kit.js` (1) | a contrast ratio, `toFixed(2)` |
+| `ui/views/design.js` (1) | a contrast ratio, `toFixed(2)` |
 
 ### Inventory
 

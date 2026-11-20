@@ -1181,7 +1181,7 @@ test("an issue row carries its short id for a pin to anchor on", () => {
   } finally { setCodes({}); }
 });
 
-test("the kit's values: a zero cost shows $0.00, a kind with no closed rows has no p50 or p90, the Stage KPI is words, a part's stage is lower case, the title is editable()", () => {
+test("the design page's values: a zero cost shows $0.00, a kind with no closed rows has no p50 or p90, the Stage KPI is words, a part's stage is lower case, the title is editable()", () => {
   const row = { repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [], notes: 0, runs: 0, cost: 0 };
   expect(v.renderRow(row)).toContain('<td class="num">$0.00</td>');
   const frame = v.closeFrame({ kinds: ["bug", "task"], unit: "days", p50: [null, 2], p90: [null, 3] });

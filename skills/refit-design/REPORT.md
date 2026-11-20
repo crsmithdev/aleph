@@ -9,10 +9,10 @@ report uses the aleph classes and tokens of `ui/app.css`, no Tailwind. It cites 
 The run directory of [refit/FINDINGS.md](../refit/FINDINGS.md), besides `index.html` and `app.css` it holds
 `shots/<route>-<theme>-<width>.png`, one file per screenshot, linked by a relative path.
 
-Link the live Kit by its absolute URL, such as `http://aleph.home/#/kit`, because the shelf serves the report from
-another host, where `/#/kit` finds nothing. The link text names the specimen by its id, the first argument of a
-`spec(id, ...)` call in `ui/views/kit.js`, such as `Kit: metric`. The Kit section of that id has the anchor
-`kit-<id>`.
+Link the live Design page by its absolute URL, such as `http://aleph.home/#/design`, because the shelf serves the report from
+another host, where `/#/design` finds nothing. The link text names the specimen by its id, the first argument of a
+`spec(id, ...)` call in `ui/views/design.js`, such as `Design: metric`. The Design section of that id has the anchor
+`design-<id>`.
 
 ## Differences from the shared shape
 
@@ -31,13 +31,13 @@ The finding comes first, and the components it breaks come under its title. A fi
 `<div class="finding" id="f<n>">`, in this order:
 
 1. the title: its number, the change as an imperative, and the chips of its lens, kind and tier (**auto** or **ask**),
-   then its result as refit/REPORT.md gives it, then the Kit link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
-   Kit names them in lower case, such as `metric-card/status` or `table/roles`. A finding that breaks a rule in two
+   then its result as refit/REPORT.md gives it, then the Design link. Put `data-annotate="<kind>[/<variant>]"` on the finding, with the kind and the variant as the
+   Design page names them in lower case, such as `metric-card/status` or `table/roles`. A finding that breaks a rule in two
    components sits under the kind of the first. No line under the title names the component again;
 2. the fix, one sentence as PROVE.md's step 2 gives it;
 3. a screenshot of the part the finding names, as drawn on the page, cropped from the shots, with no caption: its
-   `alt` names it. Show it at most 480px wide, as a link that opens the full shot in a new tab. Show no Kit
-   specimen: the Kit link stands for the rule. Show each picture once;
+   `alt` names it. Show it at most 480px wide, as a link that opens the full shot in a new tab. Show no Design
+   specimen: the Design link stands for the rule. Show each picture once;
 4. one closed `<details>`, summary "Details", that holds the rest: the rule (its `docs/design.md` section and the
    rule text, quoted), the locations (`file:line`, one each), a "Shot: see" line with a link to the finding that
    shows a repeated picture, and the guard, one sentence.
@@ -50,7 +50,7 @@ Proposals when 3 or more places use it.
   <div class="sh"><h2>Components</h2></div>
   <h3 class="sub-head">{{kind}}</h3>
   <div class="finding" id="f{{n}}" data-annotate="{{kind}}/{{variant}}">
-    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span><span class="chip">{{tier}}</span> <span class="quiet">{{result}}</span> <a href="http://aleph.home/#/kit">Kit: {{id}}</a></p>
+    <p class="ft"><b>{{n}}. {{title}}</b> <span class="chip">{{lens}}</span><span class="chip">{{kind}}</span><span class="chip">{{tier}}</span> <span class="quiet">{{result}}</span> <a href="http://aleph.home/#/design">Design: {{id}}</a></p>
     <p class="fix"><b>Fix</b>: ...</p>
     <figure><a href="shots/{{file}}.png" target="_blank"><img src="shots/{{file}}.png" alt="{{part}}" style="max-width:480px"></a></figure>
     <details><summary>Details</summary>

@@ -3,7 +3,7 @@
  * lists (`- item`) and block scalars (`key: >` folds its lines with spaces,
  * `key: |` keeps the line breaks). Quotes are honoured inside flow lists.
  * A `#` is content: the vault has no trailing comments, and a `core:` line
- * can say `#/kit`. Nothing nested.
+ * can say `#/design`. Nothing nested.
  */
 type Scalar = string;
 export type Frontmatter = Record<string, Scalar | Scalar[]>;

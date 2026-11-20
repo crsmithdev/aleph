@@ -1,7 +1,8 @@
-// #/kit: the design language's specimens. Each component of docs/design.md, drawn by its real helper from fixture
+// #/design: the design language's specimens. Each component of docs/design.md, drawn by its real helper from fixture
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
 // note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
 // /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
+import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
 import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
@@ -31,18 +32,18 @@ let doc = "", items = [];
 /** One specimen: its name, a line on what it shows, its HTML, and the rules under the doc's heading `rules` (none for ""). Not a card, so a card in it is not nested. */
 const spec = (id, title, body, note = "", rules = title) => {
   const names = [rules].flat().filter(Boolean);
-  items.push([`kit-${id}`, title, true]);
+  items.push([`design-${id}`, title, true]);
   const text = names.length > 1 ? names.map((n) => `#### ${n}\n\n${section(doc, n)}`).join("\n\n") : names.length ? section(doc, names[0]) : "";
-  return `<section class="kit-spec" id="kit-${id}" data-annotate="kit/${id}"><h3>${title}</h3>` +
-    `<div class="kit-specimen">${note ? `<p class="hint">${note}</p>` : ""}${body}</div>${text ? `<div class="kit-rules md">${md(text)}</div>` : ""}</section>`;
+  return `<section class="design-spec" id="design-${id}" data-annotate="design/${id}"><h3>${title}</h3>` +
+    `<div class="design-specimen">${note ? `<p class="hint">${note}</p>` : ""}${body}</div>${text ? `<div class="design-rules md">${md(text)}</div>` : ""}</section>`;
 };
 /** A group heading of the page, and its entry in the contents. */
-const group = (name) => { const id = `kit-g-${name.toLowerCase().replace(/\W+/g, "-")}`; items.push([id, name]); return `<h2 class="kit-h" id="${id}">${name}</h2>`; };
+const group = (name) => { const id = `design-g-${name.toLowerCase().replace(/\W+/g, "-")}`; items.push([id, name]); return `<h2 class="design-h" id="${id}">${name}</h2>`; };
 /** The sidebar's markup, copied, once per way of marking the current page (mock). */
 const NAV_VARIANTS = ["Filled pill, no bar", "Accent tint and text", "Dot before the label", "Straight bar outside box", "Bold text, others muted"];
 const navMock = (n) => `<div class="navmock" data-v="${n}"><ul>` + [["Factory"], ["gauge-high", "Now"], ["stopwatch", "Jobs", true], ["robot", "Agents"], ["Claude"], ["comments", "Sessions"], ["brain", "Memory"]].map(([a, b, on]) =>
-  b ? `<li><a href="#/kit"${on ? ' class="on"' : ""}><wa-icon name="${a}" aria-hidden="true"></wa-icon><span class="lbl">${b}</span></a></li>` : `<li class="head">${a}</li>`).join("") + `</ul></div>`;
-const row = (...xs) => `<div class="kit-row">${xs.join("")}</div>`;
+  b ? `<li><a href="#/design"${on ? ' class="on"' : ""}><wa-icon name="${a}" aria-hidden="true"></wa-icon><span class="lbl">${b}</span></a></li>` : `<li class="head">${a}</li>`).join("") + `</ul></div>`;
+const row = (...xs) => `<div class="design-row">${xs.join("")}</div>`;
 
 const FRAMES = {
   time: {
@@ -77,11 +78,11 @@ const ISSUES = Array.from({ length: 8 }, (_, i) => ({
   title: ["Give each component in design.md a live render", "Fail CI on a new hard-coded colour in ui/", "Show the cost of each run on its job page"][i % 3],
   state: ["open", "landed", "failed", "waiting", "parked"][i % 5], project: i % 4 ? "aleph" : "sidetone", labels: i % 2 ? ["ui"] : ["ui", "design"], cost: (i * 1.37) % 9,
 }));
-const issueRow = (x) => `<tr><td>${idLink(x.id, "#/kit")}</td><td class="wide" title="${x.title}">${x.title}</td><td>${badge(x.state)}</td>` +
+const issueRow = (x) => `<tr><td>${idLink(x.id, "#/design")}</td><td class="wide" title="${x.title}">${x.title}</td><td>${badge(x.state)}</td>` +
   `<td>${x.project}</td><td>${chips(x.labels)}</td><td class="num">${money(x.cost)}</td><td class="time">${when(x.at)}</td></tr>`;
 const ISSUE_HEAD = (sort) => [sortHead("Issue", "id", sort), sortHead("Title", "title", sort), "<th>State</th>", "<th>Project</th>", "<th>Labels</th>", sortHead("Cost", "cost", sort, { num: true }), sortHead("Updated", "at", sort, { num: true })].join("");
 
-const MD = `A paragraph with \`code\`, **bold**, *em* and a [link](#/kit).
+const MD = `A paragraph with \`code\`, **bold**, *em* and a [link](#/design).
 
 - one item
 - two items
@@ -91,7 +92,7 @@ const MD = `A paragraph with \`code\`, **bold**, *em* and a [link](#/kit).
 | tests | 71s |
 
 \`\`\`
-bun test ui/kit.test.ts
+bun test ui/design.test.ts
 \`\`\``;
 
 const DIFF = `diff --git a/ui/app.css b/ui/app.css
@@ -107,14 +108,14 @@ const TIMELINE = [{ title: "Runs", rows: [
 ] }];
 const NOW = "2026-11-10T17:00:00Z";
 const ASK = {
-  id: "aleph-41", href: "#/kit", repo: "aleph", key: "issue:aleph-41", card: "decide", reason: "question", label: "Decide", tag: "question",
+  id: "aleph-41", href: "#/design", repo: "aleph", key: "issue:aleph-41", card: "decide", reason: "question", label: "Decide", tag: "question",
   title: "Pick the time format for a day with no time", headline: "Pick the time format for a day with no time", priority: "high", at: "2026-11-10T16:00:00Z",
   situation: "Two tables show a day with no time two ways: Oct 28 and 10/28.",
-  actions: [{ label: "Oct 28", act: "kit", path: "/api/kit", primary: true }, { label: "10/28", act: "kit", path: "/api/kit" }, { label: "Deny", act: "kit", path: "/api/kit", input: { name: "reason" } }],
+  actions: [{ label: "Oct 28", act: "design", path: "/api/design-act", primary: true }, { label: "10/28", act: "design", path: "/api/design-act" }, { label: "Deny", act: "design", path: "/api/design-act", input: { name: "reason" } }],
 };
 const FEED = [
-  { key: "kit 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i1700", to: "#/kit" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
-  { key: "kit 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i1701", to: "#/kit" }], text: ["checks failed"], more: 0, lines: [] },
+  { key: "design 1", at: "2026-11-10T16:58:00Z", by: "job.1", kind: "work", word: "landed", id: [{ id: "i1700", to: "#/design" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
+  { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", kind: "work", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
 ];
 const FLOW = { window: "week", classes: [{ key: "landed", hours: 40, text: "reached main" }, { key: "returned", hours: 12, text: "sent back once" }, { key: "failed", hours: 6, lost: true, text: "did not land" }, { key: "dropped", hours: 3, lost: true, text: "dropped" }], figures: { kept: 52, hours: 9 } };
 
@@ -129,28 +130,28 @@ const VALUES = [
   ["Absolute time", "when()", when, [AGO]], ["Day", "day()", day, [AGO]], ["Axis hour", "hourLabel()", hourLabel, [new Date(2026, 10, 10, 4), new Date(2026, 10, 10, 13, 36)], "none"],
   ["Clock", "clock()", clock, [AGO.toISOString()]], ["Duration from seconds", "dur()", dur, [43, 245, 3720, 187200]], ["Duration from milliseconds", "durMs()", durMs, [850, 1200]],
   ["Duration between two times", "span()", (a) => span(a, new Date(T0).toISOString()), [AGO.toISOString()]], ["Cost", "money()", money, [1.25, 0.003]], ["Weekly share", "wkText()", wkText, [{ pct: 1.4 }, { pct: 0.4 }]],
-  ["Percent", "pct()", pct, [12, 0.4, 0.03]], ["Count", "count()", count, [12345]], ["Id", "idLink()", (x) => idLink(x, "#/kit"), ["a52"], "none"],
+  ["Percent", "pct()", pct, [12, 0.4, 0.03]], ["Count", "count()", count, [12345]], ["Id", "idLink()", (x) => idLink(x, "#/design"), ["a52"], "none"],
   ["Model", "shortModel()", shortModel, ["claude-opus-5-5"]], ["Bytes", "bytes()", bytes, [1536], "none"], ["Mean", "mean()", mean, [2.44]],
   ["Hours", "hours()", hours, [3.2, 12]], ["Days", "days()", days, [12]],
-  ["Missing value", "miss()", miss, ["No cost recorded"], "none"], ["Commit", "shaLink()", (x) => shaLink(x, "#/kit"), ["3f9a1c2d4e5b"], "none"],
+  ["Missing value", "miss()", miss, ["No cost recorded"], "none"], ["Commit", "shaLink()", (x) => shaLink(x, "#/design"), ["3f9a1c2d4e5b"], "none"],
   ["Meta line", "meta()", (x) => meta(x), [["11/10", "", "4m 05s"]], "none"], ["Note", "note()", note, ["A side note."], "none"], ["Sub-head", "subHead()", subHead, ["Recent runs"], "none"],
 ];
 
-function renderKit(d, query) {
+function renderDesign(d, query) {
   doc = d?.body ?? "";
   const theme = THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system";
   const sort = { key: "at", dir: -1 };
-  items = [["kit-every", "Every component"]];
-  const head = `<div class="page kit">${crumb("#/", [["aleph", "#/"], ["kit"]])}` +
-    pageHead("Kit", { aside: seg("Theme", THEMES.map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: t === theme, attrs: ` data-theme-pick="${t}"` }))) }) +
+  items = [["design-every", "Every component"]];
+  const head = `<div class="page design">${crumb("#/", [["aleph", "#/"], ["design"]])}` +
+    pageHead("Design", { aside: seg("Theme", THEMES.map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: t === theme, attrs: ` data-theme-pick="${t}"` }))) }) +
     `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>`;
-  const body = `<section class="kit-spec" id="kit-every" data-annotate="kit/every"><h3>Every component</h3><div class="kit-rules md">${md(section(doc, "Every component"))}</div></section>` +
+  const body = `<section class="design-spec" id="design-every" data-annotate="design/every"><h3>Every component</h3><div class="design-rules md">${md(section(doc, "Every component"))}</div></section>` +
 
     group("Foundations") +
-    COLOURS.map(([id, name]) => spec(id, name, `<div class="kit-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "")).join("") +
+    COLOURS.map(([id, name]) => spec(id, name, `<div class="design-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "")).join("") +
     spec("contrast", "Contrast", `<div data-tokens="contrast"></div>`, "Each ratio is computed now from the light and the dark token values. Text needs 4.5:1.") +
     spec("type", "Type", `<div data-tokens="type"></div>`, "", ["Sizes", "Weights and families", "Tracking and line height"]) +
-    spec("space", "Space and shape", `<div class="kit-row" data-tokens="space"></div><div class="kit-row" data-tokens="radius"></div><div class="kit-row" data-tokens="layers"></div>`, "",
+    spec("space", "Space and shape", `<div class="design-row" data-tokens="space"></div><div class="design-row" data-tokens="radius"></div><div class="design-row" data-tokens="layers"></div>`, "",
       ["Spacing", "Radii", "Controls and layers", "Breakpoints and motion"]) +
 
     group("Content") +
@@ -162,19 +163,19 @@ function renderKit(d, query) {
 
     group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
-    spec("detail-panel", "Detail panel", panel("kit-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
+    spec("detail-panel", "Detail panel", panel("design-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
     spec("card", "Card", card("Section", "<p>The body of a card.</p>", { count: 3, aside: actButton("Action") }) +
       card("Section with a lede", subHead("Recent runs") + "<p>The body of a card.</p>", { lede: "One sentence that sums up the card." })) +
     spec("list", "List and group", list(card("First", "<p>A card in a list.</p>") + card("Second", "<p>The list stacks its cards.</p>")) +
-      grp("kit-group-a", "<p>A group, with an id.</p>") + grp("kit-group-b", "<p>The next group.</p>")) +
+      grp("design-group-a", "<p>A group, with an id.</p>") + grp("design-group-b", "<p>The next group.</p>")) +
     spec("pair", "Pair", `<div class="pair">${card("First", "<p>Two cards side by side.</p>")}${card("Second", "<p>Each is at least 320px wide, so they stack on a phone.</p>")}</div>`) +
-    spec("contents", "Contents", toc([["kit-card", "Card"], ["kit-pair", "Pair"], ["kit-contents", "Contents", true]], "<p>The body of a page, beside its contents.</p>"),
+    spec("contents", "Contents", toc([["design-card", "Card"], ["design-pair", "Pair"], ["design-contents", "Contents", true]], "<p>The body of a page, beside its contents.</p>"),
       "A small copy. The contents of this page, at the right, are the live ones.") +
-    spec("nav-current", "Current page in the sidebar (mock)", `<div class="kit-row navmocks">${NAV_VARIANTS.map((t, i) => `<figure>${navMock(i + 1)}<figcaption>${i + 1}. ${t}</figcaption></figure>`).join("")}</div>`,
+    spec("nav-current", "Current page in the sidebar (mock)", `<div class="design-row navmocks">${NAV_VARIANTS.map((t, i) => `<figure>${navMock(i + 1)}<figcaption>${i + 1}. ${t}</figcaption></figure>`).join("")}</div>`,
       "Five ways to mark the current link, each a copy of the sidebar with Jobs current. The live sidebar is unchanged.", "") +
-    spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/kit-page</code>"]])) +
+    spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/design-page</code>"]])) +
 
     group("Data") +
     spec("metric", "Metric card", tiles("Metric cards",
@@ -183,7 +184,7 @@ function renderKit(d, query) {
       statCard({ k: "Worker slots", v: "2", v2: "5", q: ["in use", "cap"], extra: meter(40, "2 of 5 in use") }) +
       statCard({ k: "Share", v: "61%", trend: cardTrend(0.61, 0.61, 0.6, { kind: "points", lowerIsGood: null, format: String, basis: "4-week mean" }), note: "no change" }) +
       statCard({ k: "Cost", v: "–", note: "no cost" }) +
-      statCard({ k: "Link", v: "12", note: "link", href: "#/kit" }) +
+      statCard({ k: "Link", v: "12", note: "link", href: "#/design" }) +
       statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }) +
       statCard({ k: "Selector", v: "3", note: "not pressed", key: "b" }))) +
     spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: fold button, id, title, state, priority, project, labels, numbers, then time.") +
@@ -191,9 +192,9 @@ function renderKit(d, query) {
       trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty(), "", "") +
-    spec("chart", "Chart panel", `<div class="trio">${panelOf("kit/time", FRAMES.time)}${panelOf("kit/category", FRAMES.category)}${panelOf("kit/cost", FRAMES.cost)}</div>`,
+    spec("chart", "Chart panel", `<div class="trio">${panelOf("design/time", FRAMES.time)}${panelOf("design/category", FRAMES.category)}${panelOf("design/cost", FRAMES.cost)}</div>`,
       "A level over time (Area), a category (Stacked), and a flow of one key with no legend (Columns).") +
-    spec("chart-empty", "Chart panel, no data", panelOf("kit/none", FRAMES.none), "", "") +
+    spec("chart-empty", "Chart panel, no data", panelOf("design/none", FRAMES.none), "", "") +
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
     spec("outcome", "Outcome bar", bar(FLOW, "landed")) +
@@ -214,13 +215,13 @@ function renderKit(d, query) {
     group("Actions") +
     spec("button", "Button", row(actButton("Retry"), actButton("Land", {}, { primary: true }), actButton("Drop", {}, { cls: "warn" }), `<button class="act" type="button" disabled>Disabled</button>`) +
       row(actButton("Danger", {}, { kind: "danger" }), actButton("Small", {}, { kind: "small" }), actButton("Always", {}, { kind: "always" }))) +
-    spec("link-button", "Link button", row(linkButton("Issue", "#/kit"), linkButton("Next sub-issue: a1701", "#/kit"))) +
-    spec("link", "Link", `<p class="md">A link in prose: <a href="#/kit">the kit page</a>.</p><p>${idLink("a1700", "#/kit")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide" title="A row that goes to its item"><a href="#/kit">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
+    spec("link-button", "Link button", row(linkButton("Issue", "#/design"), linkButton("Next sub-issue: a1701", "#/design"))) +
+    spec("link", "Link", `<p class="md">A link in prose: <a href="#/design">the design page</a>.</p><p>${idLink("a1700", "#/design")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide" title="A row that goes to its item"><a href="#/design">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>` +
-      dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/kit")}</td><td>${badge("failed")}</td><td class="acts">${actButton("Retry", {}, { kind: "small" })}</td></tr>`)) +
+      dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/design")}</td><td>${badge("failed")}</td><td class="acts">${actButton("Retry", {}, { kind: "small" })}</td></tr>`)) +
     spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
-    spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-kit-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
+    spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-design-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
       "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
     spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
       fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) +
@@ -235,17 +236,17 @@ function renderKit(d, query) {
       { label: "Project", name: "project", data: true, value: "", options: [{ value: "", label: "All" }, "aleph", "sidetone"] },
     ])) +
     spec("pager", "Pager", pager(1, 345) + pager(2, 345) + pager(7, 345)) +
-    spec("search", "Search box", searchBox("kit-search", "", "Search ids and titles")) +
-    spec("search/action", "Search box, action", searchBox("kit-search-act", "chevron fold", "Search ids and titles", `<button type="button" class="hint">Ctrl+↵ File in aleph</button>`)) +
-    spec("tabs", "Tabs", tabs("Kit tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
+    spec("search", "Search box", searchBox("design-search", "", "Search ids and titles")) +
+    spec("search/action", "Search box, action", searchBox("design-search-act", "chevron fold", "Search ids and titles", `<button type="button" class="hint">Ctrl+↵ File in aleph</button>`)) +
+    spec("tabs", "Tabs", tabs("Design tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
     spec("select", "Select", row(selectBox("Model", "model", ["opus", "sonnet", { value: "haiku", disabled: true }], "sonnet"))) +
-    spec("field", "Field and form", form("kit-form", [
+    spec("field", "Field and form", form("design-form", [
       field("Project", selectBox("Project", "repo", ["aleph", "tools"], "aleph")), field("Title", inputBox("title", "", { attrs: " required" })),
       field("Labels", inputBox("labels", "", { attrs: ' placeholder="comma separated"' }), { hint: "Separate the labels with commas." }), field("The text is a spec", `<input type="checkbox" name="spec">`, { check: true })], "File issue")) +
-    spec("settings", "Settings list", settings("Kit settings", [
-      setting("Suite every", inputBox("every", "30min", { id: "kit-every", attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id: "kit-every", save: "Save", hint: "A number and s, min or h." }),
-      setting("Worker model", selectBox("Worker model", "model", ["opus", "sonnet"], "sonnet", { id: "kit-model" }), { id: "kit-model" }),
-      setting("Land after", inputBox("minutes", "0", { id: "kit-min", type: "number", attrs: ' min="0" step="1"' }), { id: "kit-min", save: "Save", hint: "0: waits for the user." })])) +
+    spec("settings", "Settings list", settings("Design settings", [
+      setting("Suite every", inputBox("every", "30min", { id: "design-every", attrs: ' pattern="[1-9][0-9]*(s|min|h)" required' }), { id: "design-every", save: "Save", hint: "A number and s, min or h." }),
+      setting("Worker model", selectBox("Worker model", "model", ["opus", "sonnet"], "sonnet", { id: "design-model" }), { id: "design-model" }),
+      setting("Land after", inputBox("minutes", "0", { id: "design-min", type: "number", attrs: ' min="0" step="1"' }), { id: "design-min", save: "Save", hint: "0: waits for the user." })])) +
     spec("edit", "Edit toggle", `<div class="editable"><p>${editable("<b>A title</b>", inputBox("title", "A title", { attrs: ' aria-label="Title"' }))}</p><div class="actions">${actButton("Edit", { editor: "start" }, { cls: "view-only" })}` +
       `<span class="edit-only">${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true })}</span></div></div>`) +
     spec("states", "Empty state", empty() + loadingLine("jobs") + tiles("Loading and failed cards", statCard({ k: "Asks", loading: true }) + statCard({ k: "Asks", failed: "Could not load the asks." })) + error("Could not load the jobs.", { detail: "GET /api/jobs: 502" }) + notice("Langfuse failed: timeout. Showing the data from 11/10 08:45.", true) + notice("These counts cover only part of the window.")) +
@@ -254,7 +255,7 @@ function renderKit(d, query) {
     spec("interaction", "States", row(actButton("Default"), `<button class="act" type="button" style="outline:2px solid var(--focus);outline-offset:2px">Focus</button>`,
       `<button class="act" type="button" style="border-color:var(--ink-2)">Hover</button>`, seg("Pressed", [{ label: "Off", on: false, attrs: "" }, { label: "Pressed", on: true, attrs: "" }]),
       `<button class="act" type="button" disabled>Disabled</button>`, `<button class="cmd" type="button" style="transform:translateY(1px)"><span>Active</span></button>`) +
-      `<div style="max-width:320px">${barList(barRow("Pressed bar row", 60, "6.0h", { key: "kit-bar", on: true }) + barRow("Bar row", 30, "3.0h", { key: "kit-bar-off" }))}</div>` +
+      `<div style="max-width:320px">${barList(barRow("Pressed bar row", 60, "6.0h", { key: "design-bar", on: true }) + barRow("Bar row", 30, "3.0h", { key: "design-bar-off" }))}</div>` +
       dataTable(heads(["Row", "State"]), `<tr class="mrow" aria-selected="true"><td>Selected</td><td>aria-selected="true"</td></tr><tr class="mrow" aria-selected="false"><td>Not selected</td><td>aria-selected="false"</td></tr>`) +
       `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
       "Focus, hover and active are drawn with inline styles, so they show without a pointer or a keyboard.", "States");
@@ -262,7 +263,7 @@ function renderKit(d, query) {
 }
 
 /** Each `--` custom property, light and dark, read from the stylesheets: the `:root` rules for light, `:root[data-theme="dark"]` over them for dark.
- * Kit and Web Awesome bridges are left out. A `var()` in a value is resolved in its own theme. */
+ * Dock and Web Awesome bridges are left out. A `var()` in a value is resolved in its own theme. */
 function themeTokens() {
   const light = {}, dark = {};
   for (const sheet of document.styleSheets) {
@@ -270,7 +271,7 @@ function themeTokens() {
     try { rules = sheet.cssRules; } catch { continue; }
     for (const r of rules) {
       const into = r.selectorText === ":root" ? light : r.selectorText === ':root[data-theme="dark"]' ? dark : null;
-      if (into) for (const p of r.style) if (p.startsWith("--") && !/^--(wa|kit)-/.test(p)) into[p] = r.style.getPropertyValue(p).trim();
+      if (into) for (const p of r.style) if (p.startsWith("--") && !/^--(wa|dock)-/.test(p)) into[p] = r.style.getPropertyValue(p).trim();
     }
   }
   const resolve = (map, v, n = 0) => (n > 8 ? v : v.replace(/var\((--[\w-]+)\)/g, (m, k) => (k in map ? resolve(map, map[k], n + 1) : m)));
@@ -292,7 +293,7 @@ function drawTokens(root) {
   const fill = (kind, html) => { const el = root.querySelector(`[data-tokens="${kind}"]`); if (el) el.innerHTML = html; };
   const colours = names.filter((n) => CSS.supports("color", t[n].light));
   for (const [id, , re] of COLOURS) fill(id, colours.filter((n) => re.test(n)).map((n) =>
-    `<div class="kit-swatch"><i><b style="background:${t[n].light}"></b><b style="background:${t[n].dark}"></b></i><code>${n}</code><span class="quiet">${t[n].light} / ${t[n].dark}</span></div>`).join(""));
+    `<div class="design-swatch"><i><b style="background:${t[n].light}"></b><b style="background:${t[n].dark}"></b></i><code>${n}</code><span class="quiet">${t[n].light} / ${t[n].dark}</span></div>`).join(""));
   const cell = (r) => `<td class="num">${r.toFixed(2)}${r < 4.5 ? ` ${tag("below 4.5", "error")}` : ""}</td>`;
   fill("contrast", dataTable(heads(["Pair", "Light", "Dark"], ["Light", "Dark"]), PAIRS.map(([f, b]) =>
     `<tr><td><code>${f}</code> on <code>${b}</code></td>${cell(ratio(t[f].light, t[b].light))}${cell(ratio(t[f].dark, t[b].dark))}</tr>`).join(""), { fit: true }));
@@ -303,41 +304,43 @@ function drawTokens(root) {
     ["--display", "--sans", "--mono", "--num", "--metric", "--brand", "--chart"].map((n) => `<p style="font-family:var(${n})"><code>${n}</code> ` +
       ["--fw-text", "--fw-mid", "--fw-strong"].map((w) => `<span style="font-weight:var(${w})">The factory landed 12 issues, 0123456789.</span>`).join(" · ") + "</p>").join(""));
   fill("space", names.filter((n) => n.startsWith("--sp-") || n === "--gap" || n === "--gap-in").map((n) =>
-    `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join("") +
-    ["--dot-s", "--dot-m", "--dot-l"].map((n) => `<div class="kit-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1);border-radius:var(--r-pill)"></i><code>${n}</code></div>`).join("") +
-    `<div class="kit-tok"><i style="width:var(--indent-list);height:var(--sp-8);background:var(--series-1)"></i><code>--indent-list ${val("--indent-list")}</code></div>` +
-    `<div class="kit-tok"><i style="width:var(--measure);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--measure ${val("--measure")}</code></div>`);
+    `<div class="design-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join("") +
+    ["--dot-s", "--dot-m", "--dot-l"].map((n) => `<div class="design-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1);border-radius:var(--r-pill)"></i><code>${n}</code></div>`).join("") +
+    `<div class="design-tok"><i style="width:var(--indent-list);height:var(--sp-8);background:var(--series-1)"></i><code>--indent-list ${val("--indent-list")}</code></div>` +
+    `<div class="design-tok"><i style="width:var(--measure);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--measure ${val("--measure")}</code></div>`);
   fill("radius", names.filter((n) => n.startsWith("--r-")).map((n) =>
-    `<div class="kit-tok"><i style="width:48px;height:32px;border:1px solid var(--ink-2);border-radius:var(${n})"></i><code>${n}</code></div>`).join(""));
+    `<div class="design-tok"><i style="width:48px;height:32px;border:1px solid var(--ink-2);border-radius:var(${n})"></i><code>${n}</code></div>`).join(""));
   fill("layers", ["--lift", "--card-lift", "--float"].map((n) =>
-    `<div class="kit-tok"><i style="width:96px;height:48px;background:var(--surface);border-radius:var(--r-ctl);box-shadow:var(${n})"></i><code>${n}</code></div>`).join("") +
-    `<div class="kit-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
-    `<div class="kit-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
-    `<div class="kit-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>` +
-    ["--z-rowlink", "--z-sticky", "--z-overlay", "--t-fast", "--t-mid", "--t-slow", "--ease"].map((n) => `<div class="kit-tok"><code>${n} ${val(n)}</code></div>`).join(""));
+    `<div class="design-tok"><i style="width:96px;height:48px;background:var(--surface);border-radius:var(--r-ctl);box-shadow:var(${n})"></i><code>${n}</code></div>`).join("") +
+    `<div class="design-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
+    `<div class="design-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
+    `<div class="design-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>` +
+    ["--z-rowlink", "--z-sticky", "--z-overlay", "--t-fast", "--t-mid", "--t-slow", "--ease"].map((n) => `<div class="design-tok"><code>${n} ${val(n)}</code></div>`).join(""));
 }
 
 const setTheme = (t) => (t === "system" ? delete document.documentElement.dataset.theme : (document.documentElement.dataset.theme = t));
-// The theme pick is the kit's own: another page goes back to the system's.
-if (typeof addEventListener !== "undefined") addEventListener("hashchange", () => { if (!location.hash.startsWith("#/kit")) setTheme("system"); });
+// The theme pick is the design page's own: another page goes back to the system's.
+if (typeof addEventListener !== "undefined") addEventListener("hashchange", () => { if (!location.hash.startsWith("#/design")) setTheme("system"); });
+
+export const redirect = (hash) => moved(hash, ["#/kit"], "#/design");
 
 export const view = {
-  path: "/kit",
-  title: "Kit",
+  path: "/design",
+  title: "Design",
   nav: false,
   api: "/api/design",
-  render: (d, _p, query) => renderKit(d, query),
+  render: (d, _p, query) => renderDesign(d, query),
   mount: (root, _d, query) => {
     setTheme(THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system");
     drawTokens(root);
     wireTabs(root);
     wireEdit(root);
     wireToc(root);
-    root.onclick = (e) => { const b = e.target.closest("[data-kit-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
-    for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="kit/${k}"]`).frame = f;
+    root.onclick = (e) => { const b = e.target.closest("[data-design-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
+    for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="design/${k}"]`).frame = f;
     root.querySelector("[data-theme-pick]")?.parentElement.addEventListener("click", (e) => {
       const b = e.target.closest("button[data-theme-pick]");
-      if (b) location.hash = b.dataset.themePick === "system" ? "#/kit" : `#/kit?theme=${b.dataset.themePick}`;
+      if (b) location.hash = b.dataset.themePick === "system" ? "#/design" : `#/design?theme=${b.dataset.themePick}`;
     });
   },
 };

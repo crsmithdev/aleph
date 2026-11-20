@@ -3,7 +3,7 @@ name: refit-design
 description: >
   Refit a UI to its design reference: compare a page or the whole UI to
   docs/design.md in the code and in the drawn page: hard-coded or missing
-  tokens, one-off components, pages that differ from the Kit, local defects.
+  tokens, one-off components, pages that differ from the Design page, local defects.
   Use when asked to audit, review or check a UI against the design language,
   or to find where a page leaves the design doc. NOT for: writing the design
   doc (use design-language).
@@ -24,13 +24,13 @@ This file holds what differs.
 | **variants** | Is each component drawn one way? | [VARIANTS.md](VARIANTS.md) |
 | **states** | Does each component draw its empty, loading, error, hover, focus, disabled and phone-width state? | [STATES.md](STATES.md) |
 | **stress** | Does the page hold with long text, many rows, a missing value and no data? | [STRESS.md](STRESS.md) |
-| **seams** | Does a view override a kit class or build kit markup by hand? | [SEAMS.md](SEAMS.md) |
-| **dead** | Does each CSS rule match an element, each token have a use, each Kit specimen draw a live component? | [DEAD.md](DEAD.md) |
+| **seams** | Does a view override a design class or build design markup by hand? | [SEAMS.md](SEAMS.md) |
+| **dead** | Does each CSS rule match an element, each token have a use, each Design specimen draw a live component? | [DEAD.md](DEAD.md) |
 | **slop** | Is a part bigger than its job: a nested card, an extra border, shadow or icon, a long label? | [SLOP.md](SLOP.md) |
 
 Report each candidate under one lens only. A value that breaks a rule is apply. Two builds of one component are
 variants. A missing empty line is states. An empty line that breaks at 200 characters is stress. A view that
-restyles a kit class is seams. A class that no element uses is dead. A part that carries more than its job is slop.
+restyles a design class is seams. A class that no element uses is dead. A part that carries more than its job is slop.
 
 ## Modes
 
@@ -42,12 +42,12 @@ none, the run covers each route of the router. The report's unit is a component 
 1. **Scope.** The route's view file and the shared files it imports, or every view for the whole UI. Done when you
    have a list of files and routes.
 2. **Hunt.** First list the page's components from its view code and the screenshot: each kind and variant, with
-   an id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/kit.js`. Then follow each lens
+   an id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/design.js`. Then follow each lens
    file: the code view, then the drawn view. For the whole UI, spawn one Explore subagent per route in one
    message, in place of one per lens, each with the Signals sections of the lens files and the component list
    verbatim. Each returns the candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also
    returns, per component, the rules it breaks and the rules it follows (each by `docs/design.md` section and rule
-   text) and the Kit specimen id. Done when each route has returned and each component has an entry.
+   text) and the Design specimen id. Done when each route has returned and each component has an entry.
 
 ## Act order
 
@@ -56,7 +56,7 @@ additions to the Act loop:
 
 1. Before the first fix, take a `verify-ui` screenshot of the page.
 2. After each fix, take the `verify-ui` screenshots again in light and dark at both widths. The baseline is
-   green only when the page also matches the Kit. The commit names the rule and the finding.
+   green only when the page also matches the Design page. The commit names the rule and the finding.
 
 
 ## Guards

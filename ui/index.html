@@ -57,10 +57,10 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">import { start } from "/views/lib/router.js"; start();</script>
-<!-- The font picker, the annotations, the chat and the shelf dock button: the aleph-tools widgets, served at /vendor/kit/. One script each, so a missing file loses that widget only. The picker stays; only Chris decides when it goes. -->
+<!-- The font picker, the annotations, the chat and the shelf dock button: the aleph-tools widgets, served at /vendor/dock/. One script each, so a missing file loses that widget only. The picker stays; only Chris decides when it goes. -->
 <script type="module">
-  import { dock } from "/vendor/kit/dock.js";
-  import { fontPicker, SANS, SERIF, MONO } from "/vendor/kit/font-picker.js";
+  import { dock } from "/vendor/dock/dock.js";
+  import { fontPicker, SANS, SERIF, MONO } from "/vendor/dock/font-picker.js";
   // The dock is made by the first widget: set its phone row layout before that.
   dock({ rowBelow: 720 });
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
@@ -80,7 +80,7 @@
   });
 </script>
 <script type="module">
-  import { annotate, remote } from "/vendor/kit/annotate.js";
+  import { annotate, remote } from "/vendor/dock/annotate.js";
   // Notes live on the server, where `shelf note` lets an agent read, answer and add them. The page hears of a
   // change from the router's stream; a tab shown again loads them too.
   // `send` hands a note to a waiting agent through the shelf, which marks it sent.
@@ -93,11 +93,11 @@
   });
 </script>
 <script type="module">
-  import { shelf } from "/vendor/kit/shelf.js";
+  import { shelf } from "/vendor/dock/shelf.js";
   shelf({ url: "/shelf/" });
 </script>
 <script type="module">
-  import { chat } from "/vendor/kit/chat.js";
+  import { chat } from "/vendor/dock/chat.js";
   // The chat agent (ui/chat-hooks.ts) gets the open notes of the page in view, named as annotate.js names a page, and
   // the notes its @ button points at.
   chat({

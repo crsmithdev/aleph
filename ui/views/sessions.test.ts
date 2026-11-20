@@ -104,7 +104,7 @@ describe("the Sessions page", () => {
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
   });
 
-  test("the cards use the kit parts: a fold of unused skills, a legend key, a link button", () => {
+  test("the cards use the design parts: a fold of unused skills, a legend key, a link button", () => {
     const h = v.renderSessions(data(), opts("pick=skill:x"));
     const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</section>", h.indexOf('aria-label="Skills"')));
     expect(skills).toContain('href="#/skills/tidy"');

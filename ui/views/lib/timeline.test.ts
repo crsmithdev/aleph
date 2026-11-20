@@ -172,7 +172,7 @@ describe("the timeline panel", () => {
     }
   });
 
-  test("a bar with no link takes focus, and every bar names its state outside title; a segment aside is the kit's aside", () => {
+  test("a bar with no link takes focus, and every bar names its state outside title; a segment aside is the design page's aside", () => {
     const [a, b] = spans([run("worker", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z", { state: "failed" }), run("worker", "2026-11-01T10:10:00Z", "2026-11-01T10:15:00Z", { state: "landed", href: undefined })]);
     const row = laneRow({ head: "h", runs: [a, b] });
     const bars = renderTimeline([{ title: "Work", aside: "to the <land>", rows: [row] }]).match(/<(?:a|span) class="dp-bar[^>]*>.*?<\/(?:a|span)>/g) as string[];

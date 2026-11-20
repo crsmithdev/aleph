@@ -1,4 +1,4 @@
-// The feed rows and the findings list that more than one view draws: the Status page's Herald, the Monitor findings and the Kit.
+// The feed rows and the findings list that more than one view draws: the Status page's Herald, the Monitor findings and the Design page.
 import { clock, when } from "./format.js";
 import { esc, fold, idLink, tag, tone } from "./html.js";
 

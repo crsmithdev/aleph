@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { root } from "./kit.ts";
+import { root } from "./dock.ts";
 import { hash } from "./pair.ts";
 
 const CHROME = "/usr/bin/google-chrome";

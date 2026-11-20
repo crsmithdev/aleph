@@ -34,7 +34,7 @@ test("a note written by hand still parses: single quotes and block lists", () =>
 });
 
 test("a scalar keeps its # text", () => {
-  expect(parseFrontmatter("core: Review runs on #/kit (ui/kit.js), see #12")).toEqual({ core: "Review runs on #/kit (ui/kit.js), see #12" });
+  expect(parseFrontmatter("core: Review runs on #/design (ui/views/design.js), see #12")).toEqual({ core: "Review runs on #/design (ui/views/design.js), see #12" });
 });
 
 test("a block scalar folds with > and keeps its lines with |", () => {
