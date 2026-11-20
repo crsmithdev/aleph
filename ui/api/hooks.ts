@@ -1,6 +1,6 @@
 /**
  * `GET /api/hooks`, `GET /api/hooks/:event/:name`: the Hooks page's data. The Stop-hook holds and the hook errors of the
- * last 7 days come from the hook entries of the Claude Code transcripts under `~/.claude/projects`; the hooks come from
+ * request's window and project come from the hook entries of the Claude Code transcripts under `~/.claude/projects`; the hooks come from
  * `hooks/hooks.json`. A hold's outcome is a keyword pass over its reply: a guide, not a measurement.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -10,12 +10,12 @@ import { jsonLines, type Entry } from "../../lib/jsonl.ts";
 import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
 import type { Routes } from "../server.ts";
+import { scopeOf, traceProject, type Scope } from "./scope.ts";
 
-const DAYS = 7;
 const WHY = 220; // chars of a hold's reason
 
-interface Hold { t: string; sid: string; hook: string; event: string; kind: string; who: string; out: string; why: string }
-interface Fail { t: string; sid: string; hook: string; event: string; cause: string; fix: string }
+interface Hold { t: string; sid: string; project: string; hook: string; event: string; kind: string; who: string; out: string; why: string }
+interface Fail { t: string; sid: string; project: string; hook: string; event: string; cause: string; fix: string }
 
 // An error's cause and its fix, by the first pattern its stderr matches.
 // prettier-ignore
@@ -53,12 +53,12 @@ function hold(es: Entry[], i: number): Hold {
   const e = es[i], b = e.attachment.blockingError, who = whoOf(e), said = reply(es, i);
   const out = who !== "interactive" ? "no effect" : !said ? "no reply" : OUTS.find(([re]) => re.test(said))?.[1] ?? "held up";
   const why = b.blockingError.replace(/^[\w ]+: /, "").replace(/\s+/g, " ").slice(0, WHY);
-  return { t: e.timestamp, sid: e.sessionId, hook: b.command, event: e.attachment.hookEvent, kind: kindOf(b.blockingError), who, out, why };
+  return { t: e.timestamp, sid: e.sessionId, project: traceProject(e.cwd, undefined), hook: b.command, event: e.attachment.hookEvent, kind: kindOf(b.blockingError), who, out, why };
 }
 
 function fail(e: Entry): Fail {
   const a = e.attachment, [, cause, fix] = a.type === "hook_cancelled" ? [, "Cancelled", "Interrupt"] : CAUSES.find(([re]) => re.test(a.stderr ?? "")) ?? [, "Other", ""];
-  return { t: e.timestamp, sid: e.sessionId, hook: nameOf(a.command), event: a.hookEvent, cause, fix };
+  return { t: e.timestamp, sid: e.sessionId, project: traceProject(e.cwd, undefined), hook: nameOf(a.command), event: a.hookEvent, cause, fix };
 }
 
 /** A transcript's Stop-hook holds and hook errors. */
@@ -75,13 +75,13 @@ function parse(f: string): { holds: Hold[]; fails: Fail[] } {
 /** Each transcript's parse, by path, while its mtime holds: a scan reads only the files written since the one before. */
 let parsed = new Map<string, { at: number; holds: Hold[]; fails: Fail[] }>();
 
-/** The Stop-hook holds, newest first, and the hook errors of the last 7 days. */
-function scan(): { holds: Hold[]; fails: Fail[] } {
+/** The Stop-hook holds, newest first, and the hook errors of the scope's window and project. */
+function scan({ ms, project }: Scope): { holds: Hold[]; fails: Fail[] } {
   touch("transcripts");
-  const root = claudeProjects(), since = Date.now() - DAYS * 86_400_000;
+  const root = claudeProjects(), since = Date.now() - ms;
   const files = (existsSync(root) ? [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root })] : []).map((f) => ({ f: join(root, f), at: statSync(join(root, f)).mtimeMs })).filter((x) => x.at >= since);
   parsed = new Map(files.map(({ f, at }) => [f, parsed.get(f)?.at === at ? parsed.get(f)! : { at, ...parse(f) }]));
-  const recent = (x: { t: string }) => Date.parse(x.t) >= since, all = [...parsed.values()];
+  const recent = (x: { t: string; project: string }) => Date.parse(x.t) >= since && (!project || x.project === project), all = [...parsed.values()];
   return { holds: all.flatMap((p) => p.holds).filter(recent).sort((a, b) => b.t.localeCompare(a.t)), fails: all.flatMap((p) => p.fails).filter(recent) };
 }
 
@@ -111,15 +111,19 @@ function inventory() {
 }
 
 export const routes: Routes = {
-  "GET /api/hooks": () => {
-    const { holds, fails } = scan();
+  "GET /api/hooks": (_req, _params, url) => {
+    const sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
+    const { holds, fails } = scan(sc);
     const hooks = inventory().map((h) => ({ ...h, holds: holds.filter((x) => x.event === h.event && x.hook === h.name).length }));
-    return Response.json({ days: DAYS, holds, byHook: byKind(holds), errors: byCause(fails), hooks });
+    return Response.json({ days: sc.days, holds, byHook: byKind(holds), errors: byCause(fails), hooks });
   },
-  "GET /api/hooks/:event/:name": (_req, { event, name }) => {
+  "GET /api/hooks/:event/:name": (_req, { event, name }, url) => {
+    const sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
     const hook = inventory().find((h) => h.event === event && h.name === name);
     if (!hook) return Response.json({ error: `no hook ${event}/${name}` }, { status: 404 });
-    const { holds, fails } = scan(), mine = holds.filter((x) => x.event === event && x.hook === name);
+    const { holds, fails } = scan(sc), mine = holds.filter((x) => x.event === event && x.hook === name);
     return Response.json({ ...hook, holds: mine, byKind: byKind(mine), errors: byCause(fails.filter((f) => f.event === event && f.hook === name)) });
   },
 };

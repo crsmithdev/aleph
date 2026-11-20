@@ -1,7 +1,7 @@
-// The Hooks page: the Stop-hook holds and the hook errors of the last days, and the hooks of `hooks/hooks.json`.
-// `data` is /api/hooks. The holds log filters by Who, Hook, Kind and Outcome from the address (`?who=workers&out=false`).
+// The Hooks page: the Stop-hook holds and the hook errors of the scope's window and project, and the hooks of `hooks/hooks.json`.
+// `data` is /api/hooks in the scope of the address. The holds log filters by Who, Hook, Kind and Outcome from the address (`?who=workers&out=false`).
 // One hook's page, on /api/hooks/:event/:name, draws the same parts.
-import { setQuery } from "./lib/address.js";
+import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
 import { barList, barRow, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, tag } from "./lib/html.js";
@@ -13,7 +13,7 @@ export const view = {
   icon: "plug",
   group: "claude",
   order: 2,
-  api: "/api/hooks",
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/hooks?window=${s.window}`); },
   render: (d, _params, q) => renderHooks(d, q),
   mount,
 };
@@ -97,7 +97,7 @@ export function renderHooks(d, q) {
   const inv = d.hooks.map((h) => row([cell(h.event), `<td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
     `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })])).join("");
   return `<div class="page dp-page">` +
-    pageHead("Hooks", { aside: `Last ${d.days} days` }) +
+    pageHead("Hooks", { aside: scope(q).bar() }) +
     renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
     detailPanel("Holds by Hook", count(d.byHook.length), holdsBy(d.byHook)) +
     perDay(d.holds) +
@@ -112,6 +112,7 @@ const go = (changes) => { setQuery(changes); redraw(); };
 
 /** Wires the log's filters, its pager and the names that set its filters. */
 function mount(root) {
+  scope().wire(root);
   root.onclick = (e) => {
     const b = e.target.closest?.("button");
     if (b?.matches("#holds .seg button")) return go({ [b.parentElement.dataset.name]: b.dataset.value, page: "" });
@@ -127,7 +128,7 @@ const hookView = {
   path: "/hooks/:event/:name",
   title: "Hook",
   group: "claude",
-  api: "/api/hooks/:event/:name",
+  api: (p, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/hooks/${encodeURIComponent(p.event)}/${encodeURIComponent(p.name)}?window=${s.window}`); },
   render: (d, _params, q) => renderHook(d, q),
   mount,
 };
@@ -136,7 +137,7 @@ const hookView = {
 export function renderHook(d, q) {
   const xs = d.holds;
   return `<div class="page dp-page">${crumb("#/hooks", [["hooks", "#/hooks"], [d.event], [d.name]])}` +
-    pageHead(d.name) +
+    pageHead(d.name, { aside: scope(q).bar() }) +
     facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +

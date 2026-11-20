@@ -39,11 +39,16 @@ describe("the Hooks page", () => {
     expect(logIds("")).toEqual(["aaaaaaaa1", "bbbbbbbb2", "cccccccc3", "dddddddd4"]);
   });
 
+  test("the head holds the scope bar, the Project select then the Window group, and no day count", () => {
+    const head = renderHooks(data, new URLSearchParams("window=day")).split('<details')[0];
+    expect(head).toMatch(/<select name="project"[^]*role="group" aria-label="Window" data-name="window"[^]*data-value="day" aria-pressed="true"/);
+    expect(head).not.toContain("Last 7 days");
+  });
+
   test("the page head leaves the count of hooks to the Hooks panel", () => {
     const html = renderHooks(data, new URLSearchParams());
     const head = html.match(/<header class="ph">.*?<\/header>/)![0];
     expect(head).not.toContain('<span class="count">');
-    expect(head).toContain('<div class="aside">Last 7 days</div>');
     expect(html).toContain(`<summary><span>Hooks</span><span class="dp-aside">${data.hooks.length}</span></summary>`);
   });
 
@@ -94,7 +99,8 @@ describe("the Hooks page", () => {
 
   test("a hook's page head shows its name with no count, its event in the crumb and facts", () => {
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
-    expect(html).toContain('<header class="ph"><h1>one way</h1></header>');
+    expect(html).toContain('<header class="ph"><h1>one way</h1><div class="aside">');
+    expect(html).not.toContain('<span class="count">');
     expect(html).toContain("<span>Stop</span> / <span>one way</span></nav>");
     expect(html).toContain("<dt>Event</dt><dd>Stop</dd>");
   });
