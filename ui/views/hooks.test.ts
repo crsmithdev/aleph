@@ -139,6 +139,12 @@ describe("the Hooks page", () => {
     for (const t of ["Holds by Hook", "Holds by Day", "Errors by Cause", "Holds"]) expect(html.split(`aria-label="${t}"`)[1]?.split("</section>")[0]).toContain(empty());
   });
 
+  test("the Hooks panel with no hooks shows empty() and no table", () => {
+    const panel = renderHooks({ ...data, hooks: [] }, new URLSearchParams()).split('aria-label="Hooks"')[1].split("</section>")[0];
+    expect(panel).toContain(empty());
+    expect(panel).not.toContain("<table");
+  });
+
   test("a hook with no holds and no errors draws neither panel", () => {
     const html = renderHook({ event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     expect(html).not.toContain(empty());

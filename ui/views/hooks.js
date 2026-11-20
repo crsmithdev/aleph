@@ -116,7 +116,7 @@ export function renderHooks(d, q) {
     card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length) }) +
     perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
-    card("Hooks", dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv), { count: String(d.hooks.length) }) +
+    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv),{ count: String(d.hooks.length) }) +
     holdsLog(d.holds, q, asCard) +
     `</div>`;
 }
