@@ -202,13 +202,14 @@ const kindOf = (r) => (isEpisode(r) ? "episode" : r.kind);
 /** The `when` of a log row: a time for a write or a miss, the day for a recall (the recall log keeps no time). */
 const logTime = (at) => (at.length > 10 ? when(at) : shortDay(at));
 
-/** One event of the log. A recall's query opens to the notes it returned, in rank order. */
+/** One event of the log. A recall's query opens to the notes it returned, in rank order. An episode page is no note, so it gets no link. */
 export function logRow(r) {
+  const name = isEpisode(r) ? esc(r.note) : link(r.note);
   const why = r.kind === "recall"
     ? `<details><summary title="${esc(r.why)}">${esc(r.why)}</summary><ol>${r.titles.map((t) => `<li>${link(t)}</li>`).join("")}</ol></details>`
     : esc(r.why);
   return `<tr><td class="time lead">${esc(logTime(r.at))}</td><td>${chip(r.op)}</td>` +
-    `<td>${r.note ? link(r.note) : miss("No note")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
+    `<td>${r.note ? name : miss("No note")}${r.titles.length > 1 ? ` ${q(`+${r.titles.length - 1}`)}` : ""}</td><td class="wide" title="${esc(r.why)}">${why}</td></tr>`;
 }
 
 /** The frame of the log rows that `keep` keeps, per local day over the last `n` days, oldest first. */

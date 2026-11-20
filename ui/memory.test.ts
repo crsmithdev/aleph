@@ -553,8 +553,11 @@ test("the tabs link Notes, Health and Log; the log row opens a recall to its not
   expect(words(find(v.renderLog({ project: "", rows: [] }), "#log-rows .empty"))).toEqual(["No data"]);
   const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Ship", why: "episode of aleph-1", titles: [] };
   const w = { ...ep, note: "Use Bun", why: "a fix" };
-  const kept = (kind: string) => words(find(v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))), "#log-rows tbody > tr a"));
+  const kept = (kind: string) => words(find(v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))), "#log-rows tbody > tr > td:nth-child(3)"));
   expect([kept("episode"), kept("write")]).toEqual([["aleph-1 Ship"], ["Use Bun"]]);
+  // An episode page is no note, so its row names it without a link.
+  expect([find(v.logRow(ep), "a"), words(find(v.logRow(ep), "td"))[2]]).toEqual([[], "aleph-1 Ship"]);
+  expect(find(v.logRow(w), "a").map((a) => a.attrs.href)).toEqual(["#/memory/Use%20Bun"]);
   // mountLog() sets each chart's frame by its key.
   expect(find(v.renderLog({ project: "", rows: [ep, w] }), "aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/writes", "memory/episode-writes", "memory/recalls"]);
 });
