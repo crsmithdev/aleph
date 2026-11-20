@@ -90,10 +90,9 @@ test("an event of a factory-wide job, with no project, is in the Herald of no pr
   const own = seed({ role: "build", repo: "alpha", name: "issue.1", state: "running" }).id;
   const before = readEvents().length;
   for (const job of [id, own]) logEvent({ subject: job, action: "running", object: job });
-  const s: any = { errored: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events: readEvents().slice(before), titles: {}, runs: {}, attempts: {}, chats: [{ id: "c", start: "x", last: "x", title: "t" }] } };
+  const s: any = { errored: [], running: [], done: [], doneStamps: [], queued: [], runningIssues: [], asks: [], herald: { history: [], events: readEvents().slice(before), titles: {}, runs: {}, attempts: {} } };
   expect(forProject(s, null).herald!.events.map((e) => e.object)).toEqual([id, own]);
   expect(forProject(s, "alpha").herald!.events.map((e) => e.object)).toEqual([own]);
-  expect(forProject(s, "alpha").herald!.chats).toEqual([]);
 });
 
 test("scopeOf reads the project and the window by name, with the route's default, and refuses another window", async () => {

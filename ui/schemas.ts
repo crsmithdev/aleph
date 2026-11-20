@@ -13,13 +13,9 @@ const issue = { id: "number", ref: "string", repo: "string", title: "string", hr
 const turn = { n: "number", traceId: "string", start: "time", seconds: "number?", cost: "number" };
 
 export const SCHEMAS: Record<string, Schema | "text"> = {
-  "/api/annotations": [{
-    v: "number", id: "string", url: "string", selector: "string", text: "string", html: "string", note: "string", status: "string", by: "string",
-    replies: [{ by: "string", text: "string", at: "time" }], at: "time",
-  }],
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
-    herald: { history: [{ at: "time", tone: "string", text: "string" }], seq: "number", rows: [{ key: "string", at: "time", by: "string", kind: "string", word: "string", id: "array", text: "array", more: "number", lines: "array" }], chats: [{ id: "string", start: "time", last: "time", title: "string" }] },
+    herald: { history: [{ at: "time", tone: "string", text: "string" }], seq: "number", rows: [{ key: "string", at: "time", by: "string", kind: "string", word: "string", id: "array", text: "array", more: "number", lines: "array" }] },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     errored: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],

@@ -81,7 +81,7 @@
 </script>
 <script type="module">
   import { annotate, remote } from "/vendor/kit/annotate.js";
-  // Notes live on the server, where `aleph annotation` lets an agent read, answer and add them. The page hears of a
+  // Notes live on the server, where `shelf note` lets an agent read, answer and add them. The page hears of a
   // change from the router's stream; a tab shown again loads them too.
   // `send` hands a note to a waiting agent through the shelf, which marks it sent.
   annotate({
@@ -98,14 +98,11 @@
 </script>
 <script type="module">
   import { chat } from "/vendor/kit/chat.js";
-  // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page, and
+  // The chat agent (ui/chat-hooks.ts) gets the open notes of the page in view, named as annotate.js names a page, and
   // the notes its @ button points at.
-  // On an idea page it keeps a session of its own under chat:idea:<slug> and sends the slug as `idea`.
-  const idea = () => /^#\/ideas\/([^/?]+)/.exec(location.hash)?.[1];
   chat({
     headers: { "X-Aleph-UI": "1" },
-    key: () => idea() ? `chat:idea:${idea()}` : "kit-chat",
-    context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : ""), ...(idea() ? { idea: idea() } : {}) }),
+    context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "") }),
   });
 </script>
 </body>

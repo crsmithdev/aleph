@@ -182,7 +182,7 @@ describe("help", () => {
   test("help names each command with its usage line and purpose", async () => {
     const r = await aleph(["help"]);
     expect(r.code).toBe(0);
-    for (const c of ["job", "run", "land", "issue", "idea", "annotation", "status", "doctor", "drop", "intake", "report", "always", "models"]) expect(r.stdout).toMatch(new RegExp(`^aleph ${c}\\b.*\\n  \\S`, "m"));
+    for (const c of ["job", "run", "land", "issue", "idea", "status", "doctor", "drop", "intake", "report", "always", "models"]) expect(r.stdout).toMatch(new RegExp(`^aleph ${c}\\b.*\\n  \\S`, "m"));
     expect(r.stdout).toContain("aleph land <name> [--checked]\n  land a job's branch on main");
   });
 

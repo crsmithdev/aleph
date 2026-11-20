@@ -16,7 +16,6 @@ import { counting, isError } from "../jobs/lib/records/record.ts";
 import { type Cause } from "../jobs/lib/records/outcome.ts";
 import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
 import { withProjects } from "./api/scope.ts";
-import { chats, type Chat } from "./api/chat.ts";
 import type { Context as HeraldContext } from "./herald.ts";
 import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
@@ -206,8 +205,7 @@ export interface State {
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
   /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: HeraldContext & { history: HeraldHistoryItem[]; /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[];
-    /** The UI chat conversations with a turn in the last day, oldest first. */ chats: Chat[] };
+  herald?: HeraldContext & { history: HeraldHistoryItem[]; /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[] };
 }
 
 const DONE = 10;
@@ -474,8 +472,8 @@ function doneOf(slots: Slot[], { ofItem, pickedUp }: Pickups, { toJob }: Project
   return { done, doneStamps: items.map(({ at, id }) => ({ id, at })) };
 }
 
-/** The state at `now`; `withChats` false leaves the Herald's conversations out (a scoped body drops them, and each is a transcript read). */
-export function state(now = new Date(), withChats = true): State {
+/** The state at `now`. */
+export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs();
@@ -495,7 +493,7 @@ export function state(now = new Date(), withChats = true): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists), chats: withChats ? chats(now.getTime() - 86_400_000) : [] },
+    herald: { history: currentStatusHistory(), seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
     asks: att.items, done, doneStamps,
     errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),

@@ -13,7 +13,7 @@
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
  * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row sends the `ev` rows and changes the source `events`.
- * - The annotations file is watched: a note written by the page or by `aleph annotation` sends `change` for
+ * - The annotations file is watched: a note written by the page or by `shelf note --file` sends `change` for
  *   /api/annotations at once. That route is not kept; the page reads it whole.
  * - The skills folder is watched: a skill folder added or removed, or a SKILL.md written, rebuilds the keys that read the skills.
  * - Langfuse is polled every 30 s (2 min for skills) while a key that reads it is kept; the work store is fetched

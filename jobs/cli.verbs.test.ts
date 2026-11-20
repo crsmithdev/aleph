@@ -3,7 +3,7 @@ import { getJson } from "../lib/db.ts";
 import { join } from "node:path";
 import { aleph, base, CLI, env, setup, teardown } from "./cli.testkit";
 
-// The wiring in cli/commands.ts of the verbs whose logic is tested in-process: always, judge, annotation, and monitor.
+// The wiring in cli/commands.ts of the verbs whose logic is tested in-process: always, judge and monitor.
 beforeAll(setup);
 afterAll(teardown);
 
@@ -46,28 +46,6 @@ describe("judge", () => {
     expect(bad.code).toBe(1);
     expect(bad.err).toContain("usage: aleph judge");
     expect(getJson("settings", "judge", "")).toBe("haiku");
-  });
-});
-
-describe("annotation", () => {
-  test("reply, reopen and drop change the stored note; a missing id or an unknown --by exits 1", async () => {
-    const e = { ALEPH_ANNOTATIONS: join(base, "annotations.json") };
-    const a = await aleph(["annotation", "add", "--selector", "#title", "--url", "/issues", "--", "too", "long"], e);
-    expect(a.json).toMatchObject({ selector: "#title", url: "/issues", note: "too long", status: "open", by: "agent", replies: [] });
-    const id = a.json.id;
-    const r = await aleph(["annotation", "reply", id, "--by", "you", "-"], e, "shorter then\n");
-    expect(r.json.replies).toEqual([expect.objectContaining({ text: "shorter then", by: "you" })]);
-    expect((await aleph(["annotation", "resolve", id], e)).json.status).toBe("resolved");
-    expect((await aleph(["annotation", "list", "--json"], e)).json).toEqual([]);
-    expect((await aleph(["annotation", "reopen", id], e)).json.status).toBe("open");
-    expect((await aleph(["annotation", "list", "--json", "--url", "/issues"], e)).json.map((n: any) => n.id)).toEqual([id]);
-    expect((await aleph(["annotation", "list", "--json", "--url", "/jobs"], e)).json).toEqual([]);
-    expect((await aleph(["annotation", "drop", id], e)).json).toEqual({ dropped: id });
-    expect((await aleph(["annotation", "list", "--json", "--all"], e)).json).toEqual([]);
-    const none = await aleph(["annotation", "reply"], e);
-    expect([none.code, none.stderr]).toEqual([1, expect.stringContaining("usage: aleph annotation")]);
-    const who = await aleph(["annotation", "list", "--by", "bot"], e);
-    expect([who.code, who.stderr.trim()]).toEqual([1, "--by takes you or agent"]);
   });
 });
 

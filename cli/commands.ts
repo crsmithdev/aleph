@@ -1,5 +1,5 @@
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|annotation|unit|tick|suite|report|pause|resume|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|idea|unit|tick|suite|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: the projects of $ALEPH_ITEMS or
  * ~/.aleph/items. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
@@ -26,7 +26,6 @@ import * as verbs from "../issues/lib/issues.ts";
 import { addDevice, devices, dropDevice } from "../ui/pair.ts";
 import { todoCmd } from "../issues/cli.ts";
 import { ideaCmd } from "../ideas/cli.ts";
-import * as notes from "../lib/annotations.ts";
 import { grant, readAlways, revoke } from "../jobs/lib/asks/ask.ts";
 import { readTimeouts, setTimeoutOf } from "../jobs/lib/asks/timeout.ts";
 import { behind, directorStep, hookLines, intakeNow } from "../jobs/lib/transitions/factory.ts";
@@ -74,7 +73,6 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   checked: { usage: "aleph checked <name>", purpose: "mark a landed job's check as done" },
   issue: { usage: `aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind ${issues.KINDS.join("|")}]`, purpose: "read and write a repo's issues" },
   idea: { usage: "aleph idea <add|list|show|edit|note|save|lens|built|drop> ...", purpose: "keep and develop ideas" },
-  annotation: { usage: "aleph annotation <list [--all] [--url <u>] [--json] | add (--on <id> | --selector <css>) [--url <u>] <text|-> | reply <id> [--by you|agent] <text|-> | resolve <id> | reopen <id> | drop <id> | put>", purpose: "read and write notes on UI pages" },
   ui: { usage: "aleph ui <pair [label]|unpair <label>|devices>", purpose: "pair a device with the UI, drop one, or list them" },
   tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
   director: { usage: "aleph director", purpose: "run one director step" },
@@ -353,42 +351,6 @@ function uiCmd(ctx: Ctx): void {
   }
 }
 
-const ANNOTATION_USAGE = usage("annotation");
-
-/** `aleph annotation ...`: the notes pinned on UI pages (lib/annotations.ts). `list` prints Markdown, the rest JSON; `put` reads one note as JSON on stdin. */
-async function annotationCmd(ctx: Ctx): Promise<void> {
-  const [verb, ...args] = ctx.positional;
-  const text = async (words: string[]) => (words[0] === "-" ? await ctx.stdin() : words.join(" ")).trim() || refuse(ANNOTATION_USAGE);
-  const by = (ctx.flag("by") ?? "agent") as notes.By;
-  if (!["you", "agent"].includes(by)) refuse("--by takes you or agent");
-  switch (verb) {
-    case "list": {
-      const url = ctx.flag("url");
-      const shown = notes.read().filter((n) => (ctx.rest.includes("--all") || n.status === "open") && (!url || n.url === url || n.url === ""));
-      if (ctx.rest.includes("--json")) ctx.out(shown);
-      else ctx.log(notes.markdown(shown));
-      return;
-    }
-    case "add": {
-      const on = ctx.flag("on"), css = ctx.flag("selector");
-      if (Boolean(on) === Boolean(css)) refuse(ANNOTATION_USAGE);
-      ctx.out(notes.add(on ? notes.anchor(on) : css!, await text(args), { url: ctx.flag("url") ?? "", by }));
-      return;
-    }
-    case "reply": ctx.out(notes.reply(args[0] ?? refuse(ANNOTATION_USAGE), await text(args.slice(1)), by)); return;
-    case "resolve": ctx.out(notes.mark(args[0] ?? refuse(ANNOTATION_USAGE), "resolved")); return;
-    case "reopen": ctx.out(notes.mark(args[0] ?? refuse(ANNOTATION_USAGE), "open")); return;
-    case "drop": ctx.out(notes.drop(args[0] ?? refuse(ANNOTATION_USAGE))); return;
-    case "put": {
-      let raw: unknown;
-      try { raw = JSON.parse(await ctx.stdin()); } catch { refuse("put reads one annotation as JSON on stdin"); }
-      ctx.out(notes.put(raw));
-      return;
-    }
-    default: refuse(ANNOTATION_USAGE);
-  }
-}
-
 /** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
 async function doctorCmd(ctx: Ctx): Promise<void> {
   const checks = await doctor.doctor();
@@ -436,7 +398,6 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "land": await started(ctx, await land(ctx.positional[0], { checked: ctx.rest.includes("--checked") }, { command: ctx.command, by: "human" })); break;
     case "checked": ctx.out(checked(ctx.positional[0])); break;
     case "issue": await todoCmd(ctx, usage("issue")); break;
-    case "annotation": await annotationCmd(ctx); break;
     case "ui": uiCmd(ctx); break;
     case "idea": await ideaCmd(ctx, usage("idea")); break;
     case "tick": await tickCmd(ctx); break;

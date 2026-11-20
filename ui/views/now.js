@@ -186,10 +186,7 @@ export function renderHerald(s, st = page) {
   const show = kept(SHOW, ALL);
   const live = st.live && st.live.seq > (s.herald?.seq ?? 0) ? st.live : s.herald;
   const events = (live?.rows ?? []).filter((r) => show[r.kind]).map((r) => ({ at: r.at, key: r.key, html: heraldRow(r) }));
-  // A chat conversation is one row, read from its session: its last turn's time, its latest prompt.
-  const chats = (s.herald?.chats ?? []).map((c) => ({ at: c.last, key: `chat ${c.id}`, html: feedRow({ tone: "quiet", at: c.last, by: "claude",
-    body: `<span class="event-line">${tag("chat", "quiet")}${idLink(c.id.slice(0, 8))}<span class="event-title" title="${esc(c.title)}">${esc(c.title)}</span><span></span></span>` }) }));
-  const rows = [...status, ...chats, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const rows = [...status, ...events].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => r.html.replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.

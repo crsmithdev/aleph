@@ -169,18 +169,18 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
 }
 
 /**
- * Start `claude -p --input-format stream-json` for the chat panel, and the only place that does. It runs like a terminal
- * session of Chris (his settings and skills), and keeps running: the caller writes one user line to stdin per turn and
- * reads stream-json from stdout up to each `result`. It names the session: `--session-id` for a new one, `--resume` for one
- * that exists. The command is `ALEPH_CHAT_CMD`, else `claude`.
+ * The argv and environment of `claude -p --input-format stream-json` for the chat panel, and the only place that builds
+ * them. The agent runs like a terminal session of Chris (his settings and skills), and keeps running: the chat handler
+ * of aleph-tools writes one user line to stdin per turn and reads stream-json from stdout up to each `result`. It names
+ * the session: `--session-id` for a new one, `--resume` for one that exists. The command is `ALEPH_CHAT_CMD`, else `claude`.
  */
-export function startChat(session: string, fresh: boolean, system: string, cwd: string): ReturnType<typeof Bun.spawn> {
+export function chatCommand(session: string, fresh: boolean, system: string): { argv: string[]; env: Record<string, string | undefined> } {
   const argv = modelArgv(roleCmd("CHAT"), OPUS_MODEL, [
     "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     "--append-system-prompt", system, fresh ? "--session-id" : "--resume", session,
   ], true);
   const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL) };
-  return Bun.spawn(argv, { cwd, env, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+  return { argv, env };
 }
 
 /**

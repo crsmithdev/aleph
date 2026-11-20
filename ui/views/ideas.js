@@ -75,7 +75,7 @@ export function renderIdea(d) {
   };
   const built = (d.built ?? []).map((r) => repoIdLink(r, issueHref(r))).join(" ");
   return `<div class="page">${crumb("#/ideas", [["ideas", "#/ideas"], [d.slug]])}` +
-    pageHead(d.title, { aside: actButton("Build", { build: "1" }, { primary: true }) }) +
+    pageHead(d.title) +
     statusRow(badge(d.status), "", chips([target(d.target)])) +
     renderKpis([{ k: "Results", v: esc(count(d.lenses.length)) }, { k: "Running", v: esc(count(now.size)) }, { k: "Built", v: built || "–", text: true }]) +
     tabs("Idea tabs", items, panes, tab) + "</div>";
@@ -96,20 +96,12 @@ export const ideaView = {
     wireTabs(root.querySelector(".page"), (id) => keep(`idea-tab:${d.slug}`, id));
     root.onclick = async (e) => {
       const q = e.target.closest("button[data-lens]");
-      if (q) {
-        try {
-          const { started } = await postJson(`/api/ideas/${encodeURIComponent(d.slug)}/lenses/${q.dataset.lens}`, {});
-          pending.set(started, false);
-          redraw(true);
-        } catch (err) { say(q, `Queue job failed: ${err.message}`); }
-        return;
-      }
-      if (e.target.closest("button[data-build]")) {
-        const ui = document.getElementById("kit-chat")?.shadowRoot;
-        if (!ui) return;
-        ui.querySelector("textarea").value = "Build this idea.";
-        ui.querySelector("form").requestSubmit();
-      }
+      if (!q) return;
+      try {
+        const { started } = await postJson(`/api/ideas/${encodeURIComponent(d.slug)}/lenses/${q.dataset.lens}`, {});
+        pending.set(started, false);
+        redraw(true);
+      } catch (err) { say(q, `Queue job failed: ${err.message}`); }
     };
   },
 };

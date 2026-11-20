@@ -872,7 +872,6 @@ A feed row shows one event in a feed on one line. The newest event is first.
 - One row per attempt of an issue: the first job of a job's `prev` chain. Its older events are in the fold, newest first: the time, a label (the run's kind, or the chip word) and a text (the job's link, its mark `✓` or `✗`, then its size, model, commit, time and cost).
 - A routine's run is one row, a job like any other: its Id is the run's job (`j6802`), its title says "3 changes", and each change is a line in the fold with the issue's link. A run that ended and changed nothing has no row; one still running, or one that failed, has.
 - A status row has the time and the new status text only. It is drawn where the text changes after the page loaded, as the old text gives way to the new; the first render has none.
-- A chat is one row: the chip `chat`, the first 8 characters of its id, its latest prompt.
 - A routing event is a quiet system row: the size, the model and the cost in muted text. A routed start's choice is in the fold, not the head.
 - The Work and Factory toggles above the feed show or hide the rows: an issue's events are Work, any other is Factory.
 

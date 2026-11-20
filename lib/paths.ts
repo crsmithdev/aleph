@@ -48,7 +48,7 @@ export const vaultDir = (): string => { touch("vault"); return alephPath("ALEPH_
 export const handoffsDir = (): string => { touch("handoffs"); return expand(process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs")); };
 /** The paired devices of the UI: one `<sha256-hex> <label> <iso-date>` line each (ui/pair.ts). */
 export const uiTokensFile = (): string => alephPath("ALEPH_UI_TOKENS", "ui-tokens");
-/** The notes pinned on UI pages, and the answers to them (lib/annotations.ts). */
+/** The notes pinned on UI pages, and the answers to them: the scope file of the aleph-tools notes handler (ui/server.ts) and of `shelf note --file`. */
 export const annotationsFile = (): string => { touch("annotations"); return alephPath("ALEPH_ANNOTATIONS", "annotations.json"); };
 
 /** The registry key of the repo that `cwd` is in, a worktree of it too; else the folder name of the main checkout. With `git` false: the key whose path holds `cwd`, else "", and no git run. */

@@ -7,6 +7,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { kit } from "./kit.ts";
+import { chatHooks } from "./chat-hooks.ts";
+import { sameSite } from "./http.ts";
+import { annotationsFile } from "../lib/paths.ts";
 import { gate, pairRoute } from "./pair.ts";
 import { skipFetches } from "../lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
@@ -113,6 +116,8 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       if (refused) return refused;
       const shelved = await kit?.shelf(req);
       if (shelved) return shelved;
+      const handled = await kit?.notes(req, { file: annotationsFile(), base: "/api/annotations", allow: sameSite }) ?? await kit?.chat(req, chatHooks());
+      if (handled) return handled;
       const url = new URL(req.url);
       const path = url.pathname;
       let allowed = false;

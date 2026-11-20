@@ -13,12 +13,12 @@ import { annotate, currentFit, summaryOff } from "../usage.ts";
 /** `events` narrowed to `project`'s: none of a factory-wide job. */
 const mineOf = (events: EventRow[], project: string | null) => (project ? events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)) : events);
 
-/** The state with only `project`'s jobs, issues, asks and Herald events (none of a factory-wide job, no chat); the factory and ticks stay whole. */
+/** The state with only `project`'s jobs, issues, asks and Herald events (none of a factory-wide job); the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
-  const herald = s.herald && { ...s.herald, events: mineOf(s.herald.events, project), chats: [] };
+  const herald = s.herald && { ...s.herald, events: mineOf(s.herald.events, project) };
   return { ...s, errored: mine(s.errored), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
@@ -30,10 +30,10 @@ export function heraldNow(project: string | null) {
 
 /** The `/api/factory` body for one project (null for all), with its asks and the Herald as rows. */
 async function build(project: string | null) {
-  const { doneStamps, herald, ...s } = forProject(state(new Date(), !project), project);
+  const { doneStamps, herald, ...s } = forProject(state(), project);
   const fit = await currentFit();
   annotate([...s.errored, ...s.running], fit);
-  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit) };
+  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald) }, usage: await summaryOff(fit) };
 }
 
 /** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */

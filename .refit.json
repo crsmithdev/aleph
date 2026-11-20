@@ -132,13 +132,6 @@
     },
     {
       "copies": [
-        "ui/api/chat.ts:15-21",
-        "jobs/lib/roles/housekeeper.ts:16-22"
-      ],
-      "reason": "Both are import lines, not logic. Each file keeps its own import list after the storage-ids slices."
-    },
-    {
-      "copies": [
         "jobs/lib/roles/intake.ts:20-26",
         "jobs/lib/roles/housekeeper.ts:17-23"
       ],

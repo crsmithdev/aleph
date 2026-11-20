@@ -280,7 +280,7 @@ describe("a passed job whose issue is parked", () => {
   });
 });
 
-describe("the Herald's attempts and chats", () => {
+describe("the Herald's attempts", () => {
   test("an intake, a build, a review and a land job linked by prev are one attempt: the intake's job", () => {
     const ids = (["intake", "build", "review", "land"] as const).map((kind, i) => run(`20261027-00019${i}-a`, { job: "fac-90", kind, name: "fac-90", on: "fac-90", state: "done" }));
     const other = run("20261027-000199-a", { job: "fac-91", name: "fac-91", on: "fac-91", state: "done" });
@@ -296,25 +296,6 @@ describe("the Herald's attempts and chats", () => {
     const h = state(now).herald!;
     expect(h.events.find((e) => e.object === "issue.1")?.project).toBe("fac");
     expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting issue" });
-  });
-
-  test("two turns on one chat session are one conversation: its session, start, last turn and latest prompt", () => {
-    const projects = join(base, "projects"), sessions = process.env.ALEPH_SESSIONS_DIR!;
-    const turn = (type: string, timestamp: string, content: unknown) => JSON.stringify({ type, timestamp, message: { content } });
-    mkdirSync(join(projects, "-repo"), { recursive: true });
-    writeFileSync(join(projects, "-repo", "chat-1.jsonl"), [
-      turn("user", ago(3), "fix the footer\n\nChris points at these annotations:"), turn("assistant", ago(3), [{ type: "text", text: "done" }]),
-      turn("user", ago(2), "and the header"), turn("assistant", ago(2), [{ type: "text", text: "done" }]),
-    ].join("\n"));
-    // A session the server did not run as a chat, and a chat whose last turn is older than the feed's day.
-    writeFileSync(join(projects, "-repo", "terminal-1.jsonl"), turn("user", ago(1), "typed in a terminal"));
-    writeFileSync(join(projects, "-repo", "old-1.jsonl"), turn("user", ago(30), "yesterday's"));
-    for (const id of ["chat-1", "old-1"]) mkdirSync(join(sessions, id), { recursive: true });
-    const end = withEnv({ ALEPH_CLAUDE_PROJECTS: projects });
-    try {
-      expect(state(now).herald!.chats).toEqual([{ id: "chat-1", start: ago(3), last: ago(2), title: "and the header" }]);
-      expect(state(now, false).herald!.chats).toEqual([]);
-    } finally { end(); rmSync(sessions, { recursive: true, force: true }); }
   });
 });
 

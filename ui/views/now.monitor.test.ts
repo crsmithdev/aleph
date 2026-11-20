@@ -454,17 +454,10 @@ test("a head with a note keeps its line in the fold under its titled row; a head
   } finally { setCodes({}); }
 });
 
-test("two chat turns of one session are one feed row, titled by its first prompt", () => {
-  const chat = { id: "5a5a4e9b-88d1-476f-aeb2-e20af1a9fae6", start: "2026-11-15T12:00:00Z", last: "2026-11-15T12:30:00Z", title: "why is the build red" };
-  const h = feed([], { chats: [chat] });
-  expect(h.match(/class="event-row[^"]*" data-by=/g)).toHaveLength(1);
-  expect(h).toContain('<span class="badge quiet">chat</span><span class="idp">5a5a4e9b</span><span class="event-title" title="why is the build red">why is the build red</span>');
-});
-
 test("a new event for an issue keeps its grouped row's key and id, and each Herald row has its own id", () => {
   const e = (at: string, action: string, job: string) => row({ at, by: "gate", subject: "aleph-9", action, on: [job] });
   const old = [e("2026-11-09T11:00:00Z", "done", "aleph-9#1"), e("2026-11-09T12:00:00Z", "done", "aleph-9#2")], newer = [e("2026-11-09T13:00:00Z", "done", "aleph-9#3"), ...old];
-  const draw = (events: any[]) => view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", running: [{ id: "a1#1", name: "a1", started: "2026-11-09T13:30:00Z", item: { title: "Run" } }], herald: heraldOf(events, { chats: [{ id: "chat-1", last: "2026-11-09T09:00:00Z", title: "Chat" }] }) });
+  const draw = (events: any[]) => view.renderHerald({ ...calm, now: "2026-11-09T14:00:00Z", running: [{ id: "a1#1", name: "a1", started: "2026-11-09T13:30:00Z", item: { title: "Run" } }], herald: heraldOf(events) });
   const [a, b] = [draw(old), draw(newer)];
   const ids = (h: string) => [...h.matchAll(/<(?:div|details) data-key="([^"]*)" id="([^"]*)"/g)].map((m) => m.slice(1));
   const group = (h: string) => ids(h).find(([k]) => k.startsWith("issue:aleph-9"));

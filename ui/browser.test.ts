@@ -2,7 +2,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } fro
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { kit } from "./kit.ts";
+import { kit, root } from "./kit.ts";
+import { annotationsFile } from "../lib/paths.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./browser.testkit.ts";
 
 /** The last test to start, and whether it ran to its end: one that threw or timed out leaves `ok` false, and the next test gets a clean page. */
@@ -10,6 +11,8 @@ let last = { ok: true };
 const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name, async () => { const run = { ok: false }; last = run; await fn(); run.ok = true; }, timeout);
 /** A test of a kit widget: it skips when aleph-tools is not on this machine (ui/kit.ts). */
 const kitTest = (name: string, fn: () => unknown, timeout?: number) => (kit ? test : bunTest.skip)(name, fn, timeout);
+/** `shelf note <verb> ...` of aleph-tools on the notes file of this run. */
+const shelfNote = ([verb, ...rest]: string[]) => Bun.spawnSync([process.execPath, join(root, "shelf.ts"), "note", verb, "--file", annotationsFile(), ...rest], { env: process.env, stdout: "pipe", stderr: "pipe" });
 
 /** Log one director answer whose detail is a long note of `word` repeated, into the rig database at `db`. */
 const logTo = (db: string, time: string, word: string) =>
@@ -890,8 +893,8 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "1"');
     expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin").length')).toBe(1);
     await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
-    // The note went to the server through `aleph annotation put`, by you.
-    // The server answers once the CLI wrote the file and the updater rebuilt the key: each change signal is a read.
+    // The note went to the server through the kit's notes handler, by you.
+    // The updater signals a change once the file is written: each change signal is a read.
     const server = () => page.ev<{ id: string; note: string; by: string }[]>('fetch("/api/annotations").then((r) => r.json())');
     const saved = await page.ev<{ note: string; by: string }[]>(`new Promise((done) => {
       const es = new EventSource("/api/events");
@@ -901,7 +904,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     })`);
     expect(saved.map((n) => [n.note, n.by])).toEqual([["rename this", "you"]]);
     // An agent's note, added with the CLI, reaches the open page through the change signal, with its own pin.
-    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+    const cli = shelfNote;
     expect(cli(["add", "--selector", ".mark", "--", "from the agent"]).exitCode).toBe(0);
     await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "2"');
     expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
@@ -918,7 +921,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
   const chatRig = async () => {
     await page.width(1200);
     await page.go("#/");
-    const cli = (args: string[]) => Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "cli", "cli.ts"), "annotation", ...args], { env: process.env, stdout: "pipe", stderr: "pipe" });
+    const cli = shelfNote;
     const chat = 'document.getElementById("kit-chat").shadowRoot', note = 'document.getElementById("kit-annotate")';
     await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
       ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response("event: end\\ndata: {}\\n\\n", { headers: { "content-type": "text/event-stream" } })))
@@ -996,31 +999,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect((await say("plain")).text).toBe("plain");
     await page.ev('document.getElementById("kit-annotate-off").id = "kit-annotate"');
     await done();
-  }, 30_000);
-
-  kitTest("the chat keeps a session per idea page and returns to the general one", async () => {
-    await page.width(1200);
-    await page.go("#/");
-    const chat = 'document.getElementById("kit-chat").shadowRoot';
-    await page.ev(`(() => { window.sent = []; window.realFetch = fetch; window.fetch = (u, o) => u === "/api/chat"
-      ? (sent.push(JSON.parse(o.body)), Promise.resolve(new Response('data: {"session_id":"s-' + (JSON.parse(o.body).idea ?? "general") + '"}\\n\\nevent: end\\ndata: {}\\n\\n', { headers: { "content-type": "text/event-stream" } })))
-      : realFetch(u, o); })()`);
-    const say = async (text: string) => {
-      const n = await page.ev<number>("sent.length");
-      await page.ev(`(() => { const ui = ${chat}; ui.querySelector("textarea").value = ${JSON.stringify(text)}; ui.querySelector("form").requestSubmit(); })()`);
-      await page.when(`sent.length === ${n + 1} && !${chat}.querySelector(".busy")`);
-      return page.ev<{ idea?: string; session?: string }>("sent.at(-1)");
-    };
-    expect((await say("zero")).idea).toBeUndefined();
-    await page.go("#/ideas/1");
-    const mine = await say("one");
-    expect([mine.idea, mine.session]).toEqual(["1", undefined]);
-    expect(await page.ev('JSON.parse(localStorage.getItem("chat:idea:1")).session')).toBe("s-1");
-    await page.go("#/");
-    const general = await say("two");
-    expect(general.idea).toBeUndefined();
-    expect(general.session).toBe("s-general");
-    await page.ev(`window.fetch = realFetch; ${chat}.querySelector(".new").click(); localStorage.removeItem("chat:idea:1")`);
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {
@@ -1129,11 +1107,11 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.ev(drawRig);
   };
 
-  // The Herald drawn from `chats` (one feed row each, keyed `chat <id>`) by morph, as a redraw does; `window.herald(ids)` puts the rows in that order, newest first.
+  // The Herald drawn from `rows` (one feed row each, keyed `row <id>`) by morph, as a redraw does; `window.herald(ids)` puts the rows in that order, newest first.
   const drawRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
     const root = document.querySelector("#view");
     window.view = view; window.root = root;
-    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: [], chats: ids.map((id, i) => ({ id, last: "2026-11-15T10:0" + (9 - i) + ":00Z", title: "chat " + id })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
+    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: ids.map((id, i) => ({ key: "row " + id, at: "2026-11-15T10:0" + (9 - i) + ":00Z", by: "gate", kind: "work", word: "filed", id: [], text: ["row " + id], more: 0, lines: [] })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
     window.rows = () => Object.fromEntries([...root.querySelectorAll("#herald .herald-feed > [data-key]")].map((r) => [r.dataset.key, r]));
     window.herald(["a", "b", "c"]);
   })`;
@@ -1144,7 +1122,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       const before = rows(), moved = view.swap(root);
       herald(["c", "a", "b"]); moved();
       const after = rows();
-      return [Object.keys(after).join() === "chat c,chat a,chat b", ...Object.keys(before).map((k) => before[k] === after[k])];
+      return [Object.keys(after).join() === "row c,row a,row b", ...Object.keys(before).map((k) => before[k] === after[k])];
     })()`)).toEqual([true, true, true, true]);
   }, 60_000);
 
@@ -1171,10 +1149,10 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     const exit = await page.ev<[string, boolean]>(`(() => {
       const moved = view.swap(root);
       herald(["a", "c"]); moved();
-      const ghost = [...root.querySelectorAll("#herald > .event-row")].find((r) => r.textContent.includes("chat b"));
+      const ghost = [...root.querySelectorAll("#herald > .event-row")].find((r) => r.textContent.includes("row b"));
       return [ghost?.textContent ?? "", ghost?.getAnimations().some((a) => a.playState === "running" && a.effect.getKeyframes().some((k) => "opacity" in k || "height" in k))];
     })()`);
-    expect(exit[0]).toContain("chat b");
+    expect(exit[0]).toContain("row b");
     expect(exit[1]).toBe(true);
   }, 60_000);
 
@@ -1183,7 +1161,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     const [bg, overflow] = await page.ev<string[]>(`(() => {
       const moved = view.swap(root);
       herald(["d", "a", "b", "c"]); moved();
-      const row = root.querySelector('#herald [data-key="chat d"]');
+      const row = root.querySelector('#herald [data-key="row d"]');
       return [getComputedStyle(root.querySelector("#herald .event-row")).backgroundColor, getComputedStyle(row).overflow];
     })()`);
     expect(bg).not.toBe("rgba(0, 0, 0, 0)");
