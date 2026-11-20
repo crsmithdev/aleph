@@ -36,10 +36,25 @@ beforeEach(() => {
   }
   sh("git", "checkout", "-qb", "work");
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => { rmSync(root, { recursive: true, force: true }); rmSync(`${root}.jsonl`, { force: true }); });
 
-function stop(input: object): string {
-  const p = Bun.spawnSync(["bun", HOOK], { cwd: root, env: { ...process.env }, stdin: new TextEncoder().encode(JSON.stringify(input)), stdout: "pipe", stderr: "pipe" });
+/** A transcript of one prompt whose assistant edited each file in `edits` and ran each command in `commands`, at the repo root. */
+function transcript(edits: string[], commands: string[] = []): string {
+  const file = `${root}.jsonl`;
+  const uses = [...edits.map((f) => ({ name: "Edit", input: { file_path: join(root, f) } })), ...commands.map((c) => ({ name: "Bash", input: { command: c } }))];
+  const lines = [
+    { type: "user", promptId: "p1", cwd: root, message: { content: "go" } },
+    { type: "assistant", cwd: root, message: { content: uses.map((u, i) => ({ type: "tool_use", id: `t${i}`, ...u })) } },
+  ];
+  writeFileSync(file, lines.map((l) => JSON.stringify(l)).join("\n"));
+  return file;
+}
+
+/** Without a transcript_path, the session edited each file that git lists as dirty. */
+function stop(input: Record<string, unknown>, extra: Record<string, string> = {}): string {
+  const dirty = Bun.spawnSync(["git", "status", "--porcelain", "--untracked-files=all"], { cwd: root, stdout: "pipe" }).stdout.toString().split("\n").filter(Boolean).map((l) => l.slice(3));
+  input = { ...input, transcript_path: input.transcript_path ?? transcript(dirty) };
+  const p = Bun.spawnSync(["bun", HOOK], { cwd: root, env: { ...process.env, ...extra }, stdin: new TextEncoder().encode(JSON.stringify(input)), stdout: "pipe", stderr: "pipe" });
   return p.stdout.toString().trim();
 }
 
@@ -275,4 +290,71 @@ test("a checkout with no node_modules finds the jscpd of a parent folder's node_
   write("node_modules/.bin/jscpd", "");
   mkdirSync(join(root, ".worktrees/w"), { recursive: true });
   expect(jscpd(join(root, ".worktrees/w"))).toBe(join(root, "node_modules/.bin/jscpd"));
+});
+
+test("the hook exits quietly in a factory agent", () => {
+  write("a.ts", "export const a = 99;\n");
+  session("ag").set({ start: 1 });
+  const input = { hook_event_name: "Stop", session_id: "ag", cwd: root };
+  expect(stop(input, { ALEPH_AGENT: "1" })).toBe("");
+  expect(JSON.parse(stop(input)).decision).toBe("block");
+});
+
+test("the hook exits quietly when its cwd was removed", () => {
+  const gone = join(root, "gone");
+  session("gone").set({ start: 1 });
+  const p = Bun.spawnSync(["bun", HOOK], { cwd: root, stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "Stop", session_id: "gone", cwd: gone })), stdout: "pipe", stderr: "pipe" });
+  expect([p.exitCode, p.stdout.toString(), p.stderr.toString()]).toEqual([0, "", ""]);
+});
+
+test("a commit that another session made after the start is not this session's, and one this session edited is", () => {
+  sh("git", "checkout", "-q", "main");
+  for (let i = 0; i < 12; i++) {
+    write("a.ts", `export const a = ${100 + i};\n`);
+    write("b.ts", `export const b = ${100 + i};\n`);
+    sh("git", "commit", "-qam", `more pairs ${i}`);
+  }
+  sh("git", "checkout", "-q", "work");
+  sh("git", "rebase", "-q", "main");
+  write("a.ts", "export const a = 99;\n");
+  sh("git", "commit", "-qam", "other session");
+  for (const id of ["o1", "o2"]) session(id).set({ start: 1 });
+  expect(stop({ hook_event_name: "Stop", session_id: "o1", cwd: root, transcript_path: transcript(["c.ts"]) })).toBe("");
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "o2", cwd: root, transcript_path: transcript(["a.ts"]) })).reason).toContain("b.ts changed with it");
+});
+
+test("a file that only a command of this session names counts, and a dirty file nothing names does not", () => {
+  write("a.ts", "export const a = 99;\n");
+  for (const id of ["b1", "b2"]) session(id).set({ start: 1 });
+  expect(stop({ hook_event_name: "Stop", session_id: "b1", cwd: root, transcript_path: transcript([], ["ls"]) })).toBe("");
+  expect(JSON.parse(stop({ hook_event_name: "Stop", session_id: "b2", cwd: root, transcript_path: transcript([], ["sed -i s/0/1/ a.ts"]) })).reason).toContain("b.ts changed with it");
+});
+
+test("an old boundary copy in a touched file does not block, and a new copy does", () => {
+  sh("git", "checkout", "-q", "main");
+  write("lib/money.ts", SETTLE);
+  write("ui/old.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify({ boundaries: [{ name: "money", code: ["lib/money.ts"], notIn: ["**"], allow: ["lib/money.ts"], disable: ["semantic"] }] }));
+  sh("git", "add", "-A");
+  sh("git", "commit", "-qm", "money and an old copy");
+  sh("git", "checkout", "-qb", "edit");
+  write("ui/old.ts", `export const unit = 1;\n${SETTLE}`);
+  for (const id of ["v1", "v2"]) session(id).set({ start: 1 });
+  expect(stop({ hook_event_name: "Stop", session_id: "v1", cwd: root, transcript_path: transcript(["ui/old.ts"]) })).toBe("");
+  write("ui/new.ts", SETTLE);
+  const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "v2", cwd: root, transcript_path: transcript(["ui/old.ts", "ui/new.ts"]) }));
+  expect(out.reason).toContain("ui/new.ts:1 (settle) copies lib/money.ts:1 (settle)");
+  expect(out.reason).not.toContain("ui/old.ts");
+});
+
+test("a copy in docs/mocks or .playwright-cli is not a finding", () => {
+  const { ignore } = JSON.parse(readFileSync(join(import.meta.dir, "../../.jscpd.json"), "utf8"));
+  write("lib/money.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify({ ...RENAMES, ignore }));
+  write("docs/mocks/pay.ts", RENAMED);
+  write(".playwright-cli/pay.ts", RENAMED);
+  session("mk").set({ start: 1 });
+  expect(scan(root).clones).toEqual([]);
+  expect([...changed(root)].filter((f) => f.startsWith("docs/") || f.startsWith(".play"))).toEqual([]);
+  expect(stop({ hook_event_name: "Stop", session_id: "mk", cwd: root })).toBe("");
 });

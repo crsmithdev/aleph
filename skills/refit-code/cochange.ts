@@ -11,8 +11,11 @@
  *   bun cochange.ts holes                      JSON: companions the current change left out
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { digest } from "../../hooks/lib/digest.ts";
 import { probe } from "../../lib/git.ts";
+import { readLines } from "../../lib/jsonl.ts";
+import { expand } from "../../lib/paths.ts";
 import { isTestFile } from "../../lib/test-files.ts";
 import { scan } from "./clones.ts";
 
@@ -20,6 +23,8 @@ const WIDE = 30;
 const SUPPORT = 10;
 const FLOOR = 0.6;
 const BLOCK = 0.7;
+// Design drafts and browser snapshots are not code: jscpd ignores them (.jscpd.json) and so does the change set.
+const DRAFTS = /^(docs\/mocks|\.playwright-cli)\//;
 const FIX = /\b(fix|fixes|fixed|stale|mismatch|wrong|again|drift)\b/i;
 
 export type Commit = { sha: string; subject: string; files: string[] };
@@ -117,7 +122,26 @@ export function changed(root: string, from = base(root), since = 0): Set<string>
     : git(root, "diff", "--name-only", `${from}...HEAD`).split("\n");
   const edited = (f: string) => { try { return statSync(join(root, f)).mtimeMs >= since; } catch { return true; } };
   const tree = git(root, "status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3).split(" -> ").pop()!).filter(edited);
-  return new Set([...branch, ...tree].filter(Boolean));
+  return new Set([...branch, ...tree].filter((f) => f && !DRAFTS.test(f)));
+}
+
+/**
+ * The files of `root` that the session's edits and commands name, from its whole transcript. An Edit or Write names its file;
+ * a Bash command (`sed -i`, a heredoc, `git checkout -- f`) names it as a word, which resolves from the cwd of that call.
+ * A command that writes a file it does not name (a glob, a script, `git add -A`) is missed.
+ */
+export function touched(transcript: string, cwd: string, root: string): Set<string> {
+  const out = new Set<string>();
+  const ids = new Set(readLines(transcript).map((e) => e.promptId).filter(Boolean));
+  for (const id of ids) {
+    for (const [target, dir] of digest(transcript, id).dirs) {
+      for (const word of target.split(/[\s'"`<>|;&()=,]+/)) {
+        const abs = resolve(dir ?? cwd, expand(word));
+        if (abs.startsWith(`${root}/`)) out.add(abs.slice(root.length + 1));
+      }
+    }
+  }
+  return out;
 }
 
 /** For each file a rule predicts and the change left out, the strongest rule that predicts it. */

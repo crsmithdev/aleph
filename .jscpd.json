@@ -5,6 +5,8 @@
     "**/*.testkit.ts",
     "acceptance/**",
     "docs/specs/**",
+    "docs/mocks/**",
+    ".playwright-cli/**",
     "**/*.json"
   ],
   "ignoreIdentifiers": true,

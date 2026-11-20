@@ -6,6 +6,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { probe } from "../../lib/git.ts";
 
 /** The jscpd of the nearest `node_modules` at or above `dir`, so a `.worktrees/<name>` checkout uses its parent's. */
 export function jscpd(dir: string): string {
@@ -52,4 +53,12 @@ export function scan(root: string, base?: string): { clones: Clone[]; violations
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+}
+
+/** Whether the lines of `side` are new since `base`: jscpd marks no violation as new, and its `isNew` on a clone follows the order of equal clones, not the file. A copy that the base file holds verbatim is old, wherever it sits in the file. */
+export function added(root: string, base: string, side: { name: string; start: number; end: number }): boolean {
+  const was = base ? probe(root, "show", `${base}:${side.name}`) : null;
+  if (!was?.ok) return true;
+  const copy = readFileSync(join(root, side.name), "utf8").split("\n").slice(side.start - 1, side.end).join("\n").trimEnd();
+  return !was.out.includes(copy);
 }
