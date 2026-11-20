@@ -20,6 +20,11 @@ const observations = [
 const rows = { traces: [] as any[], observations };
 const lf = memory(rows);
 const reads = () => lf.asked.filter((a) => a.list === "observations");
+type Activity = Awaited<ReturnType<typeof activity>>;
+/** Two TOOL rows 1 ms apart, the second at `ms`: a read from `ms` counts the second and not the first. */
+const edge = (ms: number) => [ms - 1, ms].map((t) => ({ ...tool(0, `at ${t}`, "tp"), startTime: new Date(t).toISOString() }));
+/** Whether `a` counts each row of `edge(ms)`. */
+const seen = (a: Activity, ms: number) => [ms - 1, ms].map((t) => a.tools.some((x) => x.name === `at ${t}`));
 
 beforeAll(() => use(lf));
 afterAll(() => use(null));
@@ -28,51 +33,49 @@ beforeEach(() => { lf.asked.length = 0; lf.down = null; rows.observations = obse
 
 describe("activity", () => {
   test("counts the tools, hooks and denials of the window", async () => {
+    // A model call named as a hook: the hook counts take it in if a read asks for model calls, which are most of the rows.
+    rows.observations = [...observations, gen(0, "verify-gate", 0.1, "ta")];
     const a = await activity(7, null, now);
     expect(a.langfuse).toBe("ok");
     expect(a.tools.map((t) => [t.name, t.calls, t.errors])).toEqual([["Bash", 2, 1], ["Edit", 1, 0], ["Read", 1, 0]]);
     expect(a.hooks.map((h) => [h.name, h.calls, h.errors])).toEqual([["verify-gate", 2, 0], ["vault-recall", 1, 1]]);
     expect(a.denials).toEqual({ total: 1, recent: [{ at: at(0), reason: "nothing was run" }] });
-    // Langfuse filters on one type per read; the model calls are not read.
-    expect(reads().length).toBeGreaterThan(0);
-    for (const r of reads()) expect(["TOOL", "GUARDRAIL", "SPAN"]).toContain((r.q as any).type);
   });
 
   test("in a build pass a second read does not reach Langfuse; after a Langfuse change it does", async () => {
     try {
       openPass({ langfuse: 1 }, "activity.test");
       const a = await activity(7, null, now);
-      const b = await activity(7, null, now);
-      expect(reads().length).toBe(3);
-      expect(b).toEqual(a);
+      lf.down = new Error("500");
+      expect(await activity(7, null, now)).toEqual(a);
       openPass({ langfuse: 2 }, "activity.test");
-      await activity(7, null, now);
-      expect(reads().length).toBe(6);
+      expect((await activity(7, null, now)).langfuse).toBe("error");
     } finally { closePass(); }
   });
 
   test("in a build pass a later read asks only for the last 10 min and keeps the rows read before; an hour on it reads the last 2 hours and a day on the window", async () => {
     const min = 60_000, startOf = (t: Date) => new Date(t.getFullYear(), t.getMonth(), t.getDate() - 6).getTime();
+    // A full read's start: the counts drop the rows before the window, so only the read shows it.
     const from = () => reads().at(-1)!.q.from!.getTime();
     const late = { ...tool(0, "Bash", "tc"), startTime: new Date(now.getTime() + 2 * min).toISOString() };
-    const hour = new Date(now.getTime() + 61 * min), calls = (a: Awaited<ReturnType<typeof activity>>) => a.tools.map((t) => [t.name, t.calls]);
+    const hour = new Date(now.getTime() + 61 * min), calls = (a: Activity) => a.tools.filter((t) => !t.name.startsWith("at ")).map((t) => [t.name, t.calls]);
+    const day = new Date(now.getTime() + 25 * 60 * min);
     try {
       openPass({ langfuse: 1 }, "activity.test.later");
       const a = await activity(7, null, now);
       expect(from()).toBe(startOf(now));
-      rows.observations = [late];
+      rows.observations = [late, ...edge(now.getTime() + min - 10 * min)];
       openPass({ langfuse: 2 }, "activity.test.later");
       const b = await activity(7, null, new Date(now.getTime() + 5 * min));
-      expect(from()).toBe(now.getTime() + min - 10 * min);
+      expect(seen(b, now.getTime() + min - 10 * min)).toEqual([false, true]);
       expect(b.tools.find((t) => t.name === "Bash")!.calls).toBe(a.tools.find((t) => t.name === "Bash")!.calls + 1);
-      rows.observations = [...observations, late];
+      rows.observations = [...observations, late, ...edge(hour.getTime() + min - 120 * min)];
       openPass({ langfuse: 3 }, "activity.test.later");
       const c = await activity(7, null, hour);
-      expect(from()).toBe(hour.getTime() + min - 120 * min);
+      expect(seen(c, hour.getTime() + min - 120 * min)).toEqual([false, true]);
       closePass();
       expect(calls(c)).toEqual(calls(await activity(7, null, hour)));
       openPass({ langfuse: 4 }, "activity.test.later");
-      const day = new Date(now.getTime() + 25 * 60 * min);
       await activity(7, null, day);
       expect(from()).toBe(startOf(day));
     } finally { closePass(); }
@@ -83,15 +86,16 @@ describe("activity", () => {
     try {
       openPass({ langfuse: 1 }, "activity.test.wider");
       await activity(7, null, now);
-      lf.asked.length = 0;
+      rows.observations = [...observations, ...edge(old), ...edge(recent)];
       openPass({ langfuse: 2 }, "activity.test.wider");
-      await activity(30, null, now);
-      expect(reads().filter((r) => r.q.to!.getTime() === old).length).toBe(3);
-      expect(reads().every((r) => r.q.from!.getTime() === recent || r.q.to!.getTime() === old)).toBe(true);
-      lf.asked.length = 0;
-      for (const days of [7, 30, 7, 30]) { openPass({ langfuse: days + reads().length }, "activity.test.wider"); await activity(days, null, now); }
-      expect(reads().length).toBe(12);
-      expect(reads().every((r) => r.q.from!.getTime() === recent)).toBe(true);
+      const wide = await activity(30, null, now);
+      expect([...seen(wide, old), ...seen(wide, recent)]).toEqual([true, false, false, true]);
+      rows.observations = [...observations, ...edge(old - 60_000), ...edge(recent)];
+      for (const [i, days] of [7, 30, 7, 30].entries()) {
+        openPass({ langfuse: 3 + i }, "activity.test.wider");
+        const a = await activity(days, null, now);
+        expect([...seen(a, old - 60_000), ...seen(a, recent)]).toEqual([false, false, false, true]);
+      }
     } finally { closePass(); }
   });
 
@@ -99,11 +103,13 @@ describe("activity", () => {
     try {
       openPass({ langfuse: 1 }, "activity.test.restart");
       const a = await activity(7, null, now);
-      // A new environment drops the rows in memory, as a restart does; the store file stays.
+      // A new environment drops the rows in memory, as a restart does; the store file stays, and only it holds the old rows.
+      const recent = now.getTime() + 60_000 - 10 * 60_000;
+      rows.observations = edge(recent);
       openPass({ langfuse: 2 }, "activity.test.restart.2");
       const b = await activity(7, null, new Date(now.getTime() + 5 * 60_000));
-      expect(reads().slice(3).every((r) => r.q.from!.getTime() === now.getTime() + 60_000 - 10 * 60_000)).toBe(true);
-      expect(b.tools).toEqual(a.tools);
+      expect(seen(b, recent)).toEqual([false, true]);
+      expect(b.tools.filter((t) => !t.name.startsWith("at "))).toEqual(a.tools);
     } finally { closePass(); }
   });
 
@@ -116,10 +122,9 @@ describe("activity", () => {
       openPass({ langfuse: 2 }, "activity.test.failed");
       expect((await activity(30, null, now)).langfuse).toBe("error");
       lf.down = null;
-      lf.asked.length = 0;
+      rows.observations = [...observations, ...edge(recent)];
       openPass({ langfuse: 3 }, "activity.test.failed");
-      await activity(7, null, now);
-      expect(reads().every((r) => r.q.from!.getTime() === recent)).toBe(true);
+      expect(seen(await activity(7, null, now), recent)).toEqual([false, true]);
     } finally { closePass(); }
   });
 

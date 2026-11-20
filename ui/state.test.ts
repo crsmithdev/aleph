@@ -8,8 +8,7 @@ import { add, setStatus } from "../lib/todo.ts";
 import { jobProjector, state } from "./state.ts";
 import { withEnv } from "./server.testkit.ts";
 import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";
-import { seed, reseed } from "../jobs/job.testkit.ts";
-import { conn } from "../lib/db.ts";
+import { seed, reseed, unseed } from "../jobs/job.testkit.ts";
 import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
@@ -86,7 +85,7 @@ beforeAll(() => {
   made = new Set();
 });
 afterEach(() => {
-  for (const id of made) { conn().run("DELETE FROM jobs WHERE id = ?", [id]); rmSync(jobFolder(id), { recursive: true, force: true }); }
+  for (const id of made) unseed(id);
   for (const l of Object.keys(K)) if (made.has(K[l])) { delete K[l]; }
   for (const j of Object.keys(lastOf)) delete lastOf[j];
   made = new Set();

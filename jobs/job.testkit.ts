@@ -1,7 +1,10 @@
 /**
- * Test helpers for the jobs table: put a job in the ledger with the fields a test cares about, and change one.
+ * Test helpers for the jobs table: put a job in the ledger with the fields a test cares about, change one, and remove one.
  * A job gets the next number of the `job` counter, so a test never names a key before it exists.
  */
+import { rmSync } from "node:fs";
+import { conn } from "../lib/db.ts";
+import { jobFolder } from "./lib/records/run-files.ts";
 import { makeJob, patchRun, setState, type RunRecord } from "./lib/records/record.ts";
 import type { Run } from "./lib/records/ledger.ts";
 import type { State } from "../lib/naming.ts";
@@ -18,4 +21,10 @@ export function reseed(id: string, { state, ...fields }: Partial<Omit<Run, "job"
   if (state) setState(id, state, fields);
   else if (Object.keys(fields).length) patchRun(id, fields);
   return patchRun(id, {});
+}
+
+/** Remove job `id`: its row and its folder, so a later test does not see it. */
+export function unseed(id: string): void {
+  conn().run("DELETE FROM jobs WHERE id = ?", [id]);
+  rmSync(jobFolder(id), { recursive: true, force: true });
 }
