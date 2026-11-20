@@ -36,7 +36,7 @@ describe("the Hooks page", () => {
     for (const t of ["Holds by Hook", "Errors by Cause", "Hooks", "Holds"]) expect(html).toMatch(new RegExp(`<section class="card"[^>]* aria-label="${t}"><div class="sh"><h2[^>]*>${t}</h2>`));
     for (const c of ["dp-page", "dp-kpi", "dp-fold"]) expect(html).not.toContain(c);
     expect(html).toContain('href="#/hooks/Stop/one%20way"');
-    expect(html).toMatch(/<tr class="rowlink"><td>Stop<\/td><td class="wide"><a href="#\/hooks\/Stop\/one%20way">one way<\/a><\/td>/);
+    expect(html).toMatch(/<tr class="rowlink"><td>Stop<\/td><td class="wide" title="one way"><a href="#\/hooks\/Stop\/one%20way">one way<\/a><\/td>/);
     expect(html).toContain("Stub or stable entry");
     expect(logIds("")).toEqual(["aaaaaaaa1", "bbbbbbbb2", "cccccccc3", "dddddddd4"]);
   });
@@ -108,6 +108,17 @@ describe("the Hooks page", () => {
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
     expect([head(html, "Holds by Day"), head(html, "Holds by Kind")]).toEqual(["2", "3"]);
     for (const c of ['class="page dp-page"', "dp-kpis", "<details"]) expect(html).toContain(c);
+  });
+
+  test("Holds by Hook shows the hook as text and its Show button in the last td.acts; Holds by Kind's Show has no hook", () => {
+    /** The cells of the first body row of the card or panel `title`. */
+    const tds = (html: string, title: string) => html.split(`>${title}<`)[1].split("<tbody>")[1].split("</tr>")[0].match(/<td[^>]*>.*?<\/td>/g)!;
+    const byHook = tds(renderHooks(data, new URLSearchParams()), "Holds by Hook");
+    expect(byHook.slice(0, -1).filter((td) => td.includes("<button"))).toEqual([]);
+    expect(byHook[0]).toBe("<td>one way</td>");
+    expect(byHook.at(-1)).toBe('<td class="acts"><button class="act small" type="button" data-kind="new-copy" data-hook="one way">Show</button></td>');
+    const one = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds, byKind: data.byHook, errors: [] }, new URLSearchParams());
+    expect(tds(one, "Holds by Kind").at(-1)).toBe('<td class="acts"><button class="act small" type="button" data-kind="new-copy">Show</button></td>');
   });
 
   test("the list page with no holds and no errors keeps each card, empty", () => {

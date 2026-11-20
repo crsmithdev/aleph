@@ -593,6 +593,8 @@ export function say(el, text) {
 export const actButton = (label, data = {}, o = {}) =>
   `<button class="act${o.primary ? " primary" : ""}${o.kind ? ` ${esc(o.kind)}` : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
+/** A row action: a small `actButton` in a last `td.acts` cell. */
+export const rowAct = (label, data) => `<td class="acts">${actButton(label, data, { kind: "small" })}</td>`;
 /** A link that looks like a button, to another page: navigation only. `label` names the page; `href` goes through `safeHref`. */
 export const linkButton = (label, href) => `<a class="act" href="${esc(safeHref(href))}">${esc(label)}</a>`;
 /** Text with its `code` spans set as code, escaped. */

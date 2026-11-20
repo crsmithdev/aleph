@@ -199,6 +199,10 @@ test("actButton kinds, card lede and error detail", () => {
   expect(error("Could not load X.")).not.toContain("<details");
 });
 
+test("rowAct puts a small act button with its label and data in a last td.acts cell, escaped", () => {
+  expect(lib.rowAct("<Show>", { kind: 'a"b' })).toBe('<td class="acts"><button class="act small" type="button" data-kind="a&quot;b">&lt;Show&gt;</button></td>');
+});
+
 test("idLink and pageHead", () => {
   expect(idLink("aleph-1", "#/jobs/aleph-1")).toBe('<a class="idl" href="#/jobs/aleph-1">aleph-1</a>');
   expect(idLink("x", "javascript:alert(1)")).toContain('href="#"');

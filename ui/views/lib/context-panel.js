@@ -8,7 +8,7 @@ import { get } from "./router.js";
 import { hashQuery, keep, kept, setQuery } from "./address.js";
 import { panelOf } from "./chart.js";
 import { count, pct, plural } from "./format.js";
-import { actButton, card, chip, dataTable, empty, error, esc, fold, heads, list, loadingLine, pagedTable, statCard, tiles } from "./html.js";
+import { actButton, card, chip, dataTable, empty, error, esc, fold, heads, list, loadingLine, pagedTable, rowAct, statCard, tiles } from "./html.js";
 
 const how = (h) => chip(h === "exact" ? "exact" : "est.");
 const pick = (requests, n) => requests.find((r) => r.n === Number(n)) ?? requests.at(-1);
@@ -29,9 +29,9 @@ function byCall(calls, r, total) {
   const sum = (cs) => cs.reduce((s, c) => s + c.tokens, 0);
   return [...groups].sort((a, b) => sum(b[1]) - sum(a[1])).map(([tool, cs]) => {
     const rows = cs.sort((a, b) => b.tokens - a.tokens).map((c) =>
-      `<tr><td class="num">${count(c.n)}</td><td class="mono wide" title="${esc(c.input)}"><button type="button" class="link" data-call="${esc(c.id)}">${esc(c.input)}</button></td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td></tr>`);
+      `<tr><td class="num">${count(c.n)}</td><td class="mono wide" title="${esc(c.input)}">${esc(c.input)}</td><td class="num">${count(c.tokens)}</td><td>${how(c.how)}</td>${rowAct("Show", { call: c.id })}</tr>`);
     return kfold(`calls:${tool}`, `${esc(tool)}<span class="peek" title="${plural(cs.length, "call")} · ${count(sum(cs))} · ${share(sum(cs), total)}">${plural(cs.length, "call")} · ${count(sum(cs))} · ${share(sum(cs), total)}</span>`,
-      pagedTable(heads(["Request", "Input", "Tokens", "How"], ["Request", "Tokens"]), rows) + `<div data-result hidden></div>`);
+      pagedTable(heads(["Request", "Input", "Tokens", "How", "Action"], ["Request", "Tokens"]), rows) + `<div data-result hidden></div>`);
   }).join("");
 }
 

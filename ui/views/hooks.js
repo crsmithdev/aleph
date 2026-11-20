@@ -4,7 +4,7 @@
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
+import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, miss, note, pageHead, pageOf, pageRows, pager, row, rowAct, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -38,18 +38,17 @@ const hookHref = (h) => `#/hooks/${encodeURIComponent(h.event)}/${encodeURICompo
 /** The outcome legend, labelled a guide: the outcomes come from a keyword pass over each hold's reply. */
 const legend = legendHtml(OUTS.map(([k, , cls]) => [k, cls])) + note("Guide only");
 
-/** A table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook. A name sets the log's filters. */
+/** A table of holds by kind, with the outcome as one meter per row; `hookCol` adds the hook. Show sets the log's filters. */
 function holdsBy(groups, hookCol = true) {
   if (!groups.length) return empty();
   const rows = groups.map((g) => {
     const n = (k) => g.outcomes[k] ?? 0;
-    const show = `<button type="button" class="link" data-kind="${esc(g.kind)}"${hookCol ? ` data-hook="${esc(g.hook)}"` : ""} title="Show these holds">${esc(hookCol ? g.hook : kindName(g.kind))}</button>`;
-    return row([`<td>${show}</td>`, ...(hookCol ? [cell(kindName(g.kind))] : []), cell(g.holds, { num: true }), cell(g.interactive, { num: true }), cell(g.workers, { num: true }),
+    return row([cell(hookCol ? g.hook : kindName(g.kind)), ...(hookCol ? [cell(kindName(g.kind))] : []), cell(g.holds, { num: true }), cell(g.interactive, { num: true }), cell(g.workers, { num: true }),
       `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>`,
-      ...OUTS.map(([k]) => cell(n(k) || "", { num: true }))]);
+      ...OUTS.map(([k]) => cell(n(k) || "", { num: true })), rowAct("Show", { kind: g.kind, ...(hookCol ? { hook: g.hook } : {}) })]);
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
-  return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1])], nums), rows.join(""));
+  return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
 }
 
 /** A card with `detailPanel`'s arguments, for the list page. */
@@ -97,7 +96,7 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
-  const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
+  const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide" title="${esc(h.name)}"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
     `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
@@ -113,7 +112,7 @@ export function renderHooks(d, q) {
 /** Set the log's filters and page in the address and draw again. */
 const go = (changes) => { setQuery(changes); redraw(); };
 
-/** Wires the log's filters, its pager and the names that set its filters. */
+/** Wires the log's filters, its pager and the Show buttons that set its filters. */
 function mount(root) {
   scope().wire(root);
   root.onclick = (e) => {

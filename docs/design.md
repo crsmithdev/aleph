@@ -1090,13 +1090,13 @@ Row actions are the buttons of one row or one card.
 
 | Helper | Reference |
 |---|---|
-| `.actions` after the text of the row; `td.acts` in a table | `ui/views/issues.js` |
+| `.actions` after the text of the row; `rowAct(label, data)` in a table | `ui/views/issues.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Row | The buttons and the form message | | `--sp-8` apart, `--sp-14` above; wraps |
 
-- In a table, a row action sits in a last `td.acts` column, as a small button (`kind: "small"`). A data cell never holds a button.
+- In a table, a row action sits in a last `td.acts` column, as a small button (`kind: "small"`): draw it with `rowAct()`. A data cell never holds a button.
 - A setting that has a Save button goes in a settings list.
 - Show the result with `say()`.
 

@@ -5,7 +5,7 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
@@ -214,7 +214,7 @@ function renderDesign(d) {
     spec("link", "Link", `<p class="md">A link in prose: <a href="#/design">the design page</a>.</p><p>${idLink("a1700", "#/design")} <button type="button" class="link">Show more</button></p>` + dataTable(heads(["Title", "Started"], ["Started"]), `<tr class="rowlink"><td class="wide" title="A row that goes to its item"><a href="#/design">A row that goes to its item</a></td><td class="time">11/10 14:05</td></tr>`)) +
     spec("command", "Command", row(cmd("aleph issue list aleph"), cmd("bun test", { primary: true, hint: "in the worktree" }))) +
     spec("row-actions", "Row actions", `<div><p>An item's text.</p><div class="actions">${actButton("Retry")}${actButton("Drop", {}, { cls: "warn" })}<span class="act-msg" role="alert">drop failed: the job has already landed</span></div></div>` +
-      dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/design")}</td><td>${badge("failed")}</td><td class="acts">${actButton("Retry", {}, { kind: "small" })}</td></tr>`)) +
+      dataTable(heads(["Job", "State", "Action"]), `<tr><td>${idLink("a1700", "#/design")}</td><td>${badge("failed")}</td>${rowAct("Retry", {})}</tr>`)) +
     spec("form-message", "Form message", `<div class="actions">${actButton("Retry")}<span class="act-msg" role="alert">Retry failed: the job is already running.</span></div>`) +
     spec("confirm", "Two-click confirm", row(`<button class="act warn" type="button" data-design-confirm>Drop</button>`, `<span class="choice"><input class="reason" name="reason" placeholder="Why?" aria-label="Reason"> <button class="act ask" type="button">Confirm</button></span>`),
       "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +

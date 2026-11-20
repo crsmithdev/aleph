@@ -462,4 +462,8 @@ test("the Context tab unfolds Tools into each tool and Tool results into each to
   expect([...h.matchAll(/<summary>(.*?)<\/summary>/g)].map((m) => text(m[1]))).toEqual(["By tool", "Bash 2 calls · 60 · 67%", "Read 1 call · 30 · 33%"]);
   expect(h).toContain('data-call="b"');
   expect(h).not.toContain('data-call="d"');
+  const b = h.match(/<tr>(?:(?!<tr>).)*data-call="b".*?<\/tr>/)![0].match(/<td[^>]*>.*?<\/td>/g)!;
+  expect(b.filter((td: string) => td.includes("data-call"))).toEqual([b.at(-1)]);
+  expect(b.at(-1)).toBe('<td class="acts"><button class="act small" type="button" data-call="b">Show</button></td>');
+  expect(b[1]).toBe('<td class="mono wide" title="in-b">in-b</td>');
 });
