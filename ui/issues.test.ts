@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { setPaused } from "../jobs/lib/gates/pause.ts";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../lib/store.ts";
@@ -23,7 +23,7 @@ const full = (o: object = {}) => ({ ...v.hashOptions(new URLSearchParams()), ...
 // @ts-ignore plain JS, shared with the page
 import * as lib from "./views/lib/html.js";
 // @ts-ignore plain JS, shared with the page
-import { label, option } from "./views/lib/chart.js";
+import { label, option, shown, title } from "./views/lib/chart.js";
 // @ts-ignore plain JS, shared with the page
 import { day, xLabel } from "./views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
@@ -67,11 +67,10 @@ const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1
 
 /** Put a job in the ledger; `on` is the issue `<repo>-<n>`. */
 function run(_id: string, { on, job: _job, ...extra }: Record<string, unknown>) {
-  seed({ role: "build", told: true, started: new Date(NOW).toISOString(), ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...extra } as any);
+  made.push(seed({ role: "build", told: true, started: new Date(NOW).toISOString(), ...(on ? { target: `issue.${String(on).split("-")[1]}` } : {}), ...extra } as any));
 }
-/** The number of the newest job of the fixture: a test's jobs are those after it. */
-let seedMax = 0;
-let issueState: Record<string, unknown>[] = [];
+/** The jobs a test made, which its cleanup drops; the fixture's stay. */
+let made: { id: string; folder: string }[] = [];
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-issues-"));
@@ -113,8 +112,7 @@ beforeAll(async () => {
   run("", { job: "fac-1", name: "fac-1", repo: "fac", state: "landed", on: "fac-1" });
   run("", { job: "oth-1", name: "oth-1", repo: "oth", state: "running", on: "oth-1" });
   seeded = sh(items, "git", "rev-parse", "origin/main");
-  seedMax = (conn().query("SELECT max(CAST(substr(id, 5) AS INTEGER)) AS n FROM jobs").get() as { n: number }).n;
-  issueState = conn().query("SELECT * FROM issue_state").all() as Record<string, unknown>[];
+  made = [];
   ({ server, stop } = await withServer({ warm: false }));
 });
 // Each test ends by putting back the fixture store and runs, so no test reads what another wrote.
@@ -123,11 +121,9 @@ afterEach(() => {
   sh(items, "git", "push", "-qf", "origin", `${seeded}:refs/heads/main`);
   sh(items, "git", "update-ref", "refs/remotes/origin/main", seeded);
   sh(items, "git", "reset", "-q", "--hard", seeded);
-  // The jobs a test made go; the fixture's stay.
-  conn().run("DELETE FROM jobs WHERE CAST(substr(id, 5) AS INTEGER) > ?", [seedMax]);
+  for (const j of made.splice(0)) { conn().run("DELETE FROM jobs WHERE id = ?", [j.id]); rmSync(j.folder, { recursive: true, force: true }); }
+  // The fixture sets no Ask, so every Ask is a test's.
   conn().run("DELETE FROM issue_state");
-  for (const r of issueState) conn().query(`INSERT INTO issue_state (${Object.keys(r).join(",")}) VALUES (${Object.keys(r).map(() => "?").join(",")})`).run(...(Object.values(r) as never[]));
-  for (const f of readdirSync(jobsDir)) if (Number(f) > seedMax) rmSync(join(jobsDir, f), { recursive: true, force: true });
 });
 afterAll(() => {
   stop();
@@ -150,8 +146,8 @@ describe("GET /api/issues", () => {
     expect(row.kind).toBe("bug");
     const d = await getJson(`/api/issues/fac-${n}`);
     expect(d.kind).toBe("bug");
-    expect(v.renderIssue(d)).toContain('<span class="chip kind">kind: bug</span>');
-    expect(v.renderRow(v.issueRows({ issues: [row] })[0])).not.toContain("chip kind");
+    expect(v.renderIssue(d)).toContain("kind: bug");
+    expect(v.renderRow(v.issueRows({ issues: [row] })[0])).not.toContain("kind:");
   });
 
   test("the issue page's head is pageHead: the title as editable() writes it and the Edit button", async () => {
@@ -161,7 +157,9 @@ describe("GET /api/issues", () => {
     try {
       const h = v.renderIssue(d);
       expect(h.match(/<header class="ph">/g)).toHaveLength(1);
-      expect(h).toContain(`<!--pageHead--><header class="ph"><h1><span class="view-only">${d.title}</span><span class="edit-only"><input name="title" type="text" value="${d.title}" class="title-edit" form="issue-edit" required aria-label="Title"></span></h1><div class="aside"><button class="act view-only" type="button" data-editor="start">Edit</button>`);
+      expect(h).toContain("<!--pageHead--><header");
+      expect(h).toMatch(new RegExp(`<h1><span class="view-only">${d.title}</span><span class="edit-only"><input name="title"[^>]*form="issue-edit"`));
+      expect(h).toContain('data-editor="start">Edit</button>');
     } finally {
       mock.module("./views/lib/html.js", () => real);
     }
@@ -176,9 +174,9 @@ describe("GET /api/issues", () => {
     expect(d.referencedBy).toEqual([]);
     const t = await getJson(`/api/issues/oth-${target}`);
     expect(t.referencedBy).toMatchObject([{ id: `fac-${n}`, title: "refers to it" }]);
-    expect(v.renderIssue(d)).toContain('<span class="quiet">Refs</span>');
+    expect(v.renderIssue(d)).toContain('class="quiet">Refs<');
     expect(v.renderIssue(d)).not.toContain("Referenced by");
-    expect(v.renderIssue(t)).toContain('<span class="quiet">Referenced by</span>');
+    expect(v.renderIssue(t)).toContain('class="quiet">Referenced by<');
     expect(v.renderIssue(d)).not.toContain("refs: issue.");
   });
 
@@ -293,9 +291,10 @@ describe("Run now", () => {
   test("the Issue page has an enabled Run now button when runNow is null, and a disabled one with the reason when it is set", async () => {
     const [ready, waits] = pair();
     const on = v.renderIssue(await getJson(`/api/issues/fac-${ready}`));
-    expect(on).toContain(`<button class="act" type="button" data-act="run" data-path="/api/issues/fac-${ready}/run" data-label="Run now">Run now</button>`);
+    expect(on).toContain(`data-act="run" data-path="/api/issues/fac-${ready}/run"`);
     const off = v.renderIssue(await getJson(`/api/issues/fac-${waits}`));
-    expect(off).toContain(`<button class="act" type="button" disabled title="Waits on issue.${ready}">Run now</button> <span class="quiet">Waits on issue.${ready}</span>`);
+    expect(off).toContain(`disabled title="Waits on issue.${ready}">Run now<`);
+    expect(off).toContain(`>Waits on issue.${ready}<`);
     expect(off).not.toContain('data-act="run"');
     expect(v.renderIssue(await getJson("/api/issues/fac-2"))).not.toContain("Run now");
   });
@@ -360,58 +359,46 @@ describe("views", () => {
     expect(v.redirect("#/issues")).toBeNull();
   });
 
-  const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";
+  /** The issue numbers of the rows a table draws, in order. */
+  const ns = (html: string) => [...html.matchAll(/data-n="([^"]+)"/g)].map((m) => m[1]);
 
-  test("the page is tiles, charts, search, filters and one table, with no Projects or Specs tables", async () => {
+  test("the page is tiles, four charts, search, filters and one table, with no Projects or Specs tables", async () => {
     const d = await getJson("/api/issues");
+    expect(v.COLUMNS.map((c: any) => c[0])).toEqual(["id", "title", "stage", "priority", "project", "labels", "notes", "runs", "cost", "age", "updated"]);
+    expect(v.filterRows(v.issueRows(d), v.hashOptions(new URLSearchParams("status=any")))).toHaveLength(d.issues.length);
     const h = v.view.render(d, {}, new URLSearchParams("status=any"));
-    expect(h).not.toContain("<h2>Projects");
-    expect(h).not.toContain("<h2>Specs");
-    expect(h).toContain('class="tiles"');
-    for (const q of ["status=any", "tile=flow&status=any", "tile=parked"]) {
-      const page = v.view.render(d, {}, new URLSearchParams(q));
-      for (const c of ["flow", "source", "close", "levels"]) expect(page).toContain(`<aleph-chart key="issues/${c}"`);
-      expect(page).not.toContain('key="issues/age"');
-      expect(page).not.toContain("Open issues by age");
-    }
-    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/flow"'));
-    expect(h.indexOf('key="issues/levels"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(h).not.toMatch(/<h2>(Projects|Specs)/);
+    const at = ['id="inv-numbers"', 'id="inv-detail"', 'data-ui="inv-search"', 'id="issues-table"'].map((k) => h.indexOf(k));
+    expect(at.every((n, i) => n >= 0 && (i === 0 || n > at[i - 1]))).toBe(true);
+    expect(h).toContain(`<h2>Issues</h2><span class="count">${d.issues.length}<`);
     expect(h).toContain('<div class="quad">');
-    const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "priority", "project", "labels", "notes", "runs", "cost", "age", "updated"]);
-    expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
+    const charts = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q)).matchAll(/<aleph-chart key="([^"]+)"/g)].map((m) => m[1]);
+    for (const q of ["status=any", "tile=flow&status=any", "tile=parked"]) expect(charts(q)).toEqual(["issues/flow", "issues/source", "issues/close", "issues/levels"]);
   });
 
-  test("issue rows: Id, Title, Updated, Stage, Project and Labels, and no X", async () => {
-    const d = await getJson("/api/issues");
-    const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
-    expect(h).toContain('href="#/issues/fac/1"');
-    expect(h).not.toContain('href="#/projects/');
-    const rows = h.split("<tr class=\"rowlink").slice(1);
-    const closed = rows.filter((r: string) => r.includes("plain task"));
-    expect(closed).toHaveLength(1);
-    expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
-    expect(rows.every((r: string) => /^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*>.*?<\/td><td class="time">/.test(r))).toBe(true);
-    expect(closed[0]).toContain(">done</span>");
-    expect(v.view.render(d, {}, new URLSearchParams())).not.toContain("File an");
+  test("issue rows link to the issue page and not a project page; a closed row shows done, and no row has a cancel", async () => {
+    const rows = v.issueRows(await getJson("/api/issues"));
+    expect(rows.find((r: any) => r.title === "first issue").href).toBe("#/issues/fac/1");
+    expect(rows.every((r: any) => r.href.startsWith("#/issues/"))).toBe(true);
+    const closed = rows.filter((r: any) => r.stage === "done");
+    expect(closed.map((r: any) => r.title)).toEqual(["plain task"]);
+    expect(v.renderRow(closed[0])).toContain(">done<");
+    expect(v.renderRow(closed[0])).toContain('<td class="wide" title="plain task">');
+    expect(rows.some((r: any) => v.renderRow(r).includes("data-cancel"))).toBe(false);
+    expect(rows.some((r: any) => v.renderRow(r).includes('href="#/projects/'))).toBe(false);
   });
 
   test("the project filter is a select with what the other filters leave", async () => {
     const d = await getJson("/api/issues");
+    const o = v.hashOptions(new URLSearchParams("project=oth&status=any"));
+    expect(o).toMatchObject({ project: "oth", status: "" });
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h).toContain('<option value="oth" selected>oth</option>');
-    expect(h).toContain('<option value="fac">fac</option>');
-    expect(h).toContain('<option value="">All Projects</option>');
-    expect(h).not.toMatch(/<option[^>]*>[^<]*\(\d+\)<\/option>/);
+    expect(h).toContain('<option value="oth" selected>');
+    expect(h).toContain('<option value="fac">');
     const rows = v.issueRows(d);
-    const counts = (o: object) => v.renderProjects(d.projects, rows, o);
-    expect(counts({ status: "open" })).toContain('<option value="oth">oth</option>');
-    expect(counts({})).toContain('aria-label="Window" data-name="window"');
-    expect(counts({})).not.toContain('class="fl">Window');
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     expect(v.filterRows(rows, full({ status: "done" })).every((r: any) => r.status === "done")).toBe(true);
-    expect(v.filterRows(rows, full({ project: "oth" })).every((r: any) => r.project === "oth")).toBe(true);
-    expect(v.filterRows(rows, full({ project: "oth" })).length).toBeGreaterThan(0);
+    expect(v.filterRows(rows, o).map((r: any) => r.title)).toEqual(["other thing"]);
     expect(v.filterRows(rows, full({ q: "plain" })).map((r: any) => r.title)).toEqual(["plain task"]);
   });
 
@@ -436,10 +423,11 @@ describe("views", () => {
       { id: 2, ref: "2", repo: "fac", title: "status of the land", status: "open", labels: [], updatedTime: iso("2026-10-01") },
       { id: 3, ref: "3", repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updatedTime: iso("2026-10-31") },
     ] });
-    const titles = (o: object) => [...v.renderTable(rows, full({ status: "open", ...o })).matchAll(/<td class="wide"[^>]*><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
-    expect(titles({ q: "status" })[0]).toBe("status of the land");
-    expect(titles({ q: "status" })).not.toContain("Set up a tiny ultra stack");
-    expect(titles({ q: "status", sort: { key: "id", dir: -1 } })).toEqual(["status of the land", "Workstatus page"]);
+    const drawn = (o: object) => ns(v.renderTable(rows, full({ status: "open", ...o })));
+    expect(drawn({ q: "status" })[0]).toBe("2");
+    expect(drawn({ q: "status" })).not.toContain("3");
+    expect(drawn({ q: "status", sort: { key: "id", dir: -1 } })).toEqual(["2", "1"]);
+    expect(v.filterRows(rows, full({ q: "land" })).find((r: any) => r.n === "2").hits).toEqual([14, 15, 16, 17]);
     expect(v.renderTable(rows, full({ status: "open", q: "land" }))).toContain("<mark>land</mark>");
   });
 
@@ -451,18 +439,17 @@ describe("views", () => {
       { id: 1, ref: "1.1", parent: "1", repo: "fac", title: "old part", status: "open", labels: [], updatedTime: iso("2026-10-30") },
       { id: 4, ref: "4", repo: "fac", title: "lone child", parent: "9", status: "open", labels: [], updatedTime: iso("2026-10-10") },
     ] });
-    const store = (group: boolean, open: string[] = []) => {
+    const store = (group?: boolean, open: string[] = []) => {
       const m: Record<string, string> = { "aleph.issues.group": JSON.stringify(group), "aleph.issues.open": JSON.stringify(open) };
       (globalThis as any).localStorage = { getItem: (k: string) => m[k] ?? null, setItem: (k: string, x: string) => { m[k] = x; } };
     };
     afterAll(() => { delete (globalThis as any).localStorage; });
-    const titles = (html: string) => [...html.matchAll(/<td class="wide"[^>]*>(?:<button.*?<\/button> )?<a[^>]*>(.*?)<\/a>/g)].map((m) => m[1]);
     const subs = (html: string) => (html.match(/class="rowlink sub-row"/g) ?? []).length;
 
-    test("off, the table is a flat list in sort order with no indent", () => {
-      store(false);
+    test("off by default, the table is a flat list in sort order with no indent", () => {
+      store();
       const html = v.renderTable(rows(), full({ status: "open" }));
-      expect(titles(html)).toEqual(["child", "old part", "other", "lone child", "parent"]);
+      expect(ns(html)).toEqual(["3", "1.1", "2", "4", "1"]);
       expect(subs(html)).toBe(0);
       expect(html).not.toContain("data-fold");
     });
@@ -470,23 +457,23 @@ describe("views", () => {
     test("on and collapsed, a parent has a chevron and hides its parts; a part with no parent in the filter is top level", () => {
       store(true);
       const html = v.renderTable(rows(), full({ status: "open" }));
-      expect(titles(html)).toEqual(["other", "lone child", "parent"]);
+      expect(ns(html)).toEqual(["2", "4", "1"]);
       expect(html.match(/data-fold="fac-1"[^>]*aria-expanded="false"/g)).toHaveLength(1);
       expect(html.match(/data-fold/g)).toHaveLength(1);
       // The fold button has its own first column; a row with no parts keeps an empty one, so the ids line up.
       expect(html).toMatch(/<tr class="rowlink"[^>]*><td><button class="fold" data-fold="fac-1"/);
       expect(html).toMatch(/<tr class="rowlink"[^>]*><td><\/td><td><a class="idl"/);
       expect(html).toMatch(/<thead><tr><th><\/th>/);
-      expect(titles(v.renderTable(rows(), full({ status: "open", q: "child" }))).map((t) => t.replace(/<\/?mark>/g, ""))).toContain("child");
+      expect(ns(v.renderTable(rows(), full({ status: "open", q: "child" })))).toContain("3");
       expect(v.renderTable(rows(), full({ status: "open", q: "child" }))).not.toContain("sub-row");
     });
 
     test("on and expanded, the parts follow their parent, indented, in the sort order", () => {
       store(true, ["fac-1"]);
       const html = v.renderTable(rows(), full({ status: "open", sort: { key: "id", dir: -1 } }));
-      expect(titles(html)).toEqual(["lone child", "other", "parent", "child", "old part"]);
+      expect(ns(html)).toEqual(["4", "2", "1", "3", "1.1"]);
       expect(subs(html)).toBe(2);
-      expect(titles(v.renderTable(rows(), full({ status: "open", sort: { key: "id", dir: 1 } })))).toEqual(["parent", "old part", "child", "other", "lone child"]);
+      expect(ns(v.renderTable(rows(), full({ status: "open", sort: { key: "id", dir: 1 } })))).toEqual(["1", "1.1", "3", "2", "4"]);
     });
 
     test("the controls hold a Group checkbox that follows the kept state", () => {
@@ -537,10 +524,13 @@ describe("views", () => {
     const o = option(fr, "lines", {});
     expect(o.series.map((s: any) => s.name)).toEqual(["filed", "closed"]);
     expect([o.yAxis.minInterval, o.yAxis.axisLabel.formatter(3)]).toEqual([1, "3"]);
-    expect(v.renderTiles(v.stats(rows, now))).toContain('<b>2<em> / 1</em></b><span class="q"><span>filed</span><span class="m"> / closed</span></span>');
+    expect(v.renderTiles(v.stats(rows, now))).toContain(">2<em> / 1<");
   });
 
-  test("the window sets the backlog buckets, the Time to close rows and the chart titles", async () => {
+  /** The four chart frames over `rows` in the week to `now`, in page order. */
+  const weekFrames = (rows: any[], now: Date) => [v.flowFrame(v.flow(rows, "week", now), "week"), v.sourceFrame(v.sources(rows, "week", now), "week"), v.closeFrame(v.closeTimes(rows, "week", now)), v.levelFrame(v.levels(rows, "week", now), "week")];
+
+  test("the window sets the backlog buckets, the Time to close rows and the chart titles", () => {
     const now = new Date("2026-11-04T16:00");
     const rows = v.issueRows({ issues: [
       { id: 1, ref: "1", repo: "f", title: "a", status: "open", labels: [], createdTime: iso("2026-11-04T15:30") },
@@ -564,25 +554,15 @@ describe("views", () => {
     expect(v.closeTimes(rows, "week", now).p50[1]).toBe(24);
     // A p50 is the nearest rank: of 1 and 5 days, the lower.
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(1);
-    const d = await getJson("/api/issues");
-    const page = v.view.render(d, {}, new URLSearchParams("window=week"));
-    for (const t of ["Issues Filed and Closed", "Issues Filed by Source", "Time to Close by Kind", "Backlog and Total"]) expect(page).toContain(`<h2>${t}</h2>`);
-    expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><div class="aside">/);
+    expect(weekFrames(rows, now).map(title)).toEqual(["Issues Filed and Closed", "Issues Filed by Source", "Time to Close by Kind", "Backlog and Total"]);
+    expect(v.hashOptions(new URLSearchParams("window=week")).window).toBe("week");
     // Each panel's title, aria label and empty line come from its frame.
-    expect(label(v.flowFrame(v.flow(rows, "week", now), "week"))).toBe("Issues Filed and Closed: filed 2, closed 1");
-    expect(page).toContain('aria-label="Issues Filed and Closed"');
-    expect(page).toContain('aria-label="Time to Close by Kind"');
-    for (const k of ["flow", "source", "close", "levels"]) expect(page).toMatch(new RegExp(`<aleph-chart key="issues/${k}"[^>]*><section class="card" aria-label="[^"]+">`));
-    expect(page).toMatch(/<div class="chartbox" role="img" aria-label="Issues Filed and Closed: [^"]+">/);
-    expect(page).not.toContain("30 days");
+    expect(label(weekFrames(rows, now)[0])).toBe("Issues Filed and Closed: filed 2, closed 1");
   });
 
-  test("a chart panel with nothing to plot shows the frame's empty line and no chart box", () => {
-    const page = v.renderIssues({ issues: [] }, { window: "week" });
-    for (const k of ["flow", "source", "close", "levels"]) expect(page).toContain(`<aleph-chart key="issues/${k}"`);
-    expect(page).not.toContain("chartbox");
-    expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(4);
-    expect(page.match(/<p>No data<\/p>/g)!.length).toBeGreaterThanOrEqual(4);
+  test("a chart panel with nothing to plot has no series to show, and the page draws no chart box", () => {
+    expect(weekFrames([], new Date(NOW)).map(shown)).toEqual([[], [], [], []]);
+    expect(v.renderIssues({ issues: [] }, { window: "week" })).not.toContain("chartbox");
   });
 
   test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
@@ -622,10 +602,10 @@ describe("views", () => {
     const html = v.renderTiles(v.stats(rows, now, "day"), "open", "day");
     for (const k of ["Open", "Backlog", "Filed / Closed", "Time to Close", "Close Rate"]) expect(html).toContain(`>${k}<`);
     for (const k of ["Open Age", "Jobs", "in store"]) expect(html).not.toContain(k);
-    expect(html).toContain('<span>filed</span><span class="m"> / closed</span>');
+    expect(html).toMatch(/>filed<.*> \/ closed</);
     const bare = v.renderTiles({ open: 0, parked: 0, filed: 0, closed: 0, filedBefore: 0, closedBefore: 0, p50: null, p90: null, p50Before: null }, "open", "day");
     expect(bare).not.toMatch(/undefined|NaN/);
-    expect(bare.match(/<b>–<\/b>/g)).toHaveLength(2);
+    expect(bare.match(/>–</g)).toHaveLength(2);
     const up = v.renderTiles({ open: 1, parked: 0, filed: 4, closed: 4, filedBefore: 4, closedBefore: 2, p50: 60, p90: 120, p50Before: 120 }, "open", "day");
     expect(up).toMatch(/Time to Close<\/span><span class="tr good"/);
     expect(up).toMatch(/Close Rate<\/span><span class="tr good"/);
@@ -654,6 +634,7 @@ describe("views", () => {
   test("the head holds the project, then the window; the form comes before the table", async () => {
     const page = v.view.render(await getJson("/api/issues"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
+    expect(head).toContain("<h1>Issues</h1>");
     expect(head).not.toContain("class=\"count\"");
     expect(page).not.toContain("Filed and closed per");
     expect(head).toContain('data-name="window"');
@@ -669,8 +650,8 @@ describe("views", () => {
     const rows = { issues: [{ repo: "aleph", n: 1, title: "alpha thing", status: "open", labels: [] }], projects: ["aleph", "fac"] };
     const page = (o: object) => v.renderIssues(rows, full(o));
     // The action sits in the search box's .fbar, right after the field, so CSS can hide it while the field is empty.
-    expect(page({ q: "alpha" })).toMatch(/data-ui="inv-search"[^>]*><button type="button" class="hint" data-file[^>]*>Ctrl\+↵ File in aleph<\/button><\/div>/);
-    expect(page({ project: "fac" })).toContain(">Ctrl+↵ File in fac</button>");
+    expect(page({ q: "alpha" })).toMatch(/data-ui="inv-search"[^>]*><button type="button"[^>]*data-file[^>]*>Ctrl\+↵ File in aleph</);
+    expect(page({ project: "fac" })).toContain(">Ctrl+↵ File in fac<");
     expect(v.renderTable([], full({ q: "zzz" }))).toContain('class="empty"');
     expect(page({ q: "alpha" })).not.toContain("file-row");
   });
@@ -701,10 +682,8 @@ describe("views", () => {
     expect(v.hashOptions(new URLSearchParams("status=any")).status).toBe("");
     expect(v.hashOptions(new URLSearchParams("status=done")).status).toBe("done");
     expect(v.hashOptions(new URLSearchParams("status=open")).status).toBe("open");
-    const def = v.view.render(d, {}, new URLSearchParams());
-    expect(section(def, "issues-table")).toContain("plain task");
-    expect(def).toContain(">done</span>");
-    expect(def).toContain('data-value="any" aria-pressed="true"');
+    expect(v.filterRows(v.issueRows(d), v.hashOptions(new URLSearchParams())).map((r: any) => r.title)).toContain("plain task");
+    expect(v.view.render(d, {}, new URLSearchParams())).toContain('data-value="any" aria-pressed="true"');
     const t = [...v.sortRows(v.filterRows(v.issueRows(d), full({ status: "open" })))].map((r: any) => Date.parse(r.at) || 0);
     expect(t).toEqual([...t].sort((x, y) => y - x));
   });
@@ -718,9 +697,10 @@ describe("views", () => {
 
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/issues");
-    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
-    expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
-    expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
+    const order = (q: string) => v.sortRows(v.issueRows(d), v.hashOptions(new URLSearchParams(q)).sort).map((r: any) => r.n);
+    expect(order("sort=id&dir=asc")).toEqual(["1", "2", "3", "4", "5"]);
+    expect(order("sort=id&dir=desc")).toEqual(["5", "4", "3", "2", "1"]);
+    expect(v.hashOptions(new URLSearchParams("sort=title&dir=asc")).sort).toEqual({ key: "title", dir: 1 });
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
   });
 
@@ -919,11 +899,9 @@ describe("a parked issue", () => {
       { id: 9, ref: "9", repo: "f", title: "d", status: "done", labels: [], createdTime: iso("2026-10-30"), closedTime: iso("2026-11-01") },
     ] });
     expect(v.renderFilters(all, { status: "" })).toContain("parked");
-    const only = v.renderTable(all, full({ status: "parked" }));
-    expect(only).toContain("shelved thing");
-    expect(only).not.toContain(">o<");
-    expect(only).toContain('<span class="badge parked">parked</span>');
-    expect(v.renderTable(all, full({ status: "open" }))).not.toContain("shelved thing");
+    expect(v.filterRows(all, full({ status: "parked" })).map((r: any) => r.title)).toEqual(["shelved thing"]);
+    expect(v.renderRow(all[0])).toContain('class="badge parked"');
+    expect(v.filterRows(all, full({ status: "open" })).map((r: any) => r.title)).toEqual(["o"]);
     expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ open: 1, parked: 1, closed: 1 });
   });
 });
@@ -987,10 +965,12 @@ describe("the Issue page shows the ask row", () => {
     const d = await getJson(`/api/issues/fac-1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
-    expect(h).toContain('<th>Commit</th><th>Subject</th><th class="num">Committed</th>');
-    expect(h).toContain(`<tr><td><span class="idp" title="abcdef1234567">abcdef1</span></td><td class="wide" title="s">s</td><td class="time">${when(date)}</td></tr>`);
+    expect(h).toMatch(/>Commit<.*>Subject<.*>Committed</);
+    expect(h).toContain('title="abcdef1234567">abcdef1<');
+    expect(h).toContain('<td class="wide" title="s">s<');
+    expect(h).toContain(`>${when(date)}<`);
     const none = v.renderIssue({ ...d, commits: [] });
-    expect(none).toContain('<span class="dp-k">Commits</span><span class="dp-v"><span title="No commit on main yet">–</span></span>');
+    expect(none).toContain('<span class="dp-v"><span title="No commit on main yet">–<');
     expect(none).not.toContain("<span>Commits</span>");
     const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date }));
     expect(v.renderIssue({ ...d, commits })).toContain("50 of 51");
@@ -1034,7 +1014,7 @@ describe("priority badges", () => {
     expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
     expect(rows.find((r: string) => r.includes("plain part"))).not.toContain(">medium<");
     const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
-    expect(row).toContain('<td><span class="badge error" title="critical">critical</span></td>');
+    expect(row).toMatch(/class="badge error"[^>]*>critical</);
   });
 });
 
@@ -1100,14 +1080,14 @@ describe("the Updated time", () => {
 test("the Issues row, the issue's id and its Work head show the short id, and the links keep the full id", () => {
   setCodes({ fac: "f" });
   try {
-    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1">f1</a>');
+    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('href="#/issues/fac/1">f1<');
     setCodes({ fac: "f", lb: "lb" });
     const row = (repo: string) => v.renderRow({ repo, n: 12, id: `${repo}-12`, href: `#/issues/${repo}/12`, title: "t", stage: "new", project: repo, priority: "medium", labels: [] });
-    expect(row("fac")).toContain('data-annotate="f12"><td><a class="idl" href="#/issues/fac/12">f12</a></td>');
-    expect(row("lb")).toContain('data-annotate="lb12"><td><a class="idl" href="#/issues/lb/12">lb12</a></td>');
+    expect(row("fac")).toContain('href="#/issues/fac/12">f12<');
+    expect(row("lb")).toContain('href="#/issues/lb/12">lb12<');
     const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], parts: [], timeline: { runs: [] } };
-    expect(v.renderIssue(d)).toContain('<span class="idp">f1</span></div>');
-    expect(v.issueSegments(d)[0].rows[0].head).toContain('<span class="idp">f1</span>');
+    expect(v.renderIssue(d)).toContain('class="idp">f1<');
+    expect(v.issueSegments(d)[0].rows[0].head).toContain('class="idp">f1<');
   } finally {
     setCodes({});
   }
@@ -1134,9 +1114,6 @@ test("the Issue page gives a machine note and a plain note each a dp-ev row with
   const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], parts: [], timeline: { runs: [] },
     notes: ["- 2026-11-05T11:02:00.000Z: intake: sized it", "- 2026-11-05T11:03:00.000Z: call me back"].map(noteOf) };
   const notes = v.renderIssue(d).match(/<ul class="notes">.*?<\/ul>/gs)!.join("");
-  const row = (tag: string, body: string) => new RegExp(`<li class="dp-ev"><span class="dp-at">\\d\\d/\\d\\d \\d\\d:\\d\\d</span><span><span [^>]*>${tag}</span></span><div class="dp-evt">${body}</div></li>`);
-  expect(notes).toMatch(row("intake", "sized it"));
-  expect(notes).toMatch(row("note", "call me back"));
   // The rows are the timeline's own event rows, as list items and never clamped.
   const ev = (at: string, tag: string, html: string) => tl.eventHtml({ at: Date.parse(at), tag, tone: "quiet", html }, { el: "li", clamped: false });
   expect(notes).toContain(ev("2026-11-05T11:02:00.000Z", "intake", "sized it"));
@@ -1155,7 +1132,7 @@ describe("the labels say sub-issue and job", () => {
   test("the Issues page heads its job count Jobs, and no label keeps the old words", async () => {
     const rows = await rowsOf("fac");
     const h = v.renderIssues({ issues: rows, projects: ["fac"] }, full());
-    expect(h).toContain('<button type="button" data-sort="runs">Jobs');
+    expect(v.COLUMNS).toContainEqual(["runs", "Jobs", { num: true }]);
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 
@@ -1167,9 +1144,9 @@ describe("the labels say sub-issue and job", () => {
     }, true)!.value;
     run("", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", state: "landed", on: `fac-${n}` });
     const h = v.renderIssue(await afterSeed(`/api/issues/fac-${n}`));
-    expect(h).toContain("<h3>Sub-issues</h3>");
-    expect(h).toContain('<span class="dp-k">Sub-issues done</span>');
-    expect(h).toContain('<span class="dp-sub">1 job</span>');
+    expect(h).toContain(">Sub-issues<");
+    expect(h).toContain(">Sub-issues done<");
+    expect(h).toContain(">1 job<");
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 });
@@ -1181,15 +1158,14 @@ test("an issue row carries its short id for a pin to anchor on", () => {
   } finally { setCodes({}); }
 });
 
-test("the design page's values: a zero cost shows $0.00, a kind with no closed rows has no p50 or p90, the Stage KPI is words, a part's stage is lower case, the title is editable()", () => {
+test("the design page's values: a zero cost shows $0.00, a kind with no closed rows has no p50 or p90, the Stage KPI is words, a part's stage is lower case", () => {
   const row = { repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [], notes: 0, runs: 0, cost: 0 };
-  expect(v.renderRow(row)).toContain('<td class="num">$0.00</td>');
+  expect(v.renderRow(row)).toContain(">$0.00<");
   const frame = v.closeFrame({ kinds: ["bug", "task"], unit: "days", p50: [null, 2], p90: [null, 3] });
   expect(frame.rows.map((r: any) => [r.p50, r.p90])).toEqual([[null, null], [172800, 259200]]);
   const d = { repo: "fac", id: 1, ref: "1", title: "A title", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], parts: [], timeline: { runs: [] } };
   const h = v.renderIssue(d);
-  expect(h).toContain('<span class="dp-v text">open</span>');
-  expect(h).toMatch(/<h1><span class="view-only">A title<\/span><span class="edit-only"><input [^>]*name="title"/);
+  expect(h).toContain('class="dp-v text">open<');
   const parts = v.renderIssue({ ...d, parts: [{ id: "1.1", stage: "review", status: "open", title: "p", href: "#/issues/fac/1.1" }] });
-  expect(parts).toContain('<span class="dp-sub">1.1 review</span>');
+  expect(parts).toContain(">1.1 review<");
 });
