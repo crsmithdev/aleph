@@ -133,6 +133,15 @@ describe("the Hooks page", () => {
     expect([fixed, matched, async].map((td) => td.replace(/<[^>]+>/g, ""))).toEqual(["Stub or stable entry", "Bash", "async"]);
   });
 
+  test("each integer cell shows through count(): a zero outcome 0, thousands with a comma", () => {
+    const html = renderHooks({ ...data, errors: [{ ...data.errors[0], n: 1234 }], hooks: [{ ...data.hooks[0], holds: 0 }] }, new URLSearchParams());
+    /** The cells of the first body row of the card `title`. */
+    const tds = (title: string) => html.split(`aria-label="${title}"`)[1].split("<tbody>")[1].split("</tr>")[0].match(/<td[^>]*>.*?<\/td>/g)!;
+    expect(tds("Holds by Hook").slice(6, 12)).toEqual(["1", "0", "0", "0", "0", "0"].map((n) => `<td class="num">${n}</td>`));
+    expect(tds("Errors by Cause")[4]).toBe('<td class="num bad">1,234</td>');
+    expect(tds("Hooks")[6]).toBe('<td class="num">0</td>');
+  });
+
   test("a hook's Holds by Kind head counts its rows", () => {
     const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
     const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());

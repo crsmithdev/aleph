@@ -45,9 +45,9 @@ function holdsBy(groups, hookCol = true) {
   if (!groups.length) return empty();
   const rows = groups.map((g) => {
     const n = (k) => g.outcomes[k] ?? 0;
-    return row([cell(hookCol ? g.hook : kindName(g.kind)), ...(hookCol ? [cell(kindName(g.kind))] : []), cell(g.holds, { num: true }), cell(g.interactive, { num: true }), cell(g.workers, { num: true }),
+    return row([cell(hookCol ? g.hook : kindName(g.kind)), ...(hookCol ? [cell(kindName(g.kind))] : []), cell(count(g.holds), { num: true }), cell(count(g.interactive), { num: true }), cell(count(g.workers), { num: true }),
       `<td>${meter(OUTS.map(([k, , cls]) => ({ pct: (100 * n(k)) / g.holds, cls })), OUTS.map(([k]) => `${k} ${n(k)}`).join(", "))}</td>`,
-      ...OUTS.map(([k]) => cell(n(k) || "", { num: true })), rowAct("Show", { kind: g.kind, ...(hookCol ? { hook: g.hook } : {}) })]);
+      ...OUTS.map(([k]) => cell(count(n(k)), { num: true })), rowAct("Show", { kind: g.kind, ...(hookCol ? { hook: g.hook } : {}) })]);
   });
   const nums = ["Holds", "Interactive", "Workers", ...OUTS.map((o) => o[1])];
   return dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1]), "Action"], nums), rows.join(""));
@@ -76,7 +76,7 @@ const perDay = (holds, q, key) => holds.length ? panelOf(key, holdsFrame(holds, 
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
   row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), e.fix ? cell(e.fix) : `<td>${miss("no known fix")}</td>`,
-    badCount(e.n), cell(e.sessions, { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
+    badCount(e.n), cell(count(e.sessions), { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 /** The filters of the holds log from the address. */
 const filtersOf = (q) => Object.fromEntries(["who", "hook", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));
@@ -109,14 +109,14 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
   const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide" title="${esc(h.name)}"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : miss("matches all")}</td>`,
-    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })].join("")}</tr>`).join("");
+    `<td>${codeText(`\`${h.file}\``)}</td>`, h.mode ? cell(h.mode) : `<td>${miss("sync by default")}</td>`, cell(count(h.timeout), { num: true }), cell(count(h.holds), { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
     card("Holds by Hook", holdsBy(d.byHook), { count: count(d.byHook.length), aside: legend(d.byHook) }) +
     perDay(d.holds, q, "hooks/day") +
     card("Errors by Cause", errorsTable(d.errors), { count: count(d.errors.length) }) +
-    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv),{ count: String(d.hooks.length) }) +
+    card("Hooks", !d.hooks.length ? empty() : dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv),{ count: count(d.hooks.length) }) +
     holdsLog(d.holds, q, asCard) +
     `</div>`;
 }
