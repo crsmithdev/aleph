@@ -36,6 +36,7 @@ describe("the Hooks page", () => {
     for (const t of ["Holds by Hook", "Errors by Cause", "Hooks", "Holds"]) expect(html).toMatch(new RegExp(`<section class="card"[^>]* aria-label="${t}"><div class="sh"><h2[^>]*>${t}</h2>`));
     for (const c of ["dp-page", "dp-kpi", "dp-fold"]) expect(html).not.toContain(c);
     expect(html).toContain('href="#/hooks/Stop/one%20way"');
+    expect(html).toMatch(/<tr class="rowlink"><td>Stop<\/td><td class="wide"><a href="#\/hooks\/Stop\/one%20way">one way<\/a><\/td>/);
     expect(html).toContain("Stub or stable entry");
     expect(logIds("")).toEqual(["aaaaaaaa1", "bbbbbbbb2", "cccccccc3", "dddddddd4"]);
   });

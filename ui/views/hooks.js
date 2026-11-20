@@ -97,8 +97,8 @@ const outcomes = (holds) => OUTS.map(([k, name]) => [k, name, holds.filter((h) =
 
 export function renderHooks(d, q) {
   const errs = d.errors.reduce((s, e) => s + e.n, 0), n = (k) => count(d.holds.filter((h) => h.out === k).length);
-  const inv = d.hooks.map((h) => row([cell(h.event), `<td><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
-    `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })])).join("");
+  const inv = d.hooks.map((h) => `<tr class="rowlink">${[cell(h.event), `<td class="wide"><a href="${esc(hookHref(h))}">${esc(h.name)}</a></td>`, `<td>${h.matcher ? codeText(`\`${h.matcher}\``) : ""}</td>`,
+    `<td>${codeText(`\`${h.file}\``)}</td>`, cell(h.mode), cell(h.timeout, { num: true }), cell(h.holds || "", { num: true })].join("")}</tr>`).join("");
   return `<div class="page">` +
     pageHead("Hooks", { aside: scope(q).bar() }) +
     tiles("Metrics", [{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }].map(statCard).join("")) +
