@@ -19,7 +19,7 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { parseKey, type EventRow } from "../../lib/naming.ts";
+import { factsOf, parseKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../lib/store.ts";
 import { noteOf } from "../../lib/todo.ts";
@@ -37,8 +37,8 @@ const DAY = 86_400_000;
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
 type LogEntry = EventRow & { times?: number; first?: string };
-/** Whether an entry is a decision on an Ask that a rule or the director made, not Chris. */
-const automatic = (e: LogEntry) => e.subject === "rule" || (e.subject === "director" && e.action !== "escalated");
+/** Whether an entry is a decision on an Ask that a rule or the director made, not Chris: an `answered` with the bare reason went with no answer. */
+const automatic = (e: LogEntry) => !(e.action === "answered" && !factsOf(e)) && (e.subject === "rule" || (e.subject === "director" && e.action !== "escalated"));
 /** Whether an entry is Chris's answer to an Ask: his rule changes are not. */
 const answer = (e: LogEntry) => e.subject === "human" && e.action !== "changed";
 
@@ -49,8 +49,9 @@ export interface AskSpan { issue: string; reason: string; set: string; cleared?:
 export function askHistory(): AskSpan[] {
   const out: AskSpan[] = [], open = new Map<string, AskSpan>();
   for (const e of readEvents(0)) {
-    if (e.subject !== "gate" || parseKey(e.object)?.kind !== "issue") continue;
-    if (e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
+    if (parseKey(e.object)?.kind !== "issue") continue;
+    // The gate sets each Ask; whoever answered it, or `rule` when it went with no answer, clears it.
+    if (e.subject === "gate" && e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
     else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; open.delete(e.object); } }
   }
   return out;

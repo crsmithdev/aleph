@@ -13,7 +13,7 @@ import * as issues from "../../../lib/todo.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
 import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setAfter, setIntake, setPlan, sourceOf } from "../../../lib/todo.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
-import { always, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
+import { always, answerDetail, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { onOf, type Repo, type Run } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -363,7 +363,7 @@ function stillRed(repo: Repo, item: issues.Issue): string | null {
 /** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | null {
   const ref = `${repo.key}-${id}`;
-  let standing = false;
+  let standing = ""; // the option an Always rule took
   const ok = sort(repo, id, `intake ${ref}: ${v.route}`, (item, doc, file) => {
     if (v.route === "build") {
       // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
@@ -385,13 +385,13 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       // The issue stays unsorted: the next intake reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
-      standing = true;
+      standing = o.label;
     } else {
     }
   }, effects);
   if (ok) askAfterDrops(ok.doc, ok.dropped);
   if (ok && v.route === "ask" && !standing) setAsk(issueKey(id), v.ask);
-  if (ok && standing) logAlways("question", ref, "answered", { detail: "the recommended answer" });
+  if (ok && standing) logAlways("question", ref, "answered", { detail: answerDetail("question", standing) });
   return ok ? v.route : null;
 }
 

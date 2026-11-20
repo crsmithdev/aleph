@@ -7,13 +7,13 @@
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { needsOf } from "../asks/ask.ts";
+import { actionsOn, needsOf, reasonOf } from "../asks/ask.ts";
 import { isWaiting, isAgentRun, isBuild, loadRegistry, onOf, repoOf, type Repo } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, lastRun, latestJob, openJob, stateOf } from "../records/job.ts";
-import { counting, getRun, makeJob, patchRun, setState, type NewJob, allRuns } from "../records/record.ts";
+import { counting, getRun, makeJob, patchRun, setState, type Answer, type NewJob, allRuns } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../../../lib/git.ts";
@@ -222,7 +222,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
  * `aleph checked`. With `checked`, Chris has done the check already.
  * The land unit takes the job lock.
  */
-export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "director" | "timeout" } = {}, o: StartOpts = {}): Promise<Start> {
+export async function land(name: string, a: { checked?: boolean; lander?: "Chris" | "director" | "timeout" | "rule" } = {}, o: StartOpts = {}): Promise<Start> {
   checkName(name);
   // Two lands of one job at once (the dispatch's batch pull and the leader's) each pass the live check below: it and the start share a lock.
   const repoKey = openJob(name)?.at(-1)!.run.repo;
@@ -316,11 +316,13 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
  * `aleph drop`: stop the job's live runs, take its branch, and mark it dropped. With `quiet`,
  * the factory's own drop: it writes the issue note and the news itself, and its dispatch goes on.
  */
-export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate } = {}): Promise<{ job: string; name: string; state: "dropped"; reason: string }> {
+export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate; answer?: Answer; answered?: boolean } = {}): Promise<{ job: string; name: string; state: "dropped"; reason: string }> {
   checkName(name);
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
   const last = lastRun(runs);
+  // Chris's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.
+  const answer = a.answer ?? (a.quiet ? undefined : { subject: "human", answer: actionsOn(reasonOf(last.run.ask?.reason))[a.answered ? 0 : 1] });
   const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
   if (!release) refuse(`job ${name} is busy`);
   try {
@@ -338,7 +340,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     for (const e of new Set([...live, last])) {
       markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
-      setState(e.id, "dropped", { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, reason, ask: undefined, phase: undefined, told: true });
+      setState(e.id, "dropped", { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, reason, ask: undefined, phase: undefined, told: true }, answer);
     }
     // The reviewer runs inside its build's unit, so a stopped unit leaves its job running.
     for (const e of runs) if (e.run.role === "review" && e.run.state === "running") setState(e.id, "dropped", { reason, phase: undefined });

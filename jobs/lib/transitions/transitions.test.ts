@@ -6,9 +6,10 @@ import { seed } from "../../job.testkit.ts";
 import { STARTING_MS } from "../infra/process.ts";
 import { getRun } from "../records/record.ts";
 import type { Run } from "../records/ledger.ts";
-import { recheck, startJob, type Start } from "./transitions.ts";
+import { drop, recheck, startJob, type Start } from "./transitions.ts";
 import { Refusal } from "../../../lib/refusal.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
+import { eventsOf } from "../../../lib/layout.ts";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -117,6 +118,20 @@ describe("recheck", () => {
 });
 
 describe("drop", () => {
+  const held = { reason: "held-path", question: "land it?", options: [], why: [] };
+  const answers = (key: string) => eventsOf(key, "answered").map((e) => [e.subject, e.detail]);
+
+  test("Chris's drop of a waiting run answers its Ask: a plain drop takes the second verb, an answer-and-rerun the first, a quiet drop none", async () => {
+    seed({ role: "build", name: "a", target: "issue.1", state: "waiting", ask: held });
+    seed({ role: "build", name: "b", target: "issue.2", state: "waiting", ask: { ...held, reason: "question" } });
+    seed({ role: "build", name: "c", target: "issue.3", state: "waiting", ask: held });
+    await drop("a");
+    await drop("b", { reason: `Chris answered the worker's question "which?": B`, answered: true });
+    await drop("c", { quiet: true });
+    expect([answers("issue.1"), answers("issue.2"), answers("issue.3")]).toEqual([
+      [["human", "held-path: disapprove"]], [["human", "question: resolve"]], [["rule", "held-path"]],
+    ]);
+  });
 });
 
 describe("checked", () => {

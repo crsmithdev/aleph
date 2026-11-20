@@ -20,6 +20,7 @@ import { archive, outcome, write } from "../../../vault/lib/ops.ts";
 import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { loadRegistry } from "../records/ledger.ts";
+import { answering } from "../records/record.ts";
 import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
@@ -146,9 +147,10 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
 /**
  * Chris's answer to the held verdict of the issue `ref`. Approve applies it through the vault op; decline keeps the claim and
  * sets the note's `updated` to today. Either clears the held verdict and the Ask. A done issue (approve) or a dropped one
- * (decline) is the result; a refusal of the op is a note on the issue, which stays parked. Why it could not answer, or null.
+ * (decline) is the result; a refusal of the op is a note on the issue, which stays parked. `by` answered: `human` or `rule`.
+ * Why it could not answer, or null.
  */
-export async function answerHeld(ref: string, approved: boolean): Promise<string | null> {
+export async function answerHeld(ref: string, approved: boolean, by: string): Promise<string | null> {
   const held = getJson<Record<string, Held>>("state", "recheck-held", {});
   const title = Object.keys(held).find((t) => held[t].issue === ref);
   if (!title) return `no held verdict for ${ref}`;
@@ -157,17 +159,19 @@ export async function answerHeld(ref: string, approved: boolean): Promise<string
   if (!n) return `no note ${title} in the vault`;
   const [r] = await apply(root, [n], [approved ? held[title] : { title, verdict: "refresh", why: "Chris kept the claim" }], today(), true);
   const at = parseIssueRef(ref)!;
-  const w = writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
+  const key = issueKey(at.id), answer = { subject: by, answer: approved ? "approve" : "disapprove" };
+  // A write that closes the issue clears its Ask at the push: `answering` gives that clear the answer.
+  const w = answering(key, answer, () => writeList({ key: at.repo }, `recheck: ${approved ? "approved" : "declined"} ${ref}`, (doc) => {
     const item = find(doc, at.id);
     if (!item) return null;
     note(item, r.refused ? `the vault refused: ${r.refused}` : approved ? `${NOTE.approved}: the ${held[title].verdict} is applied` : `${NOTE.declined}: the claim stays`);
     if (!r.refused) setStatus(item, approved ? "done" : "dropped");
     return true;
-  });
+  }));
+  clearAsk(key, answer);
   if (w) askAfterDrops(w.doc, w.dropped);
   // Read again: a recheck may have held another verdict while the op ran.
   const { [title]: _, ...rest } = getJson<Record<string, Held>>("state", "recheck-held", {});
   putJson("state", "recheck-held", rest);
-  clearAsk(issueKey(at.id));
   return r.refused ?? null;
 }

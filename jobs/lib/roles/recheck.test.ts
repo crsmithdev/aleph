@@ -8,6 +8,7 @@ import { storeRepos, vault } from "../../../tests/git.testkit.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { add, status } from "../../../lib/todo.ts";
 import { askOf } from "../asks/ask.ts";
+import { eventsOf } from "../../../lib/layout.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
 import { write } from "../../../vault/lib/ops.ts";
 import { lintVault, loadVault, readRun } from "../../../vault/lib/vault.ts";
@@ -174,17 +175,20 @@ async function held(title: string, verdict: Record<string, unknown>) {
   await recheck(root, false);
   return getJson<Record<string, any>>("state", "recheck-held", {})[title].issue as string;
 }
+/** The `answered` events of the issue `ref` (`aleph-<n>`). */
+const answers = (ref: string) => eventsOf(`issue.${ref.split("-")[1]}`).filter((e) => e.action === "answered");
 const issueOf = (ref: string) => readList({ key: "aleph" })!.items.find((i) => i.id === Number(ref.split("-")[1]))!;
 
 test("approve applies a held correct and keeps the core line, or a held archive, and closes the issue as done", async () => {
   const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
-  expect(await answerHeld(fix, true)).toBeNull();
+  expect(await answerHeld(fix, true, "human")).toBeNull();
   expect(read("CoreA")).toContain(`**Claim.** A now holds, as of ${today()}.`);
   expect(read("CoreA")).toContain("\ncore: line CoreA\n");
   expect(status(issueOf(fix))).toBe("done");
   expect(askOf(fix)).toBeNull();
+  expect(answers(fix)).toMatchObject([{ subject: "human", detail: "core-change: approve" }]);
   const gone = await held("CoreB", { verdict: "archive", why: "gone" });
-  expect(await answerHeld(gone, true)).toBeNull();
+  expect(await answerHeld(gone, true, "human")).toBeNull();
   expect(existsSync(page("CoreB"))).toBe(false);
   expect(existsSync(join(root, "archive", "CoreB.md"))).toBe(true);
   expect(getJson<Record<string, any>>("state", "recheck-held", {})).toEqual({});
@@ -192,7 +196,7 @@ test("approve applies a held correct and keeps the core line, or a held archive,
 
 test("approve of a verdict the op refuses is a note on the issue, which stays parked; the held verdict is cleared", async () => {
   const fix = await held("CoreA", { why: "moved" });
-  const refusal = await answerHeld(fix, true);
+  const refusal = await answerHeld(fix, true, "human");
   expect(refusal).toContain("no claim, details and evidence");
   expect(status(issueOf(fix))).toBe("parked");
   expect(issueOf(fix).notes.at(-1)).toContain(`the vault refused: ${refusal}`);
@@ -202,7 +206,7 @@ test("approve of a verdict the op refuses is a note on the issue, which stays pa
 test("guard: decline parks the open issue waiting on the dropped one, with the blocker-dropped Ask", async () => {
   const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
   const waiter = writeList({ key: "aleph" }, "waiter", (doc) => add(doc, "waiter", { after: [`issue.${fix.split("-")[1]}`] }).id)!.value;
-  expect(await answerHeld(fix, false)).toBeNull();
+  expect(await answerHeld(fix, false, "human")).toBeNull();
   expect(status(readList({ key: "aleph" })!.items.find((i) => i.id === waiter)!)).toBe("parked");
   expect(askOf(`issue.${waiter}`)?.reason).toBe("blocker-dropped");
 });
@@ -211,16 +215,17 @@ test("decline keeps the claim, sets updated to today and drops the issue; the no
   const fix = await held("CoreA", { why: "moved", claim: "A now holds.", details: "d", evidence: "e" });
   const was = read("CoreA");
   // A verdict held while the answer runs stays held.
-  const answer = answerHeld(fix, false);
+  const answer = answerHeld(fix, false, "human");
   putJson("state", "recheck-held", { ...getJson<Record<string, unknown>>("state", "recheck-held", {}), Later: { issue: "aleph-99" } });
   expect(await answer).toBeNull();
   expect(Object.keys(getJson("state", "recheck-held", {}))).toEqual(["Later"]);
   expect(read("CoreA")).toBe(was.replace(`updated: ${OLD}`, `updated: ${today()}`));
   expect(status(issueOf(fix))).toBe("dropped");
   expect(askOf(fix)).toBeNull();
+  expect(answers(fix)).toMatchObject([{ subject: "human", detail: "core-change: disapprove" }]);
   await seed("Other", 0);
   reply([]);
   await recheck(root, false);
   expect(readFileSync(join(base, "prompt.md"), "utf8")).not.toContain("# CoreA");
-  expect(await answerHeld(fix, false)).toBe(`no held verdict for ${fix}`);
+  expect(await answerHeld(fix, false, "human")).toBe(`no held verdict for ${fix}`);
 });

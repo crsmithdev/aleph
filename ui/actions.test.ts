@@ -157,7 +157,7 @@ test("the controls without the header are 403, running nothing", async () => {
   expect(recorded().length).toBe(before);
 });
 
-test("POST /api/jobs/:id/answer drops the question run with the answer as its reason, and refuses anything else without running the CLI", async () => {
+test("POST /api/jobs/:id/answer drops the question run as answered with the answer as its reason, and refuses anything else without running the CLI", async () => {
   const before = recorded().length;
   const hdr = { "X-Aleph-UI": "1" };
   expect((await post(jp("nope", "answer"), hdr, { answer: "blue" })).status).toBe(404);
@@ -169,7 +169,7 @@ test("POST /api/jobs/:id/answer drops the question run with the answer as its re
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ output: "out" });
   const last = recorded().at(-1)!;
-  expect(last.startsWith("drop -- asks ")).toBe(true);
+  expect(last.startsWith("drop --answered -- asks ")).toBe(true);
   expect(last).toContain("which colour?");
   expect(last).toContain("blue");
 });

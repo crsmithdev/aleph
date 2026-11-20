@@ -21,7 +21,7 @@ import * as store from "../../../lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn, askOfItem } from "../asks/ask.ts";
 import { isAgentRun, onOf, type Entry, type Repo, type Run, allJobs, isOpen } from "../records/ledger.ts";
-import { allRuns, jobOfRun } from "../records/record.ts";
+import { allRuns, answering, jobOfRun, type Answer } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
@@ -485,14 +485,15 @@ const fallback = (why: string): Text => ({ situation: `The director did not deci
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace them. */
 export interface Ports extends store.Effects {
-  land: (name: string) => Promise<string | null>;
-  drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
+  land: (name: string, lander: "director" | "rule") => Promise<string | null>;
+  /** `answer` answers the run's Ask: who answered and the option taken. */
+  drop: (name: string, reason: string, fate?: Fate, answer?: Answer) => Promise<string | null>;
   /** Starts a dispatch; a new spec starts its issue at once. */
   dispatch?: () => void;
 }
 const defaultPorts: Ports = {
-  land: (name) => refusal(async () => { await (await landJob(name, { lander: "director" }, { output: "ignore" })).child?.exited; }),
-  drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
+  land: (name, lander) => refusal(async () => { await (await landJob(name, { lander }, { output: "ignore" })).child?.exited; }),
+  drop: (name, reason, fate, answer) => refusal(() => dropJob(name, { reason, quiet: true, fate, answer })),
   dispatch: dispatchDetached,
   after: afterFiling,
 };
@@ -515,8 +516,8 @@ function jobOf(c: Case, n: number | string | undefined): string | undefined {
   return openJobOfIssue(c.repo.key, n)?.[0].run.name;
 }
 
-/** Check one action against the rules and apply it, for the case's Ask only. */
-async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
+/** Check one action against the rules and apply it, for the case's Ask only. `by` answers the Ask: the director, or `rule` for an Always rule. */
+async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule" = "director"): Promise<Outcome> {
   const repo = c.repo;
   const sub = askSub(c.ask.reason);
   if (!repo) return no(a, "the Ask is not in a factory repo");
@@ -539,7 +540,7 @@ async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
     }
     // The held files are read before the land: once the branch is on main, its diff is empty.
     const ev = c.ask.reason === "held-path" ? { action: "landed", note: heldLand(c, "the director") } : { action: "landed", sub: c.ask.reason === "review-held" ? "override" : sub };
-    const why = await ports.land(c.entry.run.name);
+    const why = await ports.land(c.entry.run.name, by);
     return why ? no(a, why) : done(a, ev);
   }
   if (a.do === "drop" || (a.do === "answer" && c.at === "run")) {
@@ -548,16 +549,17 @@ async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
     const runs = openJob(name)!;
     const last = jobRecord.counting(runs);
     const issue = issueOf(runs);
-    let reason: string, fate: Fate | undefined;
+    let reason: string, fate: Fate | undefined, answer: Answer | undefined;
     if (a.do === "answer") {
       reason = `The director answered the worker's question "${c.ask.question}": ${a.note}`;
+      answer = { subject: by, answer: a.option ?? actionsOn(reasonOf(c.ask.reason))[0] };
     } else {
       reason = a.reason;
       // The reply may leave the fate off: an issue whose own commit is on origin/main is met; a reason naming another issue already on main is work that issue did.
       const other = idsIn(a.reason).filter((r) => r.startsWith(`${repo.key}-`)).map((r) => r.slice(repo.key.length + 1)).find((x) => x !== String(issue) && itemOnMain(repo, x));
       fate = a.fate ?? (onMain(repo, { jobs: jobOfRun(last.id).map((e) => e.id), item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
     }
-    const why = await ports.drop(name, reason, fate);
+    const why = await ports.drop(name, reason, fate, answer);
     if (why) return no(a, why);
     writeRerun(name, a.do === "answer" ? reason : `The last run was dropped by the director: ${reason}`);
     const waits = a.do === "drop" && a.after && issue !== undefined ? await refusal(async () => verbs.edit(repo, issue, { after: a.after })) : null;
@@ -585,15 +587,17 @@ async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
   }
   if (a.do === "close" || a.do === "drop-issue") {
     if (chrisOwns(item)) return no(a, `${id} was filed by Chris, so closing or dropping it is his`);
+    // The close answers the Ask: a drop with the reason's second verb, a close with its first.
+    const answer = { subject: by, answer: actionsOn(reasonOf(c.ask.reason))[a.do === "drop-issue" ? 1 : 0] };
     if (a.do === "drop-issue") {
       const open = jobOf(c, n);
-      if (open) { const why = await ports.drop(open, `dropped by the director: ${a.reason}`); if (why) return no(a, why); }
-      const why = await refusal(async () => verbs.close(repo, n!, "drop", `director: dropped: ${a.reason}`));
+      if (open) { const why = await ports.drop(open, `dropped by the director: ${a.reason}`, undefined, answer); if (why) return no(a, why); }
+      const why = await refusal(async () => answering(refIn(item), answer, () => verbs.close(repo, n!, "drop", `director: dropped: ${a.reason}`)));
       return why ? no(a, why) : done(a, { action: "dropped", sub, note: a.reason });
     }
     const open = jobOf(c, n);
-    if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "met"); if (why) return no(a, why); }
-    const why = store.close(repo, n!, `director: closed: ${a.note}`, "done", "director");
+    if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "met", answer); if (why) return no(a, why); }
+    const why = answering(refIn(item), answer, () => store.close(repo, n!, `director: closed: ${a.note}`, "done", "director"));
     return why ? no(a, why) : done(a, { action: "done", sub, note: a.note });
   }
   if (a.do === "answer" || a.do === "rerun") {
@@ -607,7 +611,7 @@ async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
     // On the part-dropped Ask, any answer but the plan option closes the issue.
     if (ask?.reason === "part-dropped" && !keepsOpen(said) && chrisOwns(item)) return no(a, `${id} was filed by Chris, and this answer closes it`);
     const after = a.do === "answer" ? a.after ?? (option?.after ? [option.after] : undefined) : undefined;
-    const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}));
+    const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}, by, option?.label));
     return why ? no(a, why) : done(a, { action: a.do === "rerun" ? "reran" : "answered", sub, note: a.do === "rerun" ? a.note : option ? `${option.label}: ${a.note}` : a.note });
   }
   // edit-issue
@@ -667,10 +671,12 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
       const held = granted === "approve" && base.reason === "held-path" ? landRefusal(c, []) : null;
       const detail = granted === "approve" && base.reason === "held-path" ? heldLand(c, "Always") : undefined;
       if (held) why = held;
-      else if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true) : await ports.land(ref);
-      else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports); why = "refused" in o ? o.refused : null; }
+      else if (granted === "approve" && base.reason !== "review-held") why = base.reason === "core-change" ? await answerHeld(ref, true, "rule") : await ports.land(ref, "rule");
+      else { const o = await applyOne(c, granted === "approve" ? { do: "land" } : granted === "continue" ? { do: "rerun" } : { do: "answer", option: c.ask.recommended, note: "the recommended answer" }, ports, "rule"); why = "refused" in o ? o.refused : null; }
       if (why) return escalate(c, base, undefined, `a rule's ${granted} was refused: ${why}`);
-      logAlways(base.reason, base.ref, granted === "continue" ? "reran" : granted === "approve" && c.at === "run" ? "landed" : "answered", detail ? { detail } : {});
+      // The answer logs its own `answered`, by `rule`, as it clears the Ask.
+      if (granted === "continue") logAlways(base.reason, base.ref, "reran");
+      else if (granted === "approve" && c.at === "run") logAlways(base.reason, base.ref, "landed", detail ? { detail } : {});
       return { ...base, outcome: "decided", applied: [granted] };
     }
     // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to Chris with no second run.

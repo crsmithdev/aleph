@@ -492,6 +492,13 @@ test("the Automation page has no explaining aside; the controls panel holds the 
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
 });
 
+test("rules() credits a rule's answer to decided.rule, and not an Ask that went with no answer", () => {
+  const asks = ["issue.1", "issue.2"].map((issue) => ({ issue, reason: "held-path", set: ago(10), cleared: ago(9) }));
+  const answered = (object: string, detail: string) => ({ subject: "rule", action: "answered", object, detail, time: ago(9) }) as never;
+  const row = rules([answered("issue.1", "held-path: approve"), answered("issue.2", "held-path")], asks).find((x) => x.reason === "held-path")!;
+  expect(row.decided).toEqual({ rule: 1, director: 0, chris: 0 });
+});
+
 test("rules() has one row per Ask reason; renderRules is one table with a row per rule", () => {
   const r = rules().map((x) => x.reason);
   expect(r).toEqual(Object.keys(ASK_REASONS));
@@ -554,7 +561,7 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
     ...rec(5, [{ ...ask(6), reason: "run-cap" }]),
   ];
   const e = (n: number, subject: any, object: string, detail?: string): any => ({ time: at(n * 10), subject, object, action: "answered", detail });
-  const entries = [e(1, "rule", "issue.1"), e(2, "rule", "issue.2"), e(3, "director", "issue.3"), e(4, "human", "issue.4", "Chris: yes")];
+  const entries = [e(1, "rule", "issue.1", "question: resolve"), e(2, "rule", "issue.2", "question: resolve"), e(3, "director", "issue.3", "question: A"), e(4, "human", "issue.4", "Chris: yes")];
   const row: any = rules(entries, records, NOW + 3600_000).find((x) => x.reason === "question");
   expect(row.fired).toBe(5);
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });

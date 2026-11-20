@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 import { getJson, putJson } from "../../../lib/db.ts";
-import { mkdtempSync } from "node:fs";
+import { eventsOf } from "../../../lib/layout.ts";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as record from "../records/record.ts";
@@ -9,7 +10,7 @@ import { seed } from "../../job.testkit.ts";
 import * as issues from "../../../lib/todo.ts";
 import { readList } from "../../../lib/store.ts";
 import { takeOnTimeout } from "../transitions/tick.ts";
-import { mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
+import { ctx, mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 import { allRuns } from "../records/record.ts";
 import { setAsk, type Ask } from "./ask.ts";
 import { dueAt, issueAsks, readTimeouts, setTimeoutOf, timeoutStep } from "./timeout.ts";
@@ -163,4 +164,27 @@ test("takeOnTimeout's second verb on a waiting run drops the issue and the run; 
     expect(status()).toBe("dropped");
     expect(allRuns().at(-1)!.run.state).not.toBe("waiting");
   } finally { teardown(); }
+});
+
+test("takeOnTimeout's approve of a held-path run lands it, and the land answers the Ask as a rule", async () => {
+  setup();
+  // A `systemd-run` that does nothing, first on PATH: the land reaches its run record and starts no unit.
+  const bin = join(ctx.base, "bin"), saved = { PATH: process.env.PATH, fg: process.env.ALEPH_JOB_FOREGROUND, wait: process.env.ALEPH_PID_WAIT_MS };
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 0\n");
+  chmodSync(join(bin, "systemd-run"), 0o755);
+  Object.assign(process.env, { PATH: `${bin}:${saved.PATH}`, ALEPH_PID_WAIT_MS: "50", ALEPH_JOB_FOREGROUND: "0" });
+  try {
+    const id = newIssue(), a: Ask = { ...ask(), reason: "held-path" };
+    mk(`fac-${id}`, "build", "waiting", { ask: a });
+    const w = { key: `issue.${id}`, on: `issue.${id}`, name: `issue.${id}`, ask: a, run: true };
+    expect(await takeOnTimeout(w.name, "approve", w)).toBeNull();
+    expect(allRuns().at(-1)!.run.role).toBe("land");
+    expect(eventsOf(`issue.${id}`).filter((e) => e.action === "answered")).toMatchObject([{ subject: "rule", detail: "held-path: approve" }]);
+  } finally {
+    process.env.PATH = saved.PATH;
+    if (saved.fg === undefined) delete process.env.ALEPH_JOB_FOREGROUND; else process.env.ALEPH_JOB_FOREGROUND = saved.fg;
+    if (saved.wait === undefined) delete process.env.ALEPH_PID_WAIT_MS; else process.env.ALEPH_PID_WAIT_MS = saved.wait;
+    teardown();
+  }
 });

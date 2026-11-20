@@ -19,7 +19,7 @@ import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
 import { fetchingOnce, reader, type Reader } from "../../../lib/store.ts";
 import { status } from "../../../lib/todo.ts";
-import { allIssueStates, clearIssueState, getRun, keepingRuns, allRuns } from "../records/record.ts";
+import { allIssueStates, answering, clearIssueState, getRun, keepingRuns, allRuns } from "../records/record.ts";
 import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { directIfNew } from "./factory.ts";
@@ -198,17 +198,19 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
 export async function takeOnTimeout(name: string, action: string, w: Waiting): Promise<string | null> {
   const said = `timeout: no answer to the ${w.ask.reason} Ask; ${w.ask.effects?.find((e) => e.action === action)?.text ?? action}`;
   const verb = action.split(":")[0];
+  // The answer the timeout gives: the option's label of `resolve:<label>`, else the verb.
+  const answer = { subject: "rule", answer: action.startsWith("resolve:") ? action.slice("resolve:".length) : verb };
   if (verb === "approve") return refusal(() => land(name, { lander: "timeout" }, { output: "ignore" }));
-  if (w.run && verb === "resolve") return refusal(() => drop(name, { reason: `${said} (the question: "${w.ask.question}")`, quiet: true }));
+  if (w.run && verb === "resolve") return refusal(() => drop(name, { reason: `${said} (the question: "${w.ask.question}")`, quiet: true, answer }));
   // An issue's number is global: its repo is the one whose list holds it.
   const k = parseKey(w.key), id = k?.kind === "issue" ? k.n : undefined, lists = reader(), repo = id === undefined ? undefined : Object.values(loadRegistry()).find((r) => lists.item(r.key, id));
   if (!repo) return `no repo for ${w.key}`;
   // As `aleph issue drop`: the issue first, then its run, whose drop starts the dispatch.
-  if (verb === actionsOn(w.ask.reason)[1]) return refusal(async () => { verbs.close(repo, id!, "drop", said); if (w.run) await drop(name, { reason: said, quiet: true }); });
+  if (verb === actionsOn(w.ask.reason)[1]) return refusal(async () => { answering(w.key, answer, () => verbs.close(repo, id!, "drop", said)); if (w.run) await drop(name, { reason: said, quiet: true, answer }); });
   if (w.run || (verb !== "resolve" && verb !== "continue")) return `the timeout takes no ${action} on the ${w.ask.reason} Ask`;
   return refusal(async () => {
     const o = w.ask.options.find((x) => action === `resolve:${x.label}`);
-    const d = verbs.decide(repo, id!, o ? `timeout decided: ${o.label}: ${o.line}` : said, o?.after ? { after: [o.after] } : {});
+    const d = verbs.decide(repo, id!, o ? `timeout decided: ${o.label}: ${o.line}` : said, o?.after ? { after: [o.after] } : {}, "rule", o?.label ?? verb);
     intakeDetached(repo, d.item.id);
   });
 }

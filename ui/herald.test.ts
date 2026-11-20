@@ -106,3 +106,8 @@ test("an ID with a # that parseKey does not read as a job is not a job ID", () =
   const [r] = rows([e("2026-11-13T10:00:00Z", "aleph-7", "done", ["job.1#2"])], { attempts: { "job.1#2": "job.1#2" } });
   expect(r.key).toBe("issue:aleph-7");
 });
+
+test("an answered line says the Ask's reason and answer, then who answered, a rule as an Always rule", () => {
+  const [r] = rows([e("2026-11-13T10:05:00Z", "aleph-7", "landed", ["job.2"]), row({ at: "2026-11-13T10:00:00Z", by: "rule", subject: "aleph-7", action: "answered", note: "held-path: approve" })], { runs: { "job.2": "land" } });
+  expect(r.lines.map((l) => [l.label, plain(l.text)])).toContainEqual(["answered", "held-path: approve · by an Always rule"]);
+});

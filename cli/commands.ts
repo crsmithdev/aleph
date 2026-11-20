@@ -67,7 +67,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   run: { usage: "aleph run <name> [-- <command...>]", purpose: "run a command as a tracked plain job" },
   jobs: { usage: "aleph jobs [<name> [--resume]]", purpose: "list the open and recent jobs, show one, or open its latest session in claude" },
   recheck: { usage: "aleph recheck <name>", purpose: "run the checks of a job again" },
-  drop: { usage: "aleph drop <name> [<reason>] [--quiet] [--fate duplicate|met|manual]", purpose: "drop a job and its worktree" },
+  drop: { usage: "aleph drop <name> [<reason>] [--quiet] [--answered] [--fate duplicate|met|manual]", purpose: "drop a job and its worktree" },
   unit: { usage: "aleph unit <run-dir>", purpose: "run a started job's unit in the foreground" },
   land: { usage: "aleph land <name> [--checked]", purpose: "land a job's branch on main" },
   checked: { usage: "aleph checked <name>", purpose: "mark a landed job's check as done" },
@@ -391,7 +391,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       const given = ctx.flag("fate");
       if (ctx.rest.includes("--fate") && !FATES.includes(given as Fate)) refuse(`--fate takes one of ${FATES.join(", ")}`);
       const fate = (given as Fate | undefined) ?? (quiet ? undefined : "manual");
-      ctx.out(await drop(ctx.positional[0], { reason: ctx.positional.slice(1).join(" "), quiet, fate }));
+      ctx.out(await drop(ctx.positional[0], { reason: ctx.positional.slice(1).join(" "), quiet, fate, answered: ctx.rest.includes("--answered") }));
       break;
     }
     case "unit": await unit(resolve(ctx.positional[0])); break;

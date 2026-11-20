@@ -38,7 +38,7 @@ const answerAndRerun = post(async (body, { id }) => {
   if (!isWaiting(run.state) || may("chris", "resolve", run.ask)) fail(409, `${id} is ${run.state}, not waiting for an answer`);
   const said = typeof body.answer === "string" ? body.answer.trim() : "";
   if (!said) fail(400, "answer is required");
-  return aleph(["drop", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
+  return aleph(["drop", "--answered", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
 });
 
 /** Job `id`'s name and its issue as `<repo> <n>`; a 400 for a job with no issue. */

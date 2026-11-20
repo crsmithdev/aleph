@@ -293,7 +293,7 @@ const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
 /** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. A `reason` is a note on the issue. */
 const core = (approved: boolean) => post(async (b, params) => {
   const { repo, item } = target(params);
-  const why = await answerHeld(`${repo.key}-${item.id}`, approved);
+  const why = await answerHeld(`${repo.key}-${item.id}`, approved, "human");
   if (why) fail(422, why);
   const said = typeof b.reason === "string" ? b.reason.trim() : "";
   if (said) await aleph(["issue", "note", "--", repo.key, String(item.id), `${NOTE.said} ${said}`]);

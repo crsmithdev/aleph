@@ -89,6 +89,8 @@ function brief(e: EventRow, runs: Record<string, string>, all: EventRow[]): Line
   }
   // The group already names its issue, so a line whose sentence adds only the actor says who did it.
   const by = whoOf(e.subject, e.subject_role);
+  // An Ask's answer: its reason and answer, then who answered; with no answer, only the reason.
+  if (e.action === "answered" && e.detail && isIssue(tgt)) return line("answered", [factsOf(e) ? `${e.detail} · by ${e.subject === "rule" ? "an Always rule" : by}` : e.detail]);
   return line(stateWord(e), [...(isIssue(tgt) && (!rest.length || plain(rest) === by) ? [`by ${by}`] : rest.length ? rest : lead), ...more]);
 }
 

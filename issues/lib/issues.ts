@@ -16,7 +16,7 @@ import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
 import * as issues from "../../lib/todo.ts";
 import * as store from "../../lib/store.ts";
-import { always, askIfPartDropped, askOfItem, awaitsChris, clearAsk, decideAsk, DROP_WAITER, logAlways, refIn } from "../../jobs/lib/asks/ask.ts";
+import { always, answerDetail, answerOf, askIfPartDropped, askOfItem, clearAsk, decideAsk, DROP_WAITER, logAlways, refIn } from "../../jobs/lib/asks/ask.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { logEvent } from "../../lib/layout.ts";
 import { triage } from "./triage.ts";
@@ -104,7 +104,7 @@ function parkWaiter(repo: store.Place, waiter: issues.Issue, blocker: string): v
     return true;
   });
   if (!w) return;
-  if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: "the recommended answer" }); return; }
+  if (standing) { logAlways("blocker-dropped", ref, "answered", { detail: answerDetail("blocker-dropped", REMOVE_LINK) }); return; }
   record.setIssueAsk(ref, {
     reason: "blocker-dropped", question: `${blocker} was dropped, so this issue is parked. What now?`, recommended: REMOVE_LINK, why: [],
     options: [{ label: REMOVE_LINK, line: "Takes the dropped issue out of after and opens this issue." }, { label: DROP_WAITER, line: "Drops this issue too." }],
@@ -226,10 +226,10 @@ export function note(repo: store.Place, id: number | string, text: string, answe
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     const line = issues.note(i, text);
-    const answered = answer && awaitsChris(refIn(i));
-    return { id: i.id, ref: refIn(i), line, answered };
+    const ask = answer ? askOfItem(i) : null;
+    return { id: i.id, ref: refIn(i), line, answered: ask !== null, ask };
   })!;
-  if (w.value.answered) clearAsk(w.value.ref);
+  if (w.value.ask) clearAsk(w.value.ref, { subject: "human", answer: answerOf(w.value.ask, text) });
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
 }
 
@@ -237,20 +237,23 @@ export function note(repo: store.Place, id: number | string, text: string, answe
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
  * left to the intake that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
  * part-dropped Ask, the plan option sets `plan` and the close option closes the issue. A parked issue with the blocker-dropped Ask can be decided.
+ * `by` is who answered: the director and the timeout decide through here too, with the `option` they took.
  */
-export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {
+export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}, by = "human", option?: string) {
   checkFields(fields);
   text = text.trim() || refuse("give the decision");
-  const w = write(repo, `todo: item ${id}: decided`, (doc) => {
+  const was = show(repo, id), ask = askOfItem(was);
+  if (!ask || (issues.status(was) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${was.id} is not waiting for a decision`);
+  const answer = { subject: by, answer: option ?? answerOf(ask, text) };
+  // A write that closes the issue clears its Ask at the push: `answering` gives that clear the answer.
+  const w = record.answering(refIn(was), answer, () => write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
-    const ask = askOfItem(i);
-    if (!ask || (issues.status(i) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
     decideAsk(ask, doc, i, text, mainHead(repo));
     if (fields.after !== undefined) setKeys(i, "after", fields.after);
     return i;
-  })!;
-  clearAsk(refIn(w.value));
+  }))!;
+  clearAsk(refIn(w.value), answer);
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 

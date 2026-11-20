@@ -9,7 +9,7 @@ import * as issues from "../../lib/todo.ts";
 import { addPart } from "./parts.testkit.ts";
 import * as verbs from "./issues.ts";
 import { readEvents } from "../../lib/layout.ts";
-import { askOf, grant, refIn, revoke, setAsk, askOfItem } from "../../jobs/lib/asks/ask.ts";
+import { askOf, grant, PART_DROPPED, plainAsk, refIn, revoke, setAsk, askOfItem } from "../../jobs/lib/asks/ask.ts";
 
 setDefaultTimeout(30000);
 
@@ -262,6 +262,23 @@ test("deciding Remove the link opens the waiter without the link and clears the 
   expect(show(two.b)).toMatchObject({ status: "dropped", ask: null });
 });
 
+test("decide logs Chris's answer to the part-dropped Ask: its reason and the option the text names, also when the answer closes the issue", async () => {
+  for (const said of ["Keep open", "Close as done"]) {
+    const n = (await add("The parent")).result.added, ref = `issue.${n}`;
+    setAsk(ref, { ...plainAsk("part-dropped", "A sub-issue was dropped. What now?"), options: PART_DROPPED });
+    verbs.decide(proj(), n, said);
+    expect(readEvents().filter((e) => e.object === ref && e.action === "answered")).toMatchObject([{ subject: "human", detail: `part-dropped: ${said}` }]);
+  }
+});
+
+test("a decide whose write is refused leaves the Ask in place and logs no answer", async () => {
+  const n = (await add("A question")).result.added, ref = `issue.${n}`;
+  setAsk(ref, plainAsk("question", "Which page?"));
+  expect(() => verbs.decide(proj(), n, "page A", { after: ["issue.9999"] })).toThrow("names no issue");
+  expect(askOf(ref)?.question).toBe("Which page?");
+  expect(readEvents().filter((e) => e.object === ref && e.action === "answered")).toEqual([]);
+});
+
 test("an Always blocker-dropped grant scoped to the issue's project resolves the Ask; one for another project does not", async () => {
   expect(grant("blocker-dropped:elsewhere", "resolve")).toBeNull();
   try {
@@ -277,7 +294,7 @@ test("with Always blocker-dropped resolve, a dropped blocker opens the waiter wi
   try {
     const { a, b, ref } = await blockerDropped();
     expect(show(b)).toMatchObject({ status: "open", after: [], ask: null });
-    expect(readEvents().filter((e) => e.object === ref && e.subject === "rule").map((e) => e.action)).toEqual(["answered"]);
+    expect(readEvents().filter((e) => e.object === ref && e.subject === "rule").map((e) => [e.action, e.detail])).toEqual([["answered", "blocker-dropped: Remove the link"]]);
     expect(a).toBeGreaterThan(0);
   } finally { revoke("blocker-dropped"); }
 });

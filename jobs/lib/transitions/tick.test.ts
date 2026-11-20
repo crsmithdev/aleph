@@ -10,7 +10,7 @@ import { factoryRepos, vault } from "../../../tests/git.testkit.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, type Starts } from "./factory.ts";
 import { runDispatch } from "./dispatch.ts";
-import { readEvents } from "../../../lib/layout.ts";
+import { eventsOf, readEvents } from "../../../lib/layout.ts";
 import { sayText } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/pause.ts";
 import { setTick, tickRows, writeBaseline, writeStalls } from "../gates/tables.ts";
@@ -23,7 +23,7 @@ import { seed as seedJob } from "../../job.testkit.ts";
 import * as record from "../records/record.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { memory, use } from "../../../lib/langfuse.ts";
-import { due, maintainStep, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
+import { due, maintainStep, readTick, runTick, sweep, takeOnTimeout, type SweepPorts, type TickPorts } from "./tick.ts";
 import { ciStep } from "../gates/ci.ts";
 import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
 import { keepEnv } from "../../../tests/env.testkit.ts";
@@ -92,6 +92,25 @@ function recorder(): Starts & { taken: string[]; directors: number } {
   const r = { taken: [] as string[], directors: 0, intake: (rp: Repo, id: number) => { r.taken.push(`${rp.key}-${id}`); }, director: () => { r.directors++; } };
   return r;
 }
+
+/** The `answered` events of `issue.1`, as [subject, detail]. */
+const answers = () => eventsOf("issue.1", "answered").map((e) => [e.subject, e.detail]);
+
+test("takeOnTimeout's resolve:B on a waiting run's question Ask answers it by rule with the option's label", async () => {
+  seed([{ body: "a page" }]);
+  const ask = { ...plainAsk("question", "A or B?"), options: [{ label: "A", line: "page A" }, { label: "B", line: "Add a page" }] };
+  seedJob({ role: "build", name: "issue.1", repo: key, target: "issue.1", state: "waiting", ask });
+  expect(await takeOnTimeout("issue.1", "resolve:B", { key: "issue.1", on: "issue.1", name: "issue.1", ask, run: true })).toBeNull();
+  expect(answers()).toEqual([["rule", "question: B"]]);
+});
+
+test("takeOnTimeout's second verb on a waiting run answers its Ask once, by rule with the verb", async () => {
+  seed([{ body: "a page" }]);
+  const ask = plainAsk("review-held", "Land it?");
+  seedJob({ role: "build", name: "issue.1", repo: key, target: "issue.1", state: "waiting", ask });
+  expect(await takeOnTimeout("issue.1", "disapprove", { key: "issue.1", on: "issue.1", name: "issue.1", ask, run: true })).toBeNull();
+  expect(answers()).toEqual([["rule", "review-held: disapprove"]]);
+});
 
 const missedKeys = () => readEvents().filter((e) => e.action === "missed").map((e) => e.object);
 const missedText = () => readEvents().filter((e) => e.action === "missed").map((e) => sayText(e));

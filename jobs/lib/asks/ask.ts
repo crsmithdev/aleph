@@ -133,6 +133,13 @@ export const reasonOf = (given: string | undefined): string => (given && ASK_REA
 /** The detail of an Ask's `question` event: its reason, then its facts; throws on a reason the table does not name. */
 export const askDetail = (ask: Pick<Ask, "reason" | "facts">): string => detailOf("question", ask.reason, ask.facts, Object.keys(ASK_REASONS));
 
+/** The detail of an Ask's `answered` event: its reason, then the answer taken; the bare reason when it went with none. */
+export const answerDetail = (reason: string, answer?: string): string => detailOf("answered", reason, answer, Object.keys(ASK_REASONS));
+
+/** The answer Chris's text `said` gives `ask`: the label of the option it is or starts with as `label:`, else the reason's first verb. */
+export const answerOf = (ask: Ask, said: string): string =>
+  ask.options.find((o) => said === o.label || said.startsWith(`${o.label}:`))?.label ?? actionsOn(ask.reason)[0];
+
 /** An issue whose Ask waits for Chris: open, or parked with a core-change or blocker-dropped Ask. */
 export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
   !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && (ask.reason === "core-change" || ask.reason === "blocker-dropped")));
@@ -189,8 +196,8 @@ export const awaitsChris = (ref: string): boolean => askOf(ref) !== null;
 /** Put `ask` on the issue `ref`. */
 export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, ask);
 
-/** Take the issue's Ask off. */
-export const clearAsk = (ref: string): void => record.setIssueAsk(ref, null);
+/** Take the issue's Ask off, answered `by`. */
+export const clearAsk = (ref: string, by?: record.Answer): void => record.setIssueAsk(ref, null, by);
 
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
 /** `user` sends the Ask to Chris with no director run; every reason takes it. */

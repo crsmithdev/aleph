@@ -10,6 +10,7 @@ import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";
 import type { Run } from "../records/ledger.ts";
 import { seed, type Seed } from "../../job.testkit.ts";
+import { allRuns, makeJob, setState } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
@@ -95,8 +96,19 @@ export let dropped: { name: string; reason: string; fate?: string }[] = [];
 /** The full id of each issue a filing passed to the ports' `after`. */
 export let started: string[] = [];
 export const ports = (): Ports => ({
-  land: async (name) => { landed.push(name); return null; },
-  drop: async (name, reason, fate) => { dropped.push({ name, reason, fate }); return null; },
+  // The land row that land() writes: it clears a held run's Ask with the lander's answer.
+  land: async (name, lander) => {
+    landed.push(name);
+    const e = allRuns().findLast((x) => x.run.name === name)!;
+    makeJob({ role: "land", name, repo: key, target: e.run.target, prev: e.id, held: true, lander });
+    return null;
+  },
+  // As drop() does, the dropped run takes its Ask off with the answer.
+  drop: async (name, reason, fate, answer) => {
+    dropped.push({ name, reason, fate });
+    setState(allRuns().findLast((x) => x.run.name === name)!.id, "dropped", { ask: undefined }, answer);
+    return null;
+  },
   after: (repo, item) => { started.push(`${repo.key}-${item.id}`); },
 });
 

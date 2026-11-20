@@ -12,7 +12,7 @@
  */
 import { mkdirSync } from "node:fs";
 import type { Database } from "bun:sqlite";
-import { askDetail, reasonOf, type Ask } from "../asks/ask.ts";
+import { answerDetail, askDetail, reasonOf, type Ask } from "../asks/ask.ts";
 import type { CheckResult, Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
@@ -185,6 +185,9 @@ function logState(d: Database, x: RunRecord): void {
   catch (e) { console.error(`record: no event for ${x.id}: ${(e as Error).message}`); }
 }
 
+/** Who answers a run's Ask by starting the next job of its work, by a held land's lander or else the job's `by`: any other is a rule. */
+const ANSWERERS: Record<string, string> = { Chris: "human", human: "human", director: "director" };
+
 /** An Ask on a run decides the issue's Ask: a later build, land or recheck of the same work takes it off. */
 const decides = (role: Run["role"]): boolean => ["build", "land", "recheck"].includes(role);
 
@@ -203,7 +206,8 @@ export function makeJob(job: NewJob, fill?: (folder: string, id: string) => void
     // A build, land or recheck of the work that holds an Ask decides that Ask.
     const target = run.target ?? id;
     const held = (d.query("SELECT ask_job FROM issue_state WHERE issue = ? AND ask_job IS NOT NULL").get(target) as { ask_job: string } | null)?.ask_job;
-    if (held && run.prev && decides(run.role) && rootOf(d, held) === rootOf(d, id)) editState(d, target, (s) => { s.ask = null; s.askJob = undefined; });
+    const by = { subject: ANSWERERS[run.lander ?? run.by ?? ""] ?? "rule", answer: run.role === "land" ? "approve" : "continue" };
+    if (held && run.prev && decides(run.role) && rootOf(d, held) === rootOf(d, id)) editState(d, target, (s) => { s.ask = null; s.askJob = undefined; }, by);
     if (run.ask) takeAsk(d, id, target, run.ask);
     mkdirSync(folder, { recursive: true });
     fill?.(folder, id);
@@ -213,16 +217,16 @@ export function makeJob(job: NewJob, fill?: (folder: string, id: string) => void
   });
 }
 
-/** Keep a run's Ask in `issue_state`, not in the row. */
-function takeAsk(d: Database, id: string, target: string, ask: Ask | null): void {
+/** Keep a run's Ask in `issue_state`, not in the row; a null `ask` takes the run's Ask off, answered `by`. */
+function takeAsk(d: Database, id: string, target: string, ask: Ask | null, by?: Answer): void {
   editState(d, target, (s) => {
     if (ask) { s.ask = ask; s.askJob = id; return; }
     if (s.askJob === id) { s.ask = null; s.askJob = undefined; }
-  });
+  }, by);
 }
 
-/** Write the fields `change` into the row of `id`, inside a transaction. Returns the run as it was and as it is. */
-function write(d: Database, id: string, state: State | undefined, change: Change): { was: RunRecord; now: RunRecord } {
+/** Write the fields `change` into the row of `id`, inside a transaction; an Ask `change` takes off is answered `by`. Returns the run as it was and as it is. */
+function write(d: Database, id: string, state: State | undefined, change: Change, by?: Answer): { was: RunRecord; now: RunRecord } {
   const r = rowOf(d, id);
   if (!r) throw new Error(`no record holds the run ${id}`);
   const root = rootOf(d, id), was = fromRow(r, root, runAsks(d).get(id));
@@ -235,7 +239,7 @@ function write(d: Database, id: string, state: State | undefined, change: Change
   writes++;
   d.query("UPDATE jobs SET role=$role, by=$by, state=$state, project=$project, made=$made, started=$started, ended=$ended, model=$model, size=$size, cost=$cost, commit_sha=$commit_sha, target=$target, prev=$prev, retry_of=$retry_of, extra=$extra WHERE id=$id")
     .run(Object.fromEntries(Object.entries(row).map(([k, v]) => [`$${k}`, v])) as never);
-  if ("ask" in change) takeAsk(d, id, merged.target ?? id, ask ?? null);
+  if ("ask" in change) takeAsk(d, id, merged.target ?? id, ask ?? null, by);
   const owned = "ask" in change ? ask : was.ask;
   if (owned) merged.ask = owned;
   return { was, now: merged };
@@ -248,10 +252,10 @@ export function copyEnd(id: string): void {
   conn().query("UPDATE jobs SET pid = coalesce(?, pid), exit_code = coalesce(?, exit_code) WHERE id = ?").run(end.pid, end.exit, id);
 }
 
-/** One of the two writers of a job's state (the other is `endRun`): the state, the fields `fields` that go with it, and the event of the change, in one transaction. */
-export function setState(id: string, state: State, fields: Change = {}): RunRecord {
+/** One of the two writers of a job's state (the other is `endRun`): the state, the fields `fields` that go with it, and the event of the change, in one transaction. `by` answers an Ask `fields` takes off. */
+export function setState(id: string, state: State, fields: Change = {}, by?: Answer): RunRecord {
   return tx((d) => {
-    const { was, now } = write(d, id, state, fields);
+    const { was, now } = write(d, id, state, fields, by);
     if (was.state !== state) logState(d, now);
     return now;
   });
@@ -327,9 +331,9 @@ export const allIssueStates = (): Map<string, IssueState> =>
 
 /**
  * Read the state of `key`, apply `fn`, and write it: the row goes when nothing is live. A change of the Ask logs `answered`
- * for the Ask that went and `question` for the Ask that came, by `gate` on `key`.
+ * for the Ask that went, by `by` with its answer, else by `rule` with none; and `question` for the Ask that came, by `gate` on `key`.
  */
-function editState(d: Database, key: string, fn: (s: IssueState) => void): void {
+function editState(d: Database, key: string, fn: (s: IssueState) => void, by?: Answer): void {
   const r = d.query("SELECT * FROM issue_state WHERE issue = ?").get(key) as StateRow | null;
   const s = r ? stateOfRow(r) : { ask: null } as IssueState, had = s.ask ? `${s.askJob ?? ""}:${s.ask.reason}` : null, was = s.ask;
   fn(s);
@@ -340,26 +344,39 @@ function editState(d: Database, key: string, fn: (s: IssueState) => void): void 
   else d.query("INSERT INTO issue_state (issue, ask, ask_job, ci) VALUES (?, ?, ?, ?) ON CONFLICT (issue) DO UPDATE SET ask = excluded.ask, ask_job = excluded.ask_job, ci = excluded.ci")
     .run(key, s.ask ? JSON.stringify(s.ask) : null, s.askJob ?? null, s.ci ? JSON.stringify(s.ci) : null);
   if (has === had) return;
-  if (was) logEvent({ subject: "gate", action: "answered", object: key });
+  if (was) logEvent({ subject: by?.subject ?? "rule", action: "answered", object: key, detail: answerDetail(was.reason, by?.answer) });
   if (s.ask) logEvent({ subject: "gate", action: "question", object: key, detail: askDetail(s.ask) });
 }
 
+/** Who answered an Ask (`human`, `director` or `rule`) and the answer: an action of its reason or an option's label. */
+export interface Answer { subject: string; answer: string }
+
 /** Read-modify-write the state of `key` under the write lock. */
-export const editIssueState = (key: string, fn: (s: IssueState) => void): void => tx((d) => editState(d, key, fn));
+export const editIssueState = (key: string, fn: (s: IssueState) => void, by?: Answer): void => tx((d) => editState(d, key, fn, by));
 
 /** The Ask on the issue: the state's Ask when no run owns it. */
 export const issueAsk = (s: IssueState | null): Ask | null => (s && !s.askJob ? s.ask : null);
 
-/** Put the Ask on the issue `key`, or with null take the issue's Ask off. A run's Ask stays. */
-export function setIssueAsk(key: string, ask: Ask | null): void {
+/** Put the Ask on the issue `key`, or with null take the issue's Ask off, answered `by`. A run's Ask stays. */
+export function setIssueAsk(key: string, ask: Ask | null, by?: Answer): void {
   editIssueState(key, (s) => {
     if (ask) { s.ask = ask; s.askJob = undefined; return; }
     if (!s.askJob) s.ask = null;
-  });
+  }, by);
+}
+
+/** The decision `answering` writes: a close of its issue in that write answers the Ask by it. */
+let deciding: { key: string; by: Answer } | null = null;
+
+/** Run `fn`, a write that may close the issue `key`, so that the close logs `by` as the answer to its Ask. */
+export function answering<T>(key: string, by: Answer, fn: () => T): T {
+  deciding = { key, by };
+  try { return fn(); } finally { deciding = null; }
 }
 
 /** Delete the row of `key` when its issue closes: the Ask (the run's too) and the CI result. */
-export const clearIssueState = (key: string): void => editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.ci = undefined; });
+export const clearIssueState = (key: string): void =>
+  editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.ci = undefined; }, deciding?.key === key ? deciding.by : undefined);
 
 // The next step.
 

@@ -128,7 +128,7 @@ test("an Ask set on the issue and cleared logs a question and an answered event,
   expect(record.read("issue.32")).toBeNull();
   expect(mine("issue.32")).toEqual([
     { subject: "gate", action: "question", object: "issue.32", detail: "question" },
-    { subject: "gate", action: "answered", object: "issue.32", detail: null },
+    { subject: "rule", action: "answered", object: "issue.32", detail: "question" },
   ]);
 });
 
@@ -160,6 +160,21 @@ test("a land or build of the work that joins after the run an Ask is on clears t
   record.makeJob({ role: "land", name: "issue.7", target: "issue.7", prev: a.id });
   expect(record.read("issue.7")).toBeNull();
   expect(mine("issue.7").map((e) => e.action).filter((x) => x === "question" || x === "answered")).toEqual(["question", "answered"]);
+});
+
+test("a run's Ask is answered by the next job of its work: a land's lander approves, a recheck's starter continues, and no answered event is the gate's", () => {
+  const held = { ...ASK, reason: "held-path" };
+  const a = record.makeJob({ role: "build", name: "issue.9", target: "issue.9", state: "waiting", ask: held });
+  record.makeJob({ role: "land", name: "issue.9", target: "issue.9", prev: a.id, held: true, lander: "Chris" });
+  const b = record.makeJob({ role: "build", name: "issue.10", target: "issue.10", state: "waiting", ask: held });
+  record.makeJob({ role: "land", name: "issue.10", target: "issue.10", prev: b.id, held: true, lander: "director" });
+  const c = record.makeJob({ role: "build", name: "issue.11", target: "issue.11", state: "waiting", ask: ASK });
+  record.makeJob({ role: "recheck", name: "issue.11", target: "issue.11", prev: c.id, by: "human" });
+  expect(readEvents().filter((e) => e.action === "answered").map(({ subject, object, detail }) => ({ subject, object, detail }))).toEqual([
+    { subject: "human", object: "issue.9", detail: "held-path: approve" },
+    { subject: "director", object: "issue.10", detail: "held-path: approve" },
+    { subject: "human", object: "issue.11", detail: "question: continue" },
+  ]);
 });
 
 test("issue_state has no wait column, and a row with only a CI result reads back with it", () => {

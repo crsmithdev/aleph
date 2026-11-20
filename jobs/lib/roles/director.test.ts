@@ -10,6 +10,7 @@ import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { directorStep } from "../transitions/factory.ts";
+import { takeOnTimeout } from "../transitions/tick.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { setPaused } from "../gates/pause.ts";
 import { getRun, allRuns } from "../records/record.ts";
@@ -33,6 +34,7 @@ test("a decided Ask: code applies the answer, clears the Ask, and logs a Directo
   expect(asked(1)).toBeNull();
   expect(item(1).notes.at(-1)).toContain("director decided: A: page A. page A, as before");
   expect(events()).toContainEqual(expect.objectContaining({ subject: "director", object: `issue.1`, action: "answered", detail: "a question: A: page A, as before" }));
+  expect(events()).toContainEqual(expect.objectContaining({ subject: "director", object: `issue.1`, action: "answered", detail: "question: A" }));
   expect(readRecord()).toEqual([expect.objectContaining({ ref: `issue.1`, outcome: "decided" })]);
   const [r] = directorRuns();
   expect(r.run).toMatchObject({ state: "done", model: "claude-opus-5-5", target: `issue.1` });
@@ -136,7 +138,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(landed).toEqual([`issue.1`]);
   // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so Chris sees no buttons on a landing run.
   expect(getRun(jobOfFolder(folder))!.state).toBe("waiting");
-  expect(getRun(jobOfFolder(folder))!.ask!.situation ?? "").toBe("");
+  expect(getRun(jobOfFolder(folder))!.ask?.situation ?? "").toBe("");
 });
 
 test("an Ask of each reason with chrisOnly set goes on the escalation list with that why, whatever actions the director replies", async () => {
@@ -184,6 +186,18 @@ test("closing or dropping an issue Chris filed is refused; the same on an agent'
   expect(issues.status(item(2))).toBe("done");
 });
 
+test("the director's drop-issue and close of an issue's Ask log the answer by the director", async () => {
+  const answers = () => eventsOf("issue.1", "answered").map((e) => [e.subject, e.detail]);
+  fresh([{ title: "agent's", specced: true, source: "agent", ask: plain() }]);
+  reply([{ do: "drop-issue", reason: "stale" }]);
+  await direct();
+  expect(answers()).toEqual([["director", "question: dismiss"]]);
+  fresh([{ title: "agent's", specced: true, source: "agent", ask: plain() }]);
+  reply([{ do: "close", note: "met on main" }]);
+  await direct();
+  expect(answers()).toEqual([["director", "question: resolve"]]);
+});
+
 test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
   fresh([{ title: "q", ask: plain() }]);
   reply([...Array.from({ length: 10 }, (_, i) => ({ do: "note", text: `note ${i + 1}` })), { do: "rerun" }]);
@@ -214,6 +228,31 @@ test("a worker's question on a run: the director's answer drops the job with the
   expect(d).toMatchObject({ outcome: "decided" });
   expect(dropped).toEqual([{ name: `issue.1`, reason: `The director answered the worker's question "which module?": use ask.ts` }]);
   expect(eventsOf("issue.1", "reran").at(-1)?.detail).toBe(`The director answered the worker's question "which module?": use ask.ts`);
+});
+
+test("an answer to a run's Ask logs who answered and the option: the director's answer, and an Always rule's recommended one", async () => {
+  fresh([{ title: "specced", specced: true }]);
+  run({ name: "issue.1", target: "issue.1", ask: choice() });
+  reply([{ do: "answer", option: "B", note: "page B" }]);
+  await direct();
+  expect(eventsOf("issue.1", "answered").map((e) => [e.subject, e.detail])).toContainEqual(["director", "question: B"]);
+  fresh([{ title: "parent", specced: true }]);
+  run({ name: "issue.1", target: "issue.1", ask: { ...plainAsk("part-dropped", "A sub-issue was dropped. What now?"), options: PART_DROPPED, recommended: "Keep open" } });
+  expect(grant(`part-dropped:${key}`, "resolve")).toBeNull();
+  await direct();
+  expect(eventsOf("issue.1", "answered").map((e) => [e.subject, e.detail])).toEqual([["rule", "part-dropped: Keep open"]]);
+});
+
+test("an answer that picks B logs B, though B's line holds A's label: the director's and the timeout's", async () => {
+  const ask = { ...choice(), options: [{ label: "A", line: "page A" }, { label: "B", line: "Add a page" }] };
+  fresh([{ title: "product", ask }]);
+  reply([{ do: "answer", option: "B", note: "a new page" }]);
+  await direct();
+  setAsk("issue.1", ask);
+  expect(await takeOnTimeout("issue.1", "resolve:B", { key: "issue.1", on: "issue.1", name: "issue.1", ask, run: false })).toBeNull();
+  const answers = eventsOf("issue.1", "answered").map((e) => [e.subject, e.detail]);
+  expect(answers).toContainEqual(["director", "question: B"]);
+  expect(answers).toContainEqual(["rule", "question: B"]);
 });
 
 test("a director job on a run's Ask is a job on the run's issue and keeps its decision on its own row", async () => {
@@ -320,7 +359,7 @@ test("a held-path grant lands the run with no director run only in the run's pro
   await direct();
   expect(landed).toEqual(["issue.1"]);
   expect(directorRuns()).toHaveLength(0);
-  expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "landed", object: "issue.1" }));
+  expect(events()).toContainEqual(expect.objectContaining({ subject: "rule", action: "answered", object: "issue.1", detail: "held-path: approve" }));
 });
 
 test("a review Ask on a run that changes a path the repo holds is Chris's, as the unit's held rule decides", async () => {
@@ -346,6 +385,8 @@ test("a held-path grant lands a run that changes only the repo's held paths, wit
   const land = events().find((e) => e.subject === "rule" && e.action === "landed" && e.object === "issue.1");
   expect(land?.detail).toBe("held: path docs/a.md · approved by Always");
   expect(land?.detail).not.toContain("a protected file");
+  // The rule lands it, so the commit says `Held-by: rule`, not the director.
+  expect(allRuns().findLast((e) => e.run.role === "land")!.run.lander).toBe("rule");
 });
 
 test.each([
