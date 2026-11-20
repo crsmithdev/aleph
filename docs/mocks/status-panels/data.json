@@ -1,0 +1,647 @@
+{
+ "active": [
+  {
+   "at": "2026-11-14T08:00:00.000Z",
+   "intake": 34,
+   "queue": 21,
+   "running": 20,
+   "landed": 20
+  },
+  {
+   "at": "2026-11-15T08:00:00.000Z",
+   "intake": 100,
+   "queue": 140,
+   "running": 139,
+   "landed": 132
+  },
+  {
+   "at": "2026-11-16T08:00:00.000Z",
+   "intake": 28,
+   "queue": 34,
+   "running": 33,
+   "landed": 28
+  },
+  {
+   "at": "2026-11-17T08:00:00.000Z",
+   "intake": 20,
+   "queue": 47,
+   "running": 46,
+   "landed": 43
+  },
+  {
+   "at": "2026-11-18T08:00:00.000Z",
+   "intake": 18,
+   "queue": 24,
+   "running": 23,
+   "landed": 22
+  },
+  {
+   "at": "2026-11-19T08:00:00.000Z",
+   "intake": 24,
+   "queue": 30,
+   "running": 30,
+   "landed": 29
+  },
+  {
+   "at": "2026-11-20T08:00:00.000Z",
+   "intake": 5,
+   "queue": 0,
+   "running": 0,
+   "landed": 0
+  }
+ ],
+ "asks": {
+  "count": 70,
+  "manual": 18
+ },
+ "findings": 7,
+ "monitorDay": "2026-11-19",
+ "waiting": 0,
+ "issues": [
+  {
+   "id": 3199,
+   "repo": "aleph-tools",
+   "title": "Keep note editor text until a save succeeds",
+   "status": "open",
+   "priority": "medium",
+   "created": "2026-11-16"
+  },
+  {
+   "id": 3200,
+   "repo": "aleph-tools",
+   "title": "Rename the Terminal button to Send in the annotation list",
+   "status": "open",
+   "priority": "medium",
+   "created": "2026-11-16"
+  },
+  {
+   "id": 3201,
+   "repo": "aleph-tools",
+   "title": "Fit Send, Copy, Clear and Chat on one line in the list head",
+   "status": "open",
+   "priority": "medium",
+   "created": "2026-11-16"
+  },
+  {
+   "id": 3190,
+   "repo": "career-ops",
+   "title": "Match years-only CV dates in title and fact checks",
+   "status": "open",
+   "priority": "medium",
+   "created": "2026-11-16"
+  },
+  {
+   "id": 2881,
+   "repo": "aleph",
+   "title": "Port the hand-written UI markup to kit helpers",
+   "status": "parked",
+   "priority": "low",
+   "created": "2026-11-15"
+  },
+  {
+   "id": 3134,
+   "repo": "aleph-tools",
+   "title": "Open the note editor from a row of the annotation list",
+   "status": "open",
+   "priority": "medium",
+   "created": "2026-11-15"
+  },
+  {
+   "id": 2877,
+   "repo": "aleph",
+   "title": "Stop a paused job's live run and keep its branch",
+   "status": "parked",
+   "priority": "medium",
+   "created": "2026-11-14"
+  },
+  {
+   "id": 2117,
+   "repo": "aleph",
+   "title": "Measure tool result tokens a week after the tool denies",
+   "status": "parked",
+   "priority": "medium",
+   "created": "2026-11-13"
+  },
+  {
+   "id": 2139,
+   "repo": "aleph",
+   "title": "Rename the build run kind to implement in records and events",
+   "status": "parked",
+   "priority": "medium",
+   "created": "2026-11-13"
+  },
+  {
+   "id": 2140,
+   "repo": "aleph",
+   "title": "Chip an issue's finished run as ended, not closed",
+   "status": "parked",
+   "priority": "medium",
+   "created": "2026-11-13"
+  },
+  {
+   "id": 2061,
+   "repo": "aleph",
+   "title": "Run the tick's daily maintainer without --dry",
+   "status": "parked",
+   "priority": "medium",
+   "created": "2026-11-12"
+  }
+ ],
+ "filed7": 580,
+ "closed7": 697,
+ "stages": {
+  "intake": {
+   "stage": "intake",
+   "runs": 256,
+   "items": 231,
+   "unusable": 1,
+   "cost": 147.50079219999995,
+   "minutes": 0.8495,
+   "p90": 119.766
+  },
+  "build": {
+   "stage": "build",
+   "runs": 531,
+   "items": 289,
+   "unusable": 228,
+   "cost": 262.02029448274595,
+   "minutes": 6.643916666666667,
+   "p90": 1133.469
+  },
+  "review": {
+   "stage": "review",
+   "runs": 405,
+   "items": 279,
+   "unusable": 1,
+   "cost": 131.0750585,
+   "minutes": 0.7333333333333333,
+   "p90": 99
+  },
+  "recheck": {
+   "stage": "recheck",
+   "runs": 13,
+   "items": 10,
+   "unusable": 9,
+   "cost": null,
+   "minutes": 2.0094666666666665,
+   "p90": 278.796
+  },
+  "land": {
+   "stage": "land",
+   "runs": 314,
+   "items": 279,
+   "unusable": 40,
+   "cost": null,
+   "minutes": 0.7277666666666666,
+   "p90": 206.039
+  },
+  "director": {
+   "stage": "director",
+   "runs": 38,
+   "items": 27,
+   "unusable": 0,
+   "cost": 11.758141400000003,
+   "minutes": 0.7387333333333334,
+   "p90": 82.009
+  },
+  "monitor": {
+   "stage": "monitor",
+   "runs": 7,
+   "items": 7,
+   "unusable": 0,
+   "cost": 0.06804665841835833,
+   "minutes": 0.2561333333333333,
+   "p90": 18.651
+  }
+ },
+ "memory": {
+  "left": 50,
+  "bytes": 5950,
+  "budget": 6000,
+  "refused": 145,
+  "refusedNotes": 11,
+  "stale": 23,
+  "late": 2,
+  "total": 470,
+  "unoffered": 29,
+  "offered": 313,
+  "never": 83,
+  "writes7": 60,
+  "scopes": {
+   "aleph": {
+    "bytes": 5950,
+    "budget": 6000
+   },
+   "global": {
+    "bytes": 3237,
+    "budget": 6000
+   }
+  },
+  "trim": [
+   {
+    "title": "The Aleph Readme Is Plain And Impersonal",
+    "bytes": 205,
+    "offers": 0
+   },
+   {
+    "title": "Design Review Runs On The Design Page",
+    "bytes": 202,
+    "offers": 0
+   },
+   {
+    "title": "Worker-Low Runs On DeepSeek V4.1 Flash",
+    "bytes": 150,
+    "offers": 0
+   }
+  ],
+  "maintain": {
+   "last": "2026-11-20T11:00:33.836Z",
+   "result": "dry: 0 fixed, 0 adopt, 0 core, 0 handoffs, 23 decay, 653 overlap, 0 retry \u00b7 4 notes \u00b7 5 rechecked \u00b7 5 resolved \u00b7 0 aliased"
+  },
+  "offers30": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   129,
+   208,
+   171,
+   141,
+   96,
+   568,
+   158,
+   92,
+   37,
+   44,
+   0
+  ]
+ },
+ "classes": [
+  {
+   "key": "landed",
+   "lost": false,
+   "hours": 34.24,
+   "runs": 273
+  },
+  {
+   "key": "returned",
+   "lost": false,
+   "hours": 20.23,
+   "runs": 133
+  },
+  {
+   "key": "failed",
+   "lost": true,
+   "hours": 0.44,
+   "runs": 3
+  },
+  {
+   "key": "reran",
+   "lost": true,
+   "hours": 19.56,
+   "runs": 110
+  },
+  {
+   "key": "dropped",
+   "lost": true,
+   "hours": 5.64,
+   "runs": 25
+  }
+ ],
+ "figures": {
+  "lost": 0.3201,
+  "hours": 25.64,
+  "kept": 54.47,
+  "leadP50": 1536,
+  "leadP90": 19676,
+  "asks": 70,
+  "landed": 273,
+  "firstPass": 0.6557,
+  "waitShare": 0.0332,
+  "followups": 305,
+  "filed": 508
+ },
+ "queue": {
+  "count": 289,
+  "p50": 20,
+  "p90": 5960,
+  "hist": [
+   167,
+   22,
+   33,
+   14,
+   9,
+   38,
+   6
+  ],
+  "worst": 431370
+ },
+ "firstRun": {
+  "runs": 189,
+  "of": 273
+ },
+ "flowDays": [
+  {
+   "day": "2026-11-14",
+   "filed": 38,
+   "closed": 31
+  },
+  {
+   "day": "2026-11-15",
+   "filed": 274,
+   "closed": 290
+  },
+  {
+   "day": "2026-11-16",
+   "filed": 53,
+   "closed": 52
+  },
+  {
+   "day": "2026-11-17",
+   "filed": 63,
+   "closed": 65
+  },
+  {
+   "day": "2026-11-18",
+   "filed": 36,
+   "closed": 28
+  },
+  {
+   "day": "2026-11-19",
+   "filed": 44,
+   "closed": 171
+  },
+  {
+   "day": "2026-11-20",
+   "filed": 0,
+   "closed": 0
+  }
+ ],
+ "lostCauses": [
+  {
+   "name": "Stalled or timed out",
+   "hours": 8.91
+  },
+  {
+   "name": "Checks failed",
+   "hours": 5.88
+  },
+  {
+   "name": "Reviewer sent back",
+   "hours": 4.73
+  },
+  {
+   "name": "Restart loop",
+   "hours": 2.28
+  },
+  {
+   "name": "Passed, not landed",
+   "hours": 1.5
+  },
+  {
+   "name": "Needed the user",
+   "hours": 1.4
+  },
+  {
+   "name": "No commit",
+   "hours": 0.48
+  },
+  {
+   "name": "Work on main from another issue",
+   "hours": 0.44
+  },
+  {
+   "name": "Other",
+   "hours": 0.03
+  }
+ ],
+ "week": {
+  "filed": 573,
+  "intake": 231,
+  "landed": 273,
+  "done": 422,
+  "dropped": 270,
+  "open": 5,
+  "parked": 6,
+  "errored": 0,
+  "flowFiled": 508
+ },
+ "gates": {
+  "holds": 240,
+  "days": 7,
+  "out": {
+   "held up": 91,
+   "caught": 17,
+   "handoff": 29,
+   "false": 6,
+   "no reply": 16,
+   "no effect": 81
+  },
+  "by": [
+   {
+    "gate": "one way",
+    "holds": 106,
+    "useful": 4,
+    "held": 19,
+    "wasted": 83
+   },
+   {
+    "gate": "verify gate",
+    "holds": 106,
+    "useful": 21,
+    "held": 72,
+    "wasted": 13
+   },
+   {
+    "gate": "context gate",
+    "holds": 28,
+    "useful": 21,
+    "held": 0,
+    "wasted": 7
+   }
+  ],
+  "errors": 139
+ },
+ "issueHolds": {
+  "held": 119,
+  "gates": [
+   {
+    "gate": "paused",
+    "records": 0,
+    "issues": 0,
+    "hours": 0,
+    "stops": false
+   },
+   {
+    "gate": "waiting",
+    "records": 0,
+    "issues": 0,
+    "hours": 0,
+    "stops": false
+   },
+   {
+    "gate": "red",
+    "records": 8,
+    "issues": 8,
+    "hours": 1.2,
+    "stops": true
+   },
+   {
+    "gate": "done",
+    "records": 9,
+    "issues": 9,
+    "hours": 0,
+    "stops": false
+   },
+   {
+    "gate": "after",
+    "records": 95,
+    "issues": 77,
+    "hours": 133.1,
+    "stops": true
+   },
+   {
+    "gate": "job",
+    "records": 501,
+    "issues": 190,
+    "hours": 48.2,
+    "stops": false
+   },
+   {
+    "gate": "full",
+    "records": 55,
+    "issues": 40,
+    "hours": 5.4,
+    "stops": true
+   },
+   {
+    "gate": "file",
+    "records": 7,
+    "issues": 3,
+    "hours": 0.5,
+    "stops": true
+   },
+   {
+    "gate": "credit",
+    "records": 0,
+    "issues": 0,
+    "hours": 0,
+    "stops": false
+   },
+   {
+    "gate": "ask",
+    "records": 0,
+    "issues": 0,
+    "hours": 0,
+    "stops": false
+   }
+  ]
+ },
+ "phases": {
+  "intake": {
+   "count": 183,
+   "p50": 80,
+   "p90": 78938
+  },
+  "queue": {
+   "count": 289,
+   "p50": 20,
+   "p90": 5960
+  },
+  "implement": {
+   "count": 289,
+   "p50": 552,
+   "p90": 1632
+  },
+  "land": {
+   "count": 274,
+   "p50": 52,
+   "p90": 262
+  },
+  "lead": {
+   "count": 274,
+   "p50": 1536,
+   "p90": 19676
+  }
+ },
+ "speedDays": [
+  {
+   "day": "2026-11-14",
+   "n": 20,
+   "intake": 1.32,
+   "queue": 0.14,
+   "implement": 10.87,
+   "land": 0.82,
+   "lead": 64.67
+  },
+  {
+   "day": "2026-11-15",
+   "n": 132,
+   "intake": 1.44,
+   "queue": 0.33,
+   "implement": 7.45,
+   "land": 0.74,
+   "lead": 23.17
+  },
+  {
+   "day": "2026-11-16",
+   "n": 28,
+   "intake": 1.62,
+   "queue": 0.26,
+   "implement": 10.24,
+   "land": 1.25,
+   "lead": 24.95
+  },
+  {
+   "day": "2026-11-17",
+   "n": 43,
+   "intake": 1.11,
+   "queue": 76.53,
+   "implement": 16.2,
+   "land": 1.41,
+   "lead": 117.1
+  },
+  {
+   "day": "2026-11-18",
+   "n": 22,
+   "intake": 1.43,
+   "queue": 0.4,
+   "implement": 8.46,
+   "land": 1.38,
+   "lead": 14.59
+  },
+  {
+   "day": "2026-11-19",
+   "n": 29,
+   "intake": 0.96,
+   "queue": 0.32,
+   "implement": 10.3,
+   "land": 1.0,
+   "lead": 18.05
+  },
+  {
+   "day": "2026-11-20",
+   "n": 0,
+   "intake": 0,
+   "queue": 0,
+   "implement": 0,
+   "land": 0,
+   "lead": 0
+  }
+ ]
+}
