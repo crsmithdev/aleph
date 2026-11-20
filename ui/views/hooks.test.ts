@@ -55,4 +55,11 @@ describe("the Hooks page", () => {
     const html = renderHook({ event: "Stop", name: "context gate", matcher: "", file: "hooks/context-gate.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
     expect(html.split(empty()).length - 1).toBe(2);
   });
+
+  test("a hook's page head shows its name with no count, its event in the crumb and facts", () => {
+    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "hooks/one-way.ts", mode: "", timeout: 10, holds: [], byKind: [], errors: [] }, new URLSearchParams());
+    expect(html).toContain('<header class="ph"><h1>one way</h1></header>');
+    expect(html).toContain("<span>Stop</span> / <span>one way</span></nav>");
+    expect(html).toContain("<dt>Event</dt><dd>Stop</dd>");
+  });
 });
