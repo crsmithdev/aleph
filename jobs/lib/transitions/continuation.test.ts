@@ -52,8 +52,7 @@ describe("next step after a build or recheck", () => {
     expect(nextStep(run({ state: "failed" }), true)).toBeUndefined();
   });
 
-  test("a doc-claims fail is rechecked; the other failures go back to the worker", () => {
-    expect(nextStep(run({ state: "returned", failed: "doc-claims" }), false)).toBe("recheck");
+  test("a failed build goes back to the worker", () => {
     for (const failed of ["keep-gate", "tests", "review"]) expect(nextStep(run({ state: "returned", failed }), false)).toBe("worker");
   });
 
@@ -200,14 +199,6 @@ describe("the worker brief", () => {
     const fresh = brief(second.id, second.run, repo);
     expect(fresh).toContain("## Spec\n\n# Spec");
     expect(fresh).toContain("## Previous run: build, failed");
-  });
-
-  test("an issue's brief has the worker search past work for its title; a spec with no title gets no search", () => {
-    const jp = jobWith({}, { "spec.md": "# Retry the land push\n\n## Goal\n\nx\n" });
-    const b = brief(jp.id, run({ job: jp.id }), repo);
-    expect(b).toContain("## Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Retry the land push'` as it stands, with no pipe.");
-    const jq = jobWith({}, { "spec.md": "## Goal\n\nx\n" });
-    expect(brief(jq.id, run({ job: jq.id }), repo)).not.toContain("## Past work");
   });
 
   test("a merge run's brief lets the worker update the branch's change where main moved what it cites", () => {

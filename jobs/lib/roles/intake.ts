@@ -9,7 +9,6 @@
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
-import { pastWork } from "../transitions/continuation.ts";
 import * as issues from "../../../lib/todo.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
 import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setAfter, setIntake, setPlan, sourceOf } from "../../../lib/todo.ts";
@@ -305,10 +304,6 @@ ${openIssues(repo, item)}
 
 ${mainSince(repo, item)}
 
-# Past work
-
-${pastWork(item.title)}
-
 # Your reply
 
 One "verdict", with a "reason": one sentence that says why.
@@ -333,7 +328,6 @@ A builder builds it alone, and nobody answers questions during the run. The requ
 - "goal": the behaviour in at most 3 sentences. No implementation design. Write no claim about current code that you did not read: open each file, function and command you name.
 - "edit_surface": each file the run may change, as a path from the repo's root. A path that is not on main must have "new": true.
 - "oracle": each check that tells it is done, as a command in backticks typed as in a shell (such as \`bun test path/to/x.test.ts\` for one test file), and the behaviour it observes. Name only commands and test files that exist, or a test file the Edit surface makes. There is no \`aleph check\` command. The factory runs the repo's checks itself, so do not ask for a new committed test: a bug fix gets one regression test at the lowest layer that shows the bug, and new lasting behaviour gets a row in its module's existing test file. A check counts when an assertion observes the changed output, state or error: not a read of the source text, "does not throw", a snapshot alone, or a manual look. Each Oracle item checks code inside the Edit surface.
-- Check each Oracle clause against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec: a clause that counts text the Goal leaves out, or a clause that needs a name the code does not have.
 - No vague word without a measure ("fast", "robust", "handles errors"), no placeholder (TODO, ???, <...>), and no two clauses that cannot both be true.
 
 # Parts

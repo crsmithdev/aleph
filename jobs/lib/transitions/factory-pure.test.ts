@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList, writeList } from "../../../lib/store.ts";
 import * as issues from "../../../lib/todo.ts";
@@ -24,20 +24,6 @@ afterEach(() => { setSystemTime(); teardown(); });
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 
 
-test("report lists each new episode page once, and nothing without an episodes folder", () => {
-  const dir = join(ctx.base, "factory", "episodes");
-  rmSync(dir, { recursive: true, force: true });
-  expect(report()).not.toContain("episodes:");
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "fac-1 Ship it.md"), "x\n");
-  writeFileSync(join(dir, "fac-2 Other.md"), "x\n");
-  const first = report();
-  expect(first).toContain("episodes:\n  fac-1 Ship it\n  fac-2 Other");
-  const second = report();
-  expect(second).not.toContain("fac-1 Ship it");
-  expect(second).not.toContain("fac-2 Other");
-});
-
 test("the report groups each unshown run under its report lane, in the order of the naming standard", () => {
   mk("fac-11", "build", "landed", { shown: false });
   mk("fac-12", "build", "waiting", { shown: false });
@@ -60,20 +46,6 @@ test("a peek lists the unshown runs and leaves them unshown", () => {
   expect(report(now, true)).toContain("i14 landed");
   expect(report()).toContain("i14 landed");
   expect(report()).not.toContain("i14 landed");
-});
-
-test("a deleted episode page leaves the seen file, and a page still on disk is not listed again", () => {
-  const dir = join(ctx.base, "factory", "episodes");
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "fac-3 Old.md"), "x\n");
-  writeFileSync(join(dir, "fac-4 Kept.md"), "x\n");
-  report();
-  rmSync(join(dir, "fac-3 Old.md"));
-  expect(report()).not.toContain("episodes:");
-  const seen = readFileSync(join(ctx.base, "factory", "episodes-seen"), "utf8");
-  expect(seen).not.toContain("fac-3 Old");
-  expect(seen).toContain("fac-4 Kept");
 });
 
 test("a dispatch with checks, three factory repos and no open issues fetches the work store at most twice", async () => {

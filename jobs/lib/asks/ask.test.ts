@@ -98,7 +98,7 @@ test("waitOf reads a run with no ask as a question", () => {
 
 test("actionsOn gives each reason the one pair of verbs of its card, on a run and on an issue", () => {
   const pair = (reasons: string[], verbs: string[]) => { for (const r of reasons) expect([r, actionsOn(r)]).toEqual([r, verbs]); };
-  pair(["held-path", "review-held", "core-change", "proposal-check", "proposal-claude-md", "proposal-skill"], ["approve", "disapprove"]);
+  pair(["held-path", "review-held", "core-change"], ["approve", "disapprove"]);
   pair(["question", "rescue", "part-dropped", "blocker-dropped"], ["resolve", "dismiss"]);
   pair(["no-commit", "intake-failed", "run-cap"], ["continue", "discontinue"]);
     expect(ASK_REASONS.rescue.card).toBe("decide");
@@ -131,9 +131,8 @@ test("a grant of reason:project holds for that project only, and a bare grant ho
   expect(always("held-path", "other")?.action).toBe("approve");
   expect(grant("held-path", "land")).toContain("has no action land");
   expect(grant("held-path:aleph", "land")).toContain("has no action land");
-  expect(grant("proposal-skill:aleph", "approve")).toBeNull();
-  expect(always("proposal-skill:aleph")?.action).toBe("approve");
-  expect(grant("proposal-skill:aleph", "user")).not.toBeNull();
+  expect(grant("core-change:aleph", "approve")).toBeNull();
+  expect(always("core-change:aleph")?.action).toBe("approve");
   expect(grant("nope:aleph", "approve")).toContain("unknown reason nope:aleph");
 });
 
@@ -146,10 +145,10 @@ test("a revoke of reason:project removes only that grant and logs changed on set
 });
 
 test("grant refuses the old words, and readAlways reads a stored recommended as resolve and retry as continue", () => {
-  for (const [reason, old] of [["question", "deny"], ["question", "recommended"], ["intake-failed", "retry"], ["no-commit", "rerun"], ["part-dropped", "close"], ["proposal-check", "decline"]]) expect([reason, grant(reason, old)]).toEqual([reason, expect.stringContaining(`has no action ${old}`)]);
+  for (const [reason, old] of [["question", "deny"], ["question", "recommended"], ["intake-failed", "retry"], ["no-commit", "rerun"], ["part-dropped", "close"]]) expect([reason, grant(reason, old)]).toEqual([reason, expect.stringContaining(`has no action ${old}`)]);
   const at = "2026-11-04T12:00:00Z";
-  putJson("settings", "always", { question: { action: "recommended", at }, "intake-failed": { action: "retry", at }, "proposal-check:aleph": { action: "approve", at }, rescue: { action: "user", at } });
-  expect(readAlways()).toEqual({ question: { action: "resolve", at }, "intake-failed": { action: "continue", at }, "proposal-check:aleph": { action: "approve", at }, rescue: { action: "user", at } });
+  putJson("settings", "always", { question: { action: "recommended", at }, "intake-failed": { action: "retry", at }, "core-change:aleph": { action: "approve", at }, rescue: { action: "user", at } });
+  expect(readAlways()).toEqual({ question: { action: "resolve", at }, "intake-failed": { action: "continue", at }, "core-change:aleph": { action: "approve", at }, rescue: { action: "user", at } });
   expect(grant("blocker-dropped", "resolve")).toBeNull();
   expect(getJson("settings", "always", {})).toMatchObject({ question: { action: "resolve" }, "intake-failed": { action: "continue" } });
 });
@@ -163,21 +162,17 @@ test("grant takes only the verbs some code acts on, and refuses the other verb o
   for (const [reason, r] of Object.entries(ASK_REASONS)) { expect([reason, grant(reason, r.always)]).toEqual([reason, null]); expect(always(reason)?.action).toBe(r.always); }
   expect(grant("intake-failed", "discontinue")).toBeNull();
   expect(always("intake-failed")?.action).toBe("discontinue");
-  expect(grant("proposal-skill:aleph", "disapprove")).toBeNull();
-  expect(always("proposal-skill:aleph")?.action).toBe("disapprove");
   expect(grant("question", "user")).toBeNull();
   expect(always("question")?.action).toBe("user");
 });
 
-test("user is granted on any reason but a memory proposal, and a stored grant stays", () => {
+test("user is granted on any reason, and a stored grant stays", () => {
   expect(grant("question", "user")).toBeNull();
   expect(always("question")?.action).toBe("user");
   expect(readAlways().question?.action).toBe("user");
   expect(grant("review", "user")).toContain("unknown reason review;");
   expect(grant("review-held", "user")).toBeNull();
   revoke("review-held");
-  expect(grant("proposal-skill", "user")).not.toBeNull();
-  expect(grant("proposal-skill:aleph", "user")).not.toBeNull();
   revoke("question");
   expect(always("question")).toBeNull();
 });

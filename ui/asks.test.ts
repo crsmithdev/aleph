@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { asks, errorBlocker } from "./asks.ts";
 import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
-import type { Lesson } from "../jobs/lib/learning/corrections.ts";
 import { withEnv } from "./server.testkit.ts";
 import { reasonText } from "./asks.ts";
 import type { Job, NewIssue } from "./state.ts";
@@ -15,13 +14,11 @@ const run = (reason: string, extra: Partial<Job> = {}): Job => ({
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
   ...(STORE ? { ask: { reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
-const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/write-tests/SKILL.md" } as const;
-const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], ...(STORE && { situation: STORE.situation, effects: STORE.effects, recommend: STORE.recommend }) });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it.";
 
-const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
-const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
+const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] });
+const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues });
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
@@ -34,9 +31,6 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
   "blocker-dropped": () => ofIssues(issue({ status: "parked", reason: "blocker-dropped", decision: { ...decision, options: [{ label: "Remove the link", line: "open" }, { label: "Drop the waiter", line: "drop" }], recommended: "Remove the link" }, question: "issue.9 was dropped, so this issue is parked. What now?" })),
   "core-change": () => ofIssues(issue({ reason: "core-change", question: "Apply the archive verdict to the core note X?" })),
-  "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
-  "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
-  "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
 };
 
 describe("asks", () => {
@@ -107,8 +101,6 @@ describe("asks", () => {
         { act: "approve", path: "/api/issues/aleph-387/approve", body: {} },
         { act: "disapprove", path: "/api/issues/aleph-387/decline", body: { reason: "" } },
       ]);
-      expect(req("proposal-check").map((a) => a.path)).toEqual(["/api/proposals/L1/approve", "/api/proposals/L1/decline"]);
-      expect(req("proposal-check").map((a) => a.act)).toEqual(["approve", "disapprove"]);
     } finally { STORE = undefined; }
   });
 
@@ -148,22 +140,9 @@ describe("asks", () => {
     try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("question"); } finally { STORE = undefined; }
   });
 
-  test("the approve of a proposal, with and without a lesson, reopens the issue and says neither File nor goal", () => {
+  test("the continue of no-commit and run-cap says no goal", () => {
     STORE = { situation: "Stored situation." };
     try {
-      const approves = [
-        ...CASES["proposal-check"]()[0].actions.filter((a) => a.act === "approve"),
-        ...ofIssues(issue({ reason: "proposal-check", question: "q" }))[0].actions.filter((a) => a.act === "approve"),
-      ];
-      expect(approves.length).toBe(2);
-      for (const a of approves) {
-        expect(`${a.label} ${a.hint}`).toMatch(/[Rr]eopen/);
-        expect(`${a.label} ${a.hint}`).not.toMatch(/File|files|goal/);
-      }
-      const always = CASES["proposal-check"]()[0].always!;
-      expect(always.hint).toMatch(/[Rr]eopen/);
-      expect(always.hint).not.toMatch(/File|files|goal/);
-      expect(always.hint).toContain("aleph always revoke");
       const continues = [
         ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "continue"),
         ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "continue"),
@@ -221,17 +200,6 @@ describe("errored rows", () => {
     expect(errorBlocker({ ...errored, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
     expect(errorBlocker({ ...errored, reason: "the fix is in a143077" }, undefined, part)).toBeNull();
   });
-});
-
-test("a claude-md proposal for identity/AGENT.md names AGENT.md in its texts and has its own standing key", () => {
-  STORE = { situation: "Stored situation." };
-  try {
-    const [card] = asks({ runs: [], issues: [] }, [{ ...lesson("claude-md"), target: "identity/AGENT.md" }]);
-    expect(card.problem).toStartWith("The correction memory proposes a line in identity/AGENT.md:");
-    expect(card.actions.map((a) => a.label)).toEqual(["Reopen the issue: Add a line to identity/AGENT.md", "Leave identity/AGENT.md unchanged"]);
-    expect(card.always!.reason).toBe("proposal-claude-md:identity/AGENT.md");
-    expect(card.always!.reason).not.toBe("proposal-claude-md:global");
-  } finally { STORE = undefined; }
 });
 
 test("run-cap and intake-failed texts read the settings", () => {

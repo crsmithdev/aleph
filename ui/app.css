@@ -947,11 +947,6 @@ tr.mrow:focus-visible { outline-offset: -2px; }
 .mstrip { display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); align-items: center; padding: var(--sp-10) var(--sp-14); margin: 0 0 var(--gap-in); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-lift); font-size: var(--fs-sm); }
 .mstrip a { color: var(--ink); text-decoration: none; }
 .mstrip a:hover { text-decoration: underline; }
-/* The open lessons of Automation's Memory Jobs: the rule, its age, Approve and Decline. */
-.lessons { margin: var(--sp-8) 0 0; padding: 0; list-style: none; }
-.lessons .lesson { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--sp-12); align-items: center; padding: var(--sp-8) 0; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
-.lessons .lesson .actions { margin: 0; }
-@media (max-width: 720px) { .lessons .lesson { grid-template-columns: minmax(0, 1fr); } }
 .ins .mtype { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
 .ins .mreach { margin-top: var(--sp-10); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-ctl); background: var(--sunk); }
 .ins .actions .field { flex: 1; min-width: 140px; }

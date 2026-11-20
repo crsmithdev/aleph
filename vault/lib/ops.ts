@@ -2,8 +2,7 @@
  * The ops of `aleph memory`, each a function of the vault root with typed arguments. An op returns its value or a
  * refusal as data and prints nothing; vault/lib/cli.ts parses argv and prints.
  */
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { copyFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
@@ -19,8 +18,6 @@ import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, isVault, lintVault, linkTargets, loadVault, loadWiki, noteRead, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
 import { today } from "../../lib/day.ts";
-import { layout } from "../../lib/layout.ts";
-import { logUse } from "../../lib/episode-use.ts";
 import { errText } from "../../lib/errtext.ts";
 
 /** The text of a finding as `aleph memory` prints it, after `refuse` or `warn`. */
@@ -248,23 +245,10 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
 const TOP = 10;
 
 export interface Hit { title: string; path: string; rank: number; scope: string; frontmatter: Note["fm"] }
-interface RecallArgs { query: string; scope?: string; episodes?: boolean; unlogged?: boolean }
+interface RecallArgs { query: string; scope?: string; unlogged?: boolean }
 
-export const recall = (root: string, { query: q, scope, episodes, unlogged = false }: RecallArgs) => op<Hit[]>(async (w) => {
+export const recall = (root: string, { query: q, scope, unlogged = false }: RecallArgs) => op<Hit[]>(async (w) => {
   requireVault(root);
-  // The episode pages are the factory's, not the vault's: they get a throwaway index and no read log.
-  // They are searched alone, because a vault match list runs to thousands of lines and hides them.
-  if (episodes) {
-    const dir = join(layout().factory, "episodes");
-    const pages = (await loadVault(dir)).filter((n) => scope === undefined || String(n.fm.scope) === scope);
-    const tmp = mkdtempSync(join(tmpdir(), "aleph-episodes-"));
-    try {
-      const ranked = q ? recallNotes(tmp, pages, q, scope).map(({ note, rank }) => ({ n: note, r: rank })) : pages.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
-      const shown = q ? ranked.slice(0, TOP) : ranked;
-      if (q) logUse("shown", shown.map(({ n }) => n.title));
-      return shown.map(({ n, r }) => ({ title: n.title, path: join(dir, n.rel), rank: r, scope: String(n.fm.scope), frontmatter: n.fm }));
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
-  }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.

@@ -32,7 +32,6 @@ import { start } from "../transitions/kept.ts";
 import { agentEnv } from "./agent-run.ts";
 import { reviewer } from "./review.ts";
 import { fileFollowups } from "./followups.ts";
-import { docClaims } from "./docclaims.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, runEnvFile } from "../infra/settings.ts";
 import { jobOfFolder, logStream, logTo, readSection, runFile } from "../records/run-files.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -312,7 +311,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const done = jobRecord.roundsOf(run.target ?? id);
   if (done) facts.round = done;
   const earlier = earlierRounds(jobOfRun(id), id);
-  return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, docClaims: () => docClaims(folder, reply.summary), env, ...ports }));
+  return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, env, ...ports }));
 }
 
 /**

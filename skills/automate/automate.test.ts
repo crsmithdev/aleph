@@ -71,7 +71,6 @@ test("signals and findings count the first prompt after a vault note read as mis
     user("a", "2026-11-10T00:00:00Z", "first, before any read"),
     tool("a", "2026-11-10T00:00:01Z", "t1", "Read", { file_path: note }),
     user("a", "2026-11-10T00:00:02Z", "no, docker does not run natively"),
-    ...recall("t2", "aleph memory recall --episodes docker"),
     ...recall("t3", 'aleph memory recall "docker"'),
     user("a", "2026-11-10T00:00:05Z", "that is wrong"),
     user("a", "2026-11-10T00:00:06Z", "second prompt after the notes"),

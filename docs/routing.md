@@ -17,7 +17,7 @@ This page states which model or command does each piece of work, with which tool
 
 The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `jobs/lib/roles/judge.ts`.
 
-The maintainer's daily compile starts one read-only `claude -p` run (role model `maintainer`, default `sonnet`) only on a day with something in it. Corrections, episodes and the firefighter start no agent. Corrections asks Jev typed questions; episodes read git, the ledger and Langfuse; the firefighter is code.
+The maintainer's daily compile starts one read-only `claude -p` run (role model `maintainer`, default `sonnet`) only on a day with something in it. The firefighter starts no agent; it is code.
 
 ## How a run starts
 
@@ -113,7 +113,6 @@ A build routed to a size records the model that ran as `model` and the size word
 | Vault recall | Jev scores each candidate note | Off |
 | Task type on traces | Jev tags each turn | Off |
 | Worker size | Jev picks the size | No `--model` |
-| Corrections | Jev groups signals into lessons | Jev, the same |
 
 A judge that cannot answer passes the turn (fail open).
 

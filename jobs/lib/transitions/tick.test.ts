@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../lib/todo.ts";
-import { close, readList, writeList } from "../../../lib/store.ts";
+import { readList, writeList } from "../../../lib/store.ts";
 import { factoryRepos, vault } from "../../../tests/git.testkit.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, type Starts } from "./factory.ts";
@@ -235,7 +235,7 @@ test("a periodic step is due when it never ran or its period has passed", () => 
   const s = { last: { ci: new Date(NOW).toISOString() }, missed: [], suite: {} };
   expect(due(s, "ci", NOW + 4 * MIN)).toBe(false);
   expect(due(s, "ci", NOW + 5 * MIN)).toBe(true);
-  expect(due(s, "episodes", NOW)).toBe(true);
+  expect(due(s, "firefight", NOW)).toBe(true);
   expect(due(s, "ci", NOW + MIN)).toBe(false);
 });
 
@@ -290,7 +290,7 @@ test("a tick records the time and result of each due step in its tick row and ke
   try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_MONITOR; }
   const ran = tickRows();
   const at = new Date(NOW).toISOString();
-  for (const k of ["ci", "episodes", "sweep", "hold", "smoke", "retention", "firefighter", "timeout"]) {
+  for (const k of ["ci", "sweep", "hold", "smoke", "retention", "firefighter", "timeout"]) {
     expect(ran[k]).toEqual({ last: at, result: expect.stringMatching(/\S/) });
   }
   // The preload points ALEPH_UI_PORT at port 1: the smoke step reaches a refusing port, not the live UI on 3020.
@@ -316,31 +316,6 @@ test("a step that fails in a tick records a result that starts with failed and i
   const ran = tickRows();
   expect(ran.ci.result).toMatch(/^failed: \S/);
   expect(ran.smoke.result).toBe("failed: / answered 503");
-  expect(ran.episodes.result).toBe("0 written");
-});
-
-test("a tick where an episode page fails to write records the episodes result as failed", async () => {
-  // A specced issue that landed on main, with a run: its page is due.
-  const id = writeList({ key }, "add", (doc) => issues.add(doc, "ship it", { spec: "## Goal\nShip it." }).id, true)!.value;
-  const dir = join(base, "repo");
-  // Each test's issue numbers start at 1 in the shared repo: put main back after, or issue.1 reads as landed for the rest.
-  const start = git(dir, "rev-parse", "HEAD").out;
-  writeFileSync(join(dir, `${key}.txt`), "x\n");
-  git(dir, "add", ".");
-  git(dir, "commit", "-q", "-m", "ship it", "-m", `Issue: issue.${id}`);
-  git(dir, "push", "-q", "origin", "main");
-  close({ key }, id, "landed");
-  seedJob({ role: "build", name: `issue.${id}`, repo: key, target: `issue.${id}`, state: "landed", told: true, started: new Date(NOW - 60 * MIN).toISOString(), ended: new Date(NOW - 30 * MIN).toISOString() });
-  // An episodes folder the tick cannot write in.
-  const episodes = join(process.env.ALEPH_FACTORY_DIR!, "episodes");
-  mkdirSync(episodes, { recursive: true });
-  chmodSync(episodes, 0o555);
-  try { await runTick(NOW, quiet()); } finally {
-    chmodSync(episodes, 0o755);
-    git(dir, "reset", "-q", "--hard", start);
-    git(dir, "push", "-q", "--force", "origin", "main");
-  }
-  expect(tickRows().episodes.result).toMatch(/^failed: 1 of 1 pages, \S/);
 });
 
 // The daily vault maintenance, dry: from 03:00 local, on a vault that has VAULT.md, once per local date.
@@ -348,7 +323,7 @@ test("a tick where an episode page fails to write records the episodes result as
 test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const r = await maintainStep(NOW);
-  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, episodes: 0, decay: 0, overlap: 0, retry: 0, lessons: 0, notes: 0, rechecked: 0, resolved: 0, aliased: 0 });
+  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, overlap: 0, retry: 0, notes: 0, rechecked: 0, resolved: 0, aliased: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 
@@ -356,13 +331,11 @@ test("guard: the maintain step returns null before 03:00, with no VAULT.md, and 
   const dir = vaultHere();
   // 02:00 local: too early, so nothing runs and no run record is written.
   expect(await maintainStep(Date.parse("2026-11-04T02:00:00Z"))).toBeNull();
-  // A folder that is there, with no VAULT.md: not a vault, so only the corrections mining runs.
+  // A folder that is there, with no VAULT.md: not a vault, so nothing runs.
   const empty = join(base, "no-home");
   mkdirSync(empty, { recursive: true });
   process.env.ALEPH_VAULT = empty;
-  const r = await maintainStep(NOW);
-  expect(r!.counts).toEqual({ lessons: 0 });
-  expect(r!.compile).toBeUndefined();
+  expect(await maintainStep(NOW)).toBeNull();
   process.env.ALEPH_VAULT = dir;
   setPaused(true);
   try { expect(await maintainStep(NOW)).toBeNull(); } finally { setPaused(false); }
@@ -386,8 +359,7 @@ test("guard: a tick with a vault present records the maintain step's dry result 
   vaultHere();
   await runTick(NOW, quiet());
   const ran = tickRows();
-  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 lessons · 0 notes · 0 rechecked · 0 resolved · 0 aliased$/);
-  expect(ran.corrections).toBeUndefined();
+  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 notes · 0 rechecked · 0 resolved · 0 aliased$/);
 });
 
 test("guard: the maintain step's dry compile of yesterday runs the model and records no day", async () => {

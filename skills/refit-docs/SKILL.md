@@ -64,7 +64,7 @@ finding, run `refs.ts` and the tools again. A new broken reference is red.
 
 | Lens | Guard | Kind | Tool |
 |---|---|---|---|
-| true | A link, anchor, path, env var or own-CLI flag a doc names that does not resolve | tool | `refs.ts` broken list empty, held by `refs.test.ts` on aleph; `aleph doc-claims` in aleph |
+| true | A link, anchor, path, env var or own-CLI flag a doc names that does not resolve | tool | `refs.ts` broken list empty, held by `refs.test.ts` on aleph |
 | true | An example that does not run | unchecked | the doc-test runner of [TOOLS.md](TOOLS.md) in CI |
 | gaps | An env var the code reads that no doc names | unchecked | `refs.ts` undocumented list as a shrink-only ratchet |
 | gaps | A public symbol with no doc block | unchecked | the coverage tool of [TOOLS.md](TOOLS.md) with a floor |

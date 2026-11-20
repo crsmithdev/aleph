@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, other, repo, seedItem, sh, setup, teardown } from "./cli.testkit";
+import { other, repo, seedItem, sh, setup, teardown } from "./cli.testkit";
 import { clearAsk, setAsk } from "./lib/asks/ask.ts";
 import { allRuns } from "./lib/records/record.ts";
 import { actionJob, cli, drop } from "./flow.testkit.ts";
@@ -41,16 +41,11 @@ test("the report hook prints one line for each thing to act on, and nothing when
   expect(quiet.code).toBe(0);
 }, 60_000);
 
-test("the report hook marks no run shown and rewrites no episodes-seen file", async () => {
-  const episodes = join(base, "factory", "episodes"), seen = join(base, "factory", "episodes-seen");
-  mkdirSync(episodes, { recursive: true });
-  writeFileSync(join(episodes, "page.md"), "x\n");
-  writeFileSync(seen, "old\n");
+test("the report hook marks no run shown", async () => {
   await actionJob("fhook", "error", {}, "fac");
   const h = await cli(["report", "--hook"]);
   expect(h.stdout).not.toContain("fhook failed");
   expect(allRuns().find((e) => e.run.name === "fhook")!.run.shown).toBe(false);
-  expect(readFileSync(seen, "utf8")).toBe("old\n");
   await drop("fhook");
 }, 60_000);
 

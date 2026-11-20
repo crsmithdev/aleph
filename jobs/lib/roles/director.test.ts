@@ -1,6 +1,5 @@
 // The director: every new Ask goes to it; it decides with actions code applies, or escalates with case text. The escalation
 // list, the action bound, the once-per-issue rerun and the record are code's, whatever the fake replies.
-import { putJson } from "../../../lib/db.ts";
 import { expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +12,6 @@ import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { directorStep } from "../transitions/factory.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { setPaused } from "../gates/pause.ts";
-import { readStore } from "../learning/corrections.ts";
 import { getRun, allRuns } from "../records/record.ts";
 import { jobOfFolder, logTo } from "../records/run-files.ts";
 import { eventsOf } from "../../../lib/layout.ts";
@@ -98,7 +96,6 @@ test("a director add files the fix job through writeFiling: one filed event, on 
   expect(item(2)).toMatchObject({ title: "Fix the other module" });
   expect(events().filter((e) => e.action === "filed").map((e) => [e.subject, e.object])).toEqual([["director", "issue.2"]]);
   expect(started).toEqual([`${key}-2`]);
-  expect(prompt()).toContain("Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec");
 });
 
 test("the schema requires the case text with actions, and parseReply returns it with the actions", () => {
@@ -122,7 +119,6 @@ test("the escalation list: a land on a security path gets case text and no actio
   expect(awaitsChris(`issue.2`)).toBe(false);
   expect(getRun(jobOfFolder(folder))!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
-  expect(prompt()).not.toContain("Check each Oracle clause");
 });
 
 test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {
@@ -145,27 +141,9 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(getRun(jobOfFolder(folder))!.ask!.situation ?? "").toBe("");
 });
 
-test("a memory proposal is on the escalation list: the director's case text goes on the lesson, and no action is taken", async () => {
-  fresh();
-  const issue = `issue.1`;
-  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", issue, signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
-  putJson("state", "corrections", { minedAt: "", lessons: [lesson] });
-  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files an issue." }, { action: "disapprove", text: "Drops it." }], recommend: { action: "disapprove", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
-  const [d] = await direct();
-  expect(d).toMatchObject({ ref: issue, on: issue, reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
-  expect(directorRuns()[0].run.target).toBe(issue);
-  const l = readStore().lessons[0];
-  expect(l.situation).toBe("The lesson says to check x.ts.");
-  expect(l.recommend).toEqual({ action: "disapprove", why: "Too vague." });
-  expect(l.state).toBe("proposed");
-  // The case text says approve reopens the parked issue; it does not say approve files a goal.
-  expect(prompt()).toContain("reopens");
-  expect(prompt()).not.toContain("files a goal");
-});
-
 test("an Ask of each reason with chrisOnly set goes on the escalation list with that why, whatever actions the director replies", async () => {
   const chris = Object.entries(ASK_REASONS).filter(([, r]) => r.chrisOnly);
-  expect(chris.map(([name]) => name)).toEqual(["core-change", "blocker-dropped", "proposal-check", "proposal-claude-md", "proposal-skill"]);
+  expect(chris.map(([name]) => name)).toEqual(["core-change", "blocker-dropped"]);
   for (const [reason, { chrisOnly }] of chris) {
     fresh([{ title: reason, ask: { reason, question: "Q?", options: [], why: ["w"] } }]);
     if (reason === "core-change" || reason === "blocker-dropped") writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
@@ -195,14 +173,6 @@ test("a blocker-dropped Ask on a parked waiter is escalated to Chris, whatever a
   const [d] = await direct();
   expect(d).toMatchObject({ ref: `issue.1`, reason: "blocker-dropped", outcome: "escalated", why: "an after link to a dropped issue is Chris's", applied: [] });
   expect(issues.status(item(1))).toBe("parked");
-});
-
-test("a proposed lesson with no issue is no case", async () => {
-  fresh();
-  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", signals: [] };
-  putJson("state", "corrections", { minedAt: "", lessons: [lesson] });
-  expect(await direct()).toEqual([]);
-  expect(calls()).toBe(0);
 });
 
 test("closing or dropping an issue Chris filed is refused; the same on an agent's issue is applied", async () => {

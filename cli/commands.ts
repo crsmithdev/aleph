@@ -92,7 +92,6 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
   memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses|maintain> ...", purpose: "run a vault op" },
-  "doc-claims": { usage: "aleph doc-claims", purpose: "list each doc claim the code does not back" },
   help: { usage: "aleph help [--brief]", purpose: "list each command with its usage and purpose" },
 };
 const usage = (cmd: string) => `usage: ${COMMANDS[cmd].usage}`;
@@ -410,19 +409,12 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
       for (const [name, c] of Object.entries(COMMANDS)) ctx.log(ctx.rest.includes("--brief") ? `${name}: ${c.purpose}` : `${c.usage}\n  ${c.purpose}`);
       break;
     case "doctor": await doctorCmd(ctx); break;
-    case "doc-claims": {
-      // Each doc claim of this repo the code does not back, read now: run it after the last edit of a doc.
-      const r = (await import("../jobs/lib/gates/doc-claims-repo.ts")).docClaimsReport();
-      ctx.log(r.text);
-      if (!r.ok) ctx.code = 1;
-      break;
-    }
     case "memory": {
-      // `maintain` is the whole maintainer: the vault's mechanical pass, the corrections mining and the compile of yesterday. A missing vault falls to the op, which says so.
+      // `maintain` is the whole maintainer: the vault's mechanical pass, and the compile of yesterday. A missing vault falls to the op, which says so.
       if (ctx.command[1] === "maintain" && isVault(resolve(vaultDir()))) {
-        const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, corr: true, compile: true, decay: true, overlap: true, misses: true });
+        const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, compile: true, decay: true, overlap: true, misses: true });
         ctx.out(r);
-        if (!r.ok || r.corrections?.error || r.compile?.error || r.recheck?.error || r.dedupe?.error) ctx.code = 1;
+        if (!r.ok || r.compile?.error || r.recheck?.error || r.dedupe?.error) ctx.code = 1;
         break;
       }
       ctx.code = await (await import("../vault/lib/cli.ts")).cli(ctx.command.slice(1), { log: ctx.log, err: ctx.err });

@@ -36,8 +36,8 @@ const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
 /** The types aleph stores, in the page's order: what each holds. */
 export const TYPES = [
   { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },
-  { id: "procedural", name: "Procedural", holds: "rules, skills, hooks, lessons" },
-  { id: "episodic", name: "Episodic", holds: "episodes, daily log, sessions" },
+  { id: "procedural", name: "Procedural", holds: "rules, skills, hooks" },
+  { id: "episodic", name: "Episodic", holds: "daily log, sessions" },
   { id: "working", name: "Working", holds: "handoffs" },
   { id: "prospective", name: "Prospective", holds: "issues with an after" },
 ];
@@ -151,9 +151,7 @@ function actions(it) {
     note: `${act("Edit", "edit", { primary: true })}${why}${act("Archive", "archive")}${act("Delete", "delete", { kind: "danger" })}`,
     "memory-md": act("Edit", "edit", { primary: true }),
     handoff: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { kind: "danger" })}`,
-    episode: `${act("Edit", "edit", { primary: true })}${act("Delete", "file-delete", { kind: "danger" })}`,
     issue: `${act("Drop", "drop", { cls: "warn" })}`,
-    proposal: `${act("Approve", "approve", { primary: true })}${act("Decline", "decline")}`,
   }[it.source];
   const ro = ["rules", "skill", "hook"].includes(it.source) ? note("A file in the repo: change it on a branch.") : "";
   return `<div class="actions">${rows ?? ""}${it.href && it.source !== "note" ? linkButton("Open", it.href) : ""}</div>${ro}`;
@@ -265,7 +263,7 @@ export function renderMemory(m, o = options(), results = null) {
 }
 
 const here = () => options(hashQuery());
-/** The URL of one note, and of a handoff's, an episode's or MEMORY.md's text. */
+/** The URL of one note, and of a handoff or MEMORY.md text. */
 const noteUrl = (title, act = "") => `/api/memory/notes/${encodeURIComponent(title)}${act ? `/${act}` : ""}`;
 const fileUrl = (it, act = "") => `/api/memory/files/${encodeURIComponent(it.source)}/${encodeURIComponent(it.key)}${act ? `/${act}` : ""}`;
 
@@ -325,8 +323,6 @@ const WRITES = {
   "file-delete": (it) => [fileUrl(it, "delete"), {}],
   alias: (it, f) => [noteUrl(f.target, "alias"), { alias: it.title }],
   drop: (it) => [`/api/issues/${encodeURIComponent(it.title)}/drop`, {}],
-  approve: (it) => [`/api/proposals/${encodeURIComponent(it.key)}/approve`, {}],
-  decline: (it) => [`/api/proposals/${encodeURIComponent(it.key)}/decline`, {}],
 };
 /** A write that removes something asks for a second click. */
 const ARMED = new Set(["delete", "file-delete", "drop"]);
@@ -343,7 +339,7 @@ async function write(btn, m, a = btn.dataset.mact) {
   btn.disabled = true;
   try {
     await postJson(url, body);
-    if (a === "delete" || a === "file-delete" || a === "drop" || a === "approve" || a === "decline" || a === "archive") setQuery({ item: "" });
+    if (a === "delete" || a === "file-delete" || a === "drop" || a === "archive") setQuery({ item: "" });
     await redraw(true);
   } catch (e) { say(btn, `${a} failed: ${e.message}`); btn.disabled = false; }
 }

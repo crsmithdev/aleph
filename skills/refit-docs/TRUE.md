@@ -12,7 +12,6 @@ Does each doc agree with the code? The code is the truth. The doc is the copy.
   doc-test runner of [TOOLS.md](TOOLS.md), or run it in a scratch directory.
 - **Copied snippets.** A block that copies source code: does it still match? (`cog --check`, `embedme --verify`.)
 - **Claims.** A default, a limit, a behavior, a version the doc states: find the line of code that sets it.
-- **In aleph,** `aleph doc-claims` checks the claims of `README.md` and `docs/`.
 
 ## Proof
 
@@ -26,5 +25,5 @@ the user, not a doc fix.
 
 ## Guard
 
-`refs.ts` broken list empty in a test; the doc-test runner in CI; `aleph doc-claims` in aleph.
+`refs.ts` broken list empty in a test; the doc-test runner in CI.
 

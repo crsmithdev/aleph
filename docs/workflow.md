@@ -102,7 +102,7 @@ Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factor
 
 | Gate | Binds when | Result |
 |---|---|---|
-| Pause | The `paused` setting holds a time | Nothing starts. Intake, director, suite, firefighter, maintainer and episodes stop too. A unit's next step is kept in `paused-next` |
+| Pause | The `paused` setting holds a time | Nothing starts. Intake, director, suite, firefighter, and maintainer stop too. A unit's next step is kept in `paused-next` |
 | Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`) | Skip. Jobs on that backend do not start; jobs on other backends do |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
@@ -145,7 +145,6 @@ Verify runs four checks and the keep-gate in order, each in a detached worktree 
 | Check | Code | Passes when |
 |---|---|---|
 | Repo checks | `checks.ts` `runAll`, `related.ts` `buildChecks` | The setup and the test files the change reaches pass, and every check that is not a test (such as `tsc`). "ran 0 tests" fails |
-| Doc claims | `hooks/lib/docclaims.ts` | Each claim in the final message that a doc matches the code has a run, value or `file:line` behind it in the transcript |
 | Keep-gate | `checks.ts` `keepGate` | Never fails the run: it runs each new test on the head and on the base and gives the reviewer the ones that pass on the base, or that it did not run (no verdict). The reviewer holds such a test for a bug fix or a behaviour change, and accepts it for a refactor, a moved test or a test-only change |
 | Oracle pin | `worker-verdict.ts` `oracleFailure` | No file that an Oracle command names, that is on the base and outside the Edit surface, is edited; the check `oracle-pin` |
 | Oracle | `unit.ts` `oracleFailure` | Each Oracle command that the checks did not run passes |
@@ -238,9 +237,8 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 | `rescue` | resolve, dismiss | `resolve` |
 | `run-cap` | continue, discontinue | `continue` |
 | `core-change` | approve, disapprove | `approve` |
-| `proposal-check`, `proposal-claude-md`, `proposal-skill` | approve, disapprove | `approve` |
 
-The first verb of a pair goes ahead and the second drops the issue; the second takes an optional typed reason. `approve` lands the job, applies the core-note change or reopens the proposal issue. `resolve` takes an option, the recommendation or a typed answer; a `part-dropped` Ask offers the options "Close as done" and "Keep open". `continue` starts the job or intake again. `disapprove` on a proposal also stops the memory proposing it again, and on `core-change` it keeps the note. The six words are `ASK_ACTIONS` in `lib/naming.ts`.
+The first verb of a pair goes ahead and the second drops the issue; the second takes an optional typed reason. `approve` lands the job or applies the core-note change. `resolve` takes an option, the recommendation or a typed answer; a `part-dropped` Ask offers the options "Close as done" and "Keep open". `continue` starts the job or intake again. `disapprove` on `core-change` keeps the note. The six words are `ASK_ACTIONS` in `lib/naming.ts`.
 
 **The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-issue`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 
@@ -252,7 +250,6 @@ The first verb of a pair goes ahead and the second drops the issue; the second t
 **Escalation** (`director.ts` `escalation`). The director writes case text (situation, effects, recommendation) and takes no action when:
 
 - a rule grants `user` for its reason: no director run starts, and the Ask goes to Chris at once with the fallback case text;
-- the Ask is a memory proposal;
 - it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Disapprove keeps the claim, sets the note's `updated` to today and drops the issue;
 - it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
 - the land changes a security path or `bun.lock`;
@@ -260,9 +257,9 @@ The first verb of a pair goes ahead and the second drops the issue; the second t
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the table above, `discontinue` for `intake-failed`, `disapprove` for the memory proposals, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason but the memory proposals (`proposal-*`) takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
+**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the table above, `discontinue` for `intake-failed`, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
-**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but the memory proposals, `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
+**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
 
 ## 9. Human controls
 
@@ -286,8 +283,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 |---|---|---|---|
 | Firefighter | Tick, each 5 minutes, or each minute while a CI run on main is in progress or a land ended in the last 15 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
-| Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask, and compiles yesterday into vault notes | Signals already in a lesson are skipped; the vault run record and `compiledDays` |
-| Episodes | Tick, each 30 minutes | Writes a page for each finished issue | `episodes-seen` |
+| Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, and compiles yesterday into vault notes | The vault run record and `compiledDays` |
 | Monitor | Tick, daily from its local hour (0 to 23, 0 by default; set on the Automation page) | Reads the day's records and writes numbered findings for the Status page | One per day |
 
 ## Where to look

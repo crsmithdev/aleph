@@ -376,7 +376,6 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).toContain("do not chain parts in a line by habit");
   expect(p).toContain("(an issue key like `issue.5`)");
   expect(p).not.toContain("<repo>-<n>`)");
-  expect(p).toContain("Check each Oracle clause against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec");
   expect(p).toContain("no two clauses that cannot both be true");
   expect(p).toContain("A fresh request from Chris that goes against the current design or its tests is not stale");
 });
@@ -391,11 +390,6 @@ test("the prompt tells intake to cover the whole request and to name what it lea
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("together cover the whole request");
   expect(p).toContain('name it in "left_out"');
-});
-
-test("the prompt has intake search past work for the issue's title, quoted for the shell", () => {
-  const p = prompt(repo, { id: 1, title: "Fix Chris's land", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
-  expect(p).toContain("# Past work\n\nBefore you plan, run `aleph memory recall --episodes 'Fix Chris'\\''s land'` as it stands, with no pipe.");
 });
 
 test("the intake run may run git log, and the prompt has it search history before a spec that adds something back", async () => {

@@ -45,7 +45,6 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `GET /api/flow` | The Explore page and the Jobs page charts, for `?window=` |
 | `GET /api/automation` | The Automation page: the rules, the caps' settings, held paths and the decision log |
 | `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
-| `POST /api/proposals/:id/approve`, `/decline` | Decides a proposal |
 | `GET /api/issues` | The Issues page rows, with stage, job count and cost |
 | `GET /api/issues/:id` | One issue by its short ID (`a1430`) |
 | `POST /api/issues/:id/{edit,note,media,decide,unblock,drop,retriage,rerun}` | Acts on one issue |

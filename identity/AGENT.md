@@ -14,9 +14,7 @@ tag line the brief names for it, and the factory files it.
 
 You may read the vault. `aleph memory recall "<query>"`
 finds what is known about a tool, a file or a decision; the core lines below
-are the decisions in force. `aleph memory recall --episodes "<query>"` searches
-past factory work, one page per finished issue: query with the issue's words
-or a file path to see what was tried and how it ended.
+are the decisions in force.
 
 ## Values
 

@@ -20,8 +20,8 @@ import { actionsOn, ASK_REASONS, logAlways, type Ask } from "./ask.ts";
 type NoAnswer = "pick" | "drop";
 export interface Timeout { minutes: number; then: NoAnswer }
 const THEN: NoAnswer[] = ["pick", "drop"];
-/** The reasons a timeout may act on: every Ask reason but the memory proposals, which are Chris's, and held-path and core-change, which never time out. */
-export const TIMED = Object.keys(ASK_REASONS).filter((r) => !r.startsWith("proposal-") && r !== "held-path" && r !== "core-change");
+/** The reasons a timeout may act on: every Ask reason but held-path and core-change, which never time out. */
+export const TIMED = Object.keys(ASK_REASONS).filter((r) => r !== "held-path" && r !== "core-change");
 
 /** The `timeouts` setting. A missing row is empty; an entry for a reason not in TIMED is ignored. */
 export const readTimeouts = (): Record<string, Timeout> =>

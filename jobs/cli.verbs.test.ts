@@ -3,7 +3,7 @@ import { getJson } from "../lib/db.ts";
 import { join } from "node:path";
 import { aleph, base, CLI, env, setup, teardown } from "./cli.testkit";
 
-// The wiring in cli/commands.ts of the verbs whose logic is tested in-process: always, judge, annotation, monitor and doc-claims.
+// The wiring in cli/commands.ts of the verbs whose logic is tested in-process: always, judge, annotation, and monitor.
 beforeAll(setup);
 afterAll(teardown);
 
@@ -79,15 +79,6 @@ describe("monitor", () => {
     expect(d.stdout).toContain("## Stages");
     const bad = await aleph(["monitor", "--dry", "--day", "yesterday"]);
     expect([bad.code, bad.stderr]).toEqual([1, expect.stringContaining("usage: aleph monitor")]);
-  });
-});
-
-describe("doc-claims", () => {
-  test("prints the report of this repo and exits 1 only when a claim is not backed", async () => {
-    const r = await aleph(["doc-claims"]);
-    const last = r.stdout.trim().split("\n").at(-1)!;
-    expect(last).toMatch(/^(every checked doc claim matches the code|\d+ doc claims? the code does not back)$/);
-    expect(r.code).toBe(last.startsWith("every") ? 0 : 1);
   });
 });
 

@@ -42,7 +42,6 @@ describe("ids", () => {
 
 describe("words", () => {
   test("old words read as new", () => {
-    expect(n.word("ask", "proposal-claude-md")).toBe("proposal");
     expect(n.word("actor", "You")).toBe("human");
     expect(n.word("act", "land")).toBe("landed");
     expect(n.word("act", "landed")).toBe("landed");
@@ -125,8 +124,8 @@ test("the name table gives one display name for each step and role", () => {
 test("no file outside lib/naming.ts reads an issue ID with its own regex", () => {
   // The fixed list of non-ID uses of `-\d+`, `-(\d+` or `-(?:\d+`: file and the text on the line.
   const OK: [string, string][] = [
-    ["hooks/lib/docclaims.ts", ":\\d+(?:-\\d+)?"], ["hooks/lib/docclaims.ts", "(\\d+)(?:-\\d+)?"], ["hooks/lib/scan.ts", "@@ -\\d+"],
-    ["jobs/lib/gates/doc-claims.ts", "(?::\\d+(?:-\\d+)?)?"], ["jobs/lib/gates/doc-claims.ts", ":(\\d+)(?:-(\\d+))?"], ["ui/decision.js", ":\\d+(?:-\\d+)?"], ["ui/decision.js", "lines? \\d+(?:-\\d+)?"],
+    ["hooks/lib/scan.ts", "@@ -\\d+"],
+    ["ui/decision.js", ":\\d+(?:-\\d+)?"], ["ui/decision.js", "lines? \\d+(?:-\\d+)?"],
     ["ui/views/lib/format.js", "(-\\d+)+(\\[.*\\])?$"], ["jobs/cli.testkit.ts", "-fac-${id}-\\\\d+$"],
   ];
   const root = join(import.meta.dir, "..");

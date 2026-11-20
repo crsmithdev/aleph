@@ -83,7 +83,7 @@ export const signals = (text: string): Signal[] => {
         if (b.name === "Bash" && typeof b.input?.command === "string") {
           const cmd: string = b.input.command;
           add(READS.test(shape(cmd)) ? "lookup" : "command", shape(cmd), cmd);
-          if (/\baleph memory recall\b/.test(cmd) && !cmd.includes("--episodes")) recalls.add(b.id);
+          if (/\baleph memory recall\b/.test(cmd)) recalls.add(b.id);
         }
         if (typeof path === "string") {
           if (["Read", "Grep", "Glob"].includes(b.name)) add("lookup", norm(path), path);

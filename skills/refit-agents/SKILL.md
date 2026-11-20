@@ -88,7 +88,7 @@ The kinds are those of PROCESS.md.
 | structure | A body over 5,000 tokens | tool | `load.test.ts`: "no skill body inside the repo is over 5,000 tokens" |
 | structure | An orphan, a chain from a reference | unchecked | none |
 | triggers | Two descriptions that claim one branch | rule | write-agents RULES.md 4 |
-| drift | A command, flag or path in an agent file that does not resolve | unchecked | `aleph doc-claims` in aleph; elsewhere a test that runs each named command |
+| drift | A command, flag or path in an agent file that does not resolve | unchecked | a test that runs each named command |
 | adherence | Emphasis, scaffolding, vague bars, unreasoned rules, dated text | unchecked | `content.ts` counts as a shrink-only ratchet, not yet wired |
 | adherence | A contradiction, a discoverable fact, a hard rule left in prose | rule | write-agents RULES.md 6 |
 | interface | A CLI command with no usage, or one whose `--help` runs it | unchecked | a test that runs `<cli> <cmd> --help` for each command and asserts no side effect |

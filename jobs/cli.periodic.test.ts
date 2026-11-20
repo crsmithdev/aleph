@@ -73,15 +73,15 @@ describe("suite", () => {
 });
 
 describe("memory maintain", () => {
-  test("guard: --dry runs the mechanical pass, the corrections mining and the compile of yesterday, and reports all three", async () => {
+  test("guard: --dry runs the mechanical pass and the compile of yesterday, and reports both", async () => {
     const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
     expect((await cli(["memory", "init"], env)).code).toBe(0);
     use(memory({ traces: [], observations: [] }));
     try {
       const r = await cli(["memory", "maintain", "--dry"], env);
       expect(r.code).toBe(0);
-      expect(r.json).toMatchObject({ op: "maintain", dry: true, ok: true, corrections: { lessons: 0 }, compile: { dry: true, notes: [], skipped: "nothing on the day" } });
-      expect(r.json.counts).toMatchObject({ fixed: 0, lessons: 0, notes: 0 });
+      expect(r.json).toMatchObject({ op: "maintain", dry: true, ok: true, compile: { dry: true, notes: [], skipped: "nothing on the day" } });
+      expect(r.json.counts).toMatchObject({ fixed: 0, notes: 0 });
     } finally {
       use(null);
     }

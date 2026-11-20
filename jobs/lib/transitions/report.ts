@@ -1,5 +1,5 @@
-/** `aleph report`: the runs not yet shown, the issues that came due, the new episodes, the asks and the proposed lessons. See docs/factory.md. */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+/** `aleph report`: the runs not yet shown, the issues that came due, and the asks. See docs/factory.md. */
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { money } from "../../../lib/money.ts";
 import { LANES, lane, shownId } from "../../../lib/naming.ts";
@@ -13,8 +13,6 @@ import { isWaiting, loadRegistry, onOf, type Entry, allJobs } from "../records/l
 import { isRunning } from "../infra/process.ts";
 import { checkedBy, lookMinutes } from "../records/job.ts";
 import { patchRun, allRuns } from "../records/record.ts";
-import { proposals } from "../learning/corrections.ts";
-import { listEpisodes } from "../learning/episode.ts";
 import { changedLinesOf } from "../gates/factory-status.ts";
 import { paused } from "../gates/pause.ts";
 import { runsToday, spentToday } from "../gates/gpu.ts";
@@ -64,12 +62,8 @@ function reportOnce(now: number, peek: boolean): string {
   const lines = runLines(now, peek);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
-  const eps = newEpisodes();
-  if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
   const asks = askLines();
   if (asks.length) lines.push(["asks:", ...asks.map((a) => `  ${a}`)].join("\n"));
-  const lessons = proposals();
-  if (lessons.length) lines.push(["proposed lessons (Yes or No on Status):", ...lessons.map((l) => `  ${l.id} ${l.kind}: ${l.sentence} (${l.count} signals)`)].join("\n"));
   return lines.join("\n");
 }
 
@@ -78,23 +72,6 @@ function askLines(): string[] {
   return Object.values(loadRegistry()).flatMap((repo) => (reader({ fetch: false }).list(repo.key)?.items ?? [])
     .filter((item) => issues.status(item) === "open" && askOfItem(item))
     .map((item) => `${shownId(refIn(item), repo.key)} ${item.title}`));
-}
-
-const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
-
-/**
- * The episode page titles under `<factoryDir()>/episodes/` that no report has listed. The seen file is then
- * rewritten as the titles on disk, so a page deleted after KEEP_DAYS (episode.ts) leaves it too.
- */
-function newEpisodes(): string[] {
-  const titles = listEpisodes().map((e) => e.file.slice(0, -3));
-  const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
-  const fresh = titles.filter((t) => !seen.has(t));
-  if (fresh.length || seen.size !== titles.length - fresh.length) {
-    mkdirSync(factoryDir(), { recursive: true });
-    writeFileSync(episodesSeenFile(), titles.map((t) => t + "\n").join(""));
-  }
-  return fresh;
 }
 
 const seenFile = () => join(factoryDir(), "seen");

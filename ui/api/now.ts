@@ -1,6 +1,5 @@
 /** `GET /api/factory`: the Status view's data, narrowed to one project by `?project=<key>`. */
 import type { Routes } from "../server.ts";
-import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import { eventIn, factoryWide, inProject, known, repoIn, scopeOf } from "./scope.ts";
 import { heraldContext, heraldEvents, state, type State } from "../state.ts";
 import { heraldRows } from "../herald.ts";
@@ -34,7 +33,7 @@ async function build(project: string | null) {
   const { doneStamps, herald, ...s } = forProject(state(new Date(), !project), project);
   const fit = await currentFit();
   annotate([...s.errored, ...s.running], fit);
-  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) };
+  return { ...s, herald: herald && { history: herald.history, seq: herald.seq, rows: heraldRows(herald.events, herald), chats: herald.chats }, usage: await summaryOff(fit) };
 }
 
 /** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */

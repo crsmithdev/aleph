@@ -1,8 +1,7 @@
 /**
  * What the Awaiting-you rows say and offer (the `asks` of /api/factory). The server decides from the Ask's reason and the item's data;
- * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
+ * the page only renders. One entry per run, issue that waits for Chris.
  */
-import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
 import { SENT_BACK } from "../jobs/lib/gates/worker-verdict.ts";
 import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
 import { jobHref, parseId, refs, word } from "../lib/naming.ts";
@@ -27,7 +26,7 @@ export interface AskItem {
   actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string; /** What the grant covers by default: the item's project or every project. */ scope: "project" | "all"; /** The one-line risk of the grant, for the reasons that act on work or code. */ risk?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
-  /** The priority of the issue or run's item it is about; none for a proposal. */
+  /** The priority of the issue or run's item it is about. */
   priority?: string;
   /** A waiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
   /** A waiting run: the issue it is on. */ on?: string;
@@ -52,20 +51,15 @@ function clean(text: unknown): string {
 }
 const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
-type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
+type Ctx = { id: string; run?: Job; issue?: NewIssue };
 
 /** The name and the one line of a reason. A reason not in the table is named by its key, with no line. */
 export const reasonText = (reason: string): { name: string; line: string } => {
   const r = ASK_REASONS[reason];
   return r ? { name: r.name, line: r.line } : { name: reason, line: "" };
 };
-/** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
-const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => {
-  const ask = c.run?.ask ?? c.issue?.ask;
-  if (ask) return ask;
-  const l = c.lesson;
-  return l?.situation ? { headline: l.headline, situation: l.situation, details: l.details, effects: l.effects, recommend: l.recommend } : undefined;
-};
+/** The text a row shows: the Ask of its run or issue. */
+const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => c.run?.ask ?? c.issue?.ask;
 
 /** An issue's question as one sentence, or "" when it has none. */
 const asked = (c: Ctx): string => { const q = clean(c.issue?.decision?.question ?? c.issue?.question); return q && sentence(q); };
@@ -87,30 +81,11 @@ const PROBLEM: Record<string, (c: Ctx) => string | undefined> = {
 };
 /** A row's problem text: what the context says, else the reason's fixed text. */
 const problemOf = (reason: string, c: Ctx): string => PROBLEM[reason]?.(c) || ASK_REASONS[reason].problem.replaceAll("{id}", c.id);
-/** What a proposal changes and where, in the words of its buttons and hints. */
-function words(l: Lesson | undefined) {
-  const kind = l?.kind ?? "skill";
-  const p = place(kind, l?.target);
-  if (kind === "claude-md") {
-    const agent = p.includes("AGENT.md"); // the target names its files
-    const f = agent ? p : p ? `${p} CLAUDE.md` : "CLAUDE.md";
-    return { problem: `a line in ${f}`, approve: `Add a line to ${f}`, decline: `Leave ${agent ? f : "CLAUDE.md"} unchanged`, hint: `adds the line to ${f}`, every: `proposed addition to ${f}` };
-  }
-  if (kind === "skill") {
-    const s = p ? `the ${p} skill` : "the skill";
-    return { problem: p ? `a change to ${s}` : "a skill change", approve: `Change ${s}`, decline: `Leave ${s} unchanged`, hint: `changes ${s}`, every: `proposed change to ${s}` };
-  }
-  const r = p ? p : "the repo";
-  return { problem: `a check for ${r}`, approve: `Add a check to ${r}`, decline: "Add no check", hint: `adds the check to ${r}`, every: `proposed check for ${r}` };
-}
-for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) => `The correction memory proposes ${words(c.lesson).problem}: ${clean(c.lesson?.sentence).replace(/\.$/, "")}.`;
-
 function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
   const job = (verb: string) => `/api/jobs/${encodeURIComponent(c.run?.id ?? "")}/${verb}`;
   const issue = (verb: string) => `/api/issues/${encodeURIComponent(c.id)}/${verb}`;
   /** The drop of the issue: on a run, of the run's issue, which drops the run with it (`aleph issue drop`). */
   const dropIt = c.run?.item ? `/api/issues/${encodeURIComponent(`${c.run.repo}-${c.run.item.id}`)}/drop` : c.run ? job("drop") : issue("drop");
-  const proposal = (verb: string) => `/api/proposals/${encodeURIComponent(c.id)}/${verb}`;
   const a = (act: string, label: string, hint: string, path: string, body: Record<string, unknown> = {}, more: Partial<Action> = {}): Action =>
     ({ act, label, hint, primary: false, recommended: false, path, body, ...more });
   const held = reason === "held-path" || reason === "review-held";
@@ -121,14 +96,10 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
     switch (act) {
       case "approve":
         if (held) return [a("approve", "Land it", c.run ? "Merges the run's branch into main." : "Lands the held run's branch on main.", job("land"))];
-        if (reason === "core-change") return [a("approve", "Apply the change", "Applies the verdict to the note in the vault, then closes the issue as done.", issue("approve"))];
-        if (c.lesson) { const w = words(c.lesson); return [a("approve", `Reopen the issue: ${w.approve}`, `Reopens the issue that ${w.hint}.`, proposal("approve"))]; }
-        return [a("approve", "Reopen the issue", "Reopens the proposal's issue with a spec for the factory.", proposal("approve"))];
+        return [a("approve", "Apply the change", "Applies the verdict to the note in the vault, then closes the issue as done.", issue("approve"))];
       case "disapprove":
         if (held) return drops("disapprove", "Drop the issue", "Discards the run's branch and marks the issue dropped.", dropIt);
-        if (reason === "core-change") return drops("disapprove", "Keep the claim", "Keeps the note as it is with its date set to today, and drops the issue.", issue("decline"));
-        if (c.lesson) return drops("disapprove", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", proposal("decline"));
-        return drops("disapprove", "Never propose this", "Drops the proposal and stops the memory proposing it again.", proposal("decline"));
+        return drops("disapprove", "Keep the claim", "Keeps the note as it is with its date set to today, and drops the issue.", issue("decline"));
       case "resolve": {
         if (c.run) return [a("resolve", "Answer and rerun", "Takes the user's answer and starts the job again with it.", job("answer"), {}, { input: { name: "answer" } })];
         const decide = (label: string, hint: string, body: Record<string, unknown> = { label }) => a("resolve", label, hint, issue("decide"), body);
@@ -192,7 +163,6 @@ function detailsFor(c: Ctx): Details {
     if (c.issue.question) d.note = c.issue.question;
     if (c.issue.decision) d.ask = c.issue.decision;
   }
-  if (c.lesson) d.signals = c.lesson.signals.map(({ source, at, quote, link }) => ({ source, at, quote, link }));
   return d;
 }
 
@@ -215,14 +185,6 @@ function alwaysFor(reason: string, action: string, first: string | undefined, re
   return { label, action, scope, ...(risk ? { risk } : {}), hint: `Does this one now. From now on, the factory does this without asking. ${revoke}` };
 }
 
-function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
-  const key = standingKey(l);
-  return {
-    label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key, scope: "all",
-    hint: `From now on, the factory reopens the issue for every ${words(l).every} without asking. Revoke with \`aleph always revoke ${key}\`.`,
-  };
-}
-
 /**
  * One row. An Ask with no case text is still with the director (jobs/lib/roles/director.ts): the row shows the fixed problem
  * text and offers no action and no auto-yes until the director escalates it with its case text.
@@ -242,7 +204,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
     key, reason, card: r.card, label: r.card[0].toUpperCase() + r.card.slice(1), headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
-    ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label, repo) } : {}),
+    ...(!escalated ? {} : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label, repo) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
     ...(c.issue ? { at: c.issue.updated, since: c.issue.since ?? "", part: c.issue.part } : {}),
     ...(!c.run ? {} : {
@@ -254,25 +216,21 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
 }
 
 /**
- * The asks: runs that await, then issues that await, then proposals. `runs` are the awaiting runs, each with its `ask`;
+ * The asks: runs that await, then issues that await. `runs` are the awaiting runs, each with its `ask`;
  * `issues` the issues that hold an Ask.
  */
-export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[] = openProposals()): { items: AskItem[] } {
+export function attend(s: { runs: Job[]; issues: NewIssue[] }): { items: AskItem[] } {
   const out: AskItem[] = [];
   const add = (it: AskItem) => out.push(it);
   const rank = Object.keys(ASK_REASONS);
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => rank.indexOf(a.ask!.reason) - rank.indexOf(b.ask!.reason));
   for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, jobHref(j.id), j.item?.title ?? "", j.repo, j.item?.priority));
   for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, parseId(i.id)?.repo ?? "", i.priority));
-  for (const l of lessons) {
-    const reason = `proposal-${l.kind ?? "skill"}`;
-    if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
-  }
   return { items: out };
 }
 
 /** The asks alone. */
-export const asks = (s: { runs: Job[]; issues: NewIssue[] }, lessons?: Lesson[]): AskItem[] => attend(s, lessons).items;
+export const asks = (s: { runs: Job[]; issues: NewIssue[] }): AskItem[] => attend(s).items;
 
 /** The open issue an errored job cannot succeed before: the part's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }

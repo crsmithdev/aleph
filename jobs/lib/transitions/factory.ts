@@ -1,11 +1,9 @@
 /**
- * The factory's small steps around the runs: intake, the director, the corrections, the episodes and the hook's lines.
+ * The factory's small steps around the runs: intake, the director and the hook's lines.
  * Each job of its own has its module: the dispatch (dispatch.ts), the sweep of a list (sweep.ts), main's baseline
  * (baseline.ts), the stall check (stall.ts) and the report (report.ts). What it reads of its state is in
  * factory-status.ts. Its state lives in ~/.aleph/factory. See docs/factory.md.
  */
-import { today } from "../../../lib/day.ts";
-import { DAILY_HOUR } from "../../../lib/schedule.ts";
 import { issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/todo.ts";
 import { reader, type Reader } from "../../../lib/store.ts";
@@ -15,13 +13,10 @@ import { logEvent } from "../../../lib/layout.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { isWaiting, loadRegistry, type Entry, type Repo, allJobs, isOpen } from "../records/ledger.ts";
 import { holdsWork } from "../infra/process.ts";
-import { filing } from "./filing.ts";
 import { causeOf } from "../records/outcome.ts";
 import { stateOf } from "../records/job.ts";
 import { counting, allRuns } from "../records/record.ts";
-import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
-import { writeEpisodes } from "../learning/episode.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { gates, stallLines } from "../gates/factory-status.ts";
 import { paused } from "../gates/pause.ts";
@@ -30,27 +25,6 @@ import { redMains } from "../gates/tables.ts";
 
 import { decider } from "../gates/decider.ts";
 import { INTAKE_CAP } from "../infra/settings.ts";
-
-/** True from 03:00 local, when the store has not been mined on this local date. */
-export function correctionsDue(now = Date.now()): boolean {
-  if (new Date(now).getHours() < DAILY_HOUR) return false;
-  const at = readStore().minedAt;
-  const t = Date.parse(at);
-  return !at || Number.isNaN(t) || today(new Date(t)) !== today(new Date(now));
-}
-
-/** The daily correction mining (corrections.ts); the maintainer's step gates it. The tick catches and records an error. */
-export async function mineCorrections(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number }> {
-  const store = await mine(now, filing);
-  const r = {
-    signals: store.lessons.reduce((n, l) => n + l.signals.length, 0),
-    lessons: store.lessons.length,
-    proposed: store.lessons.filter((l) => l.state === "proposed").length,
-  };
-  // A proposed lesson is an Ask.
-  if (r.proposed) directIfNew();
-  return r;
-}
 
 /** The detached starts that follow a write: an intake of one issue, and the director. Tests replace them. */
 export interface Starts { intake(repo: Repo, id: number): void; director(): void }
@@ -103,14 +77,6 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   return d;
 }
 
-/** The tick's episode pages for issues that finished (episode.ts), written and failed. The tick catches and records an error. */
-export async function episodeStep(): Promise<{ written: string[]; failed: string[] }> {
-  if (paused()) return { written: [], failed: [] };
-  const r = await writeEpisodes(sandboxRepos());
-  for (const f of r.failed) logEvent({ subject: "rule", action: "failed", object: "episodes", detail: f });
-  return r;
-}
-
 /** How far a checkout is behind origin/<main>, with the diff a pull would bring; with `short`, the key and the count alone. */
 export function behind(repo: Repo, short = false): string | null {
   const n = Number(git(repo.path, "rev-list", "--count", `HEAD..origin/${repo.main}`).out || 0);
@@ -129,7 +95,6 @@ export function hookLines(now = Date.now()): string[] {
       if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${item.id}`);
     }
   }
-  refs.push(...proposals().map((l) => l.id));
   if (refs.length) lines.push(`${refs.length} asks wait for Chris: ${refs.slice(0, 5).join(", ")}`);
   lines.push(...redMains().map((r) => r.line), ...stallLines(now, jobs).map((h) => h.text));
   for (const repo of repos.filter((r) => r.sandbox)) lines.push(behind(repo, true) ?? "");

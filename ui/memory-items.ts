@@ -8,8 +8,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { clip, issueHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
-import { readStore } from "../jobs/lib/learning/corrections.ts";
-import { episodeFields, KEEP_DAYS, listEpisodes, readEpisode } from "../jobs/lib/learning/episode.ts";
 import { claimLine, recall } from "../vault/lib/index.ts";
 import { dailyNotes, readMemoryMd, scopeOf, type Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "../jobs/lib/infra/settings.ts";
@@ -137,13 +135,6 @@ async function procedural(): Promise<Item[]> {
     out.push({ type: "procedural", source: "hook", key: `${h.event} ${h.command}`, title: `hook ${h.event}${h.matcher ? ` ${h.matcher}` : ""}`, text: h.command, scope: "global", at: "", read: null,
       body: h.command, effect: `Runs on ${h.event}${h.matcher ? ` for ${h.matcher}` : ""}${h.calls === null ? "" : `; ${h.calls} calls in 7 days`}.` });
   }
-  const s = readStore();
-  for (const l of s.lessons.filter((l) => l.state === "open" || l.state === "proposed")) {
-    const proposed = l.state === "proposed";
-    out.push({ type: "procedural", source: proposed ? "proposal" : "correction", key: l.id, title: proposed ? "proposal" : "correction", text: l.sentence, scope: "global",
-      at: s.minedAt, read: null, body: l.sentence,
-      effect: proposed ? `Seen ${l.count} times. Approve it to reopen it as a rule change.` : `Seen ${l.count} times. A third sighting makes it a proposal.` });
-  }
   return out;
 }
 
@@ -160,11 +151,7 @@ function working(): Item[] {
 }
 
 async function episodic(root: string): Promise<Item[]> {
-  const out: Item[] = listEpisodes().map(({ file: f }) => {
-    const body = readEpisode(f) ?? "", { scope, updated } = episodeFields(body);
-    return { type: "episodic", source: "episode", key: f, title: f.slice(0, -3), text: intent(splitFrontmatter(body).body), scope, at: updated,
-      read: null, body, effect: `The factory report lists it once; it is deleted after ${KEEP_DAYS} days.` };
-  });
+  const out: Item[] = [];
   for (const { day, text: body } of dailyNotes(root)) {
     const n = body.split("\n").filter((l) => l.startsWith("- ")).length;
     out.push({ type: "episodic", source: "daily", key: `${day}.md`, title: `daily ${day}`, text: `${n} vault writes`, scope: "", at: day, read: null, body,

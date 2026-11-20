@@ -10,7 +10,7 @@ import { writeRepos } from "../../tests/projects.testkit.ts";
 // The Memory page's search and writes against a real vault: `aleph memory init`, then notes through `aleph memory write`.
 const CLI = join(import.meta.dir, "..", "..", "cli", "cli.ts");
 const day = "2026-11-04";  // write checks only the date format, so a fixed one serves
-let base: string, vault: string, hand: string, eps: string, restore: () => void, stop: () => void;
+let base: string, vault: string, hand: string, restore: () => void, stop: () => void;
 let at: (p: string, init?: RequestInit) => Promise<Response>;
 const post = (p: string, b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) =>
   at(p, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(b) });
@@ -29,10 +29,9 @@ const body = (claim: string, related = "") => `**Claim.** ${claim}, as of 2026-0
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-memory-write-"));
-  vault = join(base, "vault"); hand = join(base, "handoffs"); eps = join(base, "factory", "episodes");
-  mkdirSync(join(hand, "projects"), { recursive: true }); mkdirSync(eps, { recursive: true });
+  vault = join(base, "vault"); hand = join(base, "handoffs");
+  mkdirSync(join(hand, "projects"), { recursive: true });
   writeFileSync(join(hand, "current.md"), "## Intent\n\nMove the worktree serve to its own port.\n");
-  writeFileSync(join(eps, "aleph-9 Port.md"), `---\nkind: episode\nscope: aleph\nupdated: ${day}\n---\n## Goal\nServe a worktree on a port.\n`);
   writeRepos(JSON.parse("{}"));
   restore = withEnv({ ALEPH_VAULT: vault, ALEPH_JUDGE: "haiku", ALEPH_HANDOFFS_DIR: hand, ALEPH_FACTORY_DIR: join(base, "factory"), 
     ALEPH_SKILLS_DIR: join(base, "skills"), ALEPH_CLAUDE_SETTINGS: join(base, "settings.json"),
@@ -47,12 +46,11 @@ beforeAll(async () => {
 });
 afterAll(() => { stop(); restore(); rmSync(base, { recursive: true, force: true }); });
 
-test("search finds a term in notes, handoffs and episodes, says how each reaches the agent, and drops bodies", async () => {
+test("search finds a term in notes and handoffs, says how each reaches the agent, and drops bodies", async () => {
   const r: any = await (await at("/api/memory/search?q=worktree")).json();
   const by = (s: string) => r.results.filter((x: any) => x.source === s);
   expect(by("note").map((x: any) => x.title).sort()).toEqual(["Land From The Main Checkout", "Worktree Serve Needs A Port"]);
   expect(by("handoff")[0]).toMatchObject({ type: "working", key: "current.md", text: "Move the worktree serve to its own port." });
-  expect(by("episode")[0]).toMatchObject({ type: "episodic", title: "aleph-9 Port", text: "Serve a worktree on a port." });
   expect(by("note")[0].effect).toContain("vault recall");
   // A note's line is its claim, not its title.
   expect(by("note").find((x: any) => x.title === "Land From The Main Checkout").text).toContain("A squash merge from inside the worktree");
@@ -115,14 +113,11 @@ test("delete refuses a note with a caller; archive and delete commit", async () 
   expect(gitLog()).toContain("delete: Lone Note");
 });
 
-test("handoffs and episodes are edited and deleted as files; MEMORY.md through vault write; a key outside its folder is 404", async () => {
+test("handoffs are edited and deleted as files; MEMORY.md through vault write; a key outside its folder is 404", async () => {
   writeFileSync(join(hand, "edit-me.md"), "## Intent\n\nOld.\n");
-  writeFileSync(join(eps, "aleph-8 Drop.md"), `---\nkind: episode\nscope: aleph\nupdated: ${day}\n---\n## Goal\nDrop me.\n`);
   expect(((await (await at(fileAt("handoff", "edit-me.md"))).json()) as any).text).toContain("Old.");
   expect((await post(fileAt("handoff", "edit-me.md", "edit"), { text: "## Intent\n\nNew.\n" })).status).toBe(200);
   expect(readFileSync(join(hand, "edit-me.md"), "utf8")).toBe("## Intent\n\nNew.\n");
-  expect((await post(fileAt("episode", "aleph-8 Drop.md", "delete"), {})).status).toBe(200);
-  expect(existsSync(join(eps, "aleph-8 Drop.md"))).toBe(false);
   expect((await post(fileAt("handoff", "../vault/VAULT.md", "delete"), {})).status).toBe(404);
   expect((await post(fileAt("memory-md", "MEMORY.md", "delete"), {})).status).toBe(404);
   const mem = readFileSync(join(vault, "MEMORY.md"), "utf8");

@@ -62,13 +62,9 @@ export interface Reason {
 }
 interface Granted { action: string; at: string }
 
-const proposal = (name: string, line: string): Reason =>
-  ({ actions: ["approve", "disapprove"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change.", chrisOnly: "a memory proposal is Chris's" });
-
 /**
  * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
- * reasons. The second group is kept as it was, because the spec names no new home for it: run-cap and the
- * `proposal-<kind>:<place>` keys.
+ * reasons. The second group is kept as it was, because the spec names no new home for it: run-cap.
  */
 const REASONS = {
   "held-path": { actions: ["approve", "disapprove"], always: "approve", needs: "protected", card: "approve", name: "Lands on held paths",
@@ -101,9 +97,6 @@ const REASONS = {
   // The issue is parked; its option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
   "blocker-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped blockers",
     line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked.", chrisOnly: "an after link to a dropped issue is Chris's" },
-  "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
-  "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
-  "proposal-skill": proposal("Proposed skill changes", "The correction memory proposes a change to a skill."),
 } satisfies Record<string, Reason>;
 
 /** The limits on the text a card shows, in words: the title phrase, the case text, and each choice's text. */
@@ -200,13 +193,11 @@ export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, a
 export const clearAsk = (ref: string): void => record.setIssueAsk(ref, null);
 
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
-/** `user` sends the Ask to Chris with no director run; every reason takes it but the memory proposals. */
+/** `user` sends the Ask to Chris with no director run; every reason takes it. */
 const USER = "user";
-const PROPOSAL = "proposal-";
-/** The grants some code acts on: the reason's first verb, `user`, `discontinue` for intake-failed and `disapprove` for the memory proposals. */
+/** The grants some code acts on: the reason's first verb, `user`, `discontinue` for intake-failed. */
 const allows = (reason: string, r: Reason, action: string): boolean =>
-  action === r.always || (action === USER && !reason.startsWith(PROPOSAL)) ||
-  (action === "discontinue" && reason.startsWith("intake-failed")) || (action === "disapprove" && reason.startsWith(PROPOSAL));
+  action === r.always || action === USER || (action === "discontinue" && reason.startsWith("intake-failed"));
 
 /** The old words of a stored grant and the verbs they read as. */
 const RENAMED: Record<string, string> = { recommended: "resolve", retry: "continue" };

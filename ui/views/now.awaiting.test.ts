@@ -4,7 +4,7 @@ import * as view from "./now.js";
 import { attend } from "../asks.ts";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
-import { asksOf, withAttn, issue, full, rows, problem, prop } from "../now.testkit.ts";
+import { asksOf, withAttn, issue, full, rows, problem } from "../now.testkit.ts";
 
 afterEach(() => setCodes({}));
 
@@ -29,12 +29,11 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
 
 /** The case text the director writes when it escalates: until then, the row offers no action. */
 const CASE = { situation: "The director sent it to you." };
-const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
-  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", state: "waiting", ask: { reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
-  const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { reason: o.reason, question: o.question, options: [], why: [], ...CASE } }], lessons: [] as any[] });
+const sample = (reason: string): { runs: any[]; issues: any[] } => {
+  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", state: "waiting", ask: { reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[] });
+  const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { reason: o.reason, question: o.question, options: [], why: [], ...CASE } }] });
   if (["held-path", "review-held"].includes(reason)) return run(reason, reason === "review-held" ? { reviewCall: { call: "waiting", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
-  if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
     "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
     "run-cap": { reason: "run-cap", question: "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it." },
@@ -48,7 +47,7 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
 test("the deny and answer inputs render hidden", () => {
   for (const reason of ["question"]) {
     const sm = sample(reason);
-    const row = withAttn({ ...state, errored: [], factory: { ...state.factory, health: [] }, asks: attend(sm, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
+    const row = withAttn({ ...state, errored: [], factory: { ...state.factory, health: [] }, asks: attend(sm).items }).match(/<article [^]*?<\/article>/)![0];
     const inputs = row.match(/<input [^>]*>/g) ?? [];
     expect(inputs.length).toBeGreaterThan(0);
     for (const i of inputs) expect(i).toMatch(/\shidden/);
@@ -108,7 +107,7 @@ test("an errored job with a blocker shows the hold action and the blocker id, an
 });
 
 test("an ask and an errored run are one Alerts section, and the errored card has the Ask card structure in the red tone", () => {
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), errored: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }]), errored: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
   const h = withAttn(s);
   expect(h).not.toContain("Errored or failed");
   const errored = h.match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];

@@ -152,9 +152,9 @@ test("the status line says attention is needed when the Issues section has an it
 
 test("a held run asks for your attention once the director escalates it, and not while the director holds it", () => {
   const calm = { ...state, errored: [], factory: { ...state.factory, health: [] } };
-  const withDirector = attend({ runs: [held], issues: [] }, []).items;
+  const withDirector = attend({ runs: [held], issues: [] }).items;
   expect(view.renderLede({ ...calm, asks: withDirector })).not.toMatch(/attention is needed/i);
-  const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }, []).items;
+  const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }).items;
   const h = view.renderLede({ ...calm, asks });
   expect(h).toMatch(/attention is needed/i);
   expect(h).toContain('class="say warning"');

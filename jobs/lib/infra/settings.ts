@@ -81,12 +81,6 @@ export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
 export const INTAKE_TRIES_DEFAULT = 2;
 export const INTAKE_TRIES = () => cap("intakeTries", INTAKE_TRIES_DEFAULT);
-/** How many signals make a lesson a proposal. */
-export const PROPOSE_AT = (): number => {
-  const n = num("ALEPH_PROPOSE_AT", 3);
-  return Number.isFinite(n) && n >= 1 ? n : 3;
-};
-
 export const JOB_SECONDS_DEFAULT = 1800;
 export const jobSeconds = () => cap("jobSeconds", JOB_SECONDS_DEFAULT);
 /** How long an agent call may print nothing before the stall watch stops it. */

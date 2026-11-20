@@ -10,7 +10,7 @@ import { adopt, archive, compile, del, init, lint, misses, recall, renameScopeOp
 
 export interface Io { log: (s: string) => void; err: (s: string) => void }
 
-const USAGE = "usage: aleph memory <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]|maintain [--dry]>";
+const USAGE = "usage: aleph memory <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]|maintain [--dry]>";
 
 /** Print `r` and return the exit code: `code` of the value on success, 1 on a refusal. */
 function print(io: Io, r: Result<unknown>, code: (v: any) => number = () => 0, text = false): number {
@@ -39,11 +39,11 @@ export async function cli(argv: string[], io: Io): Promise<number> {
       return positional[0] && why ? print(io, await write(root, positional[0], why)) : usage('usage: aleph memory write <file.md> --why "<one line>"');
     case "recall": {
       // Only `--scope` takes a value, so only the word after it leaves the query: a bare flag such as
-      // `--episodes` or `--unlogged` leaves the word after it in, wherever the flag stands.
+      // `--unlogged` leaves the word after it in, wherever the flag stands.
       const query = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1] !== "--scope").join(" ").trim().toLowerCase();
       const scope = flag("scope");
-      if (!query && !scope) return usage("usage: aleph memory recall [--episodes] <query> [--scope <name>]  |  aleph memory recall [--episodes] --scope <name>");
-      return print(io, await recall(root, { query, scope, episodes: has("episodes"), unlogged: has("unlogged") }));
+      if (!query && !scope) return usage("usage: aleph memory recall <query> [--scope <name>]  |  aleph memory recall --scope <name>");
+      return print(io, await recall(root, { query, scope, unlogged: has("unlogged") }));
     }
     case "lint": return print(io, await lint(root, { fix: has("fix"), overlap: has("overlap"), template: has("template") }), (v) => (v.refuse.length ? 1 : 0));
     case "adopt":

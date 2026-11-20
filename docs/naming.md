@@ -69,10 +69,10 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
   - Invariants: at most one Ask per issue. The first verb of a pair goes ahead and the second drops the issue.
   - Relations: one issue. At most one job, the one that asked.
 - **Always**
-  - Identity: a reason plus a scope. The key is the reason alone (all projects) or the reason, a colon and a project key (such as `held-path:aleph`). Proposal rules keep their key of a proposal reason, a colon and a place (such as `proposal-skill:aleph`).
+  - Identity: a reason plus a scope. The key is the reason alone (all projects) or the reason, a colon and a project key (such as `held-path:aleph`).
   - Lifecycle: granted, revoked. Each logs `changed` on `settings`.
   - Owner: the `always` setting, in the `settings` table.
-  - Invariants: a grant takes a verb of the reason's pair, or `user` (not for a proposal reason). The Always action of a card is the first verb of its pair. The lookup for a reason in a project returns the project grant, else the all grant.
+  - Invariants: a grant takes a verb of the reason's pair, or `user`. The Always action of a card is the first verb of its pair. The lookup for a reason in a project returns the project grant, else the all grant.
   - Relations: one reason. At most one project.
 - **Hold**
   - Identity: the issue key. A Hold has no key and no row of its own: it is an event of the issue.
@@ -134,11 +134,11 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
+| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened |
 | Hold | yes | factory gates: pause, credit, cap; issue holds: after, job, file, red, credit |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
-| Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped, proposal-check, proposal-claude-md, proposal-skill |
+| Ask reason | yes | held-path, review-held, question, no-commit, part-dropped, intake-failed, rescue, run-cap, core-change, blocker-dropped |
 | Role | yes, never shown | build, plain, land, review, intake, recheck, director, monitor, lens, housekeeper, maintainer, title, judge |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |

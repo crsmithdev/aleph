@@ -97,9 +97,7 @@ With the variable set, the hook denies a command that is not a prefix or a prefi
 1. No code file changed (`.md` and `.mdx` do not count): pass.
 2. The prompt says `skip verify`: pass. Factory runs cannot use this.
 3. The gate has denied twice this turn: pass.
-4. The final message cites a commit hash that the turn never showed: deny (`hooks/lib/hashes.ts`).
-5. The final message says a doc matches the code with no run, value or `file:line` behind it: deny (`hooks/lib/docclaims.ts`).
-6. Else the judge decides (see [Routing](routing.md#judge)).
+4. Else the judge decides (see [Routing](routing.md#judge)).
 
 A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot answer passes the turn as `fail-open`. Each outcome posts a `guardrail` span and a `verified` score to Langfuse. The design and the evidence are in [the verify gate decision](verify-gate.md).
 

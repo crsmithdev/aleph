@@ -1,6 +1,6 @@
 /**
  * A factory run as one Langfuse trace, under the run's id: the unit posts it after the run, from the worker's
- * and the reviewer's stream-json. episode.ts reads it back by that id.
+ * and the reviewer's stream-json.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resultContent } from "../../../lib/toolresult.ts";

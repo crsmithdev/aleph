@@ -64,7 +64,6 @@ Only Chris can say `skip verify`.
 - Verify from inside the worktree you edited.
 - For an interactive check, start a one-off server on a free port at or above 3002, and kill it after. A shared server does not run your code.
 - Run a headless check as `claude -p` with `CLAUDECODE` unset.
-- Check each status claim against the tool output that produced it. Name each task by its ID before you report on it.
 
 ## Browser
 

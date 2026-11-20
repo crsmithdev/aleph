@@ -4,8 +4,6 @@
  */
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readUses } from "../../lib/episode-use.ts";
-import { layout } from "../../lib/layout.ts";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
@@ -14,7 +12,6 @@ import { daysAgo, today } from "../../lib/day.ts";
 import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, trimRecallLog, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
-const SHOWN_UNOPENED = 8;
 const OVERLAP_QUEUE = 10;
 type Json = Record<string, any>;
 
@@ -79,15 +76,6 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
   const compiled = compiledDays(root);
   report.handoffs = move(handoffsDir(), join(backup, "handoffs"), dry, dated, daysAgo(HANDOFF_DAYS), (d) => compiled.includes(d));
 
-  // An episode page shown often and never opened does not help: it moves to the backup, and nothing is deleted.
-  const uses = readUses();
-  const shown = (t: string, event: string) => uses.filter((u) => u.title === t && u.event === event).length;
-  const pages = join(layout().factory, "episodes");
-  report.episodes = (existsSync(pages) ? readdirSync(pages) : []).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3))
-    .filter((t) => shown(t, "shown") >= SHOWN_UNOPENED && !shown(t, "opened"));
-  if (!dry && report.episodes.length) mkdirSync(join(backup, "episodes"), { recursive: true });
-  if (!dry) for (const t of report.episodes) renameSync(join(pages, `${t}.md`), join(backup, "episodes", `${t}.md`));
-
   if (!dry) {
     try { trimRecallLog(root); } catch { failed.push("recall trim"); }
   }
@@ -98,7 +86,7 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
   report.queues = { decay: decayQueue(root, queue("stale")), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.ok ? { misses: misses.value } : {}) };
   const overlaps = queue("overlap").length;
   report.counts = {
-    fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length, episodes: report.episodes.length,
+    fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length,
     decay: report.queues.decay.length, overlap: overlaps, retry: retry ? 1 : 0,
   };
   report.ok = !failed.length;

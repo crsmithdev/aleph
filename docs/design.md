@@ -1525,28 +1525,6 @@ The Needs-you strip lists what in the memory waits for Chris. An item shows only
 |---|---|
 | `start 2 core lines cut` | an item at 0 |
 
-#### Lesson row
-
-A lesson row shows one open lesson: the rule it teaches, its age, and the Approve and Decline buttons.
-
-**Use:** in the Lessons card of Automation's Memory Jobs. **Not for:** an Ask; use an ask card.
-
-| Helper | Reference |
-|---|---|
-| `lessonList(lessons)` in `ui/views/lib/processes.js` | `ui/views/gates.js` |
-
-| # | Part | Holds | Optional | Style |
-|---|---|---|---|---|
-| 1 | Rule | The lesson's sentence | | `--fs-sm`; wraps |
-| 2 | Age | Days since its first signal | yes | `--muted` |
-| 3 | Actions | Approve, the primary, and Decline | | `actButton()`; under the rule below 720px |
-
-- Post through the router's `act` buttons, so the page reloads after the answer.
-
-| Do | Don't |
-|---|---|
-| `15 d` | the signal's timestamp |
-
 ## Views
 
 A page is a view module in `ui/views/`. The router reads its `view` object (the comment at the top of `ui/views/lib/router.js`).

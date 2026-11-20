@@ -24,7 +24,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     errored: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
     asks: [{ key: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
-    usage: "object?", proposals: "array",
+    usage: "object?",
   },
   "/api/status": { tone: "string" },
   "/api/automation": {
@@ -89,8 +89,6 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/memory/log": { project: "string?", rows: [{ at: "string", kind: "string", op: "string", note: "string", why: "string", titles: ["string"] }] },
   "/api/memory/processes": {
     steps: [{ name: "string", runs: "string", last: "string?", next: "string?", result: "string?", does: "string" }],
-    episodes: { pages: "number", keep: "number", days: [{ date: "string", pages: "number", finished: "number" }], prunes: [{ at: "string", text: "string" }] },
-    corrections: { states: { "*": "number" }, waiting: [{ id: "string", sentence: "string", state: "string", since: "string?" }] },
     decay: { stale: [{ note: "string", detail: "string", window: "number", over: "number" }] },
   },
   "/api/memory/search": { q: "string", results: [{ type: "string", source: "string", key: "string", title: "string" }] },

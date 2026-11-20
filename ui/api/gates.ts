@@ -58,14 +58,12 @@ export function askHistory(): AskSpan[] {
 
 /**
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what the `always` setting grants.
- * A `proposal-<kind>` reason is granted per place (`proposal-<kind>:<place>`); its row lists those keys.
  */
 export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.now(), ms = LOG_DAYS * DAY) {
   const granted = readAlways(), timeouts = readTimeouts();
   const from = now - ms, SLACK = 60_000;
   const recent = asks.filter((a) => Date.parse(a.set) >= from);
   return Object.entries(ASK_REASONS).map(([reason, r]) => {
-    const perPlace = reason.startsWith("proposal-");
     const g = granted[reason];
     const mine = recent.filter((a) => a.reason === reason);
     const decided = { rule: 0, director: 0, chris: 0 }, outcome = { fixed: 0, none: 0 };
@@ -80,8 +78,7 @@ export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.
       reason, ...reasonText(reason), mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
       ...(TIMED.includes(reason) ? { timeout: timeouts[reason]?.minutes ?? 0, noAnswer: timeouts[reason]?.then ?? "pick" } : {}),
-      ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) }
-        : { projects: Object.entries(granted).filter(([k]) => k.startsWith(`${reason}:`)).map(([k, x]) => ({ project: k.slice(reason.length + 1), action: x.action, at: x.at })) }),
+      projects: Object.entries(granted).filter(([k]) => k.startsWith(`${reason}:`)).map(([k, x]) => ({ project: k.slice(reason.length + 1), action: x.action, at: x.at })),
     };
   });
 }
@@ -165,7 +162,7 @@ const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds
 export function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   const rows = tickRows(), missed = tickMissed();
-  const times = ["ci", "firefight", "episodes"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));
+  const times = ["ci", "firefight"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));
   const suite: Record<string, { at: string; result: string }> = {};
   for (const [k, v] of Object.entries(rows)) if (k.startsWith("suite ") && v.last) suite[k.slice(6)] = { at: v.last, result: v.result ?? "" };
   const monitor = rows.monitor?.last ? { at: rows.monitor.last, result: rows.monitor.result } : null;

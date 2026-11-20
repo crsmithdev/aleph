@@ -68,11 +68,6 @@ test("only lib/git.ts and skills/refit-code/ spawn git directly", () => {
 
 // Each owner below keeps one rule for its job; a copy elsewhere skips that rule.
 
-test("only jobs/lib/learning/episode.ts calls episodesDir(): it keeps the file-name rule and the KEEP_DAYS prune", () => {
-  // ui/updater.ts watches the folder as a whole and lists no page.
-  expect(offenders(/\bepisodesDir\(/, ["jobs/lib/learning/episode.ts", "ui/updater.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
-});
-
 test("only lib/errtext.ts writes an error's text, and no file types a catch as any", () => {
   expect(offenders(/\?\.message \?\? String\(|catch \(\w+: any\)/, ["lib/errtext.ts"], ["{jobs,ui,vault,hooks,lib,issues,herdr}/**"])).toEqual([]);
 });

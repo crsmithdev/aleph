@@ -34,7 +34,7 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 
 | Word | Means |
 |---|---|
-| Issue | What someone asks for: Chris, a worker, the corrections or a session |
+| Issue | What someone asks for: Chris, a worker or a session |
 | Sub-issue | An issue that intake split from a large issue, with a `from` link to the parent |
 | Spec | Goal, Edit surface and Oracle: what to change, where, and the check that proves it |
 | Job | All the runs on one issue, with one record |

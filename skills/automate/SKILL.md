@@ -48,7 +48,7 @@ The argument sets the scope:
    | `command` | One Bash command shape in three or more sessions |
    | `prompt` | One prompt from Chris in three or more sessions |
    | `lookup` | One read-only lookup (a Read, Grep or Glob call, or a Bash command that only reads) in three or more sessions, keyed by the path or the command shape. A path the same session edits or writes is left out |
-   | `misled` | The first prompt Chris typed after the assistant read a vault note (a Read of `~/.aleph/vault/wiki/**.md`, or an `aleph memory recall` result without `--episodes`), keyed by the note's title. One session is enough |
+   | `misled` | The first prompt Chris typed after the assistant read a vault note (a Read of `~/.aleph/vault/wiki/**.md`, or an `aleph memory recall` result), keyed by the note's title. One session is enough |
 
 2. **Read the other sources** for the same window. Done when each one has a count or a reason it has none.
    - Git, for each project in `~/.aleph/items/projects/*/project.md` (the `path:` line of its frontmatter): reverts, and fixes to code
@@ -74,7 +74,7 @@ The argument sets the scope:
      or a session started before a fix keeps an error alive after main is fixed.
 
    A `gate` or `loop` finding asks whether the gate is wrong, not whether the agent was.
-   `jobs/lib/learning/corrections.ts` already turns denials into lessons for the agent. Read three denials
+   Read three denials
    from the `ids` sessions, the latest in each. For each one, decide whether the claim was unverified (the gate was right) or was
    verified or was not a claim (the gate was too strict).
 

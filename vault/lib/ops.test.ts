@@ -658,35 +658,13 @@ describe("recall", () => {
     expect(none.code).toBe(0);
     expect(none.json).toEqual([]);
   });
-  test("--episodes searches only the episode pages, keeps the next word in the query, and --scope filters them", async () => {
-    const factory = join(base, "factory");
-    mkdirSync(join(factory, "episodes"), { recursive: true });
-    writeFileSync(join(factory, "episodes", "aleph-1 Zebra.md"), "---\nkind: episode\nscope: aleph\nupdated: 2026-11-04\n---\n\nThe zebraquill page.\n");
-    (await cli("write", note("Verify Gate"), "--why", "x"));
-    const env = { ALEPH_VAULT: vault, ALEPH_FACTORY_DIR: factory };
-    const hit = (await run(env, "recall", "--episodes", "zebraquill")).json;
-    expect(hit).toHaveLength(1);
-    expect(hit[0]).toMatchObject({ title: "aleph-1 Zebra", scope: "aleph", rank: 3, path: join(factory, "episodes", "aleph-1 Zebra.md") });
-    expect(hit[0].frontmatter.kind).toBe("episode");
-    const use = readFileSync(join(factory, "episode-use.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
-    expect(use.map(({ title, event }) => ({ title, event }))).toEqual([{ title: "aleph-1 Zebra", event: "shown" }]);
-    expect((await run(env, "recall", "zebraquill")).json).toEqual([]);
-    expect((await run(env, "recall", "--episodes", "verify", "gate")).json).toEqual([]);
-    expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "beamline")).json).toEqual([]);
-    expect((await run(env, "recall", "--episodes", "zebraquill", "--scope", "aleph")).json).toHaveLength(1);
-  });
   test("a query returns the top 10 matches, and --scope alone lists every note", async () => {
-    const factory = join(base, "factory");
-    mkdirSync(join(factory, "episodes"), { recursive: true });
     mkdirSync(join(vault, "wiki", "gotchas"), { recursive: true });
     for (let i = 0; i < 12; i++) {
-      writeFileSync(join(factory, "episodes", `aleph-${i} Page.md`), `---\nkind: episode\nscope: aleph\nupdated: 2026-11-04\n---\n\nThe quokkaflux page.\n`);
       writeFileSync(join(vault, "wiki", "gotchas", `Quokka ${i}.md`), readFileSync(note(`Quokka ${i}`), "utf8"));
     }
-    const env = { ALEPH_VAULT: vault, ALEPH_FACTORY_DIR: factory };
-    expect((await run(env, "recall", "--episodes", "quokkaflux")).json).toHaveLength(10);
-    expect((await run(env, "recall", "quokka")).json).toHaveLength(10);
-    expect((await run(env, "recall", "--episodes", "--scope", "aleph")).json).toHaveLength(12);
+    expect((await cli("recall", "quokka")).json).toHaveLength(10);
+    expect((await cli("recall", "--scope", "aleph")).json.length).toBeGreaterThanOrEqual(12);
   });
   test("--scope narrows the search, and alone it lists the scope", async () => {
     (await cli("write", note("Scoped To Beamline", { scope: "beamline" }), "--why", "x"));
@@ -841,7 +819,7 @@ describe("misses", () => {
   test("recallQuery takes cli.ts and vault recall as a command word only", async () => {
     expect(recallQuery('bun ~/.claude/skills/aleph/vault/cli.ts recall "x"')).toBe("x");
     expect(recallQuery('cd v && bun cli.ts recall "y z" --scope aleph | head')).toBe("y z");
-    expect(recallQuery("vault recall --episodes a b")).toBe("a b");
+    expect(recallQuery("vault recall --unlogged a b")).toBe("a b");
     expect(recallQuery('aleph memory recall "x" --scope aleph')).toBe("x");
     expect(recallQuery("aleph memory lint")).toBeNull();
     expect(recallQuery('grep "cli.ts recall" f')).toBeNull();
@@ -982,25 +960,5 @@ describe("maintain", () => {
     expect(readdirSync(handoffs).sort()).toEqual([`${day(41)}-101010-not-compiled.md`, `${day(5)}-101010-recent.md`]);
     expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("core: Terse [[UI Text]] always");
     expect(gitLog()).toContain("maintain core: 1 notes");
-  });
-
-  describe("episode pages", () => {
-    const pages = () => join(base, "factory", "episodes");
-    beforeEach(() => {
-      const lines = (title: string, event: string, n: number) => Array.from({ length: n }, () => JSON.stringify({ date: day(1), title, event, session: null }) + "\n").join("");
-      for (const t of ["aleph-1 A", "aleph-2 B", "aleph-3 C"]) put(join(pages(), `${t}.md`), "---\nkind: episode\n---\n");
-      put(join(base, "factory", "episode-use.jsonl"), lines("aleph-1 A", "shown", 8) + lines("aleph-2 B", "shown", 8) + lines("aleph-2 B", "opened", 1) + lines("aleph-3 C", "shown", 7));
-    });
-    test("moves the page shown 8 times and never opened, and no other", async () => {
-      const r = await run(env(), "maintain");
-      expect(r.json).toMatchObject({ episodes: ["aleph-1 A"], counts: { episodes: 1 } });
-      expect(readdirSync(join(backups, "maintain", readdirSync(join(backups, "maintain"))[0], "episodes"))).toEqual(["aleph-1 A.md"]);
-      expect(readdirSync(pages()).sort()).toEqual(["aleph-2 B.md", "aleph-3 C.md"]);
-    });
-    test("--dry reports the same page and moves none", async () => {
-      const r = await run(env(), "maintain", "--dry");
-      expect(r.json).toMatchObject({ episodes: ["aleph-1 A"], counts: { episodes: 1 } });
-      expect(readdirSync(pages()).sort()).toEqual(["aleph-1 A.md", "aleph-2 B.md", "aleph-3 C.md"]);
-    });
   });
 });

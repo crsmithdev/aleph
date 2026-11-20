@@ -1,7 +1,7 @@
-import { conn, putJson } from "../lib/db.ts";
+import { conn } from "../lib/db.ts";
 import { setTick } from "../jobs/lib/gates/tables.ts";
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, mkdirSync, utimesSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,8 +65,6 @@ beforeAll(async () => {
   note("gotchas", "Other trap", "gotcha", "other", "**Claim.** A trap; see [[Use Bun]].");
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
   writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nChris prefers short answers.\n");
-  mkdirSync(join(base, "factory", "episodes"), { recursive: true });
-  writeFileSync(join(base, "factory", "episodes", "aleph-1 Ship.md"), `---\nkind: episode\nscope: aleph\nupdated: ${today}\n---\n## Goal\nShip it.\n`);
   const hand = join(base, "handoffs");
   mkdirSync(hand);
   writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");
@@ -91,11 +89,6 @@ afterAll(() => {
   stop();
   restoreEnv();
   rmSync(base, { recursive: true, force: true });
-});
-
-test("the search lists the pages in the factory's episodes folder", async () => {
-  const r: any = await (await at("/api/memory/search?q=")).json();
-  expect(r.results.filter((x: any) => x.source === "episode").map((x: any) => [x.title, x.scope, x.at, x.text])).toEqual([["aleph-1 Ship", "aleph", today, "Ship it."]]);
 });
 
 test("?project= keeps only that project's data", async () => {
@@ -465,7 +458,6 @@ test("the inspector says how a memory reaches the agent, shows its recall histor
   expect(hand).not.toContain("Recall history");
   expect(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1])).not.toContain("aleph-chart");
   expect(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" }))).toContain("change it on a branch");
-  expect(v.renderInspector(it({ type: "procedural", source: "proposal", key: "p1" }))).toContain('data-mact="approve"');
   expect(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" }))).toContain('data-mact="drop"');
   expect(v.renderInspector(it({ title: "<x>" }))).toContain("&lt;x&gt;");
   expect(v.renderInspector(null)).toContain("Select a memory");
@@ -489,44 +481,29 @@ test("/api/memory/log lists writes and recalls newest first, one recall per call
   } finally { rmSync(log, { force: true }); rmSync(daily, { force: true }); await fresh(); }
 });
 
-test("/api/memory/processes reads the tick, the corrections store, the episode pages and the stale notes", async () => {
-  utimesSync(join(base, "factory", "episodes", "aleph-1 Ship.md"), NOW / 1000, NOW / 1000);
-  setTick("episodes", { last: "2026-11-04T11:30:00.000Z", result: "failed: no page" });
-  setTick("maintain", { last: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 0 lessons · 2 notes" });
+test("/api/memory/processes reads the tick and the stale notes", async () => {
+  setTick("maintain", { last: "2026-11-04T10:00:00.000Z", result: "dry: 1 fixed · 2 notes" });
   const runs0 = join(base, "vault", ".index", "runs");
   mkdirSync(runs0, { recursive: true });
   writeFileSync(join(runs0, "maintain.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: `dry: ${JSON.stringify({ decay: 3, overlap: 5 })}` }));
   writeFileSync(join(runs0, "compile.json"), JSON.stringify({ at: "2026-11-04T10:00:00.000Z", result: "ok", detail: "dry: 2026-11-03: 2 notes" }));
-  const signal = (at: string) => ({ id: at, source: "chris", at, quote: "q", link: "" });
-  putJson("state", "corrections", { minedAt: "2026-11-04T11:00:00.000Z", lessons: [{ id: "l1", sentence: "Run the checks.", state: "proposed", signals: [signal("2026-11-02T10:00:00.000Z"), signal("2026-11-01T10:00:00.000Z")] }, { id: "l2", sentence: "Old.", state: "declined", signals: [] }] });
   try {
     const m = await (await at("/api/memory/processes")).json() as any;
     expect(m.steps.map((s: any) => [s.name, s.last, s.next, s.result])).toEqual([
-      ["episodes", "2026-11-04T11:30:00.000Z", "2026-11-04T12:00:00.000Z", "failed: no page"],
-      ["maintain", "2026-11-04T10:00:00.000Z", m.steps[1].next, "dry: 1 fixed · 0 lessons · 2 notes"],
+      ["maintain", "2026-11-04T10:00:00.000Z", m.steps[0].next, "dry: 1 fixed · 2 notes"],
       ["seen prune", null, null, null],
       ["recall trim", null, null, null],
       ["vault push", null, null, null],
     ]);
-    expect(m.steps[1]).toMatchObject({ name: "maintain", runs: "daily after 03:00", next: "2026-11-05T03:00:00.000Z", detail: "decay 3 · overlap 5 · 2 notes" });
+    expect(m.steps[0]).toMatchObject({ name: "maintain", runs: "daily after 03:00", next: "2026-11-05T03:00:00.000Z", detail: "decay 3 · overlap 5 · 2 notes" });
     const runs = join(base, "vault", ".index", "runs");
     writeFileSync(join(runs, "seen prune.json"), JSON.stringify({ at: "2026-11-04T11:45:00.000Z", result: "ok" }));
     writeFileSync(join(runs, "vault push.json"), JSON.stringify({ at: "2026-11-04T11:50:00.000Z", result: "failed", detail: "no route" }));
     await fresh("factory");
-    const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(2).map((s: any) => [s.name, s.last, s.result, s.detail]);
+    const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(1).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
     const row = renderMemoryJobs(await (await at("/api/memory/processes")).json()).split("<tr>").find((t: string) => t.includes("vault push"))!;
     expect(row).toContain('<span class="badge error" title="no route">failed</span>');
-    expect(m.episodes.pages).toBe(1);
-    expect(m.episodes.days.at(-1)).toEqual({ date: today, pages: 1, finished: 0 });
-    expect(m.corrections).toEqual({ states: { declined: 1, proposed: 1 }, waiting: [{ id: "l1", sentence: "Run the checks.", state: "proposed", since: "2026-11-01T10:00:00.000Z" }] });
-    const h = renderMemoryJobs(m);
-    expect(h).toContain("Run the checks.");
-    expect(h).toContain('data-act="approve" data-path="/api/proposals/l1/approve"');
-    expect(h).toContain('data-act="decline" data-path="/api/proposals/l1/decline"');
-    expect(h).toContain('<span class="badge error">failed: no page</span>');
-    expect(renderMemoryJobs({ ...m, steps: [{ ...m.steps[0], result: "2 written" }] })).toContain('<span class="badge done">2 written</span>');
-    expect(h).toContain("You decided 1: 0 of 1 approved (0.0%).");
   } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
@@ -561,13 +538,12 @@ test("a day frame counts the rows it keeps per local day, oldest first, and writ
 });
 
 test("the Needs-you strip shows each item only over its act-threshold, and nothing when none is", () => {
-  const old = new Date(NOW - 10 * 86400_000).toISOString();
   const m = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 }, global: { cut: 0 } }, misses: { unoffered_reads: 11 },
-    processes: { corrections: { waiting: [{ id: "l", sentence: "s", state: "open", since: old }] }, decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
+    processes: { decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
   const h = needs(m, NOW);
-  for (const t of ["1 lesson wait, oldest 10 d", "2 core lines cut", "1 note refused", "11 reads nobody offered", "1 note over 30 d late"]) expect(h).toContain(t);
+  for (const t of ["2 core lines cut", "1 note refused", "11 reads nobody offered", "1 note over 30 d late"]) expect(h).toContain(t);
   expect(h).toContain('<span class="badge error">refused</span>');
-  const calm = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { corrections: { waiting: [{ id: "l", sentence: "s", state: "open", since: new Date(NOW).toISOString() }] }, decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
+  const calm = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
   expect(needs(calm, NOW)).toBe("");
 });
 

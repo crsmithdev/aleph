@@ -6,7 +6,7 @@ import { count, day, localMs, plural, hours, pct, when } from "./lib/format.js";
 import { clamp, fold, toc, wireToc, actButton, say, badge, card, cell, row, miss, note, notice, dataTable, pagedTable, empty, error, esc, filterBar, inputBox, selectBox, setting, settings, meter, heads, chip, idLink, pageOf, pageRows, pager, pageHead, seg, statCard, tiles } from "./lib/html.js";
 import { contentText, issueHref, linked, parseId, shownId } from "../../lib/naming.ts";
 import { findingHtml, findingsList } from "./lib/feed.js";
-import { mountMemoryJobs, renderMemoryJobs } from "./lib/processes.js";
+import { renderMemoryJobs } from "./lib/processes.js";
 
 export const view = {
   path: "/automation",
@@ -21,7 +21,7 @@ export const view = {
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
-  mount: (root, d) => { mount(root); mountMemoryJobs(root, d.processes); },
+  mount: (root) => mount(root),
 };
 
 /** `#/gates` (with or without a query) is now `#/automation`. */
@@ -36,7 +36,7 @@ export const BY = Object.fromEntries(["human", "rule", "director", "firefighter"
 
 const PAGE = 50;
 
-const CONTENTS = [["gates-schedules", "Schedules"], ["memory-jobs", "Memory Jobs"], ["memory-lessons", "Lessons", true], ["memory-episodes", "Episodes", true], ["gates-caps", "Controls"], ["monitor", "Monitor"],
+const CONTENTS = [["gates-schedules", "Schedules"], ["memory-jobs", "Memory Jobs"], ["gates-caps", "Controls"], ["monitor", "Monitor"],
   ["rules", "Rules"], ["gates-held", "Held Paths"], ["gates-log", "Log"]];
 
 export function renderGates(d, q = new URLSearchParams()) {
@@ -122,7 +122,7 @@ const splitWait = (m) => { const [unit, k] = WAITS.find(([, k]) => m % k === 0);
 const waitText = (m) => { const { n, unit } = splitWait(m); return `${count(n)} ${unit}`; };
 
 /** Who decides a reason first: a rule's action when the always setting grants one, else the director. */
-const decidesText = (r) => (r.places ? (r.places.length ? `Approve for ${r.places.map((k) => k.slice(k.indexOf(":") + 1)).join(", ")}` : "Director") : r.granted ? modeLabel(r.granted.action) : "Director");
+const decidesText = (r) => (r.granted ? modeLabel(r.granted.action) : "Director");
 
 /** What happens when an escalated Ask gets no answer: it keeps waiting, or after the timeout the director's pick is taken or the Ask is dropped. */
 const noAnswerText = (r) => (r.timeout ? `After ${waitText(r.timeout)}: ${r.noAnswer === "drop" ? "drop" : "take the pick"}` : "Keep waiting");
@@ -134,9 +134,6 @@ function decidedCell(d) {
   const line = `${count(d.rule)} rule · ${count(d.director)} director · ${count(d.chris)} user`;
   return meter([["rule", d.rule], ["dir", d.director], ["user", d.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), line) + `<small class="split">${esc(line)}</small>`;
 }
-
-/** A reason has an Edit row unless it is a memory proposal, which is granted per place. */
-const editable = (r) => !r.places;
 
 /** The settings form of a reason, under the table and hidden until its Edit button opens it. Save posts only what changed. */
 function ruleForm(r) {
@@ -158,9 +155,9 @@ function ruleForm(r) {
 export function renderRules(d) {
   const rows = d.rules.map((r) => row([
     cell(r.name, { wide: true, title: [r.reason, r.line].filter(Boolean).join(" ") }), cell(count(r.fired), { num: true }), `<td class="decided">${decidedCell(r.decided)}</td>`,
-    cell(decidesText(r)), cell(noAnswerText(r)), `<td class="acts">${editable(r) ? actButton("Edit", { "edit-rule": r.reason }, { kind: "small" }) : ""}</td>`])).join("");
+    cell(decidesText(r)), cell(noAnswerText(r)), `<td class="acts">${actButton("Edit", { "edit-rule": r.reason }, { kind: "small" })}</td>`])).join("");
   return card("Rules", !rows ? empty() :
-    dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }) + d.rules.filter(editable).map(ruleForm).join(""), { id: "rules" });
+    dataTable(heads(["Ask", "Fired", "Decided By", "Decides", "If No Answer", ""], ["Fired"]), rows, { id: "rules-table" }) + d.rules.map(ruleForm).join(""), { id: "rules" });
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */

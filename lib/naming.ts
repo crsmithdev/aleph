@@ -52,9 +52,8 @@ export const OLD: Record<string, Record<string, string>> = {
   },
 };
 
-/** The new word for `w` in set `set`; an `ask` reason `proposal-*` is `proposal`. */
+/** The new word for `w` in set `set`. */
 export function word(set: string, w: string): string {
-  if (set === "ask" && String(w).startsWith("proposal-")) return "proposal";
   return OLD[set]?.[w] ?? w;
 }
 

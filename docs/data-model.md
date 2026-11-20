@@ -205,9 +205,9 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 
 | Table | Holds | Writer |
 |---|---|---|
-| `tick` | One row per step: `step`, `last` (the time it last ran) and `result` (`ok`, a short summary or `failed: <error>`). The periodic steps `ci`, `episodes` and `firefight` keep their due time in `last`. Each suite (`suite <repo>`) and the monitor have a row | Tick and every step |
+| `tick` | One row per step: `step`, `last` (the time it last ran) and `result` (`ok`, a short summary or `failed: <error>`). The periodic steps `ci` and `firefight` keep their due time in `last`. Each suite (`suite <repo>`) and the monitor have a row | Tick and every step |
 | `settings` | Rows `caps` (`{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}`; an env var wins), `models` (`{<size or role model>: {enabled, model}}`), `always` (`{<reason>: {action, at}}`), `timeouts` (`{<reason>: {minutes, then}}`; `then` is `pick` or `drop`; a bare number is minutes with `pick`), `paused` (the time of the pause, `null` when resumed) and `judge` (`jev` or `haiku`). Value is JSON | Automation page, Gates page, `aleph pause`, `aleph models`, `aleph always`, `aleph judge` |
-| `state` | Rows `baseline` (`{<repo>: {commit, ok, failed?}}`), `ci` (GitHub CI state per repo), `stalls` (stall first-seen times), `smoke` (failures in a row), `backend-hold`, `reran` (CI runs rerun), `recheck-held`, `housekeeper`, `corrections` (signals and lessons), `tick.missed` and `tick.suite`. Value is JSON | Tick, suite, firefighter, housekeeper, corrections |
+| `state` | Rows `baseline` (`{<repo>: {commit, ok, failed?}}`), `ci` (GitHub CI state per repo), `stalls` (stall first-seen times), `smoke` (failures in a row), `backend-hold`, `reran` (CI runs rerun), `recheck-held`, `housekeeper`, `tick.missed` and `tick.suite`. Value is JSON | Tick, suite, firefighter, housekeeper |
 | `usage` | `seq`, `time`, `seven_day`, `seven_day_resets_at`: one row per 10 minutes; `pollOnce` writes all three | `pollOnce` in `ui/usage.ts` |
 | `openrouter` | `seq`, `time`, `usage`, `factor`: the key's lifetime USD and the rate per list dollar | `pollOpenRouter` in `ui/usage.ts` |
 | `jev` | `seq`, `time`, `cost`: one row per Jev call | `decide` in `lib/jev.ts` |
@@ -220,14 +220,8 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 |---|---|---|
 | `baseline/<repo>/` | The suite's `checks.log` | `aleph suite` |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
-| `episodes/` | One page per finished issue; kept 90 days | Episodes |
-| `episode-use.jsonl` | `{date, title, event}` per line; `event` is `shown` or `opened`; kept 90 days | `aleph memory recall --episodes`, the `episode-open.ts` hook |
 | `standing-retry/` | Runs an Always `continue` started | Intake |
 | `dispatch.log` | Output of detached dispatch, intake, director and suite | `launch.ts` |
-
-### Corrections
-
-The `corrections` row of `state` holds `{minedAt, lessons[]}` (`jobs/lib/learning/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
 
 ## Vault: `vault/`
 

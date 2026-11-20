@@ -5,7 +5,6 @@
  *   Stop              unchanged tree and no edits → pass silently
  *                     "skip verify" from the user → pass
  *                     two denials already → forced pass
- *                     a cited hash or a doc claim no run backs → deny
  *                     otherwise ask the judge; deny with its reason
  *                     record a guardrail span and a score, unless unchanged
  */
@@ -13,17 +12,15 @@ import { resolve } from "node:path";
 import { isAgent, langfuseConfig, sessionEnvironment } from "../../lib/env.ts";
 import { expand, home } from "../../lib/paths.ts";
 import { postScore, truncate, turnTraceIdFor } from "../../lib/otlp.ts";
-import { digest, readEntries, userGrantedSkip } from "./digest.ts";
-import { docClaimProblems } from "./docclaims.ts";
+import { digest, userGrantedSkip } from "./digest.ts";
 import { denials, snap } from "./handshake.ts";
-import { backing, unbackedHashes } from "./hashes.ts";
 import { judge as realJudge } from "../../jobs/lib/roles/judge.ts";
 import { changedFiles, isCode, snapshot } from "./snapshot.ts";
 import { postTurnSpan } from "./trace.ts";
 
 const MAX_DENIALS = 2;
 
-export type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "hash" | "doc-claim" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
+export type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
 
 /** The hook's event in; the Stop outcome out, or null for any other event and for a factory agent. */
 export async function gate(input: Record<string, any>, deps = { judge: realJudge }): Promise<Outcome | null> {
@@ -54,7 +51,6 @@ export async function gate(input: Record<string, any>, deps = { judge: realJudge
     .flat().map(treeOf));
   const codeChanged = before !== null && after !== null && changedFiles(before, after).some((f) => isCode(f) && named.has(treeOf(f)));
   const changed = codeChanged || (after === null && d.edits.some(isCode));
-  const unbacked = (message: string, transcript: string | undefined, id: string) => unbackedHashes(message, backing(readEntries(transcript ?? "", id)));
 
   let outcome: Outcome;
   if (!changed) {
@@ -63,16 +59,8 @@ export async function gate(input: Record<string, any>, deps = { judge: realJudge
     outcome = { verdict: "pass", kind: "skip", reason: "user said skip verify", score: 1 };
   } else {
     const n = denials(promptId).count();
-    // A deterministic check before the judge: a cited commit hash that nothing in the turn shows.
-    const hashes = unbacked(d.finalMessage, input.transcript_path, promptId);
-    const docProblems = hashes.length ? [] : docClaimProblems(readEntries(input.transcript_path ?? "", promptId), d.finalMessage);
     if (n >= MAX_DENIALS) {
       outcome = { verdict: "pass", kind: "forced", reason: `passed after ${n} denials`, score: 0.5 };
-    } else if (hashes.length) {
-      const cited = hashes.map((h) => `${h} (run git show --stat ${h})`).join(", ");
-      outcome = { verdict: "deny", kind: "hash", reason: `The final message cites commit ${cited}, and no command or output this turn shows ${hashes.length > 1 ? "them" : "it"}.`, score: 0 };
-    } else if (docProblems.length) {
-      outcome = { verdict: "deny", kind: "doc-claim", reason: `The final message says a doc matches the code, and ${docProblems.join("; and ")}.`, score: 0 };
     } else {
       const result = await deps.judge(d.text, d.finalMessage);
       if (!result.verdict) {

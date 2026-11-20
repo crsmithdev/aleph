@@ -24,15 +24,12 @@ export function writeWeeks(rows, now = Date.now()) {
   return { week, median: sorted[1], lo: sorted[0], hi: sorted[2] };
 }
 
-/** The lessons' age, the cut core lines, the refusals, the unoffered reads and the notes far past their re-check, each shown only over its act-threshold. */
+/** The cut core lines, the refusals, the unoffered reads and the notes far past their re-check, each shown only over its act-threshold. */
 export function needs(m, now = Date.now()) {
-  const waiting = m.processes?.corrections.waiting ?? [];
-  const oldest = Math.max(0, ...waiting.filter((l) => l.since).map((l) => age(l.since, now)));
   const cut = Object.values(m.start ?? {}).reduce((n, s) => n + s.cut, 0), refused = m.lint?.refuse.length ?? 0;
   const unoffered = m.misses?.unoffered_reads ?? 0, late = (m.processes?.decay.stale ?? []).filter((s) => s.over > 30).length;
   // prettier-ignore
   const items = [
-    [oldest > 7, "lessons", "need", `${plural(waiting.length, "lesson")} wait, oldest ${oldest} d`, "#/automation", "Shows when an open lesson is older than 7 days."],
     [cut > 0, "start", "need", `${plural(cut, "core line")} cut`, tab("health"), "Shows when a core line is cut from a start context."],
     [refused > 0, "refused", "error", `${plural(refused, "note")} refused`, tab("health"), "Shows when lint refuses a note."],
     [unoffered > 10, "reads", "need", `${count(unoffered)} reads nobody offered`, tab("health"), "Shows when more than 10 wiki reads in 7 days had no offer in their turn."],

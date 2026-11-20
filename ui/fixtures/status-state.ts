@@ -7,7 +7,7 @@ export const held: any = awaitingHeld({ name: "aleph-27", reason: "Held path: ho
 export const state: any = {
   now: "2026-10-27T17:00:00Z",
   factory: { paused: false, liveRuns: 0, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", health: [{ text: "judge is down", kind: "alert" }] },
-  asks: attend({ runs: [held], issues: [] }, []).items,
+  asks: attend({ runs: [held], issues: [] }).items,
   errored: [job({ name: "aleph-30", state: "failed", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
   runningIssues: [],

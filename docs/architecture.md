@@ -78,11 +78,11 @@ The modules of `jobs/lib/`, one folder per concern:
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
 | Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `dispatch.ts`, `sweep.ts`, `baseline.ts`, `stall.ts`, `report.ts`, `tick.ts`, `launch.ts` |
 | Agent roles | `roles/` | `agent-call.ts`, `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `issue-spec.ts`, `role-skill.ts` |
-| Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `holds.ts`, `pause.ts`, `gpu.ts`, `tables.ts`, `checks.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
+| Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `holds.ts`, `pause.ts`, `gpu.ts`, `tables.ts`, `checks.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `related.ts` |
 | Land and recovery | `land/` | `landing.ts`, `rescue.ts` |
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
 | Asks | `asks/` | `ask.ts`; the director (`jobs/lib/roles/director.ts`) answers the asks |
-| Learning | `learning/` | `corrections.ts`, `episode.ts`, `monitor-table.ts`, `trace.ts` |
+| Learning | `learning/` | `monitor-table.ts`, `trace.ts` |
 | Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `main-clone.ts`, `ui-graph.ts`, `doctor.ts`, `systemd.ts` |
 
 The tests, fixtures and testkits of a module are in its folder.
@@ -105,7 +105,7 @@ The tests, fixtures and testkits of a module are in its folder.
 
 ### The UI read path
 
-The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`). The updater learns of a write to `aleph.db` by polling `PRAGMA data_version` every 100 ms: a new event row changes the source `events`. It watches the files that stay files (the items repo, job and factory folders, the skills, the vault, the handoffs, the episodes, the annotations); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
+The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`). The updater learns of a write to `aleph.db` by polling `PRAGMA data_version` every 100 ms: a new event row changes the source `events`. It watches the files that stay files (the items repo, job and factory folders, the skills, the vault, the handoffs, the annotations); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
 
 ## Invariants
 

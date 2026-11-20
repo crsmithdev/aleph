@@ -13,11 +13,11 @@ import { decided, denyReasons, endDraw, startDraw } from "./views/lib/decisions.
 import { when } from "./views/lib/format.js";
 import { shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
-import { asksOf, prop, withAttn, withFactory } from "./now.testkit.ts";
+import { asksOf, withAttn, withFactory } from "./now.testkit.ts";
 import { job } from "./fixtures/status-state.ts";
 
 const CASE = (actions: string[], rec: string) => ({
-  headline: "the doc-claim check in the verify gate",
+  headline: "the retry check in the verify gate",
   situation: "This work adds a check that compares the docs with the code. Both reviews passed.",
   effects: actions.map((a) => ({ action: a, text: `What ${a} does.` })),
   recommend: { action: rec, why: "it is safe" },
@@ -31,7 +31,7 @@ const four = () => asksOf(
   [
     issueAsk(41, "question", { ask: { reason: "question", question: "A or B?", options: [], why: [], ...CASE(["resolve", "dismiss"], "resolve") } }),
     issueAsk(42, "no-commit", { ask: { reason: "no-commit", question: "q", options: [], why: [], ...CASE(["continue", "discontinue"], "continue") } }),
-  ], []);
+  ]);
 const card = (row: string) => row.match(/^<article[^]*<\/article>$/)![0];
 
 test("one card per kind: the title opens with the kind label, and the tag names the stop", () => {
@@ -44,7 +44,7 @@ test("one card per kind: the title opens with the kind label, and the tag names 
     expect(row).toContain(`data-card="${i.card}"`);
     expect(row).not.toContain("data-kind");
     expect(row).toContain(`data-annotate="${shortId(i.id)}"`);
-    expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the doc-claim check in the verify gate</span></span>`);
+    expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the retry check in the verify gate</span></span>`);
     expect(row).toContain(`<span class="ask-tag">${i.tag}</span>`);
   }
 });
@@ -111,12 +111,9 @@ test("one Ask per reason: the card, its label and its tag come from the server i
     "no-commit": ["unstick", "Unstick", "failed"], "part-dropped": ["decide", "Decide", "incomplete"], "intake-failed": ["unstick", "Unstick", "failed"],
     rescue: ["decide", "Decide", "waiting"], "run-cap": ["unstick", "Unstick", "capped"],
     "core-change": ["approve", "Approve", "core-change"], "blocker-dropped": ["decide", "Decide", "blocker-dropped"],
-    "proposal-check": ["approve", "Approve", "proposal"], "proposal-claude-md": ["approve", "Approve", "proposal"], "proposal-skill": ["approve", "Approve", "proposal"],
   };
   expect(Object.keys(want).sort()).toEqual(Object.keys(ASK_REASONS).sort());
-  const plain = Object.keys(want).filter((r) => !r.startsWith("proposal-"));
-  const items = asksOf([], plain.map((r, n) => issueAsk(60 + n, r, { title: `Stop ${r}`, ask: { reason: r, question: "q", options: [], why: [], ...CASE([], "") } })),
-    ["check", "claude-md", "skill"].map((k, n) => ({ ...prop, id: `l-${n}`, kind: k, situation: "S." })));
+  const items = asksOf([], Object.keys(want).map((r, n) => issueAsk(60 + n, r, { title: `Stop ${r}`, ask: { reason: r, question: "q", options: [], why: [], ...CASE([], "") } })));
   expect(items.map((i) => i.reason).sort()).toEqual(Object.keys(want).sort());
   for (const i of items) {
     const [kind, label, tag] = want[i.reason];

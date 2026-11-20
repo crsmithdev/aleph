@@ -8,12 +8,11 @@ This page lists what aleph records about itself, where each record goes, who wri
 |---|---|---|---|---|
 | Event log | `events` table in `~/.aleph/aleph.db` | One row per event | `logEvent` in `lib/layout.ts` | Herald, Gates page, Status page, `/api/events` stream |
 | Job rows | `jobs` table of `aleph.db` | One row for each job: its state, its fields and its `extra` | `makeJob`, `setState`, `endRun` and `patchRun` in `jobs/lib/records/record.ts` | The factory, the director, the monitor |
-| Turn traces | Langfuse | One trace per Claude Code turn | `hooks/obs.ts`, `hooks/lib/gate.ts` | Langfuse UI, `ui/api/sessions.ts`, `jobs/lib/learning/corrections.ts`, `ui/usage.ts` |
-| Factory traces | Langfuse | One trace per factory run | `postTrace` in `jobs/lib/learning/trace.ts` | Langfuse UI, `jobs/lib/learning/episode.ts` |
+| Turn traces | Langfuse | One trace per Claude Code turn | `hooks/obs.ts`, `hooks/lib/gate.ts` | Langfuse UI, `ui/api/sessions.ts`, `ui/usage.ts` |
+| Factory traces | Langfuse | One trace per factory run | `postTrace` in `jobs/lib/learning/trace.ts` | Langfuse UI |
 | `usage` table | `aleph.db` | The account's weekly plan usage, one row per 10 minutes | `ui/usage.ts:91` | `ui/usage.ts`, the monitor table |
 | `openrouter` table | `aleph.db` | What OpenRouter bills per list dollar | `ui/usage.ts:219` | `ui/usage.ts` |
 | `jev` table | `aleph.db` | The `time` and `cost` of each Jev call | `lib/jev.ts:56` | `ui/usage.ts` |
-| `episode-use.jsonl` | `~/.aleph/factory/episode-use.jsonl` | Each time recall shows or opens an episode page | `logUse` in `lib/episode-use.ts` | Episode eviction (`jobs/lib/learning/episode.ts:215`) |
 | `suite_history` table | `aleph.db` | One row per suite run | `appendSuiteHistory` in `jobs/lib/gates/tables.ts` | `suiteHistory`, the monitor |
 | `dispatch.log` | `~/.aleph/factory/dispatch.log` | Output of detached dispatch, intake, director and suite | `jobs/lib/transitions/launch.ts:113` | A person, `jobs/cli.testkit.ts:114` (test failure dump) |
 | Job folders | `~/.aleph/jobs/<n>/` | The files of one job; `log.txt` holds its command, setup, stderr, dispatch, checks and land sections | The unit, the checks and the land | The UI job page, `postTrace`. The `dispatch` section holds the output of the dispatch that the job ending starts (`jobs/lib/roles/unit.ts`) |
@@ -39,8 +38,8 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `rule` | `started` for a run, with the model | `jobs/lib/transitions/transitions.ts:369` |
 | `rule` | `missed` for a stalled key (its object the issue or job, its detail the step that did not move: `start`, `land`, `intake`, `Ask`, `rescue`, `rerun`), `started` (`check`) for a suite on a moved main, `failed` (`error`) for a tick step | `jobs/lib/transitions/tick.ts:180`, `:189`, `:245` |
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:137` |
-| `rule` | `failed` for a filing, a detached start, a land start, a job diff, a correction, a UI read | `jobs/lib/transitions/filing.ts:27`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:90`, `jobs/lib/records/jobdiff.ts:48`, `jobs/lib/learning/corrections.ts:16`, `ui/state.ts:39` |
-| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:247`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:344`, `jobs/lib/asks/timeout.ts:111`, `jobs/lib/learning/corrections.ts`, `issues/lib/issues.ts` |
+| `rule` | `failed` for a filing, a detached start, a land start, a job diff, a UI read | `jobs/lib/transitions/filing.ts:27`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:90`, `jobs/lib/records/jobdiff.ts:48`, `ui/state.ts:39` |
+| `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:247`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:344`, `jobs/lib/asks/timeout.ts:111`, `issues/lib/issues.ts` |
 | `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/gates/firefighter.ts:217` to `:244` |
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:113` to `:405` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:151` |
@@ -115,5 +114,4 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 | Run folders | Deleted 90 days after the run ended, when its record is archived. A folder that no record holds goes after 90 days with no change |
 | `usage` table | Rows older than 90 days are dropped |
 | `dispatch.log`, `housekeeper.log` | Moved to `dispatch.<day>.log` and `housekeeper.<day>.log` each day. A day file older than 90 days is deleted |
-| `episode-use.jsonl` | Lines older than 90 days are dropped (`jobs/lib/learning/episode.ts:215`) |
 | `openrouter`, `jev` and `suite_history` tables | Forever |

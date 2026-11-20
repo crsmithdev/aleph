@@ -1,6 +1,6 @@
 /**
  * The director: every new Ask goes to it first. An Ask is new while it has no case text (`situation`): on an open store
- * item that awaits Chris, on a waiting run's `ask` in the ledger, or on a proposed lesson. Each one gets one read-only
+ * item that awaits Chris, or on a waiting run's `ask` in the ledger. Each one gets one read-only
  * `claude -p` run, kind `director`, in the repo's checkout. Every reply carries the case text (situation, effects,
  * recommendation) that Chris reads on the Ask's card. With typed actions the run decides: code checks and applies them
  * for that Ask only. With no actions it escalates. The card shows no buttons until the case text is there (ui/asks.ts).
@@ -35,7 +35,6 @@ import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
-import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { because, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
 import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";
@@ -66,11 +65,10 @@ const RECORD_LINES = 20;
 const ALLOWED = ["Read", "Grep", "Glob", ...["status", "log", "show", "diff", "ls-files"].map((c) => `Bash(git ${c}:*)`), "Bash(ls:*)",
   "Bash(aleph jobs:*)", "Bash(aleph issue show:*)", "Bash(aleph issue list:*)"];
 
-/** One Ask with no case text: on a store item, on a waiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's issue ref. */
+/** One Ask with no case text: on a store item or on a waiting run. `on` is the item's ref or the run's folder name. */
 export type Case =
   | { at: "item"; on: string; repo: Repo; item: issues.Issue; ask: Ask }
-  | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
-  | { at: "lesson"; on: string; repo?: Repo; lesson: Lesson };
+  | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue };
 
 type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">;
 
@@ -78,7 +76,7 @@ type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recomm
 const idOf = (i: issues.Issue): number => i.id;
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
 
-/** Every Ask that has no case text: open items that await Chris, then waiting runs, oldest run first, then proposed lessons. */
+/** Every Ask that has no case text: open items that await Chris, then waiting runs, oldest run first. */
 export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
   const out: Case[] = [];
   for (const repo of repos) {
@@ -101,23 +99,16 @@ export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = all
     const item = repo && n !== undefined ? lists.item(repo.key, n) ?? undefined : undefined;
     out.push({ at: "run", on: entry.id, repo, entry, ask: r.ask!, ...(item ? { item } : {}) });
   }
-  // A proposal is a case only once its issue is in the store: that issue is the case's subject.
-  for (const lesson of proposals()) {
-    if (lesson.state !== "proposed" || !lesson.kind || !lesson.issue || lesson.situation?.trim()) continue;
-    out.push({ at: "lesson", on: lesson.issue, repo: repos[0], lesson });
-  }
   return out;
 }
 
-/** What the case asks: an Ask's question, a lesson's sentence. */
-const questionOf = (c: Case): string => (c.at === "lesson" ? c.lesson.sentence : c.ask.question);
-const reasonName = (c: Case): string => (c.at === "lesson" ? `proposal-${c.lesson.kind}` : c.ask.reason);
-/** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job, a lesson's id. */
+const questionOf = (c: Case): string => c.ask.question;
+const reasonName = (c: Case): string => c.ask.reason;
+/** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job. */
 const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.target ?? c.entry.run.name : c.on);
 
 /** The actions Chris's card offers, each owed an effect: the reason's actions, with `resolve` on an issue as one `resolve:<label>` per option. */
 function actionsOf(c: Case): string[] {
-  if (c.at === "lesson") return ["approve", "disapprove"];
   return actionsOn(reasonOf(c.ask.reason)).flatMap((a) => (a === "resolve" && c.at !== "run" && c.ask.options.length ? c.ask.options.map((o) => `resolve:${o.label}`) : [a]));
 }
 
@@ -174,7 +165,7 @@ function heldChange(repo: Repo, branch: string | undefined, held: string[] = rep
 
 /** The branch of the run a case is about: the case's own run, or the open job of its item. */
 function branchOf(c: Case): { repo: Repo; branch?: string } | null {
-  if (c.at === "lesson" || !c.repo) return null;
+  if (!c.repo) return null;
   if (c.at === "run") {
     const runs = openJob(c.entry.run.name);
     const agent = runs?.findLast((e) => isAgentRun(e.run.role));
@@ -192,14 +183,13 @@ function landRefusal(c: Case, held: string[]): string | null {
 
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
- * judgement: a memory proposal, a change to a core note, an after link to a dropped issue, a land of a run that changes a security path, a path the repo holds or bun.lock (or a held run whose branch
+ * judgement: a change to a core note, an after link to a dropped issue, a land of a run that changes a security path, a path the repo holds or bun.lock (or a held run whose branch
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
 function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
   const why = ASK_REASONS[reasonName(c)]?.chrisOnly;
   if (why) return { why };
-  if (c.at === "lesson") return null;
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
   const b = actionsOf(c).includes("approve") ? branchOf(c) : null;
@@ -239,21 +229,6 @@ const section = (title: string, body: string | null | undefined): string => (bod
 
 /** The case as prompt text: the Ask, its item and its run. */
 function caseText(c: Case): string {
-  if (c.at === "lesson") {
-    const l = c.lesson;
-    return `# The proposal ${c.on}
-
-Reason: proposal-${l.kind}
-Actions on Chris's card: ${actionsOf(c).join(", ")}
-Kind: ${l.kind}
-Target: ${l.target || "(none)"}
-Title: ${l.title || "(none)"}
-Sentence: ${l.sentence}
-Approve only reopens the proposal's parked issue with a spec for the factory; it writes no CLAUDE.md line, skill or check itself. Disapprove marks the lesson declined for good.
-Signals:
-${l.signals.map((s) => `- source: ${s.source}; at: ${s.at}; quote: ${s.quote}; link: ${s.link}`).join("\n") || "(none)"}
-`;
-  }
   const reason = reasonOf(c.ask.reason);
   const r = ASK_REASONS[reason];
   const item = c.item;
@@ -311,7 +286,6 @@ Reply with the case text only. ${CASE_TEXT(acts)}
 - Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
 - When a run cannot pass until another open issue lands, drop it or edit the issue with \`after\` set to that issue. A note alone does not stop a rerun. An \`after\` must name open issues: an \`after\` on a parked issue is refused.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
-- Check each Oracle clause of a spec you write against the Goal and against the code on main that you read, and amend any clause that conflicts with either before you write the spec: a clause that counts text the Goal leaves out, or a clause that needs a name the code does not have.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this issue with edit-issue when it must wait for the fix.
 - Every reply has the case text. Add actions to decide; with no actions the Ask goes to Chris. An Ask that your actions leave open goes to Chris with your case text.
 
@@ -471,7 +445,6 @@ const sameAsk = (a: Ask | null | undefined, b: Ask): boolean => !!a && reasonOf(
 
 /** Whether the case's Ask is still the same one, with no case text. */
 function stillOpen(c: Case): boolean {
-  if (c.at === "lesson") return proposals().some((l) => l.id === c.lesson.id && l.state === "proposed" && !l.situation?.trim());
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, idOf(c.item));
     return !!item && asking(item, askOf(c.on)) && sameAsk(askOf(c.on), c.ask);
@@ -489,7 +462,6 @@ function writeCaseText(c: Case, t: Text): boolean {
     setAsk(c.on, { ...now, ...t });
     return true;
   }
-  if (c.at === "lesson") return explainLesson(c.lesson.id, c.lesson.sentence, t);
   const now = jobRecord.getRun(c.entry.id);
   if (!now || now.state !== "waiting" || !sameAsk(now.ask, c.ask)) return false;
   jobRecord.patchRun(c.entry.id, { ask: { ...now.ask!, ...t } });
@@ -528,13 +500,13 @@ function parkedIn(after: string[]): string | null {
 }
 
 /** The open job of the case: its own run's job, else the open job of its item. */
-function jobOf(c: Exclude<Case, { at: "lesson" }>, n: number | string | undefined): string | undefined {
+function jobOf(c: Case, n: number | string | undefined): string | undefined {
   if (c.at === "run") return c.entry.run.name;
   return openJobOfIssue(c.repo.key, n)?.[0].run.name;
 }
 
 /** Check one action against the rules and apply it, for the case's Ask only. */
-async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Ports): Promise<Outcome> {
+async function applyOne(c: Case, a: Action, ports: Ports): Promise<Outcome> {
   const repo = c.repo;
   const sub = askSub(c.ask.reason);
   if (!repo) return no(a, "the Ask is not in a factory repo");
@@ -635,7 +607,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
 }
 
 /** Apply the reply's actions for the case in order, at most MAX_ACTIONS. Whether one of them decided the Ask. */
-export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: (Action | string)[], ports: Ports = defaultPorts): Promise<{ applied: string[]; refused: string[]; decided: boolean; events: Ev[] }> {
+export async function applyActions(c: Case, actions: (Action | string)[], ports: Ports = defaultPorts): Promise<{ applied: string[]; refused: string[]; decided: boolean; events: Ev[] }> {
   const out = { applied: [] as string[], refused: [] as string[], decided: false, events: [] as Ev[] };
   for (const [i, a] of actions.entries()) {
     let o: Outcome;
@@ -676,7 +648,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     const granted = always(base.reason, c.repo?.key)?.action;
     if (granted === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
     // An Always rule granted the reason's first verb takes it with no run, and logs it as a rule event. `resolve` needs the Ask's recommended option; an Ask with none goes on to the director.
-    if (c.at !== "lesson" && FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
+    if (FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
       const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
       let why: string | null;
       // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays Chris's. A review-held run lands through the land action, which refuses the repo's held paths too.
@@ -712,9 +684,9 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
       run.end("escalated");
       return escalate(c, at, reply.escalate, listed?.why ?? "the director did not decide", held);
     }
-    if (listed || c.at === "lesson") {
+    if (listed) {
       run.end("escalated: the Ask is on the escalation list");
-      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, reply.text, listed?.why ?? "a memory proposal is Chris's", held);
+      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, reply.text, listed?.why ?? "the director did not decide", held);
     }
     const r = await applyActions(c, reply.actions, ports);
     const decided = r.decided || !stillOpen(c);

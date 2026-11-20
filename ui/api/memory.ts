@@ -4,10 +4,9 @@
  * The updater (ui/updater.ts) builds every GET in its Worker. The vault's notes, `vault misses` and the memory items are
  * each read once and shared by every build until one of their sources changes; a search only filters and ranks the items.
  * The POST routes are its writes: a note goes through `vault write`, `archive` or `delete`, so each is validated,
- * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
+ * committed and pushed; a handoff is a file. A write clears nothing: the updater's watchers see it.
  */
-import { readStore } from "../../jobs/lib/learning/corrections.ts";
-import { daysAgo, today } from "../../lib/day.ts";
+import { daysAgo } from "../../lib/day.ts";
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,21 +15,16 @@ import { aleph, cli, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
-import { editEpisode, KEEP_DAYS, listEpisodes, readEpisode, removeEpisode } from "../../jobs/lib/learning/episode.ts";
 import { tickRows, type TickRow } from "../../jobs/lib/gates/tables.ts";
-import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { readLists } from "../../lib/store.ts";
-import { closed, status } from "../../lib/todo.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { backlinks, coreNotes, dailyNotes, isVault, memoryFile, recallSeen, writeMemoryMd, linkTargets, links, lintVault, loadVault, parseOp, scopeOf, RECALL_DAYS, readMemoryMd, readRecallLog, readRun, relativeDates, START_BUDGET, startContext, wikiNotes, type Note } from "../../vault/lib/vault.ts";
-import { later, once } from "../../lib/sources.ts";
+import { later, once, touch } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
-import { DAILY_HOUR, DAILY_TEXT, EPISODES_MS, EPISODES_TEXT } from "../../lib/schedule.ts";
+import { DAILY_HOUR, DAILY_TEXT } from "../../lib/schedule.ts";
 
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
-const count = (xs: string[]) => Object.fromEntries([...new Set(xs)].sort().map((x) => [x, xs.filter((y) => y === x).length]));
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 /** Every line the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
@@ -178,43 +172,34 @@ function maintain(root: string, ran: TickRow | undefined) {
   const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
   const resolved = /(\d+) resolved/.exec(dedupe?.detail ?? "")?.[1];
   const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`, resolved && `${resolved} resolved`].filter(Boolean).join(" · ");
-  return { name: "maintain", runs: DAILY_TEXT, last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, mines lessons, compiles yesterday, re-checks stale notes, resolves overlaps" };
+  return { name: "maintain", runs: DAILY_TEXT, last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, compiles yesterday, re-checks stale notes, resolves overlaps" };
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. */
 async function processes(): Promise<Response> {
-  const root = vaultDir(), now = Date.now();
+  const root = vaultDir();
+  // The tick table is in the factory's database: a tick write must rebuild this answer.
+  touch("factory");
   const tick = tickRows();
-  const store = readStore();
-  const step = (name: string, runs: string, last: string | undefined, next: string | null, does: string) =>
-    ({ name, runs, last: last ?? null, next, result: tick[name]?.result ?? null, detail: null, does });
   const steps = [
-    step("episodes", EPISODES_TEXT, tick.episodes?.last ?? undefined, tick.episodes?.last ? new Date(Date.parse(tick.episodes.last) + EPISODES_MS).toISOString() : null, `writes a page for each finished issue and deletes pages older than ${KEEP_DAYS} days`),
     maintain(root, tick.maintain),
     ...([["seen prune", "with each recall that injects a note", "deletes seen lists older than 7 days"], ["recall trim", "daily with maintain", "keeps 30 days of the recall log"], ["vault push", "with each vault write", "pushes the vault commit to origin"]] as const).map(([name, runs, does]) => {
       const run = readRun(root, name);
       return { name, runs, last: run?.at ?? null, next: null, result: run?.result ?? null, detail: run?.detail ?? null, does };
     }),
   ];
-  const mtimes = listEpisodes().map((e) => e.mtimeMs);
-  const days = Array.from({ length: KEEP_DAYS }, (_, i) => daysAgo(KEEP_DAYS - 1 - i, new Date(now)));
-  // Issues closed done per local day, in every registry repo: the episode pages should follow them.
-  const closes = readLists(Object.values(loadRegistry())).flatMap((doc) => doc?.items ?? []).filter((i) => status(i) === "done").map((i) => today(new Date(closed(i) ?? 0)));
-  const perDay = days.map((date) => ({ date, pages: mtimes.filter((t) => today(new Date(t)) === date).length, finished: closes.filter((d) => d === date).length }));
   const all = await vaultNotes(root);
   const stale = lintVault(all).warn.filter((f) => f.rule === "stale");
   // The stale detail is staleness()'s sentence in vault/lib/vault.ts: "... every <window> days; updated <date>, <days> days ago".
   const late = (detail: string) => { const [, window, days] = /every (\d+) days.*, (\d+) days ago/.exec(detail) ?? []; return { window: Number(window), over: Number(days) - Number(window) }; };
   return json({
     steps,
-    episodes: { pages: mtimes.length, keep: KEEP_DAYS, days: perDay, prunes: opLines(root).filter((l) => l.text.startsWith("prune episodes")).slice(0, 5) },
-    corrections: { states: count(store.lessons.map((l) => l.state)), waiting: store.lessons.filter((l) => l.state === "open" || l.state === "proposed").map((l) => ({ id: l.id, sentence: l.sentence, state: l.state, since: l.signals.map((s) => s.at).sort()[0] ?? null })) },
     decay: { stale: stale.map((f) => ({ note: f.note, detail: f.detail, ...late(f.detail) })).sort((a, b) => b.over - a.over) },
   });
 }
 
 /** Every memory item of every type, built once until one of its sources changes. */
-const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
+const ITEM_SOURCES = ["vault", "handoffs", "usage", "later:memory:calls", "later:memory:sessions", "store", "registry", "factory", "action"];
 async function memoryItems(root: string) {
   return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
     const wiki = wikiNotes(await vaultNotes(root));
@@ -297,10 +282,9 @@ const write = (f: Post) => post((b, params) => f({ ...strings(b), ...params }));
 /** The file a handoff is, or null for a key outside its folder. */
 const handoffFile = (key: string): string | null => handoffOf(key)?.path ?? null;
 
-/** The text of a handoff, an episode or MEMORY.md, or null when there is none. */
+/** The text of a handoff or MEMORY.md, or null when there is none. */
 function textOf(source: string, key: string): string | null {
   if (source === "memory-md") return readMemoryMd(vaultDir())?.text ?? null;
-  if (source === "episode") return readEpisode(key);
   const path = source === "handoff" ? handoffFile(key) : null;
   return path && existsSync(path) ? readFileSync(path, "utf8") : null;
 }
@@ -313,7 +297,6 @@ function file(source: string, key: string): Response {
 /** Replaces the text of a file `textOf` finds. */
 function setText(source: string, key: string, text: string): void {
   if (source === "memory-md") writeMemoryMd(vaultDir(), text);
-  else if (source === "episode") editEpisode(key, text);
   else writeFileSync(handoffFile(key)!, text);
 }
 
@@ -328,7 +311,7 @@ const editFile: Post = async ({ source, key, text }) => {
 
 const deleteFile: Post = async ({ source, key }) => {
   const path = source === "handoff" ? handoffFile(key) : null;
-  const gone = source === "episode" ? removeEpisode(key) : !!path && existsSync(path) && (unlinkSync(path), true);
+  const gone = !!path && existsSync(path) && (unlinkSync(path), true);
   if (!gone) fail(404, "no such file");
   return { op: "delete", source, key };
 };

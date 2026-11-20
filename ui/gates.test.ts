@@ -50,7 +50,7 @@ beforeAll(async () => {
   }, join(base, "items"));
   const factory = join(base, "factory");
   mkdirSync(factory);
-  putJson("settings", "always", { rescue: { action: "resolve", at: ago(30) }, "run-cap": { action: "continue", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } });
+  putJson("settings", "always", { rescue: { action: "resolve", at: ago(30) }, "run-cap": { action: "continue", at: ago(40) }, "core-change:global": { action: "approve", at: ago(50) } });
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
@@ -89,7 +89,7 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
   for (const r of d.rules) { expect(r.mode).not.toBe(""); expect(r.mode).toBe(ASK_REASONS[r.reason].always); }
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
   expect(by("rescue").granted.action).toBe("resolve");
-  expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
+  expect(by("core-change").projects).toEqual([{ project: "global", action: "approve", at: expect.any(String) }]);
   expect(d.held).toEqual(SECURITY_PATHS);
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
 });
@@ -131,7 +131,7 @@ test("the log reads the hold, the rules Chris set, and the old rule, director an
     "gate | issue.3 | held | full: local",
     "human | rescue | changed | set to resolve",
     "human | run-cap | changed | set to continue",
-    "human | proposal-claude-md:global | changed | set to approve",
+    "human | core-change:global | changed | set to approve",
   ]);
 });
 
@@ -193,7 +193,7 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
     expect(gates.renderRules({ rules: [row("question")] })).toContain('data-field="wait"');
     expect([row("question").timeout, row("question").noAnswer]).toEqual([20, "drop"]);
     expect([row("no-commit").timeout, row("no-commit").noAnswer]).toEqual([0, "pick"]);
-    expect(row("proposal-check").timeout).toBeUndefined();
+    expect(row("held-path").timeout).toBeUndefined();
     const send = (minutes: number, then?: string) => at("/api/automation/rules/question/timeout", { method: "POST", headers: { "X-Aleph-UI": "1", "Content-Type": "application/json" }, body: JSON.stringify({ minutes, then }) });
     expect((await send(20, "drop")).status).toBe(200);
     expect(readFileSync(calls, "utf8").trim().split("\n").at(-1)).toBe("always timeout -- question 20 drop");
@@ -213,11 +213,11 @@ const data = () => ({
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { issues: 2, hours: 3 } },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
-  processes: { steps: [], episodes: { pages: 0, keep: 90, days: [{ date: "2026-11-16", pages: 0, finished: 0 }, { date: "2026-11-17", pages: 0, finished: 0 }], prunes: [] }, corrections: { states: {}, waiting: [] }, decay: { stale: [] } },
+  processes: { steps: [], decay: { stale: [] } },
 });
 
 test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
@@ -242,9 +242,8 @@ test("the view draws the sections in order, a closed gate, and an Edit row with 
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
     const form = h.split('<form class="rule-form"').find((x: string) => x.startsWith(` data-rule="${reason}"`));
     const modes = form ? [...form.slice(form.indexOf('data-field="decide"')).split("</div>")[0].matchAll(/data-value="([^"]*)"/g)].map((m) => m[1]) : [];
-    // A memory proposal is granted per place, so it has no Edit row; every other reason offers Director, its mode and User.
-    if (reason.startsWith("proposal-")) expect(form).toBeUndefined();
-    else expect(modes).toEqual(["", ...(r.always ? [r.always] : []), "user"]);
+    // Each reason offers Director, its mode and User.
+    expect(modes).toEqual(["", ...(r.always ? [r.always] : []), "user"]);
   }
   expect(h).not.toContain("The director decides first");
   const rescue = h.slice(h.indexOf('data-rule="rescue"'));
@@ -510,8 +509,8 @@ test("the Automation page has no explaining aside; the controls panel holds the 
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
     expect(h).not.toContain("gates-two");
-    // Schedules with Controls, and the memory jobs' Episodes with Lessons.
-    expect(h.match(/<div class="pair">/g)).toHaveLength(2);
+    // Schedules with Controls.
+    expect(h.match(/<div class="pair">/g)).toHaveLength(1);
     const pair = h.slice(h.indexOf('<div class="pair">'));
     expect(pair.slice(0, pair.indexOf("</div></section></div>"))).toMatch(/id="gates-schedules".*id="gates-caps"/s);
     expect(h.indexOf('id="gates-caps"')).toBeLessThan(h.indexOf('id="gates-held"'));
@@ -532,7 +531,7 @@ test("the Deviations row of docs/design.md drops the held-path chips and names t
 test("rules() has one row per Ask reason; renderRules is one table with a row per rule", () => {
   const r = rules().map((x) => x.reason);
   expect(r).toEqual(Object.keys(ASK_REASONS));
-  for (const k of ["proposal-check", "proposal-claude-md", "proposal-skill", "question", "held-path"]) expect(r).toContain(k);
+  for (const k of ["question", "held-path"]) expect(r).toContain(k);
   const h = gates.renderRules({ rules: rules() });
   expect(h.match(/<table/g)!.length).toBe(1);
   expect(h.match(/<td class="acts">/g)!.length).toBe(r.length);
@@ -558,7 +557,7 @@ test("a stored firefighter grant for held-path is dead: rules() shows no grant a
   } finally { putJson("settings", "always", saved); }
 });
 
-test("a reason granted user shows User in Decides, and the proposal-skill row offers no User choice", () => {
+test("a reason granted user shows User in Decides", () => {
   const saved = getJson("settings", "always", {});
   try {
     putJson("settings", "always", { "held-path": { action: "user", at: ago(5) } });
@@ -566,8 +565,6 @@ test("a reason granted user shows User in Decides, and the proposal-skill row of
     const held = gates.renderRules({ rules: all.filter((x) => x.reason === "held-path") });
     expect(held).toContain("<td>User</td>");
     expect(held).toMatch(/data-value="user" aria-pressed="true">User</);
-    const skill = gates.renderRules({ rules: all.filter((x) => x.reason === "proposal-skill") });
-    expect(skill).not.toContain('data-value="user"');
   } finally { putJson("settings", "always", saved); }
 });
 

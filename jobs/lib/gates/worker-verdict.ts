@@ -1,6 +1,6 @@
 /**
  * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks,
- * the doc claims, the keep-gate and the Oracle. An Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
+ * the keep-gate and the Oracle. An Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
  * no verdict runs once more), which gets the keep-gate's finding: the new tests that pass on the base, or that it did not run. A reviewer's pass on a diff that changes a security path or a held path waits
  * for Chris with a held-path Ask. A failure of a check, the Oracle or the reviewer goes back to
  * the worker as a fix round while rounds are left. The ports run each step: `branchPorts` gives the git and worktree
@@ -32,8 +32,6 @@ export interface VerdictPorts {
   checks(): Promise<{ stop: ChecksStop | null; failed?: string }>;
   /** The Ask question when `check` failed with the same failing tests on the run before, else null. */
   repeatedFailure(check: string): { question: string } | null;
-  /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
-  docClaims(): string | null;
   /** The keep-gate: the new tests of the branch that pass on its base, as `file > name`. */
   keepGate(): Promise<string[] | NoVerdict>;
   /** The diff stat, for an Ask. */
@@ -112,7 +110,7 @@ function reviewHold(done: number | undefined, earlier: Run[] | undefined, reason
 export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict> {
   const { earlier, done, rounds } = b;
   const facts = { ...b.facts };
-  // Verify: the checks, the doc claims, the keep-gate and the Oracle.
+  // Verify: the checks, the keep-gate and the Oracle.
   const { stop, failed } = await p.checks();
   if (stop) {
     const check = backCheck(stop, failed);
@@ -121,9 +119,6 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
     if (same) return { outcome: { ...waiting("question", same.question), question: same.question, ...stopFields(stop), ...facts }, code: 0 };
     return stopped(stop, { ...facts, ...checkBack(done, check, stop.reason, rounds) });
   }
-  // After the checks, so a doc-claims failure leaves their runs and results as they were.
-  const claims = p.docClaims();
-  if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(done, "doc-claims", claims, rounds) });
   const kept = await p.keepGate();
   const keep = Array.isArray(kept) ? kept : null;
   // An Oracle with no verdict fails as `infra`: not a fix round; the rescue checks the branch again once, then asks.
@@ -228,11 +223,10 @@ export type Review = (folder: string, run: Run, repo: Repo, base: string, branch
 
 /**
  * The ports of the worker verdict for `branch` of a run, based on `base`. The checks and the reviewer each run in a
- * detached worktree at the branch's tip. `earlier` is the job's runs that were sent back, `docClaims` the doc-claim
- * check of the worker's final message (a recheck has none), `runner` runs the Oracle's commands, `review` is the
+ * detached worktree at the branch's tip. `earlier` is the job's runs that were sent back, `runner` runs the Oracle's commands, `review` is the
  * reviewer call, `onSpawn` gets each check's process so the unit's stop signal reaches it, and `env` is the unit's env.
  */
-export function branchPorts(folder: string, run: Run, repo: Repo, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; docClaims?: () => string | null; runner?: Runner; review: Review; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; env?: Record<string, string | undefined> }): VerdictPorts {
+export function branchPorts(folder: string, run: Run, repo: Repo, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; runner?: Runner; review: Review; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; env?: Record<string, string | undefined> }): VerdictPorts {
   const phase = (p: string) => jobRecord.patchRun(jobOfFolder(folder), { phase: p });
   // Verify is one station: its checks, keep-gate and Oracle all show as the phase `verify`.
   const verify = () => phase("verify");
@@ -254,7 +248,6 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       return { stop, failed: jobRecord.getRun(jobOfFolder(folder))?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
-    docClaims: o.docClaims ?? (() => null),
     keepGate: async () => {
       verify();
       const head = git(repo.path, "rev-parse", tip).out;

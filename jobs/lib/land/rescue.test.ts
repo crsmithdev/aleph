@@ -116,7 +116,6 @@ test("a spec question run, then the director's answer: the answer is refused, an
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(ask(id)?.options).toEqual([]);
   const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `issue.${id}`)!;
-  if (c.at === "lesson") throw new Error("not an item case");
   const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, after: () => {} });
   // The run waits for a spec edit: the director's answer is refused, and the next dispatch keeps the Ask and starts nothing.
   expect(r.refused).toEqual([`answer: the grep wins: the run issue.${id} asked about the spec and waits for a spec edit; use edit, or drop it`]);
