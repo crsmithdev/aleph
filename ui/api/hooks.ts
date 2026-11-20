@@ -5,6 +5,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { readJsonOr } from "../../lib/json.ts";
 import { jsonLines, type Entry } from "../../lib/jsonl.ts";
 import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
@@ -102,7 +103,7 @@ const byCause = (fails: Fail[]) => [...Map.groupBy(fails, (f) => f.cause).entrie
 type Cmd = { args: string[]; statusMessage?: string; timeout: number; async?: boolean };
 /** The hooks of `hooks/hooks.json`, in its order. */
 function inventory() {
-  const cfg: Record<string, { matcher?: string; hooks: Cmd[] }[]> = JSON.parse(readFileSync(join(import.meta.dir, "..", "..", "hooks", "hooks.json"), "utf8")).hooks;
+  const cfg = readJsonOr<{ hooks: Record<string, { matcher?: string; hooks: Cmd[] }[]> }>(join(import.meta.dir, "..", "..", "hooks", "hooks.json"), { hooks: {} }).hooks;
   return Object.entries(cfg).flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.map((h) => {
     const file = h.args.find((a) => a.endsWith(".ts"))!.replace("${CLAUDE_PLUGIN_ROOT}/", "");
     return { event, name: h.statusMessage ?? nameOf(file), matcher: g.matcher ?? "", file, mode: h.async ? "async" : "", timeout: h.timeout };
