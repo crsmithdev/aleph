@@ -238,6 +238,8 @@ The dock widgets in `aleph-tools` read these. Each points at a base token, so on
 
 The dock's theme picker sets `data-palette` on `<html>`. A palette in `ui/app.css` sets `--bg`, `--surface`, `--sunk`, `--raised`, `--ink`, `--ink-2`, `--muted`, `--rule`, `--rule-2` and `--focus`, for light and for dark. Every other token stays, so a state keeps its colour in each palette.
 
+The picker's top row picks System, Light or Dark. Light and Dark set `data-theme` on `<html>` on every page, and System sets none.
+
 | Palette | Accent |
 |---|---|
 | Dracula | purple |

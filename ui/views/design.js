@@ -14,7 +14,6 @@ import { eventRow, findingsList } from "./lib/feed.js";
 import { bar } from "./lib/flow-parts.js";
 import { needs } from "./lib/memory-health.js";
 
-const THEMES = ["system", "light", "dark"];
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();
 /** The Memory page's numbers with every Needs-you item over its threshold. */
 const NEEDS = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 } }, misses: { unoffered_reads: 35 },
@@ -137,13 +136,12 @@ const VALUES = [
   ["Meta line", "meta()", (x) => meta(x), [["11/10", "", "4m 05s"]], "none"], ["Note", "note()", note, ["A side note."], "none"], ["Sub-head", "subHead()", subHead, ["Recent runs"], "none"],
 ];
 
-function renderDesign(d, query) {
+function renderDesign(d) {
   doc = d?.body ?? "";
-  const theme = THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system";
   const sort = { key: "at", dir: -1 };
   items = [["design-every", "Every component"]];
   const head = `<div class="page design">${crumb("#/", [["aleph", "#/"], ["design"]])}` +
-    pageHead("Design", { aside: seg("Theme", THEMES.map((t) => ({ label: t[0].toUpperCase() + t.slice(1), on: t === theme, attrs: ` data-theme-pick="${t}"` }))) }) +
+    pageHead("Design") +
     `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>`;
   const body = `<section class="design-spec" id="design-every" data-annotate="design/every"><h3>Every component</h3><div class="design-rules md">${md(section(doc, "Every component"))}</div></section>` +
 
@@ -318,10 +316,6 @@ function drawTokens(root) {
     ["--z-rowlink", "--z-sticky", "--z-overlay", "--t-fast", "--t-mid", "--t-slow", "--ease"].map((n) => `<div class="design-tok"><code>${n} ${val(n)}</code></div>`).join(""));
 }
 
-const setTheme = (t) => (t === "system" ? delete document.documentElement.dataset.theme : (document.documentElement.dataset.theme = t));
-// The theme pick is the design page's own: another page goes back to the system's.
-if (typeof addEventListener !== "undefined") addEventListener("hashchange", () => { if (!location.hash.startsWith("#/design")) setTheme("system"); });
-
 export const redirect = (hash) => moved(hash, ["#/kit"], "#/design");
 
 export const view = {
@@ -329,18 +323,13 @@ export const view = {
   title: "Design",
   nav: false,
   api: "/api/design",
-  render: (d, _p, query) => renderDesign(d, query),
-  mount: (root, _d, query) => {
-    setTheme(THEMES.includes(query?.get?.("theme")) ? query.get("theme") : "system");
+  render: (d) => renderDesign(d),
+  mount: (root) => {
     drawTokens(root);
     wireTabs(root);
     wireEdit(root);
     wireToc(root);
     root.onclick = (e) => { const b = e.target.closest("[data-design-confirm]"); if (b && !arm(b, "Drop a1700? Click again")) b.textContent = "Dropped"; };
     for (const [k, f] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="design/${k}"]`).frame = f;
-    root.querySelector("[data-theme-pick]")?.parentElement.addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-theme-pick]");
-      if (b) location.hash = b.dataset.themePick === "system" ? "#/design" : `#/design?theme=${b.dataset.themePick}`;
-    });
   },
 };

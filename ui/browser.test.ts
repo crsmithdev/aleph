@@ -322,9 +322,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector(".event-dot")).borderRadius')).toBe("999px");
   }, 30_000);
 
-  test("Design: every specimen draws, the charts draw from fixtures, and its theme pick stays on the design page", async () => {
+  test("Design: every specimen draws and the charts draw from fixtures", async () => {
     await page.width(1200);
-    await page.go("#/design?theme=dark");
+    await page.go("#/design");
     await page.when('document.querySelector(".design-swatch") && document.querySelectorAll("aleph-chart canvas").length >= 3');
     const r = await page.ev<any>(`({
       specimens: document.querySelectorAll('[data-annotate^="design/"]').length,
@@ -333,10 +333,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       noRules: [...document.querySelectorAll(".design-spec")].filter((s) => !s.querySelector(".design-rules")?.textContent.trim()).map((s) => s.querySelector("h3").textContent),
       values: document.querySelectorAll("#design-values .design-specimen tbody tr").length,
       contrast: document.querySelectorAll('[data-tokens="contrast"] tbody tr').length,
-      theme: document.documentElement.dataset.theme,
       error: !!document.querySelector("#view > .page > .error"),
     })`);
-    expect(r).toMatchObject({ theme: "dark", error: false, charts: 3 });
+    expect(r).toMatchObject({ error: false, charts: 3 });
     // Each specimen shows its rules from docs/design.md; the variants of a component have none.
     expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, action"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
@@ -378,13 +377,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Table"');
     expect(await hash()).toMatch(/^#\/design/);
     expect(await page.ev('getComputedStyle(document.querySelector(".toc")).position')).toBe("sticky");
-    // Mount the Design page again through the theme pick: one click on the confirm button arms it and does not drop it.
-    await page.ev('document.querySelector("button[data-theme-pick=light]").click()');
-    await page.when('document.documentElement.dataset.theme === "light" && document.querySelector("[data-design-confirm]")');
+    // Mount the Design page again: one click on the confirm button arms it and does not drop it.
+    await page.go("#/jobs");
+    await page.go("#/design");
+    await page.when('document.querySelector("[data-design-confirm]")');
     await page.ev('document.querySelector("[data-design-confirm]").click()');
     expect(await page.ev('document.querySelector("[data-design-confirm]").textContent')).toBe("Drop a1700? Click again");
-    await page.go("#/jobs");
-    expect(await page.ev("document.documentElement.dataset.theme ?? null")).toBeNull();
     expect(page.errors).toEqual([]);
   }, 30_000);
 
@@ -814,6 +812,19 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
     await page.go("#/");
     expect(await page.ev('[...document.querySelectorAll("#dock-host > div")].map((d) => d.id)')).toEqual(["dock-fonts", "dock-theme", "dock-annotate", "dock-shelf", "dock-chat"]);
+  });
+
+  dockTest("the theme picker's Dark holds on every page, and System clears it", async () => {
+    const mode = (m: string) => page.ev(`document.getElementById("dock-theme").shadowRoot.querySelector('[data-mode="${m}"]').click()`);
+    await page.go("#/");
+    await mode("Dark");
+    await page.go("#/jobs");
+    expect(await page.ev("document.documentElement.dataset.theme")).toBe("dark");
+    await page.reload();
+    await page.when('document.getElementById("dock-theme")');
+    expect(await page.ev("document.documentElement.dataset.theme")).toBe("dark");
+    await mode("System");
+    expect(await page.ev("document.documentElement.dataset.theme ?? null")).toBeNull();
   });
 
   dockTest("the font picker sets the sans font and the chart scale, and its reset clears them", async () => {
