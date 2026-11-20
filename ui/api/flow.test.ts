@@ -446,7 +446,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(r.worker).toMatchObject({ live: 1, runs: 7, hours: 6.5, p50: 3600, models: ["sonnet", "haiku"] });
   expect(r.intake).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.director).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["fable"] });
-  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "housekeeper", "maintainer", "lens", "judge", "reviewer"]);
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "housekeeper", "maintainer", "judge", "reviewer"]);
   expect(a.mean).toBe(1); // 8 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
   expect(a.points[2].intake).toBe(0.5);
@@ -567,14 +567,6 @@ test("agents: housekeeper and maintainer runs are roles with their own outcome r
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
   expect(a.outcomes.map((x) => [x.role, x.runs, x.cost])).toEqual([["housekeeper", 2, 0.75], ["maintainer", 1, 1]]);
   expect(a.roles.map((x) => x.key)).toEqual(expect.arrayContaining(["housekeeper", "maintainer"]));
-});
-
-test("agents: lens runs are a role with their own outcome row", () => {
-  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
-  const runs = [{ folder: "l1", id: "l1", run: { n: 1, role: "lens", job: "j1", state: "done", started: iso(10), ended: iso(11), model: "claude-opus-5-5", cost: 2 } }] as any;
-  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.map((x) => [x.role, x.runs, x.cost])).toEqual([["lens", 1, 2]]);
-  expect(a.roles.find((x) => x.key === "lens")).toMatchObject({ name: "Lens", runs: 1 });
 });
 
 test("agents: judge runs are a role with their own outcome row and cost", () => {

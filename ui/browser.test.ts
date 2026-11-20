@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } from "bun:test";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { dock, root } from "./dock.ts";
@@ -1117,97 +1117,6 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     // The stream rows are made up: leave Status, so the next visit draws its own data.
     await page.go("#/issues");
   }, 60_000);
-});
-
-describe.skipIf(!chromeUsable)("Ideas", () => {
-  let rig: Rig, page: Page, idea = "";
-  beforeAll(async () => {
-    rig = await startRig((e) => {
-      idea = join(e.ALEPH_ITEMS, "ideas", "1");
-      mkdirSync(idea, { recursive: true });
-      writeFileSync(join(idea, "idea.md"), "---\ntitle: Issue history\nstatus: exploring\nbuilt: []\n---\nA sketch.\n\n## Log\n");
-      for (const f of ["prior-art-2026-11-01-0900.html", "prior-art-2026-11-02-1000.html"]) writeFileSync(join(idea, f), `<p>${f}</p>`);
-    });
-    page = await rig.open("#/ideas");
-  }, 150_000);
-  afterAll(() => rig?.stop());
-  afterEach(async () => { if (!last.ok) page = await rig.reset(); });
-
-  test("the list shows an idea after Jobs in the nav, and the idea page shows its tabs and the newest prior art", async () => {
-    await page.go("#/ideas");
-    await page.when('document.querySelector("#view tbody tr")');
-    expect(await page.ev<string>('document.querySelector("#view tbody tr").textContent')).toContain("Issue historyexploringnew project");
-    
-    expect(await page.ev<boolean>('(() => { const n = [...document.querySelectorAll("#nav li a")].map((a) => a.textContent); return n.indexOf("Ideas") === n.indexOf("Jobs") + 1; })()')).toBe(true);
-    await page.go("#/ideas/1");
-    await page.when('document.querySelector("#view [data-tab]")');
-    expect(await page.ev<string[]>('[...document.querySelectorAll("#view [data-tab]")].map((b) => b.textContent)')).toEqual(["Write-up", "Prior art", "Red team", "Explainer", "Log"]);
-    await click('#view [data-tab="prior-art"]');
-    await page.when('document.querySelector("#view section[data-pane=prior-art]:not([hidden]) iframe")');
-    const frame = 'document.querySelector("#view section[data-pane=prior-art] iframe")';
-    expect(await page.ev<string>(`${frame}.getAttribute("src")`)).toBe("/api/ideas/1/lenses/prior-art-2026-11-02-1000.html");
-    expect(await page.ev<boolean>(`${frame}.hasAttribute("sandbox")`)).toBe(true);
-    expect(await page.ev<string>('document.querySelector("#view section[data-pane=prior-art] .list").textContent')).toMatch(/^(11\/01 09:00|2026-11-01)$/);
-    expect(page.errors).toEqual([]);
-  }, 60_000);
-
-  // The row is marked, the view redrawn, and the row looked up again: `old` is still set only on the same element.
-  const redrawn = async () => {
-    await page.go("#/ideas");
-    await page.when('document.querySelector("#view tbody tr")');
-    await page.ev('window.row = document.querySelector("#view tbody tr")');
-    await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
-    await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Issue history")');
-    return page.ev<[boolean, boolean]>('[document.querySelector("#view tbody tr") === window.row, window.row.isConnected]');
-  };
-
-  test("a redraw keeps the same row on the list and the same element on the idea page, as the default morph set says", async () => {
-    expect(await redrawn()).toEqual([true, true]);
-    await page.go("#/ideas/1");
-    await page.when('document.querySelector("#view [data-tab]")');
-    await page.ev('document.querySelector("#view [data-tab]").mark = 1');
-    await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
-    await page.when('document.querySelector("#view [data-tab]")');
-    expect(await page.ev('document.querySelector("#view [data-tab]").mark')).toBe(1);
-    expect(page.errors).toEqual([]);
-  }, 60_000);
-
-  test("a reload with changed data puts the new text in the kept row", async () => {
-    await page.go("#/ideas");
-    await page.when('document.querySelector("#view tbody tr")');
-    await page.ev('window.row = document.querySelector("#view tbody tr")');
-    const file = join(idea, "idea.md"), before = readFileSync(file, "utf8");
-    writeFileSync(file, before.replace("title: Issue history", "title: Renamed idea"));
-    try {
-      await page.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
-      await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Renamed idea")');
-      expect(await page.ev('document.querySelector("#view tbody tr") === window.row')).toBe(true);
-    } finally {
-      writeFileSync(file, before);
-      await page.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
-      await page.when('document.querySelector("#view tbody tr")?.textContent.includes("Issue history")');
-    }
-    expect(page.errors).toEqual([]);
-  }, 60_000);
-
-  test("after two redraws the page head is kept, and one change of its Project select runs its handler once", async () => {
-    await page.go("#/ideas");
-    await page.when('document.querySelector("#view .ph select")');
-    await page.ev('window.ph = document.querySelector("#view .ph")');
-    for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
-    expect(await page.ev('document.querySelector("#view .ph") === window.ph')).toBe(true);
-    await page.ev(`(() => {
-      window.saved = 0;
-      const set = Storage.prototype.setItem;
-      Storage.prototype.setItem = function (k, v) { if (k === "aleph.project") window.saved++; return set.call(this, k, v); };
-      document.querySelector("#view .ph select").dispatchEvent(new Event("change", { bubbles: true }));
-      Storage.prototype.setItem = set;
-    })()`);
-    expect(await page.ev("window.saved")).toBe(1);
-    expect(page.errors).toEqual([]);
-  }, 60_000);
-
-  const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
 });
 
 describe.skipIf(!chromeUsable)("Automation redraw", () => {

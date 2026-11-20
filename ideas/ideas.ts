@@ -1,11 +1,10 @@
 /**
  * The ideas: one folder per idea in the items repo, `ideas/<n>/` (the path is its key, `idea.<n>`; `slug` below is
- * that number as text). `idea.md` is frontmatter (`title`, `project`, `status`, `built`), the write-up, then `## Log`;
- * `<lens>-<YYYY-MM-DD-HHMM>.html|md` beside it are the lens results. Every write is one commit on origin/main,
+ * that number as text). `idea.md` is frontmatter (`title`, `project`, `status`, `built`), the write-up, then `## Log`. Every write is one commit on origin/main,
  * made by the store without a working tree; the checkout follows. See docs/specs/2026-11-10-ideas.md.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { join } from "node:path";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../lib/frontmatter.ts";
 import { clock, today } from "../lib/day.ts";
 import { next } from "../lib/db.ts";
@@ -14,16 +13,6 @@ import { itemsDir, writeFiles } from "../lib/store.ts";
 import { projectKey } from "../lib/projects.ts";
 import { refuse } from "../lib/refusal.ts";
 import { git } from "../lib/git.ts";
-import { openRun } from "../jobs/lib/roles/agent-run.ts";
-import { skillSection } from "../jobs/lib/roles/role-skill.ts";
-import { runFile } from "../jobs/lib/records/run-files.ts";
-import { readModels } from "../jobs/lib/routing/models.ts";
-
-/** The lenses: each is the skill of the same name. */
-export const LENSES = ["prior-art", "red-team", "explainer"];
-
-/** Read-only tools, the web, and Write, which acceptEdits allows only in the run folder, its working directory. */
-const LENS_FLAGS = ["--tools", "Read,Grep,Glob,WebSearch,WebFetch,Write", "--allowedTools", "Read,Grep,Glob,WebSearch,WebFetch", "--permission-mode", "acceptEdits"];
 
 export interface Idea { slug: string; fm: Frontmatter; writeup: string; log: string[] }
 
@@ -68,32 +57,12 @@ export function add(title: string, writeup: string, target?: string): { slug: st
 /** The local time `YYYY-MM-DD HH:MM`. */
 const stamp = (d = new Date()): string => `${today(d)} ${clock(d)}`;
 
-/** The idea's lens results, oldest first. `file` is the name beside `idea.md`. */
-export function lenses(slug: string): { lens: string; at: string; file: string }[] {
-  const dir = join(ideasDir(), slug);
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).sort().flatMap((f) => {
-    const m = /^(.+)-(\d{4}-\d\d-\d\d)-(\d\d)(\d\d)\.(html|md)$/.exec(f);
-    return m ? [{ lens: m[1], at: `${m[2]} ${m[3]}:${m[4]}`, file: f }] : [];
-  });
-}
-
-/** The ideas with `status`, each with its lens names and the local time of its last commit. */
-export function list(status = "exploring"): { idea: Idea; lenses: string[]; last: string }[] {
+/** The ideas with `status`, each with the local time of its last commit. */
+export function list(status = "exploring"): { idea: Idea; last: string }[] {
   const dir = ideasDir();
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((d) => existsSync(file(d))).sort((a, b) => Number(a) - Number(b)).map(read).filter((i) => i.fm.status === status)
-    .map((idea) => ({ idea, lenses: [...new Set(lenses(idea.slug).map((l) => l.lens))], last: git(itemsDir(), "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M", "--", join("ideas", idea.slug)).out }));
-}
-
-/** Copy `from`, an .html or .md result, to `<lens>-<YYYY-MM-DD-HHMM>.<ext>` in the idea's folder and log it; its name and the push warning. */
-export function save(slug: string, lens: string, from: string): { file: string; warn: string | null } {
-  const i = read(slug);
-  const ext = extname(from).slice(1);
-  if (ext !== "html" && ext !== "md") refuse(`a lens result is .html or .md, not ${from}`);
-  const now = new Date();
-  const rel = `${lens}-${stamp(now).replace(" ", "-").replace(":", "")}.${ext}`;
-  return { file: rel, warn: write({ ...i, log: [...i.log, `- ${stamp(now)} ${lens} saved: ${rel}`] }, "save", { [rel]: readFileSync(from) }) };
+    .map((idea) => ({ idea, last: git(itemsDir(), "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d %H:%M", "--", join("ideas", idea.slug)).out }));
 }
 
 /** Replace the write-up; the push warning. */
@@ -117,21 +86,4 @@ export function built(slug: string, refs: string[]): string | null {
 export function drop(slug: string): string | null {
   const i = read(slug);
   return write({ ...i, fm: { ...i.fm, status: "dropped" } }, "drop");
-}
-
-/** Run `lens` on the idea as a `lens` run with no worktree, and save the result.html or result.md it writes; refuses when it wrote none. */
-export async function lens(slug: string, name: string): Promise<{ file: string; warn: string | null }> {
-  if (!LENSES.includes(name)) refuse(`no lens named ${name}: use ${LENSES.join(", ")}`);
-  read(slug);
-  const run = openRun({ role: "lens", who: `the ${name} lens`, model: readModels().lens.model, seconds: 3600, flags: LENS_FLAGS, name: `${slug}-${name}`, command: `idea lens ${slug} ${name}`, shown: true });
-  const prompt = `${skillSection(name, `The ${name} skill`)}\n\nThe skill's folder is ${join(import.meta.dir, "..", "skills", name)}.\n\n## The idea\n\nApply the skill to the idea in ${file(slug)}. Write your result to result.html or result.md in your working directory, ${run.folder}.`;
-  const error = await run.ask(prompt, run.folder).then(() => undefined, (e: Error) => e.message);
-  const out = [runFile(run.folder, "result.html"), runFile(run.folder, "result.md")].find((f) => existsSync(f));
-  if (!out) {
-    run.end(`failed: ${error ?? "the run wrote no result file"}`, { cause: "unanswered" });
-    refuse(`the ${name} lens on ${slug} wrote no result: ${run.folder}`);
-  }
-  const s = save(slug, name, out);
-  run.end(`saved ${s.file}`);
-  return s;
 }

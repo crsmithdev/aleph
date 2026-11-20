@@ -72,7 +72,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   land: { usage: "aleph land <name> [--checked]", purpose: "land a job's branch on main" },
   checked: { usage: "aleph checked <name>", purpose: "mark a landed job's check as done" },
   issue: { usage: `aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind ${issues.KINDS.join("|")}]`, purpose: "read and write a repo's issues" },
-  idea: { usage: "aleph idea <add|list|show|edit|note|save|lens|built|drop> ...", purpose: "keep and develop ideas" },
+  idea: { usage: "aleph idea <add|list|show|edit|note|built|drop> ...", purpose: "keep and develop ideas" },
   ui: { usage: "aleph ui <pair [label]|unpair <label>|devices>", purpose: "pair a device with the UI, drop one, or list them" },
   tick: { usage: "aleph tick", purpose: "run the periodic steps that are due and the sweep" },
   director: { usage: "aleph director", purpose: "run one director step" },

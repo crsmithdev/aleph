@@ -26,7 +26,7 @@ import { parentOf, partsOf } from "../../lib/todo.ts";
 import * as todos from "../../lib/todo.ts";
 
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */
-interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "housekeeper" | "maintainer"; state: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 interface LogFile { name: string; size: number }
 /**
@@ -113,7 +113,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", lens: "lens", housekeeper: "housekeeper", maintainer: "maintainer", judge: "worker" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", review: "review", plain: "plain", intake: "intake", director: "director", monitor: "monitor", housekeeper: "housekeeper", maintainer: "maintainer", judge: "worker" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",

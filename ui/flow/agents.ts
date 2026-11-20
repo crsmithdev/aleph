@@ -31,7 +31,7 @@ export interface Agents {
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["lens", "lens"], ["judge", "judge"], ["reviewer", "review"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
+const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["judge", "judge"], ["reviewer", "review"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */

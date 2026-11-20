@@ -1,19 +1,9 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run } from "../cli/commands.ts";
-import { allRuns } from "../jobs/lib/records/record.ts";
-import { setModel } from "../jobs/lib/routing/models.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
-
-// The fake lens agent: it keeps its prompt, writes $FAKE_RESULT in its working directory unless that is "none", and ends as stream-json does.
-const FAKE = `#!/usr/bin/env bash
-cat > prompt.txt
-[ "$FAKE_RESULT" = none ] || echo "# found" > "$FAKE_RESULT"
-echo '{"type":"system","subtype":"init","session_id":"s1"}'
-echo '{"type":"result","subtype":"success","is_error":false,"result":"ok","session_id":"s1","total_cost_usd":0.5}'
-`;
 
 let base = "", items = "", store = "", remote = "", restore = () => {};
 
@@ -31,12 +21,10 @@ beforeEach(() => {
   items = join(base, "items");
   store = join(items, "ideas");
   remote = join(base, "items.git");
-  writeFileSync(join(base, "claude"), FAKE);
-  chmodSync(join(base, "claude"), 0o755);
   writeRepos({ aleph: { path: base, code: "a" } }, items);
   const vars: Record<string, string> = {
     ALEPH_DB: join(base, "aleph.db"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"),
-    ALEPH_ITEMS: items, ALEPH_LENS_CMD: join(base, "claude"), FAKE_RESULT: "result.md", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
+    ALEPH_ITEMS: items, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
     GIT_COMMITTER_DATE: "2026-11-10T12:00:00",
   };
   const saved = Object.fromEntries(Object.keys(vars).map((k) => [k, process.env[k]]));
@@ -109,85 +97,17 @@ test("list prints the exploring ideas with their project, and --status the built
   expect((await aleph(["idea", "built", "1", "issue.1", "a2"])).code).toBe(0);
   expect((await aleph(["idea", "drop", "d3"])).code).toBe(0);
   const day = "2026-11-10 12:00";
-  expect((await aleph(["idea", "list"])).out).toBe(`d2  new project  -  ${day}\n`);
-  expect((await aleph(["idea", "list", "--status", "built"])).out).toBe(`d1  aleph  -  ${day}\n`);
-  expect((await aleph(["idea", "list", "--status", "dropped"])).out).toBe(`d3  new project  -  ${day}\n`);
+  expect((await aleph(["idea", "list"])).out).toBe(`d2  new project  ${day}\n`);
+  expect((await aleph(["idea", "list", "--status", "built"])).out).toBe(`d1  aleph  ${day}\n`);
+  expect((await aleph(["idea", "list", "--status", "dropped"])).out).toBe(`d3  new project  ${day}\n`);
   expect(idea(1)).toContain("status: built\nbuilt: [issue.1, issue.2]\n");
   expect(idea(3)).toContain("status: dropped\n");
 });
 
-test("show prints idea.md and its lens results", async () => {
+test("show prints idea.md", async () => {
   await aleph(["idea", "add", "Issue history", "--sketch", "-"], "Sketch.");
   const s = await aleph(["idea", "show", "1"]);
-  expect(s.out).toBe(`${idea(1)}\n## Lens results\n\nnone\n`);
+  expect(s.out).toBe(idea(1));
   expect((await aleph(["idea", "show", "nope"])).code).toBe(1);
   expect((await aleph(["idea", "show", "9"])).code).toBe(1);
-});
-
-test("save copies a result under its lens and local time, logs it, keeps each date, and refuses another extension", async () => {
-  await aleph(["idea", "add", "Issue history"]);
-  writeFileSync(join(base, "out.html"), "<p>prior</p>");
-  writeFileSync(join(base, "out.md"), "# prior again");
-  writeFileSync(join(base, "out.txt"), "no");
-  try {
-    setSystemTime(new Date(2026, 10, 9, 8, 5));
-    expect((await aleph(["idea", "save", "1", "prior-art", join(base, "out.html")])).code).toBe(0);
-    setSystemTime(new Date(2026, 10, 10, 14, 30));
-    expect((await aleph(["idea", "save", "1", "prior-art", join(base, "out.md")])).code).toBe(0);
-  } finally {
-    setSystemTime();
-  }
-  expect(readdirSync(join(store, "1")).sort()).toEqual(["idea.md", "prior-art-2026-11-09-0805.html", "prior-art-2026-11-10-1430.md"]);
-  expect(readFileSync(join(store, "1", "prior-art-2026-11-09-0805.html"), "utf8")).toBe("<p>prior</p>");
-  expect(idea(1)).toEndWith("- 2026-11-09 08:05 prior-art saved: prior-art-2026-11-09-0805.html\n- 2026-11-10 14:30 prior-art saved: prior-art-2026-11-10-1430.md\n");
-  expect(git(items, "status", "--porcelain", "--untracked-files=no")).toBe("");
-  expect(git(items, "log", "-1", "--format=%s")).toBe("save idea.1");
-  expect((await aleph(["idea", "save", "1", "prior-art", join(base, "out.txt")])).code).toBe(1);
-  expect((await aleph(["idea", "list"])).out).toStartWith("d1  new project  prior-art  ");
-  expect((await aleph(["idea", "show", "1"])).out).toEndWith("## Lens results\n\n- prior-art 2026-11-09 08:05 prior-art-2026-11-09-0805.html\n- prior-art 2026-11-10 14:30 prior-art-2026-11-10-1430.md\n");
-});
-
-test("lens runs the lens skill on the idea as a lens run with its cost, and saves its result", async () => {
-  await aleph(["idea", "add", "Issue history"]);
-  const l = await aleph(["idea", "lens", "1", "prior-art"]);
-  expect(l).toMatchObject({ code: 0, err: "" });
-  const saved = readdirSync(join(store, "1")).filter((f) => f !== "idea.md");
-  expect(saved).toEqual([expect.stringMatching(/^prior-art-\d{4}-\d\d-\d\d-\d{4}\.md$/)]);
-  expect(readFileSync(join(store, "1", saved[0]), "utf8")).toBe("# found\n");
-  expect(l.out).toBe(`${saved[0]}\n`);
-  const [r] = allRuns().filter((e) => e.run.role === "lens");
-  expect(r.id).toMatch(/^job\.\d+$/);
-  expect(r.run).toMatchObject({ name: "1-prior-art", cost: 0.5, state: "done" });
-  expect(r.run.worktree).toBeUndefined();
-  const prompt = readFileSync(join(r.folder, "prompt.txt"), "utf8");
-  expect(prompt).toContain("# Prior Art");
-  expect(prompt).toContain(join(store, "1", "idea.md"));
-});
-
-test("a lens run records the model the lens setting names", async () => {
-  await aleph(["idea", "add", "Issue history"]);
-  expect(setModel("lens", { model: "sonnet" })).toBeNull();
-  await aleph(["idea", "lens", "1", "prior-art"]);
-  expect(allRuns().filter((e) => e.run.role === "lens").map((e) => e.run.model)).toEqual(["sonnet"]);
-});
-
-test("lens saves an html result, refuses an unknown lens, and saves nothing when the run wrote no result", async () => {
-  await aleph(["idea", "add", "Issue history"]);
-  process.env.FAKE_RESULT = "result.html";
-  expect((await aleph(["idea", "lens", "1", "explainer"])).out).toMatch(/^explainer-.*\.html\n$/);
-  const bad = await aleph(["idea", "lens", "1", "vibes"]);
-  expect(bad.code).toBe(1);
-  for (const k of ["prior-art", "red-team", "explainer"]) expect(bad.err).toContain(k);
-  process.env.FAKE_RESULT = "none";
-  const none = await aleph(["idea", "lens", "1", "red-team"]);
-  expect(none.code).toBe(1);
-  expect(readdirSync(join(store, "1")).filter((f) => f !== "idea.md")).toHaveLength(1);
-  const runs = allRuns().filter((e) => e.run.role === "lens");
-  expect(runs).toHaveLength(2);
-  expect(runs.find((e) => e.run.name === "1-red-team")!.run.reason).toStartWith("failed");
-});
-
-test("no factory transition, routine or timer starts a lens run", () => {
-  const p = Bun.spawnSync(["grep", "-rlE", "idea lens|ideas/ideas|\"idea\", \"lens\"", "jobs/lib", "jobs/systemd", "jobs/windows"], { cwd: join(import.meta.dir, ".."), stdout: "pipe" });
-  expect(p.stdout.toString()).toBe("");
 });

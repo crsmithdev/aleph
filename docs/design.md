@@ -1312,7 +1312,7 @@ Tabs show one pane of a page at a time. A segmented control picks the pane.
 
 | Helper | Reference |
 |---|---|
-| `tabs(label, items, panes, on)`; `wireTabs(root, onTab)` | `ui/views/ideas.js` |
+| `tabs(label, items, panes, on)`; `wireTabs(root, onTab)` | `ui/views/now.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -1326,7 +1326,7 @@ Tabs show one pane of a page at a time. A segmented control picks the pane.
 
 | Do | Don't |
 |---|---|
-| `tabs("Idea tabs", [["writeup", "Write-up"], ["log", "Log"]], panes, tab)` | `seg()` plus `section` tags written by hand |
+| `tabs("Herald", [["events", "Events"], ["inspector", "Inspector"]], panes, tab)` | `seg()` plus `section` tags written by hand |
 | three tabs | a tab bar of nine tabs that scrolls |
 
 #### Select
@@ -1591,7 +1591,6 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | Charts outside the chart panel: the Agent Time bar, the session waterfall | `ui/views/lib/flow-parts.js`, `ui/views/session.js` | allowed |
-| A lens result is a hand `iframe.lens-frame`, sandboxed: no helper for a result page; the Log pane's lines are a hand `ul` | `renderIdea()` in `ui/views/ideas.js` | follow-up |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
 | The outcome bar shows `empty()` with no card | `bar()` in `ui/views/lib/flow-parts.js` | follow-up |

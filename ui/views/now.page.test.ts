@@ -104,11 +104,11 @@ test("the sidebar links and the routes exist", async () => {
   expect(eff.redirect("#/flow?window=day")).toBe("#/explore?window=day");
 });
 
-test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs, Ideas, Explore in that order", async () => {
-  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs", "ideas", "efficiency"].map((f) => import(`./${f}.js`)));
+test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs, Explore in that order", async () => {
+  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs", "efficiency"].map((f) => import(`./${f}.js`)));
   const sorted = views.map((m) => m.view).sort((a, b) => a.order - b.order);
-  expect(sorted.map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs", "Ideas", "Explore"]);
-  expect(views[6].view.icon).toBe("magnifying-glass-chart");
+  expect(sorted.map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs", "Explore"]);
+  expect(views[5].view.icon).toBe("magnifying-glass-chart");
 });
 
 test("more loads the window of the address", async () => {

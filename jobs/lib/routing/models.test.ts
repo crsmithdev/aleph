@@ -23,7 +23,6 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
     intake: { enabled: true, model: "claude-opus-5-5" },
     director: { enabled: true, model: "claude-opus-5-5" },
     monitor: { enabled: true, model: "deepseek-v4.1-flash" },
-    lens: { enabled: true, model: "claude-opus-5-5" },
     housekeeper: { enabled: true, model: "claude-opus-5-5" },
     maintainer: { enabled: true, model: "sonnet" },
     judge: { enabled: true, model: "haiku" },
@@ -39,7 +38,7 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("housekeeper", { model: "sonnet" })).toBeNull();
   expect(m.housekeeper).toEqual({ enabled: true, model: "claude-opus-5-5" });
   expect(readModels().housekeeper.model).toBe("sonnet");
-  expect(setModel("lens", { enabled: false })).toContain("can be disabled");
+  expect(setModel("monitor", { enabled: false })).toContain("can be disabled");
   expect(setModel("small", { model: "sonnet" })).toContain("offers");
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
   expect(setModel("title", { model: "haiku" })).toContain("unknown name");

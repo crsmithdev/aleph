@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Ctx } from "../cli/commands.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { refuse } from "../lib/refusal.ts";
@@ -27,32 +26,18 @@ export async function ideaCmd(ctx: Ctx, use: string): Promise<void> {
       return;
     }
     case "list":
-      for (const r of ideas.list(ctx.flag("status"))) ctx.log([shownKey(key("idea", Number(r.idea.slug))), projectName(String(r.idea.fm.project ?? "")) ?? "new project", r.lenses.join(",") || "-", r.last].join("  "));
+      for (const r of ideas.list(ctx.flag("status"))) ctx.log([shownKey(key("idea", Number(r.idea.slug))), projectName(String(r.idea.fm.project ?? "")) ?? "new project", r.last].join("  "));
       return;
     case "show": {
       const slug = ideaArg(args[0]);
       ideas.read(slug);
-      const results = ideas.lenses(slug).map((l) => `- ${l.lens} ${l.at} ${l.file}`);
-      ctx.write(`${readFileSync(ideas.file(slug), "utf8")}\n## Lens results\n\n${results.join("\n") || "none"}\n`);
+      ctx.write(readFileSync(ideas.file(slug), "utf8"));
       return;
     }
     case "edit": return warn(ideas.edit(ideaArg(args[0]), await text("writeup")));
     case "note": return warn(ideas.note(ideaArg(args[0]), args.slice(1).join(" ")));
     case "built": return warn(ideas.built(ideaArg(args[0]), args.slice(1).map(builtRef)));
     case "drop": return warn(ideas.drop(ideaArg(args[0])));
-    case "lens": {
-      const l = await ideas.lens(ideaArg(args[0]), args[1] ?? refuse(use));
-      warn(l.warn);
-      ctx.log(l.file);
-      return;
-    }
-    case "save": {
-      const [slug, lens, from] = args;
-      const s = ideas.save(ideaArg(slug), lens ?? refuse(use), resolve(from ?? refuse(use)));
-      warn(s.warn);
-      ctx.log(s.file);
-      return;
-    }
     default: refuse(use);
   }
 }
