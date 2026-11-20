@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
-import { adopt, commitAndPush, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
+import { adopt, commitAndPush, installHook, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
 import { daysAgo, today } from "../../lib/day.ts";
 import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, trimRecallLog, type Finding } from "./vault.ts";
 
@@ -41,6 +41,8 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
   const report: Json = { op: "maintain", dry };
   const failed: string[] = [];
   const backup = join(alephPath("ALEPH_BACKUPS_DIR", "backups"), "maintain", today());
+
+  if (!dry) report.hook = installHook(root);
 
   const retry = readRun(root, "vault push")?.result === "failed";
   const pushed = retry && !dry ? pushOrigin(root) : null;

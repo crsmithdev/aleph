@@ -11,9 +11,9 @@ import { missesStore } from "../../jobs/lib/infra/settings.ts";
 import type { Observation } from "../../lib/langfuse.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, pushOrigin, tracked, trackedFiles } from "./git.ts";
-import { git } from "../../lib/git.ts";
+import { git, readFiles } from "../../lib/git.ts";
 import { compileDigest } from "./compile.ts";
-import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
+import { GITIGNORE, MEMORY_MD, OBSIDIAN, preCommit, VAULT_MD } from "./templates.ts";
 import { claimLine, recall as recallNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { appendDaily as writeDaily, backlinks, budgetFindings, coreNotes, fixFrontmatter, folderFor, isVault, lintVault, linkTargets, loadVault, loadWiki, noteRead, parseNote, readNote, recordCompiled, recordRun, relativeDates, renameScope, scopeOf, screenCandidates, stampProvenance, START_BUDGET, startContext, validateNote, wikiNotes, type Finding, type Note, type Op } from "./vault.ts";
@@ -93,6 +93,17 @@ function rollback(root: string, paths: string[]): void {
   }
 }
 
+/** Global and each scope with a core line: the scopes a start context is made for. */
+const coreScopes = (notes: Note[]): string[] => [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map(scopeOf)])];
+
+/** The bytes of the start context of `scope` before and after a change, when the change grows it past START_BUDGET; else null. */
+function grown(root: string, prior: Note[], notes: Note[], scope: string): { before: number; after: number } | null {
+  const after = startContext(root, notes, scope).bytes;
+  if (after <= START_BUDGET) return null;
+  const before = startContext(root, prior, scope).bytes;
+  return after > before ? { before, after } : null;
+}
+
 /**
  * The refusal for a core line the start context cannot hold: a write that
  * grows a scope's start context past the budget. A write that keeps an
@@ -102,10 +113,9 @@ function rollback(root: string, paths: string[]): void {
  */
 function coreFindings(root: string, prior: Note[], notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
   const scope = scopeOf(draft);
-  const scopes = scope === "global" ? [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map(scopeOf)])] : [scope];
+  const scopes = scope === "global" ? coreScopes(notes) : [scope];
   for (const s of scopes) {
-    const { bytes } = startContext(root, notes, s);
-    if (bytes <= START_BUDGET || bytes <= startContext(root, prior, s).bytes) continue;
+    if (!grown(root, prior, notes, s)) continue;
     const ranked = coreNotes(notes, s).reverse();
     return {
       findings: [{ note: draft.title, rule: "core", detail: `the start context of scope ${s} is over ${START_BUDGET} bytes with this core line` }],
@@ -132,7 +142,36 @@ export const init = (root: string) => op(async (w) => {
     if (!r.ok) fail(r.out);
   }
   const commit = commitAndPush(root, w, "init vault", made);
+  installHook(root);
   return { op: "init", path: root, commit };
+});
+
+/** Lay down the vault's pre-commit hook when it is missing. Whether it did. */
+export function installHook(root: string): boolean {
+  const path = resolve(root, git(root, "rev-parse", "--git-path", "hooks/pre-commit").out);
+  if (existsSync(path)) return false;
+  writeFileSync(path, preCommit(process.execPath, join(import.meta.dir, "..", "..", "cli", "cli.ts")), { mode: 0o755 });
+  return true;
+}
+
+/** The MEMORY.md and wiki notes of `rev`: `HEAD`, or `""` for the index. */
+function gitNotes(root: string, rev: string): Note[] {
+  const list = rev ? git(root, "ls-tree", "-r", "-z", "--name-only", rev, "--", "MEMORY.md", "wiki") : git(root, "ls-files", "-z", "--", "MEMORY.md", "wiki");
+  const rels = list.out.split("\0").filter((p) => p.endsWith(".md"));
+  const texts = readFiles(root, rels.map((p) => `${rev}:${p}`));
+  return rels.map((rel, i) => parseNote(join(root, rel), root, texts[i]));
+}
+
+/** The vault's pre-commit check: it refuses a commit that grows the start context of a scope past START_BUDGET. */
+export const precommit = (root: string) => op(async () => {
+  const prior = gitNotes(root, "HEAD");
+  const staged = gitNotes(root, "");
+  const findings = coreScopes(staged).flatMap((s) => {
+    const g = grown(root, prior, staged, s);
+    return g ? [{ note: `scope ${s}`, rule: "core", detail: `the start context grows from ${g.before} to ${g.after} bytes, over ${START_BUDGET}` }] : [];
+  });
+  if (findings.length) refuse(findings);
+  return { op: "precommit" };
 });
 
 export interface Written extends Committed { op: string; title: string; path: string; archived?: string[]; warnings?: Finding[] }

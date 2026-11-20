@@ -6,11 +6,11 @@ import { resolve } from "node:path";
 import { today } from "../../lib/day.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { maintain } from "./maintain.ts";
-import { adopt, archive, compile, del, init, lint, misses, recall, renameScopeOp, write, type Result } from "./ops.ts";
+import { adopt, archive, compile, del, init, lint, misses, precommit, recall, renameScopeOp, write, type Result } from "./ops.ts";
 
 export interface Io { log: (s: string) => void; err: (s: string) => void }
 
-const USAGE = "usage: aleph memory <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]|maintain [--dry]>";
+const USAGE = "usage: aleph memory <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|delete <title> --why <text>|compile [date]|misses [--days N]|maintain [--dry]|precommit>";
 
 /** Print `r` and return the exit code: `code` of the value on success, 1 on a refusal. */
 function print(io: Io, r: Result<unknown>, code: (v: any) => number = () => 0, text = false): number {
@@ -64,6 +64,7 @@ export async function cli(argv: string[], io: Io): Promise<number> {
       return days === undefined || days > 0 ? print(io, await misses(days)) : usage("usage: aleph memory misses [--days N]");
     }
     case "maintain": return print(io, await maintain(root, has("dry")), (v) => (v.ok ? 0 : 1));
+    case "precommit": return print(io, await precommit(root));
     default: io.err(USAGE); return 2;
   }
 }

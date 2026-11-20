@@ -10,7 +10,7 @@
  * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/seams-lint.test.ts) or name a path.
  */
 import * as record from "../jobs/lib/records/record.ts";
-import { fetchOrigin, fetchOriginAsync, followMain, git, spawnGit, treeWithFiles } from "./git.ts";
+import { fetchOrigin, fetchOriginAsync, followMain, git, readFiles, treeWithFiles } from "./git.ts";
 import { layout, logEvent } from "./layout.ts";
 import { next } from "./db.ts";
 import { CLOSED, issueKey, key as keyOf } from "./naming.ts";
@@ -76,23 +76,6 @@ function fetchNow(dir: string): void {
 
 /** The store's fetch failed: the lists on disk may be stale, not missing. */
 class FetchFailed extends Error {}
-
-/** The contents of each `rev:path`, in one `git cat-file --batch`. */
-function readFiles(dir: string, specs: string[]): string[] {
-  if (!specs.length) return [];
-  const p = spawnGit(["git", "cat-file", "--batch"], { cwd: dir, stdin: new Blob([specs.join("\n") + "\n"]), stdout: "pipe", stderr: "pipe" });
-  if (p.exitCode !== 0) throw new Error(`cat-file: ${p.stderr.toString()}`);
-  const buf = p.stdout;
-  const out: string[] = [];
-  let at = 0;
-  for (const _ of specs) {
-    const nl = buf.indexOf(10, at);
-    const size = Number(buf.subarray(at, nl).toString().split(" ")[2]);
-    out.push(buf.subarray(nl + 1, nl + 1 + size).toString());
-    at = nl + 1 + size + 1;
-  }
-  return out;
-}
 
 /** Every issue of the items repo at the commit last loaded, by directory: a commit never changes, so a later load of the same commit reads no blob. Only the latest commit is kept. */
 const texts = new Map<string, { sha: string; items: Issue[] }>();

@@ -81,6 +81,12 @@ core line that puts a scope's start context over 6,000 bytes, the body
 template. It warns on stale claims, relative dates and same-scope overlap.
 `;
 
+/** The vault's pre-commit hook: `aleph memory precommit` under the bun and the CLI that installed it. Findings go to stderr. */
+export const preCommit = (bun: string, cli: string): string => `#!/bin/sh
+# Installed by aleph memory init and maintain.
+ALEPH_VAULT="$(pwd)" exec "${bun}" "${cli}" memory precommit >/dev/null
+`;
+
 export const MEMORY_MD = `# Memory
 
 Standing context, ≤150 lines. If this needs to grow, something in it belongs

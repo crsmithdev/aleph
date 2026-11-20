@@ -53,6 +53,23 @@ function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint8Array 
   }
 }
 
+/** The contents of each `rev:path`, in one `git cat-file --batch`. */
+export function readFiles(dir: string, specs: string[]): string[] {
+  if (!specs.length) return [];
+  const p = spawnGit(["git", "cat-file", "--batch"], { cwd: dir, stdin: new Blob([specs.join("\n") + "\n"]), stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`cat-file: ${p.stderr.toString()}`);
+  const buf = p.stdout;
+  const out: string[] = [];
+  let at = 0;
+  for (const _ of specs) {
+    const nl = buf.indexOf(10, at);
+    const size = Number(buf.subarray(at, nl).toString().split(" ")[2]);
+    out.push(buf.subarray(nl + 1, nl + 1 + size).toString());
+    at = nl + 1 + size + 1;
+  }
+  return out;
+}
+
 /** `git` in `cwd`, not ok (and no throw) when `cwd` does not exist. */
 export function probe(cwd: string, ...args: string[]): { ok: boolean; out: string } {
   return existsSync(cwd) ? git(cwd, ...args) : { ok: false, out: "" };

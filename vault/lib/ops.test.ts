@@ -380,13 +380,44 @@ describe("core", () => {
     for (let j = 0; j < i; j++) (await cli("archive", `Budget Core ${j}`, "--why", "test fixture"));
   });
   test("a write that shortens a core line of a scope over the start budget succeeds", async () => {
-    // 50 core lines of about 175 bytes each put the scope over 6000 bytes; no write can grow it there, so they are committed directly.
-    for (let i = 0; i < 50; i++) writeFileSync(join(vault, `wiki/decisions/Over Core ${i}.md`), readFileSync(note(`Over Core ${i}`, { kind: "decision", scope: "overcore", core: `Core fact ${i} ${"y".repeat(140)}` }), "utf8"));
-    Bun.spawnSync(["git", "-C", vault, "add", "-A"]);
-    Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "seed core lines"], { env: { ...process.env, ...testEnv } });
+    overCore();
     const r = (await cli("write", note("Over Core 0", { kind: "decision", scope: "overcore", core: "Core fact 0, shorter" }), "--why", "x"));
     expect(r.code).toBe(0);
     expect(readFileSync(join(vault, "wiki/decisions/Over Core 0.md"), "utf8")).toContain("core: Core fact 0, shorter");
+  });
+});
+
+/** A hand-made note of the scope `scope` with the core line `core`, staged. */
+function handCore(title: string, scope: string, core: string): void {
+  writeFileSync(join(vault, `wiki/decisions/${title}.md`), readFileSync(note(title, { kind: "decision", scope, core }), "utf8"));
+  Bun.spawnSync(["git", "-C", vault, "add", "-A"]);
+}
+/** A plain `git commit` in the vault, which runs its hooks; `--no-verify` skips them. */
+const handCommit = (...flags: string[]) => Bun.spawnSync(["git", "-C", vault, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "hand edit", ...flags], { env: { ...process.env, ...testEnv }, stdout: "pipe", stderr: "pipe" });
+const head = () => Bun.spawnSync(["git", "-C", vault, "rev-parse", "HEAD"], { stdout: "pipe" }).stdout.toString().trim();
+/** Scope overcore over the start budget: 50 core lines of about 175 bytes each. The hook refuses a commit that grows it there, so the seed skips the hook. */
+function overCore(): void {
+  for (let i = 0; i < 50; i++) handCore(`Over Core ${i}`, "overcore", `Core fact ${i} ${"y".repeat(140)}`);
+  expect(handCommit("--no-verify").exitCode).toBe(0);
+}
+
+describe("pre-commit hook", () => {
+  test("refuses a hand commit that grows a scope over the start budget, and passes one that shrinks it or stays under", () => {
+    overCore();
+    const before = head();
+    handCore("Over Core 50", "overcore", "One more core fact");
+    const r = handCommit();
+    expect(r.exitCode).not.toBe(0);
+    expect(r.stderr.toString() + r.stdout.toString()).toContain("overcore");
+    expect(head()).toBe(before);
+    rmSync(join(vault, "wiki/decisions/Over Core 50.md"));
+    const path = join(vault, "wiki/decisions/Over Core 0.md");
+    writeFileSync(path, readFileSync(path, "utf8").replace(/^core:.*\n/m, ""));
+    Bun.spawnSync(["git", "-C", vault, "add", "-A"]);
+    expect(handCommit().exitCode).toBe(0);
+    handCore("Small Core", "smallcore", "A core fact");
+    expect(handCommit().exitCode).toBe(0);
+    expect(gitStatus()).toBe("");
   });
 });
 
@@ -969,5 +1000,12 @@ describe("maintain", () => {
     expect(readdirSync(handoffs).sort()).toEqual([`${day(41)}-101010-not-compiled.md`, `${day(5)}-101010-recent.md`]);
     expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("core: Terse [[UI Text]] always");
     expect(gitLog()).toContain("maintain core: 1 notes");
+  });
+  test("puts back a deleted pre-commit hook", async () => {
+    overCore();
+    rmSync(join(vault, ".git/hooks/pre-commit"));
+    expect((await run(env(), "maintain")).code).toBe(0);
+    handCore("Over Core 50", "overcore", "One more core fact");
+    expect(handCommit().exitCode).not.toBe(0);
   });
 });
