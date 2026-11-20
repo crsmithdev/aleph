@@ -4,7 +4,7 @@
 import { scope, setQuery } from "./lib/address.js";
 import { redraw } from "./lib/router.js";
 import { count, day, when } from "./lib/format.js";
-import { barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
+import { badCount, barList, barRow, card, cell, codeText, crumb, dataTable, empty, esc, facts, filterBar, heads, idLink, legendHtml, meter, note, pageHead, pageOf, pageRows, pager, row, statCard, tag, tiles } from "./lib/html.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
 export const view = {
@@ -65,7 +65,7 @@ function perDay(holds, box) {
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
   row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), cell(e.fix),
-    cell(e.n, { num: true }), cell(e.sessions, { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
+    badCount(e.n), cell(e.sessions, { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 /** The filters of the holds log from the address. */
 const filtersOf = (q) => Object.fromEntries(["who", "hook", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));

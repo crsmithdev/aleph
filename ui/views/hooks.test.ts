@@ -83,11 +83,11 @@ describe("the Hooks page", () => {
     expect([head(html, "Holds by Hook"), head(html, "Holds by Day"), head(html, "Errors by Cause")]).toEqual(["1", "2", "1"]);
   });
 
-  test("the errors table puts Fix before the numbers and Last at the end", () => {
+  test("the errors table puts Fix before the numbers, Last at the end, and a count above 0 in the bad tone", () => {
     const table = renderHooks(data, new URLSearchParams()).split('aria-label="Errors by Cause"')[1].split("</table>")[0];
     expect([...table.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"]);
     expect(table).toContain('<th class="num">Errors</th><th class="num">Sessions</th>');
-    expect(table).toMatch(/<td>Stub or stable entry<\/td><td class="num">53<\/td><td class="num">10<\/td><td class="time">/);
+    expect(table).toMatch(/<td>Stub or stable entry<\/td><td class="num bad">53<\/td><td class="num">10<\/td><td class="time">/);
   });
 
   test("a hook's Holds by Day head counts the days and Holds by Kind its rows", () => {
