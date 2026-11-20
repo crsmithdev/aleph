@@ -20,6 +20,10 @@ const data = {
   errors: [{ cause: "Moved hook file", fix: "Stub or stable entry", n: 53, sessions: 10, hooks: ["vault"], events: ["SessionStart"], last: "2026-11-19T09:13:00Z" }],
   hooks: [{ event: "Stop", name: "one way", matcher: "", file: "skills/refit-code/hook.ts", mode: "", timeout: 30, holds: 2 }],
 };
+/** The count in the head of panel `title`. */
+const head = (html: string, title: string) => html.match(new RegExp(`<span>${title}</span><span class="dp-aside">([^<]*)`))?.[1];
+/** The holds over two days: the last a day later. */
+const twoDays = holds.map((h, i) => (i === 3 ? { ...h, t: "2026-11-19T10:00:00Z" } : h));
 /** The session ids of the holds log's rows. */
 const logIds = (q: string) => [...renderHooks(data, new URLSearchParams(q)).split('id="holds"')[1].matchAll(/#\/sessions\/(\w+)/g)].map((m) => m[1]);
 
@@ -49,6 +53,17 @@ describe("the Hooks page", () => {
     expect(logIds("hook=verify%20gate")).toEqual(["cccccccc3", "dddddddd4"]);
     expect(logIds("kind=boundary")).toEqual(["bbbbbbbb2"]);
     expect(logIds("out=no%20effect")).toEqual(["bbbbbbbb2", "cccccccc3"]);
+  });
+
+  test("the heads of Holds by Hook, Holds by Day and Errors by Cause count their own items", () => {
+    const html = renderHooks({ ...data, holds: twoDays }, new URLSearchParams());
+    expect([head(html, "Holds by Hook"), head(html, "Holds by Day"), head(html, "Errors by Cause")]).toEqual(["1", "2", "1"]);
+  });
+
+  test("a hook's Holds by Day head counts the days and Holds by Kind its rows", () => {
+    const kind = (k: string) => ({ kind: k, holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } });
+    const html = renderHook({ event: "Stop", name: "one way", matcher: "", file: "x.ts", mode: "", timeout: 10, holds: twoDays, byKind: ["new-copy", "boundary", "judged"].map(kind), errors: [] }, new URLSearchParams());
+    expect([head(html, "Holds by Day"), head(html, "Holds by Kind")]).toEqual(["2", "3"]);
   });
 
   test("a hook with no holds and no errors shows the empty state", () => {

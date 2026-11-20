@@ -52,10 +52,10 @@ function holdsBy(groups, hookCol = true) {
   return legend + dataTable(heads([...(hookCol ? ["Hook"] : []), "Kind", "Holds", "Interactive", "Workers", "Outcome", ...OUTS.map((o) => o[1])], nums), rows.join(""));
 }
 
-/** Holds per day as a bar list, oldest first, the largest day marked. */
+/** The Holds by Day panel: a bar list, oldest first, the largest day marked, its head the day count. */
 function perDay(holds) {
   const days = [...Map.groupBy([...holds].reverse(), (h) => day(h.t)).entries()], most = Math.max(...days.map(([, xs]) => xs.length));
-  return barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join(""));
+  return detailPanel("Holds by Day", count(days.length), barList(days.map(([d, xs]) => barRow(esc(d), (100 * xs.length) / most, String(xs.length), { top: xs.length === most })).join("")));
 }
 
 /** Errors by cause, each with its fix. */
@@ -98,9 +98,9 @@ export function renderHooks(d, q) {
   return `<div class="page dp-page">` +
     pageHead("Hooks", { aside: `Last ${d.days} days` }) +
     renderKpis([{ k: "Holds", v: count(d.holds.length) }, { k: "Caught", v: n("caught") }, { k: "False", v: n("false") }, { k: "No Effect", v: n("no effect") }, { k: "Errors", v: count(errs) }]) +
-    detailPanel("Holds by Hook", count(d.holds.length), holdsBy(d.byHook)) +
-    (d.holds.length ? detailPanel("Holds by Day", count(d.holds.length), perDay(d.holds)) : "") +
-    detailPanel("Errors by Cause", count(errs), errorsTable(d.errors)) +
+    detailPanel("Holds by Hook", count(d.byHook.length), holdsBy(d.byHook)) +
+    (d.holds.length ? perDay(d.holds) : "") +
+    detailPanel("Errors by Cause", count(d.errors.length), errorsTable(d.errors)) +
     detailPanel("Hooks", String(d.hooks.length), dataTable(heads(["Event", "Hook", "Matcher", "File", "Mode", "Timeout s", "Holds"], ["Timeout s", "Holds"]), inv)) +
     holdsLog(d.holds, q) +
     `</div>`;
@@ -139,7 +139,7 @@ export function renderHook(d, q) {
     facts([["Event", esc(d.event)], ["Matcher", d.matcher ? codeText(`\`${d.matcher}\``) : "all"], ["File", codeText(`\`${d.file}\``)], ["Mode", d.mode || "sync"], ["Timeout", `${d.timeout} s`]]) +
     (xs.length ? renderKpis([{ k: "Holds", v: count(xs.length) }, ...outcomes(xs).filter(([, , n]) => n).map(([, k, n]) => ({ k, v: count(n) }))]) +
       detailPanel("Holds by Kind", count(d.byKind.length), holdsBy(d.byKind, false)) +
-      detailPanel("Holds by Day", count(xs.length), perDay(xs)) : "") +
+      perDay(xs) : "") +
     holdsLog(xs, q, false) +
     detailPanel("Errors", count(d.errors.reduce((s, e) => s + e.n, 0)), errorsTable(d.errors)) +
     `</div>`;
