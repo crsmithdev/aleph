@@ -201,6 +201,22 @@ test("rescue: each step: a killed run, an infra failure, a land conflict, and a 
   expect(rerun(landChecks)).toContain("its checks log:\n\n```\n(empty)\n```");
 });
 
+test("a check failure whose tests all fail on main is held while main is red, rechecked once at green, then asks", async () => {
+  const [held, own] = [newIssue(), newIssue()];
+  const failed = (onMain?: true): Partial<Run> => ({ cause: "check", checkName: "tests", reason: "tests failed", checks: [{ name: "tests", ok: false, seconds: 1, tests: { ran: 1, passed: 0, failed: 1, skipped: 0, failures: [{ file: "a.test.ts", name: "a", message: "", ...(onMain && { onMain }) }] } }] });
+  const { job } = mk(`fac-${held}`, "build", "failed", failed(true));
+  mk(`fac-${own}`, "build", "failed", failed());
+  const red = await rescue({ state: "red", line: "tests fail" });
+  expect(red.calls).toEqual([]);
+  expect(ask(held)).toBeNull();
+  expect((await rescue()).calls).toEqual([`recheck issue.${held}`]);
+  expect(ask(held)).toBeNull();
+  expect(ask(own)!.why).toContain("No safe default covers this case");
+  mk(`fac-${held}`, "recheck", "failed", { job, ...failed(true) });
+  expect((await rescue()).calls).toEqual([]);
+  expect(ask(held)!.question).toContain("hit the same case again");
+});
+
 test("hasWork: a branch whose only change is result.md is not work to rescue, as unit's branchFacts decides; one that changes code is", async () => {
   const [notes, code, gone] = [newIssue(), newIssue(), newIssue()];
   branch("notes", "result.md");

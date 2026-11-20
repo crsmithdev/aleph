@@ -11,6 +11,7 @@
  * the issue; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, or it has had no `pid` for two minutes, and no host
  * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
+ * A build or recheck whose failed check's tests all fail on main too waits while main is red, and is rechecked once when it turns green.
  */
 import { issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/todo.ts";
@@ -187,7 +188,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
 /** The run a rescue acts on: its entry, its repo, its job name, its issue, and why it stopped. */
 type Ended = { last: Entry; r: Run; repo: Repo; name: string; issue: number | string | undefined; reason: string };
 
-type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "infra" | "land-checks" | "land-conflict";
+type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "infra" | "land-checks" | "land-conflict" | "main-red";
 
 /** Which safe case a returned or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
 function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
@@ -197,7 +198,15 @@ function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): Rescue
   if (cause === "infra" || cause === "locked") return "infra";
   if (r.role === "land" && cause === "conflict") return "land-conflict";
   if (r.role === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
+  if (isAgentRun(r.role) && cause === "check" && failsOnMain(r)) return "main-red";
   return null;
+}
+
+/** Whether each failed test of the run's failed check fails on main too, as the worker verdict's `failsOnMain` marks it. */
+function failsOnMain(r: Run): boolean {
+  const tests = r.checks?.findLast((c) => c.name === r.checkName)?.tests;
+  // The record keeps at most 20 failures, so a check with more cannot show that each fails on main.
+  return !!tests?.failures.length && tests.failures.length === tests.failed && tests.failures.every((f) => f.onMain);
 }
 
 /** One action on a run. `rerun` is the rerun note; `dropReason` is the drop's text, when it is not `noted`; `told` is the news, when it is not `noted`. */
@@ -254,6 +263,12 @@ function conflictStep({ last, r, repo }: Ended, touched: string): Step {
     rerun: `The last land failed with a merge conflict in ${what}. Another issue landed on the same lines first; this run starts from the current ${repo.main}.`,
     noted: `${r.role} run ${last.id}: merge conflict in ${what}; dropped, and the issue reruns once from current ${repo.main}`,
   };
+}
+
+/** The step for a run whose failed tests all fail on main, once main is green. */
+function greenStep({ last, r }: Ended): Step {
+  const text = `${r.role} run ${last.id} failed only tests that fail on main too, and main is green now: `;
+  return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
 }
 
 /** The step for a run that stopped with nothing to keep. The note quotes the end of its log. */
@@ -425,7 +440,12 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     record(text);
     return void await say(text);
   }
+  if (key === "main-red") {
+    // Main fails these tests too, so a fix round or an Ask waits for main: a green main rechecks the branch.
+    const main: MainState = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
+    if (main.state !== "green") { logEvent({ subject: "gate", action: "waiting", object: name, detail: `each failed test fails on main too; the run waits: ${main.line}` }); return; }
+  }
   if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the issue?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   markRescued(last, key);
-  return take(key === "infra" ? infraStep(ended, r.role !== "land" && hasBranch(ended)) : key === "land-conflict" ? conflictStep(ended, touched(ended)) : rerunStep(ended, key as "no-commit" | "land-checks"));
+  return take(key === "infra" ? infraStep(ended, r.role !== "land" && hasBranch(ended)) : key === "land-conflict" ? conflictStep(ended, touched(ended)) : key === "main-red" ? greenStep(ended) : rerunStep(ended, key as "no-commit" | "land-checks"));
 }
