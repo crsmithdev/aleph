@@ -173,7 +173,7 @@ test("with one live local-backend run a second local run is held by the local ca
   }
 });
 
-test("while a title or judge call holds the GPU slot, a local agent run is held by the local cap and a Claude run still starts", async () => {
+test("while a judge call holds the GPU slot, a local agent run is held by the local cap and a Claude run still starts", async () => {
   expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   const release = (await gpuSlot(0))!;
   try {

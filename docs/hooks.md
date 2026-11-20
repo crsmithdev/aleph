@@ -142,4 +142,4 @@ Setup and the trace contents are in [Langfuse](langfuse.md).
 
 ## Hooks in factory runs
 
-The judge and the title writer pass `--setting-sources ""`, so no hook runs inside them. The worker, reviewer, intake, director and monitor runs load user settings, so the plugin's hooks can run there. `ALEPH_JOB_ID` tells a hook that it is in a factory run: `handoff-start` does nothing, and the verify gate ignores `skip verify`.
+The judge passes `--setting-sources ""`, so no hook runs inside it. The worker, reviewer, intake, director and monitor runs load user settings, so the plugin's hooks can run there. `ALEPH_JOB_ID` tells a hook that it is in a factory run: `handoff-start` does nothing, and the verify gate ignores `skip verify`.

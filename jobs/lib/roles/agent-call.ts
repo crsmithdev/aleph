@@ -18,7 +18,7 @@ import { jsonLines, type Entry } from "../../../lib/jsonl.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */
-export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer";
+export type AgentRole = "worker" | "reviewer" | "judge" | "intake" | "director" | "monitor" | "lens" | "housekeeper" | "maintainer";
 
 /** Why a call gave no usable reply, and its kind. `limit`: the stall window or time box that stopped it, in seconds. */
 interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string; limit?: number }

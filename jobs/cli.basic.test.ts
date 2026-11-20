@@ -167,11 +167,12 @@ describe("run", () => {
 });
 
 describe("models", () => {
-  test("set title gpt-oss-20b is printed by models; an unknown name exits non-zero", async () => {
-    expect((await cli(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
+  test("set judge gpt-oss-20b is printed by models; title is an unknown name and exits non-zero", async () => {
+    expect((await cli(["models", "set", "judge", "gpt-oss-20b"])).code).toBe(0);
     const r = await cli(["models"]);
-    expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" } });
-    const bad = await cli(["models", "set", "nonexistent", "haiku"]);
+    expect(r.json).toMatchObject({ judge: { enabled: true, model: "gpt-oss-20b" } });
+    expect(r.json).not.toHaveProperty("title");
+    const bad = await cli(["models", "set", "title", "haiku"]);
     expect(bad.code).not.toBe(0);
     expect(bad.stderr).toContain("unknown name");
     expect(bad.stderr).not.toContain("tier");

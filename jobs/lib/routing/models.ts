@@ -133,7 +133,6 @@ export const OFFERS = {
   lens: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   housekeeper: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
   maintainer: ["sonnet", "haiku", "claude-opus-5-5", ...OTHERS],
-  title: ["haiku", ...OTHERS],
   judge: ["haiku", ...OTHERS],
 };
 /** A size (small, medium, large) or a role model. */

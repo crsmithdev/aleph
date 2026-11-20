@@ -46,7 +46,7 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
   const models = readModels();
   const hold = backendHold();
   const local = run !== undefined && onLocal(run, models);
-  // A title or judge call holds the `gpu` lock while it runs on the local backend: it takes the GPU slot as a local run does.
+  // A judge call holds the `gpu` lock while it runs on the local backend: it takes the GPU slot as a local run does.
   const call = local && held("gpu");
   const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
   const bound: Bound = local

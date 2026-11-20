@@ -446,7 +446,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(r.worker).toMatchObject({ live: 1, runs: 7, hours: 6.5, p50: 3600, models: ["sonnet", "haiku"] });
   expect(r.intake).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.director).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["fable"] });
-  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "housekeeper", "maintainer", "lens", "title", "judge", "reviewer"]);
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "intake", "director", "monitor", "housekeeper", "maintainer", "lens", "judge", "reviewer"]);
   expect(a.mean).toBe(1); // 8 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
   expect(a.points[2].intake).toBe(0.5);
@@ -577,13 +577,13 @@ test("agents: lens runs are a role with their own outcome row", () => {
   expect(a.roles.find((x) => x.key === "lens")).toMatchObject({ name: "Lens", runs: 1 });
 });
 
-test("agents: title and judge runs are roles with their own outcome rows and cost", () => {
+test("agents: judge runs are a role with their own outcome row and cost", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
   const e = (kind: string, a: number, extra: object = {}) => ({ folder: `t${n}`, id: `t${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "done", started: iso(a), ended: iso(a + 0.1), model: "haiku", ...extra } }) as any;
-  const runs = [e("title", 10, { cost: 0.01 }), e("title", 12, { cost: 0.02 }), e("judge", 14, { cost: 0.04 })];
+  const runs = [e("judge", 12, { cost: 0.02 }), e("judge", 14, { cost: 0.04 })];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.map((x) => [x.role, x.model, x.runs, x.cost])).toEqual([["title", "haiku", 2, 0.03], ["judge", "haiku", 1, 0.04]]);
+  expect(a.outcomes.map((x) => [x.role, x.model, x.runs, x.cost])).toEqual([["judge", "haiku", 2, 0.06]]);
 });
 
 test("agents: each outcome row has ended, p95 and, for a worker, the cost per built job", () => {

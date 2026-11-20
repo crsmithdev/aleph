@@ -44,10 +44,10 @@ const MIN_ENDED = 20;
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
 /** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
-const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", lens: "lens", housekeeper: "housekeeper", title: "title", judge: "judge" };
+const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", lens: "lens", housekeeper: "housekeeper", judge: "judge" };
 
 /** The noun of each role's output; a role not named here counts its OK runs. */
-const NOUNS = { worker: "landed", reviewer: "verdict", intake: "triage", director: "step", monitor: "reading", housekeeper: "sweep", title: "rule", judge: "call" };
+const NOUNS = { worker: "landed", reviewer: "verdict", intake: "triage", director: "step", monitor: "reading", housekeeper: "sweep", judge: "call" };
 
 /** Where an off size's work goes, as route() picks it: the next size up that is on, else the next one down. */
 function goesTo(key, set) {

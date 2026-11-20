@@ -26,7 +26,7 @@ test("GET /api/models answers each size and role model under models with enabled
   conn().run("DELETE FROM settings WHERE key = 'models'");
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.models)).toEqual(["small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge"]);
+  expect(Object.keys(b.models)).toEqual(["small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "judge"]);
   expect(b.models.medium).toEqual({ enabled: true, model: "sonnet" });
   expect(b).not.toHaveProperty("tiers");
   expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });
@@ -44,15 +44,15 @@ test("POST /api/models writes an entry's model or enable to the models setting",
 
 test("a missing header gives 403; a bad name, a model the entry does not offer, and gpt-oss-20b while /health is down give 422; the models setting stays", async () => {
   healthy = true;
-  const kept = { title: { enabled: true, model: "haiku" } };
+  const kept = { judge: { enabled: true, model: "haiku" } };
   putJson("settings", "models", kept);
   expect((await post({ name: "nonexistent", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "merge", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "intake", model: "nonexistent" })).status).toBe(422);
   expect((await post({ name: "small", model: "sonnet" })).status).toBe(422);
-  expect((await post({ name: "title", enabled: false })).status).toBe(422);
+  expect((await post({ name: "judge", enabled: false })).status).toBe(422);
   healthy = false;
-  expect((await post({ name: "title", model: "gpt-oss-20b" })).status).toBe(422);
+  expect((await post({ name: "judge", model: "gpt-oss-20b" })).status).toBe(422);
   expect(getJson("settings", "models", {})).toEqual(kept);
-  expect((await post({ name: "title", model: "haiku" })).status).toBe(200);
+  expect((await post({ name: "judge", model: "haiku" })).status).toBe(200);
 });

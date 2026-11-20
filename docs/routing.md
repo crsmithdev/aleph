@@ -83,7 +83,7 @@ The `models` setting maps each size and role model ([Naming](naming.md#terms)) t
 | `review`, `intake`, `director` | `claude-opus-5-5` |
 | `monitor` | `deepseek-v4.1-flash` |
 | `maintainer` | `sonnet` |
-| `title`, `judge` | `haiku` |
+| `judge` | `haiku` |
 
 Any one size can be off, but one size stays on. A role model is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
@@ -97,7 +97,7 @@ A build routed to a size records the model that ran as `model` and the size word
 
 **OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
 
-**Local.** `llama-server` is run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/routing/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A call on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A title or judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
+**Local.** `llama-server` is run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/routing/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A call on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
 
 ## Judge
 

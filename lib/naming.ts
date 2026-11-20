@@ -23,7 +23,7 @@ export const ACTORS: readonly string[] = [...SUBJECTS, ...OLD_ROLES];
 /** The kinds of an issue. */
 export const ISSUE_KINDS = ["task", "bug", "check", "flake"] as const;
 /** The roles of a job: what it does. `review` is the reviewer's job, its `prev` the build it reviews. */
-export const ROLES = ["build", "plain", "land", "review", "intake", "recheck", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge"] as const;
+export const ROLES = ["build", "plain", "land", "review", "intake", "recheck", "director", "monitor", "lens", "housekeeper", "maintainer", "judge"] as const;
 export type State = (typeof STATES)[number];
 export type Role = (typeof ROLES)[number];
 /** The roles that one agent call opens (`openRun`): the others start a unit or a command. */
@@ -32,7 +32,7 @@ export type AgentRole = Exclude<Role, "build" | "plain" | "land" | "review" | "r
 export const NAMES: Record<string, string> = {
   lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", build: "Implement",
   review: "Review", recheck: "Recheck", land: "Land", worker: "Worker", planner: "Planner", merge: "Merge", reviewer: "Reviewer",
-  director: "Director", monitor: "Monitor", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", title: "Rule", judge: "Judge",
+  director: "Director", monitor: "Monitor", lens: "Lens", housekeeper: "Housekeeper", maintainer: "Maintainer", judge: "Judge",
 };
 export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"] as const;
 export type StageName = (typeof STAGES)[number];
@@ -153,7 +153,7 @@ export const EDITS = { close: "closed", drop: "dropped", retitle: "retitled", re
 /** The words a detail can start with, by action: `<word>: <facts>`. A setting is a pause, a credit hold, the live cap, an Always rule or a model entry. */
 const WORDS: Record<string, readonly string[]> = {
   held: ["after", "job", "red", "file", "credit", "paused", "gpu", "full", "waiting", "done"],
-  changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "title", "judge", ...Object.keys(EDITS)],
+  changed: ["pause", "credit", "cap", "Always", "small", "medium", "large", "review", "intake", "director", "monitor", "lens", "housekeeper", "maintainer", "judge", ...Object.keys(EDITS)],
   started: ["model"],
   landed: ["held"],
   routed: ["classifier"],

@@ -26,7 +26,6 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
     lens: { enabled: true, model: "claude-opus-5-5" },
     housekeeper: { enabled: true, model: "claude-opus-5-5" },
     maintainer: { enabled: true, model: "sonnet" },
-    title: { enabled: true, model: "haiku" },
     judge: { enabled: true, model: "haiku" },
   });
 });
@@ -43,6 +42,7 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("lens", { enabled: false })).toContain("can be disabled");
   expect(setModel("small", { model: "sonnet" })).toContain("offers");
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
+  expect(setModel("title", { model: "haiku" })).toContain("unknown name");
   expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
   expect(setModel("review", { enabled: false })).toContain("can be disabled");
@@ -116,8 +116,8 @@ test("an agent role leaves out Chris's CLAUDE.md, runs at high effort and says i
 });
 
 test("every entry offers its Claude model first, then every model Claude does not serve", () => {
-  expect(setModel("title", { model: "deepseek-v4.1-flash" })).toBeNull();
-  expect(readModels().title.model).toBe("deepseek-v4.1-flash");
+  expect(setModel("judge", { model: "deepseek-v4.1-flash" })).toBeNull();
+  expect(readModels().judge.model).toBe("deepseek-v4.1-flash");
   const others = Object.keys(MODELS).filter((m) => viaOf(m) !== "claude");
   expect(others).toEqual(["gpt-oss-20b", "deepseek-v4.1-flash", "gpt-6-luna", "minimax-m3.1-flash", "step-3.5-flash", "mimo-v2.6-flash"]);
 });

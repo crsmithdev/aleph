@@ -213,10 +213,9 @@ describe("GET /api/jobs", () => {
     expect(pressed(jt.renderFilters({ unusable: "1" }))).toEqual({ "": "false", "1": "true" });
     expect(pressed(jt.renderFilters({}))).toEqual({ "": "true", "1": "false" });
   });
-  test("title and judge runs are not jobs", async () => {
-    const ids = [run("", { role: "title", name: "title", started: ago(1) }), run("", { role: "judge", name: "judge", started: ago(1) })];
-    expect(await idsOf()).not.toContain(ids[0]);
-    expect(await idsOf()).not.toContain(ids[1]);
+  test("judge runs are not jobs", async () => {
+    const id = run("", { role: "judge", name: "judge", started: ago(1) });
+    expect(await idsOf()).not.toContain(id);
     expect(await idsOf()).toContain(K["oth-1#1"]);
   });
   test("?project narrows to one project", async () => {
