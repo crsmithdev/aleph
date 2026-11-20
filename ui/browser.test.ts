@@ -791,7 +791,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("");
   });
 
-  dockTest("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Terminal and Chat", async () => {
+  dockTest("a note saves to the server by you, an agent's note shows its own pin, and the notes list offers Send and Chat", async () => {
     await page.width(1200);
     await page.go("#/");
     // A click in pick mode opens a note instead of following the link; the saved note shows a pin and the Markdown names it.
@@ -818,9 +818,9 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(cli(["add", "--selector", ".mark", "--", "from the agent"]).exitCode).toBe(0);
     await page.when('document.getElementById("dock-annotate").shadowRoot.querySelector(".count").textContent === "2"');
     expect(await page.ev('document.getElementById("dock-annotate-layer").shadowRoot.querySelectorAll(".pin.agent").length')).toBe(1);
-    // The notes list of an open note offers both ways out: Terminal, from the `send` index.html gives annotate(), and Chat, from the tool.
+    // The notes list of an open note offers both ways out: Send, from the `send` index.html gives annotate(), and Chat, from the tool.
     await page.ev('document.getElementById("dock-annotate").shadowRoot.querySelector(".count").click()');
-    expect(await page.ev('(() => { const u = document.getElementById("dock-annotate").shadowRoot; return [u.querySelector(".term").hidden, u.querySelector(".term").textContent, u.querySelector(".send").hidden, u.querySelector(".send").textContent]; })()')).toEqual([false, "Terminal", false, "Chat"]);
+    expect(await page.ev('(() => { const u = document.getElementById("dock-annotate").shadowRoot; return [u.querySelector(".term").hidden, u.querySelector(".term").textContent, u.querySelector(".send").hidden, u.querySelector(".send").textContent]; })()')).toEqual([false, "Send", false, "Chat"]);
     for (const n of await server()) expect(cli(["drop", n.id]).exitCode).toBe(0);
   }, 30_000);
 

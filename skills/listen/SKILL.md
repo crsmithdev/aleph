@@ -6,7 +6,7 @@ description: Wait for notes Chris sends to the shelf inbox and act on each. Use 
 # Listen
 
 The shelf (`shelf`) keeps notes that Chris sends with the
-Terminal button. A send from a shelf item goes to the agent that waits on that item. A send from any other page goes
+Send button. A send from a shelf item goes to the agent that waits on that item. A send from any other page goes
 to the inbox. This skill makes this session the inbox's listener.
 
 1. Run `shelf wait` with `run_in_background`, then end the turn.
