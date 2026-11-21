@@ -151,9 +151,21 @@ On the files of `e0cb9b2a`, in Chromium at 1600 × 1000 px, on 2026-11-21:
 - At 900 px, A and C keep Needs You first and do not overflow.
 - A and C draw with no fault in the dark theme.
 
-Not checked: B in the dark theme, and B at 900 px after the last layout change. The action buttons do nothing.
+On the same files, from a one-off server, in Chromium on 2026-11-21 at 12:00 Pacific:
+
+- B draws with no fault in the dark theme at 1600 × 1000 px, in both states: 6 cards, no duplicate ID, no horizontal
+  overflow, 0 console messages.
+- At 900 px, B keeps Attention first, draws the board as 2 columns and does not overflow the page, in both states.
+- Defect, B at 900 px, Busy: the Attention table is 643 px wide and its card gives it 610 px. The last 33 px hold most
+  of the right action button of a row (CI run, Drop). A scroll inside the card reaches them. The table fits at
+  1000 px and above, and in the Quiet state at 900 px. Not fixed.
+
+The action buttons do nothing.
 
 ## Next
 
 Chris picks one: A as drawn, A with C's lanes as a second form of the Now card, or B or C. The build is then filed as
 an issue. http://aleph.home/#/issues/aleph/3452 covers the backend hold that the Status sentence does not say.
+
+His notes arrive on the shelf item `20261121-194453-v4ql`, and `shelf wait 20261121-194453-v4ql` receives them. The
+pages of that item are the pages of `e0cb9b2a`.
