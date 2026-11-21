@@ -475,9 +475,9 @@ export function reopen(doc: Doc, item: Issue, since: string | null): void {
     if (!i || status(i) === "open") continue;
     if (i !== item && status(i) === "parked") continue;
     issues.setStatus(i, "open");
-    if (since) i.fm.since = since;
+    if (since) issues.edit(i, { since });
   }
-  if (since) item.fm.since = since;
+  if (since) issues.edit(item, { since });
 }
 
 /** A new issue; `spec` makes it buildable, `from` (the key of the issue it was split from, `issue.5`) makes it a child, and `after` is what it waits for. */
@@ -500,8 +500,7 @@ export function writeFiling<T>(repo: Place, message: string, by: string, effects
     // A retry runs `change` again on a fresh list.
     made = [];
     return change(doc, (f) => {
-      const item = issues.add(doc, f.title, { kind: f.kind, labels: f.labels, request: f.request, spec: f.spec, priority: f.priority, source: f.source, from: f.from, after: f.after });
-      if (f.areas) item.fm.areas = f.areas;
+      const item = issues.add(doc, f.title, { kind: f.kind, labels: f.labels, request: f.request, spec: f.spec, priority: f.priority, source: f.source, from: f.from, after: f.after, areas: f.areas });
       if (f.parked) issues.setStatus(item, "parked");
       made.push(item);
       return item;

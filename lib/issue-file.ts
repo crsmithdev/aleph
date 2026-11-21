@@ -99,8 +99,6 @@ export const closedWhy = (item: Issue): string | undefined => (item.fm.closed_wh
 export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
-/** Replace the issue's `after` links. */
-export const setAfter = (item: Issue, refs: string[]): void => { item.fm.after = refs; };
 /** The issues an issue names as plain references: its `refs`. They hold nothing. */
 export const refsOf = (item: Issue): string[] => list(item.fm.refs);
 /** The issues of `all` whose `refs` name `item`. Numbers are global, so a ref can cross projects. */
@@ -206,13 +204,13 @@ export function titleProblem(title: string, o: { part?: boolean } = {}): string 
 export const kindProblem = (kind: string): string | null => ((KINDS as readonly string[]).includes(kind) ? null : `unknown kind "${kind}": use ${KINDS.join(", ")}`);
 
 /** `from` is the key of the issue this one was split from (`issue.5`); `after` the keys it waits for. The number comes from the counter at once, so a write that fails leaves a gap. */
-export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; from?: string; after?: string[]; now?: Date } = {}): Issue {
+export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; from?: string; after?: string[]; areas?: string[]; now?: Date } = {}): Issue {
   const kind = o.kind ?? "task";
   const bad = kindProblem(kind) ?? titleProblem(title, { part: !!o.from });
   if (bad) throw new Error(bad);
   const given = o.labels ?? [];
   const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("memory") ? "memory" : "chris");
-  const areas = given.filter((l) => !(SOURCES as readonly string[]).includes(l) && !NOT_AREAS.includes(l));
+  const areas = o.areas ?? given.filter((l) => !(SOURCES as readonly string[]).includes(l) && !NOT_AREAS.includes(l));
   const item: Issue = {
     id: nextId(doc),
     title,
@@ -241,7 +239,7 @@ export function note(item: Issue, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[] }): void {
+export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[]; source?: Source; after?: string[]; refs?: string[]; media?: string[]; since?: string }): void {
   const bad = change.title === undefined || change.title === item.title ? null : titleProblem(change.title, { part: parentRef(item) !== undefined });
   if (bad) throw new Error(bad);
   if (change.kind !== undefined) item.fm.kind = change.kind;
@@ -250,6 +248,11 @@ export function edit(item: Issue, change: { kind?: string; title?: string; reque
   if (change.spec !== undefined) item.spec = change.spec;
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.areas !== undefined) item.fm.areas = change.areas;
+  if (change.source !== undefined) item.fm.source = change.source;
+  if (change.after !== undefined) item.fm.after = change.after;
+  if (change.refs !== undefined) item.fm.refs = change.refs;
+  if (change.media !== undefined) item.fm.media = change.media;
+  if (change.since !== undefined) item.fm.since = change.since;
 }
 
 /** Close the issue as `next`, with why; `open` takes the closure off. A reopen also sets `since`: see `store.reopen`. The caller logs the close (`store.logClosed`). */

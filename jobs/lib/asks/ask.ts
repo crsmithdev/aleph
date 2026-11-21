@@ -16,7 +16,7 @@ import { alwaysRow, INTAKE_TRIES, NO_COMMIT_LIMIT, RUN_CAP, setAlwaysRow } from 
 import { specVersion } from "../../../lib/issue-spec.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { isDropped, reopen, writeList, type Place } from "../../../lib/store.ts";
-import { afterOf, parentOf, partsOf, setAfter, setPlan } from "../../../lib/issue-file.ts";
+import { afterOf, edit, parentOf, partsOf, setPlan } from "../../../lib/issue-file.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -356,7 +356,7 @@ export function decideAsk(ask: Ask | null, doc: issues.Doc, item: issues.Issue, 
   if (ask?.reason === "blocker-dropped") {
     const drop = ask.options.find((o) => o.label === DROP_WAITER);
     if (drop && (said.includes(drop.label) || said.includes(drop.line))) issues.setStatus(item, "dropped", undefined, said);
-    else { setAfter(item, afterOf(item).filter((r) => !isDropped(r))); reopen(doc, item, since); }
+    else { edit(item, { after: afterOf(item).filter((r) => !isDropped(r)) }); reopen(doc, item, since); }
     return;
   }
   if (ask?.reason !== "part-dropped") return;

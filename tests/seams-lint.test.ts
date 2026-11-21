@@ -162,3 +162,7 @@ test("roles hand the vault a draft through put and write no note file", () => {
 test("gates sit below transitions and land: no file in jobs/lib/gates imports either", () => {
   expect(offenders(/from "\.\.\/(?:transitions|land)\//, [], ["jobs/lib/gates/**"])).toEqual([]);
 });
+
+test("only lib/issue-file.ts writes an issue's fm field: the store and the verbs go through add, edit and setStatus", () => {
+  expect(offenders(/\b(item|issue|i)\.fm(?:\.\w+|\[[^\]]+\])\s*=(?!=)|delete (item|issue|i)\.fm\b/, ["lib/issue-file.ts", "ui/fixtures/review/build.ts"], ["{lib,issues,jobs,ui,vault,hooks,cli}/**"])).toEqual([]);
+});

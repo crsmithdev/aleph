@@ -53,7 +53,7 @@ export function checkFields(f: Fields): void {
 function setKeys(i: issues.Issue, field: "after" | "refs", refs: string[]): void {
   const keys = checkKeys(field, refs);
   for (const r of keys) if (!store.hasIssue(parseKey(r)!.n)) refuse(`--${field} ${r} names no issue`);
-  i.fm[field] = keys;
+  issues.edit(i, { [field]: keys });
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */
@@ -99,7 +99,7 @@ function parkWaiter(repo: store.Place, waiter: issues.Issue, blocker: string): v
   const w = store.writeList(repo, `todo: item ${waiter.id}: blocker ${blocker} dropped`, (doc) => {
     const item = issues.find(doc, waiter.id);
     if (!item || issues.status(item) !== "open" || !issues.afterOf(item).includes(blocker)) return null;
-    if (standing) issues.setAfter(item, issues.afterOf(item).filter((r) => r !== blocker));
+    if (standing) issues.edit(item, { after: issues.afterOf(item).filter((r) => r !== blocker) });
     else issues.setStatus(item, "parked");
     return true;
   });
@@ -147,7 +147,7 @@ function attachTo(item: issues.Issue, files: { name: string; data: Uint8Array }[
     names.push(name);
     blobs[store.mediaPath(item, name)] = f.data;
   }
-  item.fm.media = names;
+  issues.edit(item, { media: names });
   return names;
 }
 
@@ -269,9 +269,8 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot wait for itself");
     for (const r of named ?? []) if (parseKey(r)?.n === i.id) refuse("an issue cannot reference itself");
-    issues.edit(i, { kind, title, request, spec, priority, areas: labels });
+    issues.edit(i, { kind, title, request, spec, priority, areas: labels, source: source as issues.Source | undefined });
     if (priority !== undefined) for (const p of issues.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
-    if (source !== undefined) i.fm.source = source;
     if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");
     else if (status === "open") store.reopen(doc, i, mainHead(repo));
     else if (status !== undefined) issues.setStatus(i, status as issues.Status);

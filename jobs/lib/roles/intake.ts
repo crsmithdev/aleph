@@ -11,7 +11,7 @@ import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
-import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setAfter, setIntake, setPlan, sourceOf } from "../../../lib/issue-file.ts";
+import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setIntake, setPlan, sourceOf } from "../../../lib/issue-file.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, answerDetail, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { onOf, type Repo, type Run } from "../records/ledger.ts";
@@ -372,7 +372,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
         return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
-      if (after.length) setAfter(item, after);
+      if (after.length) issues.edit(item, { after });
       setIntake(item);
       if (v.parts) addParts(file, item, v.parts, after);
       else item.spec = specText(v.spec!);
