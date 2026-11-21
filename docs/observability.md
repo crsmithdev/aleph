@@ -40,7 +40,7 @@ The count is 53 direct `logEvent(` calls in code that is not a test, and one hel
 | `rule` | `gpu`, when the GPU slot stays taken and the call falls back | `jobs/lib/roles/agent-call.ts:137` |
 | `rule` | `failed` for a filing, a detached start, a land start, a job diff, a UI read | `jobs/lib/transitions/filing.ts:27`, `jobs/lib/transitions/launch.ts:89`, `jobs/lib/roles/unit.ts:90`, `jobs/lib/records/jobdiff.ts:48`, `ui/state.ts:39` |
 | `rule` | What an Always rule or an Ask timeout did: `answered`, `reran`, `done`, `dropped`, `landed`, `failed` | `logAlways` in `jobs/lib/asks/ask.ts:247`, called from `jobs/lib/roles/intake.ts`, `jobs/lib/land/rescue.ts:344`, `jobs/lib/asks/timeout.ts:111`, `issues/lib/issues.ts` |
-| `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/gates/firefighter.ts:217` to `:244` |
+| `firefighter` | `reran`, `red`, `changed`, `failed` for red CI and slow lands | `jobs/lib/roles/firefighter.ts:217` to `:244` |
 | `firefighter` | `waiting`, `busy`, `failed` (`rescue`) for a rescue of a slow land | `jobs/lib/land/rescue.ts:113` to `:405` |
 | `director` | The action of each applied decision: `landed`, `dropped`, `done`, `changed`, `answered`, `escalated` (with `to: human`) | `jobs/lib/roles/director.ts:151` |
 | `director` | `failed`, when a case text or a decision fails | `jobs/lib/roles/director.ts:648`, `:730`, `:733` |

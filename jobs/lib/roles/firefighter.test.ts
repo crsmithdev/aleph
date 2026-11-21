@@ -7,13 +7,13 @@ import { join } from "node:path";
 import * as issues from "../../../lib/issue-file.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { askOf } from "../asks/ask.ts";
-import { ciStep, type GhRun } from "./ci.ts";
+import { ciStep, type GhRun } from "../gates/ci.ts";
 import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { logTo } from "../records/run-files.ts";
-import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.testkit.ts";
+import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "./director.testkit.ts";
 
 useDirectorFixture();
 

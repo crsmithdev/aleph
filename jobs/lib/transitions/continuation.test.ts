@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   afterLand, askedQuestion, brief, clearRerun, earlierRounds, issueBrief,
-  nextBrief, nextStep, questionOf, repeatedFailure, writeRerun,
+  nextBrief, nextStep, questionOf, writeRerun,
 } from "./continuation.ts";
+import { repeatedFailure } from "../gates/worker-verdict.ts";
 import type { Entry, Repo, Run } from "../records/ledger.ts";
 import { logTo } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";

@@ -30,7 +30,7 @@ import { paused } from "../gates/pause.ts";
 import { probeHold } from "../gates/holds.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { baselines, readStalls, setTick, tickMissed, tickRows, writeStalls } from "../gates/tables.ts";
-import { firefight } from "../gates/firefighter.ts";
+import { firefight } from "../roles/firefighter.ts";
 import { git } from "../../../lib/git.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { retain } from "../infra/retention.ts";

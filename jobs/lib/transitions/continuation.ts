@@ -7,7 +7,8 @@
  * It owns two markers: the rerun note, a `reran` event on the issue that its next `started` event clears, and `rescued` on a job row, which counts a rescue case against
  * the issue. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
-import { skillSection } from "../roles/role-skill.ts";
+import { FOREGROUND, skillSection } from "../roles/role-skill.ts";
+import { failuresOf, quoteFailures } from "../gates/worker-verdict.ts";
 import { reader, runMedia } from "../../../lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../../../lib/git.ts";
@@ -17,7 +18,7 @@ import { runsBunTest } from "../gates/checks.ts";
 import { isAgentRun, onOf, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
-import { jobOfFolder, jobSpec, readSection } from "../records/run-files.ts";
+import { jobSpec, readSection } from "../records/run-files.ts";
 import { eventsOf, logEvent } from "../../../lib/layout.ts";
 
 /** One sentence for prompts that says how a tag line such as `QUESTION:` is read: questionOf reads it this way. */
@@ -26,8 +27,6 @@ const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such
 // The worker brief
 
 // A worker that backgrounds a command and ends its turn is never woken again in a headless run.
-export const FOREGROUND = "Run every command in the foreground and wait for it: nothing wakes you after your turn ends.";
-
 // The parsers read a tag on any line; this order keeps the worker's final text readable.
 const ENDING = "After the summary come your tag lines, and the `QUESTION:` line, when you have one, is the last line.";
 
@@ -227,7 +226,7 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
   const note = run.failed === "review"
     ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
-    ? `The check \`${run.failed}\` failed on this branch. ${failedTests(run, run.failed).length ? testsNote(failedTests(run, run.failed)) : `The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}`}\n\nFix the cause, run the tests, and commit.`
+    ? `The check \`${run.failed}\` failed on this branch. ${failuresOf(run, run.failed).length ? testsNote(failuresOf(run, run.failed)) : `The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}`}\n\nFix the cause, run the tests, and commit.`
     : bounceNote(run);
   return { note, merge: !run.failed && isMergeBounce(run) };
 }
@@ -240,9 +239,6 @@ function checkSection(folder: string, name: string): string {
 
 const checkLog = (folder: string, name: string): string => checkSection(folder, name).split("\n").slice(-80).join("\n");
 
-/** The failed tests in the run's record of the named check: empty when the check ran no `bun test` or no test failed. */
-const failedTests = (run: Run | null, check: string): FailedTest[] => run?.checks?.findLast((c) => c.name === check)?.tests?.failures ?? [];
-
 /** The note's failed tests: those of the branch alone, then those that fail on main too, which the worker leaves. */
 function testsNote(failures: FailedTest[]): string {
   const main = failures.filter((f) => f.onMain);
@@ -250,35 +246,10 @@ function testsNote(failures: FailedTest[]): string {
   return main.length ? `${own}\n\nEach test below fails on main too. Do not fix it:\n\n${quoteFailures(main)}` : own;
 }
 
-/** Each failed test as `- file > name` and its failure, indented. */
-const quoteFailures = (failures: FailedTest[]): string =>
-  failures.map((f) => `- ${f.file} > ${f.name}${f.message ? `\n${f.message.split("\n").map((l) => (l ? `    ${l}` : "")).join("\n")}` : ""}`).join("\n");
-
-// Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
+// Fix rounds: the runs before. The repeat rule and the round rule are in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
 export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && record.sentBack(e.run));
-
-/**
- * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
- * names, of the tests that fail on the branch alone. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
- * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
- * failed test, or there is no run before.
- */
-export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
-  const prev = earlier.at(-1);
-  if (!prev || prev.run.failed !== check) return null;
-  const now = failedTests(record.getRun(jobOfFolder(folder)), check).filter((f) => !f.onMain);
-  const key = (f: FailedTest) => `${f.file} > ${f.name}`;
-  const before = failedTests(prev.run, check).filter((f) => !f.onMain).map(key).sort();
-  const names = now.map(key).sort();
-  if (!names.length || names.join("\n") !== before.join("\n")) return null;
-  const quoted = quoteFailures(now.slice(0, 5));
-  return {
-    names,
-    question: `The check \`${check}\` failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
-  };
-}
 
 /** The worker's question: the text of its last `QUESTION:` line, or undefined when it has none. */
 export const questionOf = (result: string): string | undefined =>

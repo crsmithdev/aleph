@@ -10,6 +10,9 @@ import { splitFrontmatter } from "../../../lib/frontmatter.ts";
 /** The flag on every agent role's `claude -p`: no skills and no slash commands. */
 export const NO_SKILLS = "--disable-slash-commands";
 
+/** A line of the worker brief and of the review prompt. */
+export const FOREGROUND = "Run every command in the foreground and wait for it: nothing wakes you after your turn ends.";
+
 /** The body of `skills/<name>/SKILL.md`, without its frontmatter, as a prompt section. A relative link becomes an absolute path, so the agent can Read the file it names. */
 export function skillSection(name: string, title: string): string {
   const dir = join(import.meta.dir, "..", "..", "..", "skills", name);

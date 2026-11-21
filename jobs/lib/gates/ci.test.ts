@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ciOf, ciRunning, ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
 import { health } from "./factory-status.ts";
-import { reds } from "./firefighter.ts";
+import { reds } from "../roles/firefighter.ts";
 import type { Repo } from "../records/ledger.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
 

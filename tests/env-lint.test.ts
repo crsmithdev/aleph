@@ -16,7 +16,7 @@ const TEARDOWN = /\bfinally\s*\{|\bafter(?:Each|All)\(/;
 
 /** Each of these deletes a variable that was unset before the test, so the delete puts it back. */
 const EXCEPT = [
-  "hooks/verify-gate.test.ts", "issues/lib/triage.test.ts", "jobs/lib/gates/firefighter.test.ts", "jobs/lib/roles/agent-call.test.ts",
+  "hooks/verify-gate.test.ts", "issues/lib/triage.test.ts", "jobs/lib/roles/firefighter.test.ts", "jobs/lib/roles/agent-call.test.ts",
   "jobs/lib/roles/agent-run.test.ts", "jobs/lib/roles/intake.test.ts", "jobs/lib/roles/judge.test.ts", "jobs/lib/routing/route.test.ts",
   "jobs/lib/transitions/factory-pure.test.ts", "jobs/lib/transitions/tick.test.ts",
 ];

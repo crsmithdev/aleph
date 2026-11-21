@@ -13,10 +13,9 @@ import { changedPaths, heldRule, securityChange, testFindings } from "./gate.ts"
 import { git } from "../../../lib/git.ts";
 import * as jobRecord from "../records/record.ts";
 import { jobOfFolder, jobSpecFile, logTo } from "../records/run-files.ts";
-import type { CheckResult, Entry, Repo, Run, TestRecord } from "../records/ledger.ts";
+import type { CheckResult, Entry, FailedTest, Repo, Run, TestRecord } from "../records/ledger.ts";
 import { oracleCommands, oraclePaths, outsideSurface } from "../../../lib/issue-spec.ts";
-import { skillSection } from "../roles/role-skill.ts";
-import { FOREGROUND, repeatedFailure } from "../transitions/continuation.ts";
+import { FOREGROUND, skillSection } from "../roles/role-skill.ts";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 
 /** The fields of the run that a verdict sets. */
@@ -356,4 +355,32 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, base: string,
   }
   result(true);
   return null;
+}
+
+/** The failed tests in the run's record of the named check: empty when the check ran no `bun test` or no test failed. */
+export const failuresOf = (run: Run | null, check: string): FailedTest[] => run?.checks?.findLast((c) => c.name === check)?.tests?.failures ?? [];
+
+/** Each failed test as `- file > name` and its failure, indented. */
+export const quoteFailures = (failures: FailedTest[]): string =>
+  failures.map((f) => `- ${f.file} > ${f.name}${f.message ? `\n${f.message.split("\n").map((l) => (l ? `    ${l}` : "")).join("\n")}` : ""}`).join("\n");
+
+/**
+ * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
+ * names, of the tests that fail on the branch alone. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
+ * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
+ * failed test, or there is no run before.
+ */
+export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
+  const prev = earlier.at(-1);
+  if (!prev || prev.run.failed !== check) return null;
+  const now = failuresOf(jobRecord.getRun(jobOfFolder(folder)), check).filter((f) => !f.onMain);
+  const key = (f: FailedTest) => `${f.file} > ${f.name}`;
+  const before = failuresOf(prev.run, check).filter((f) => !f.onMain).map(key).sort();
+  const names = now.map(key).sort();
+  if (!names.length || names.join("\n") !== before.join("\n")) return null;
+  const quoted = quoteFailures(now.slice(0, 5));
+  return {
+    names,
+    question: `The check \`${check}\` failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
+  };
 }

@@ -158,3 +158,7 @@ for (const [name, re] of Object.entries({
 test("roles hand the vault a draft through put and write no note file", () => {
   expect(offenders(/\bserializeFrontmatter\b/, [], ["jobs/lib/roles/**"])).toEqual([]);
 });
+
+test("gates sit below transitions and land: no file in jobs/lib/gates imports either", () => {
+  expect(offenders(/from "\.\.\/(?:transitions|land)\//, [], ["jobs/lib/gates/**"])).toEqual([]);
+});
