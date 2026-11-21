@@ -20,6 +20,15 @@ and copies `ui/app.css`. `mock.css` holds the parts the design language does not
 The 11 rounds of `docs/mocks/status-panels` arranged analysis panels: a stage table, agent time, week counts. These
 pages order the blocks by the two decisions.
 
+## Suggestions
+
+1. Order the page by the two decisions: what needs Chris, then how the factory does and what is wrong with it.
+2. Make each scorecard card the headline of one block below it, and link the card to the block.
+3. Add a Problems block. Today's page has no place for a thing outside its usual range.
+4. Draw the idle state too. The factory is idle for most of a day, and a page that needs a full factory fails then.
+5. Give Events a filter by kind and a search.
+6. Move analysis one click down: the stage table, the Active Issues chart, the Herald's Active and Inspector tabs.
+
 ## What the three pages share
 
 | Block | Shows | Rule |
@@ -127,3 +136,24 @@ Each needs a place in `docs/design.md` before a build.
 - The page drops the stage table, the Active Issues chart and the Herald's Active and Inspector tabs. They need a
   place one click down, or they go.
 - The mocks use one project. A second project needs a column or a group in Problems, Now and Events.
+
+## Checked
+
+On the files of `e0cb9b2a`, in Chromium at 1600 × 1000 px, on 2026-11-21:
+
+- Each of the 3 pages shows, in both states, the right sentence and 6 cards, with no duplicate ID, no horizontal
+  overflow and 0 console messages.
+- A: the feed holds 25 rows. The Landed filter leaves 9 and Problems leaves 1. A search for "herald" leaves 4. A fold
+  opens 5 lines.
+- B: the feed holds 16 rows. Landed leaves 2, Problems 0 and "herald" 4. A fold opens 5 lines.
+- C: the log holds 18 rows. Landed leaves 0, Problems 2 and "herald" 4. A filter acts only on the rows in the page.
+- The State control switches the sentence on all three pages.
+- At 900 px, A and C keep Needs You first and do not overflow.
+- A and C draw with no fault in the dark theme.
+
+Not checked: B in the dark theme, and B at 900 px after the last layout change. The action buttons do nothing.
+
+## Next
+
+Chris picks one: A as drawn, A with C's lanes as a second form of the Now card, or B or C. The build is then filed as
+an issue. http://aleph.home/#/issues/aleph/3452 covers the backend hold that the Status sentence does not say.
