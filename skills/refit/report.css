@@ -1,0 +1,56 @@
+/* The look of a refit report, on the tokens of app.css. Copy it into the run directory beside app.css. */
+
+/* layout */
+.page{max-width:1100px}
+.ph h1{font-size:var(--fs-metric)}
+.sh h2{font-size:var(--fs-xl)}
+.lede{max-width:var(--measure)}
+.tally{display:flex;gap:var(--gap-in);margin:var(--sp-12) 0 var(--sp-16)}
+.tally a{display:block;padding:var(--sp-10) var(--sp-16);border-radius:var(--r-ctl);background:var(--sunk);color:var(--ink);text-decoration:none}
+.tally b{display:block;font:var(--fw-mid) var(--fs-2xl)/1.2 var(--num)}
+.tally span{font-size:var(--fs-xs);color:var(--muted)}
+.tally a.need b{color:var(--need)}
+.group{margin-top:var(--sp-24)}
+.gh{display:flex;align-items:baseline;gap:var(--sp-8);margin:0 0 var(--sp-6);font:var(--fw-strong) var(--fs-lg)/1.35 var(--sans)}
+.gh .count{font:var(--fw-mid) var(--fs-sm) var(--num);color:var(--muted)}
+.ft .u{font-size:var(--fs-xs);color:var(--muted)}
+.finding{border-top:1px solid var(--rule)}
+.finding .ft{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--sp-4) var(--sp-10);margin:0;padding:var(--sp-10) 0;font-size:var(--fs-md);color:var(--ink);cursor:default}
+details.finding>summary.ft{cursor:pointer;list-style:none}
+details.finding>summary.ft::-webkit-details-marker{display:none}
+.ft .n{min-width:3.5ch;font:var(--fw-mid) var(--fs-sm) var(--num);color:var(--muted)}
+.ft .t{font-weight:var(--fw-strong)}
+.ft .chips{display:inline-flex;gap:var(--sp-6);align-items:baseline;margin-left:auto}
+.ft .sig{font-size:var(--fs-xs);color:var(--muted)}
+.chip{font-size:var(--fs-xs);color:var(--ink-2);background:var(--sunk);padding:1px var(--sp-8);border-radius:var(--r-pill)}
+.fb{padding:0 0 var(--sp-16) calc(3.5ch + var(--sp-10))}
+.fb .ask{margin:0 0 var(--sp-8);font-size:var(--fs-sm);color:var(--ink)}
+.fb .fix{margin:0;max-width:var(--measure);font-size:var(--fs-sm);color:var(--ink-2);line-height:1.5}
+.fb .diff-panel{max-width:760px}
+.fb figure.refit{max-width:940px;margin:var(--sp-12) 0 0}
+.fb figcaption{margin-top:var(--sp-6);font-size:var(--fs-xs);color:var(--muted)}
+.more{margin-top:var(--sp-10);font-size:var(--fs-xs);color:var(--muted)}
+.more summary{cursor:pointer}
+.more .locs{margin:var(--sp-6) 0;padding-left:var(--indent-list)}
+.more .aux{margin:0}
+.clean{margin-top:var(--sp-24);font-size:var(--fs-sm);color:var(--muted)}
+svg.key{width:640px;max-width:100%;height:auto}
+svg.key text{font-size:13px;fill:var(--muted)}
+.ov details{margin-top:var(--sp-8);font-size:var(--fs-sm)}
+.ov details ul{margin:var(--sp-4) 0 var(--sp-10);padding-left:var(--indent-list);color:var(--ink-2)}
+.ov details h4{margin:var(--sp-10) 0 0;font-size:var(--fs-xs);color:var(--muted);font-weight:var(--fw-strong)}
+
+/* the figure layer */
+figure.refit{margin:0}
+figure.refit svg{width:100%;height:auto;display:block}
+figure.refit text{font-size:14px;fill:var(--ink)}
+figure.refit text.t-head{font-weight:600}
+.panel{fill:none;stroke:var(--rule);stroke-width:1.5}
+.node{fill:var(--surface);stroke:var(--ink);stroke-width:1.5}
+.node.own{fill:var(--ink)}
+.node.gone{fill:var(--sunk);stroke:var(--muted);stroke-dasharray:6 4}
+figure.refit text.on-own{fill:var(--surface)}
+figure.refit text.on-gone{fill:var(--muted)}
+.edge{fill:none;stroke:var(--muted);stroke-width:1.5;marker-end:url(#arrow)}
+.edge.leak{stroke:var(--error);stroke-dasharray:4 4;marker-end:url(#arrow-leak)}
+figure.refit text.leak-t{fill:var(--error)}

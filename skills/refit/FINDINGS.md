@@ -38,6 +38,8 @@ directory holds:
 - `figure`: `true` when the fix changes how two or more files relate (merges copies, moves an owner, closes a leak or
   collapses a call path), else `false`. PROVE.md step 2 sets it. The report draws a figure for `true` only, and a
   later `fix <run dir>` reads it to draw the same figures.
+- `before`, `after`: with `figure` false, the lines or text before and after the fix, as the code reads. `after` is
+  `(gone)` when the fix deletes the lines.
 - `tier`: `auto`, `ask`, or `none` in a skill with no fix.
 - `trigger`: for an ask finding, the PROVE.md trigger, in one sentence.
 - `rider`: the id of the finding whose fix found it, else `null`.
