@@ -4,8 +4,8 @@ import { basename, dirname, join } from "node:path";
 import type { Entry } from "./jsonl.ts";
 import { claudeProjects } from "./paths.ts";
 
-/** A tool call's `tool_use` block and the `tool_result` block that answers it; either is absent when the transcript has only the other. */
-export interface Pair { use?: Entry; result?: Entry }
+/** A tool call's `tool_use` block and the `tool_result` block that answers it, each with the entry that holds it; either side is absent when the transcript has only the other. */
+export interface Pair { use?: Entry; result?: Entry; useEntry?: Entry; resultEntry?: Entry }
 
 /** The transcript of session `id`: one lookup in each project folder, not a scan of every transcript. */
 export function find(id: string): string | undefined {
@@ -28,8 +28,15 @@ export function list(): { id: string; project: string; path: string; at: number 
 export function pairs(entries: Iterable<Entry>): Map<string, Pair> {
   const out = new Map<string, Pair>();
   for (const e of entries) for (const b of [e.message?.content].flat()) {
-    if (b?.type === "tool_use") out.set(b.id, { ...out.get(b.id), use: b });
-    if (b?.type === "tool_result") out.set(b.tool_use_id, { ...out.get(b.tool_use_id), result: b });
+    if (b?.type === "tool_use") out.set(b.id, { ...out.get(b.id), use: b, useEntry: e });
+    if (b?.type === "tool_result") out.set(b.tool_use_id, { ...out.get(b.tool_use_id), result: b, resultEntry: e });
   }
   return out;
+}
+
+/** The text of a tool_result block's content: the string itself, or its parts' text joined with "\n". */
+export function resultContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) return content.map((p: any) => p?.text ?? "").join("\n");
+  return "";
 }

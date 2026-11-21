@@ -2,7 +2,7 @@
  * What one prompt's turn did, read from the transcript: edits, commands and
  * their output, other tool calls, the last user text, the final message.
  */
-import { resultContent, resultEntries } from "../../lib/toolresult.ts";
+import { pairs, resultContent } from "../../lib/transcripts.ts";
 import { jobId } from "../../lib/env.ts";
 import { readLines, type Entry } from "../../lib/jsonl.ts";
 
@@ -72,7 +72,7 @@ export function readEntries(transcriptPath: string, promptId: string): Entry[] {
  */
 export function digest(transcriptPath: string, promptId: string, stopFinal = ""): Digest {
   const entries = readEntries(transcriptPath, promptId);
-  const results = resultEntries(entries);
+  const calls = pairs(entries);
 
   let prompt = "";
   const edits: string[] = [];
@@ -99,7 +99,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "")
       if (block.type !== "tool_use") continue;
       const name: string = block.name ?? "tool";
       const inp = block.input ?? {};
-      const out = results.get(block.id);
+      const out = calls.get(block.id)?.resultEntry;
       if (EDIT_TOOLS.has(name)) {
         edits.push(inp.file_path ?? "?");
         dirs.push([inp.file_path ?? "?", e.cwd]);

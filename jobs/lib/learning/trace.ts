@@ -3,7 +3,7 @@
  * and the reviewer's stream-json.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { resultContent } from "../../../lib/toolresult.ts";
+import { pairs, resultContent } from "../../../lib/transcripts.ts";
 import { langfuseConfig } from "../../../lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../lib/otlp.ts";
 import { onOf, type Run } from "../records/ledger.ts";
@@ -31,31 +31,23 @@ const when = (ev: any): number | undefined => {
 
 /** The tool calls, the result text and the model of one stream-json transcript. It is an error when resultOf is not ok. */
 function parseStream(stream: string): Parsed {
-  const calls = new Map<string, Call>();
+  const events: any[] = [];
   let text = "", model: string | undefined;
   for (const line of stream.split("\n")) {
     let ev: any;
     try { ev = JSON.parse(line); } catch { continue; }
+    events.push(ev);
     if (ev?.type === "system" && typeof ev.model === "string") model = ev.model;
     if (ev?.type === "assistant") {
       if (!model && typeof ev.message?.model === "string") model = ev.message.model;
-      for (const b of ev.message?.content ?? []) {
-        if (b?.type === "text" && b.text) text = b.text;
-        if (b?.type === "tool_use") calls.set(b.id, { name: b.name, input: b.input, output: "", startMs: when(ev), error: false });
-      }
-    }
-    if (ev?.type === "user" && Array.isArray(ev.message?.content)) {
-      for (const b of ev.message.content) {
-        const c = b?.type === "tool_result" ? calls.get(b.tool_use_id) : undefined;
-        if (!c) continue;
-        c.output = resultContent(b.content);
-        c.endMs = when(ev);
-        c.error = b.is_error === true;
-      }
+      for (const b of ev.message?.content ?? []) if (b?.type === "text" && b.text) text = b.text;
     }
   }
+  const calls = [...pairs(events).values()].filter((p) => p.use).map(({ use, result, useEntry, resultEntry }): Call => ({
+    name: use!.name, input: use!.input, output: result ? resultContent(result.content) : "", startMs: when(useEntry), endMs: result ? when(resultEntry) : undefined, error: result?.is_error === true,
+  }));
   const r = resultOf(stream);
-  return { calls: [...calls.values()], result: r.result || text, model, cost: r.cost, error: !r.ok };
+  return { calls, result: r.result || text, model, cost: r.cost, error: !r.ok };
 }
 
 /** The root span and one child per tool call of a transcript, under `parent` when given. */

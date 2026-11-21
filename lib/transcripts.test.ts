@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { find, pairs } from "./transcripts.ts";
+import { find, pairs, resultContent } from "./transcripts.ts";
 
 let base: string, saved: string | undefined;
 beforeAll(() => {
@@ -32,14 +32,15 @@ test("find gives nothing when the projects folder is missing", () => {
 
 test("pairs joins each tool call to its result by id, whichever block is missing", () => {
   const use = (id: string) => ({ type: "tool_use", id, name: "Read" }), res = (id: string) => ({ type: "tool_result", tool_use_id: id, content: id });
-  const got = pairs([
-    { message: { content: [use("a"), use("b")] } },
-    { message: { content: [res("b"), res("c")] } },
-    { message: { content: "text" } },
-    { type: "system" },
-  ]);
+  const asked = { message: { content: [use("a"), use("b")] } }, answered = { message: { content: [res("b"), res("c")] } };
+  const got = pairs([asked, answered, { message: { content: "text" } }, { type: "system" }]);
   expect([...got.keys()]).toEqual(["a", "b", "c"]);
-  expect(got.get("a")).toEqual({ use: use("a") });
-  expect(got.get("b")).toEqual({ use: use("b"), result: res("b") });
-  expect(got.get("c")).toEqual({ result: res("c") });
+  expect(got.get("a")).toEqual({ use: use("a"), useEntry: asked });
+  expect(got.get("b")).toEqual({ use: use("b"), result: res("b"), useEntry: asked, resultEntry: answered });
+  expect(got.get("c")).toEqual({ result: res("c"), resultEntry: answered });
+});
+
+test("a result's content joins its parts' text with a newline; a string stays as it is", () => {
+  expect(resultContent([{ text: "a" }, { text: "b" }])).toBe("a\nb");
+  expect(resultContent("a\nb")).toBe("a\nb");
 });
