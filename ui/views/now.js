@@ -166,7 +166,7 @@ export function renderPipeline(d, q = new URLSearchParams(), errored = 0) {
     const failed = r.unusable ? num(`<a class="pf${t ? ` ${t}` : ""}" href="${esc(drillHref(k, q, { unusable: "1" }))}">${cardPct(share)}</a>`) : cell(cardPct(share), { num: true });
     return row([go(k, name, tip), cell(mean(r.runs / r.items), { num: true }), cell(dur(r.p90), { num: true }), failed, bar(k), cell(hours(agentH(k)), { num: true })]);
   };
-  const table = dataTable(heads(["Stage", "Runs / Issue", "p90", "Failed", "", "Agent"], ["Runs / Issue", "p90", "Failed", "Agent"]), Object.entries(PIPE).map(line).join(""), { fit: true });
+  const table = dataTable(heads(["Stage", "Runs / Issue", "p90", "Failed", "", "Agent"], ["Runs / Issue", "p90", "Failed", "Agent"]), Object.entries(PIPE).map(line).join(""));
   const legend = legendHtml(classes.map((c) => [`${c.key} ${hours(c.hours)}`, `seg-${c.key}`, `data-inspect="class" data-target="${esc(c.key)}" title="${esc(c.text ?? c.key)}"`]));
   const intake = by.get("intake")?.items ?? 0, open = d.open ?? { open: 0, parked: 0 };
   const side = sideStats([

@@ -57,6 +57,14 @@ test("each Pipeline stage name and each outcome in its legend is an Inspector ta
   expect([...h.matchAll(/data-inspect="class" data-target="([^"]*)"/g)].map((m) => m[1])).toEqual(["landed", "returned"]);
 });
 
+test("the Pipeline table fills the card's main part, so its bars grow, and the side keeps its stats", () => {
+  const h = view.renderPipeline({ window: "week", stages: { rows: [] }, phases: {}, figures: FIG, classes: CLASSES });
+  expect(h).toContain('<table class="tbl">');
+  expect(h).not.toContain('<table class="tbl fit">');
+  const side = h.slice(h.indexOf('<div class="duo-side"><dl class="sstats">'));
+  expect([...side.matchAll(/<dt>([^<]*)<\/dt>/g)].map((m) => m[1])).toEqual(["Filed", "Intake", "Landed", "Dropped", "Open", "Errored"]);
+});
+
 /** The flow data of the Inspector tests: two build issues, the failed one first, and the returned class's issues, most hours first, as /api/flow sorts them. */
 const issue = (n: number, title: string, x: object) => ({ issue: `aleph-${n}`, title, href: `#/issues/aleph/${n}`, ...x });
 const flow = {
