@@ -66,7 +66,7 @@ const FATES: Fate[] = ["duplicate", "met", "manual"];
 const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   job: { usage: "aleph job <repo> <name> --spec <file|-> [--on <ref>] [--model <m>] [--land]", purpose: "start a worker job on a branch of the repo" },
   run: { usage: "aleph run <name> [-- <command...>]", purpose: "run a command as a tracked plain job" },
-  jobs: { usage: "aleph jobs [<name> [--resume]]", purpose: "list the open and recent jobs, show one, or open its latest session in claude" },
+  jobs: { usage: "aleph jobs [<name> [--resume]|--news]", purpose: "list the open and recent jobs, show one, or open its latest session in claude" },
   recheck: { usage: "aleph recheck <name>", purpose: "run the checks of a job again" },
   drop: { usage: "aleph drop <name> [<reason>] [--quiet] [--answered] [--fate duplicate|met|manual]", purpose: "drop a job and its worktree" },
   unit: { usage: "aleph unit <run-dir>", purpose: "run a started job's unit in the foreground" },

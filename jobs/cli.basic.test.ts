@@ -185,6 +185,7 @@ describe("help", () => {
     expect(r.code).toBe(0);
     for (const c of ["job", "run", "land", "issue", "idea", "status", "doctor", "drop", "intake", "report", "always", "models"]) expect(r.stdout).toMatch(new RegExp(`^aleph ${c}\\b.*\\n  \\S`, "m"));
     expect(r.stdout).toContain("aleph land <name> [--checked]\n  land a job's branch on main");
+    expect(r.stdout).toMatch(/^aleph jobs .*--news/m);
   });
 
   test("help --brief prints one line per command, with ALEPH_AGENT set", async () => {
