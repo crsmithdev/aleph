@@ -92,19 +92,28 @@ test("with no failure in the window, the Inspector is empty", () => {
   expect(listed(h)).toEqual([]);
 });
 
-test("the Active pane lists the running and queued issues, or the running jobs with a kept jobs toggle, each row linked to its page", () => {
-  const s = { ...calm, runningIssues: [{ id: "aleph-9", title: "Sort it", href: "#/issues/aleph/9" }], running: [{ id: "job.0", name: "aleph-7", item: { title: "Fix it" } }], queued: [{ repo: "aleph", id: 12, title: "Wait" }] };
-  /** Each section of the Active pane with the hrefs of its rows, drawn with `mode` as the kept toggle. */
-  const active = (mode: string | null) => {
-    (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.active" && mode ? JSON.stringify(mode) : null), setItem() {} };
-    try {
-      const h = view.renderHerald(s);
-      const pane = h.slice(h.indexOf('data-pane="active"'), h.indexOf('data-pane="inspector"'));
-      return [...pane.matchAll(/<section aria-label="(\w+)">(.*?)<\/section>/g)].map((m) => [m[1], [...m[2].matchAll(/href="([^"]*)"/g)].map((x) => x[1])]);
-    } finally { delete (globalThis as any).localStorage; }
-  };
-  expect(active(null)).toEqual([["Running", ["#/issues/aleph/9"]], ["Queued", ["#/issues/aleph/12"]]]);
-  expect(active("jobs")).toEqual([["Running", ["#/jobs/job.0"]], ["Queued", ["#/issues/aleph/12"]]]);
+const busy = { ...calm, runningIssues: [{ id: "aleph-9", title: "Sort it", href: "#/issues/aleph/9" }], running: [{ id: "job.0", name: "aleph-7", item: { title: "Fix it" } }], queued: [{ repo: "aleph", id: 12, title: "Wait" }] };
+/** The Active pane of the Herald drawn from `s`, with `kept` as the stored `aleph.herald.active` value. */
+const activePane = (s: object, kept: string | null = null) => {
+  (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.active" && kept ? JSON.stringify(kept) : null), setItem() {} };
+  try { const h = view.renderHerald(s); return h.slice(h.indexOf('data-pane="active"'), h.indexOf('data-pane="inspector"')); }
+  finally { delete (globalThis as any).localStorage; }
+};
+/** The hrefs of a pane's rows, in order. */
+const hrefs = (pane: string) => [...pane.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
+
+test("the Active pane lists the running issues, then the queued issues, then the running jobs, with no toggle, whatever value is kept", () => {
+  for (const kept of [null, "jobs"]) {
+    const pane = activePane(busy, kept);
+    expect(hrefs(pane)).toEqual(["#/issues/aleph/9", "#/issues/aleph/12", "#/jobs/job.0"]);
+    expect(pane).not.toContain("data-active");
+  }
+});
+
+test("with no job, the Active pane lists the running issue above the queued one in one table", () => {
+  const pane = activePane({ ...busy, running: [] });
+  expect(hrefs(pane)).toEqual(["#/issues/aleph/9", "#/issues/aleph/12"]);
+  expect(pane.match(/<table/g)?.length).toBe(1);
 });
 
 test("a kept Inspector tab on the build stage lists its issues, failed first, under an All jobs link to the stage's Jobs in the window and project", () => {

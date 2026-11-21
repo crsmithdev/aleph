@@ -4,7 +4,7 @@
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
-import { actButton, seg, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
+import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf, title as chartTitle } from "./lib/chart.js";
 import { feedRow, heraldRow } from "./lib/feed.js";
@@ -29,13 +29,12 @@ export const view = {
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
     scope(q).wire(root); wireHeraldJump(root); wireInspect(root);
-    // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it. A button of the Active toggle keeps its choice.
+    // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it.
     root.onclick = (e) => {
-      const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x, #herald [data-active]");
+      const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x");
       if (!b) return;
       e.preventDefault();
-      if (b.dataset.active) keep(ACTIVE, b.dataset.active);
-      else keep(WORD, b.matches(".ref-x") ? null : b.textContent);
+      keep(WORD, b.matches(".ref-x") ? null : b.textContent);
       redrawHerald(root);
     };
     if (usable(s.flow)) { root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow); root.querySelector('aleph-chart[key="status/speed"]').frame = speedFrame(s.flow); }
@@ -203,17 +202,14 @@ function runNow(s) {
   return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
 }
 
-/** The key of the Active pane's toggle in keep(): "issues" or "jobs". */
-const ACTIVE = "herald.active";
-
-/** The Active pane: a toggle between issues and jobs over the Running and Queued sections, each row linked to its page. The state holds no queued job apart from the queued issues, so Queued lists those in either mode. */
+/** The Active pane: one list of the running issues, then the queued issues, then the running jobs, each row linked to its page. */
 function active(s) {
-  const mode = kept(ACTIVE, "issues");
-  const toggle = seg("Show", [["issues", "Issues"], ["jobs", "Jobs"]].map(([k, label]) => ({ label, on: k === mode, attrs: ` data-active="${k}"` })));
-  const part = (name, rows) => `<section aria-label="${name}">${subHead(name)}${rows.length ? dataTable("", rows.map(([id, title]) => row([`<td>${id}</td>`, cell(title, { wide: true })])).join("")) : empty()}</section>`;
-  const running = mode === "jobs" ? s.running.map((j) => [jobLink(j), j.item?.title || j.name]) : s.runningIssues.map((i) => [repoIdLink(i.id, i.href), i.title]);
-  const queued = (s.queued ?? []).map((q) => { const id = `${q.repo}-${q.id}`; return [repoIdLink(id, issueHref(id)), q.title]; });
-  return toggle + part("Running", running) + part("Queued", queued);
+  const rows = [
+    ...s.runningIssues.map((i) => [repoIdLink(i.id, i.href), i.title]),
+    ...(s.queued ?? []).map((q) => { const id = `${q.repo}-${q.id}`; return [repoIdLink(id, issueHref(id)), q.title]; }),
+    ...s.running.map((j) => [jobLink(j), j.item?.title || j.name]),
+  ];
+  return rows.length ? dataTable("", rows.map(([id, title]) => row([`<td>${id}</td>`, cell(title, { wide: true })])).join("")) : empty();
 }
 
 /** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class", or "failures" with no target. */

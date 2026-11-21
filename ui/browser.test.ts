@@ -954,7 +954,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("the Herald's tabs read Events, Active, Inspector, the Active tab shows its pane, and its toggle switches the rows between issues and jobs through a redraw", async () => {
+  test("the Herald's tabs read Events, Active, Inspector, the Active tab shows its pane, and its one list keeps its rows through a redraw", async () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #herald")');
     // The page's last state gets a running issue, a running job and a queued issue; a stream event draws the Herald again from it. Its `seq` of 0 leaves the state's feed rows for the next test.
@@ -965,15 +965,14 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     }))`);
     expect(await page.ev('[...document.querySelectorAll("#herald button[data-tab]")].map((b) => b.textContent)')).toEqual(["Events", "Active", "Inspector"]);
     await page.ev('document.querySelector("#herald button[data-tab=active]").click()');
-    const running = () => page.ev('[document.querySelector("#herald section[data-pane=active]").hidden, ...[...document.querySelectorAll("#herald [data-pane=active] [aria-label=Running] a")].map((a) => a.getAttribute("href"))]');
-    expect(await running()).toEqual([false, "#/issues/aleph/9"]);
-    await page.ev('document.querySelector("#herald [data-active=jobs]").click()');
-    expect(await running()).toEqual([false, "#/jobs/job.0"]);
+    const listed = () => page.ev('[document.querySelector("#herald section[data-pane=active]").hidden, ...[...document.querySelectorAll("#herald [data-pane=active] a")].map((a) => a.getAttribute("href"))]');
+    const all = [false, "#/issues/aleph/9", "#/issues/aleph/12", "#/jobs/job.0"];
+    expect(await listed()).toEqual(all);
     await page.ev("window.beat()");
-    expect(await running()).toEqual([false, "#/jobs/job.0"]);
+    expect(await listed()).toEqual(all);
     expect(page.errors).toEqual([]);
-    // Drop the kept tab and toggle, and leave Status, so the next visit draws its own data on the Events tab.
-    await page.ev('localStorage.removeItem("aleph.herald.inspect"); localStorage.removeItem("aleph.herald.active")');
+    // Drop the kept tab, and leave Status, so the next visit draws its own data on the Events tab.
+    await page.ev('localStorage.removeItem("aleph.herald.inspect")');
     await page.go("#/issues");
   }, 60_000);
 
