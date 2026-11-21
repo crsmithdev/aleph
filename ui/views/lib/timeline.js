@@ -8,7 +8,7 @@ import { contentText, runWord, wordOf } from "../../../lib/naming.ts";
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** A note of the issue answer (`{ at, text }`, issues/lib/todo.ts noteOf) as an event at its time in ms; null for one with no stamp. */
+/** A note of the issue answer (`{ at, text }`, issues/lib/issue-file.ts noteOf) as an event at its time in ms; null for one with no stamp. */
 export const noteEvent = (n) => (n.at ? { at: Date.parse(n.at), text: n.text } : null);
 
 /**

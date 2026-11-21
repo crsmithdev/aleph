@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, setSystemTime } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";

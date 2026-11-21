@@ -2,11 +2,11 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../lib/store.ts";
-import { add, note } from "../lib/todo.ts";
-import { gatesBody, securityFacts } from "./api/gates.ts";
-import { withEnv } from "./server.testkit.ts";
-import { writeRepos } from "../tests/projects.testkit.ts";
+import { writeList } from "../../lib/store.ts";
+import { add, note } from "../../lib/issue-file.ts";
+import { gatesBody, securityFacts } from "./gates.ts";
+import { withEnv } from "../server.testkit.ts";
+import { writeRepos } from "../../tests/projects.testkit.ts";
 
 // Its own git issue store and sandbox repo, set up as ui/issues.test.ts does; ui/gates.test.ts may have neither.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

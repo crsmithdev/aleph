@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { putJson } from "../../../lib/db.ts";
 import { close, readList, writeList } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { dispatchIssues } from "../transitions/dispatch.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { readEvents } from "../../../lib/layout.ts";

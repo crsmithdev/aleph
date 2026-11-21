@@ -123,3 +123,11 @@ describe("the .o-dead fill", () => {
     expect(fill("o-dead")).not.toBe(fill("o-held"));
   });
 });
+
+test("each data-theme dark block sets the same tokens as its prefers-color-scheme twin", () => {
+  const decls = (body: string) => body.replace(/\/\*[\s\S]*?\*\//g, "").split(";").map((d) => d.trim()).filter(Boolean).sort();
+  const rules = new Map([...html.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => [m[1].trim(), decls(m[2])]));
+  const dark = [...rules.keys()].filter((s) => s.includes('[data-theme="dark"]'));
+  expect(dark.length).toBeGreaterThan(1);
+  for (const s of dark) expect([s, rules.get(s.replace('[data-theme="dark"]', ':not([data-theme="light"])'))]).toEqual([s, rules.get(s)]);
+});

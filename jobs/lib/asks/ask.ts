@@ -12,12 +12,11 @@
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
 import { BECAUSE, because, detailOf, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
-import { alwaysRow, INTAKE_TRIES, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
-import { NO_COMMIT_LIMIT } from "../gates/issue-decision.ts";
-import { specVersion } from "../roles/issue-spec.ts";
-import * as issues from "../../../lib/todo.ts";
+import { alwaysRow, INTAKE_TRIES, NO_COMMIT_LIMIT, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
+import { specVersion } from "../../../lib/issue-spec.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { isDropped, reopen, writeList, type Place } from "../../../lib/store.ts";
-import { afterOf, parentOf, partsOf, setAfter, setPlan } from "../../../lib/todo.ts";
+import { afterOf, parentOf, partsOf, setAfter, setPlan } from "../../../lib/issue-file.ts";
 import type { Entry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
 import { errText } from "../../../lib/errtext.ts";

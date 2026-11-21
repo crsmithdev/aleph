@@ -18,7 +18,7 @@ import { held } from "../../../lib/locks.ts";
 import { startJob } from "./transitions.ts";
 import { start, startKept } from "./kept.ts";
 import { readSections } from "../records/run-files.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { change, ctx, dispatch, fakes, newIssue, mk, setup, sh, teardown } from "./factory.testkit.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
@@ -352,4 +352,11 @@ test("the Issue page's Run now says what the dispatch of that issue does, for th
   const waited = `Waits on issue.${blocker}`;
   const cases: [string, number, string | null][] = [["ready", ready, null], ["an unfinished after", waits, waited], ["an open job", running, "Its job is running"], ["a waiting parent", part, waited], ["an after that was closed and not copied", gone, null]];
   for (const [name, id, text] of cases) expect({ name, ...(await says(id)) }).toEqual({ name, page: text, dispatch: text });
+});
+
+test("a dispatch pass in keepingRuns reads the table of jobs once, whatever the number of ready issues", async () => {
+  for (let i = 0; i < 4; i++) newIssue();
+  const before = record.runLoads;
+  await record.keepingRuns(() => dispatch(fakes()));
+  expect(record.runLoads - before).toBe(1);
 });

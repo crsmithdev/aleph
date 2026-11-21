@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { storeRepos, vault } from "../../../tests/git.testkit.ts";
 import { readList, writeList } from "../../../lib/store.ts";
-import { add, status } from "../../../lib/todo.ts";
+import { add, status } from "../../../lib/issue-file.ts";
 import { askOf } from "../asks/ask.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";

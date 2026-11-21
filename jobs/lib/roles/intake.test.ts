@@ -3,12 +3,12 @@ import { putJson } from "../../../lib/db.ts";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { buildableIssues, isBuildable, isSorted, itemsDir, mediaPath, readList, writeList, type File } from "../../../lib/store.ts";
-import { partsOf } from "../../../lib/todo.ts";
+import { partsOf } from "../../../lib/issue-file.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts } from "./intake.ts";
-import type { Spec } from "./issue-spec.ts";
+import type { Spec } from "../../../lib/issue-spec.ts";
 import { type Repo } from "../records/ledger.ts";
 import { getRun, allRuns } from "../records/record.ts";
 import { seed } from "../../job.testkit.ts";

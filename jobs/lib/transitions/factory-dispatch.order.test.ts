@@ -3,7 +3,7 @@ import { putJson } from "../../../lib/db.ts";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { writeList } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
 import { readList } from "../../../lib/store.ts";
 import { ctx, fakes, withChecks, setup, teardown } from "./factory.testkit.ts";

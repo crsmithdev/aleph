@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLI } from "../jobs/cli.testkit.ts";
-import { renderItem } from "../lib/todo.ts";
+import { renderItem } from "../lib/issue-file.ts";
 import { itemsDir } from "../lib/store.ts";
 import { seed } from "../jobs/job.testkit.ts";
 import { layout } from "../lib/layout.ts";

@@ -6,7 +6,7 @@
  * A decider reads one list and one stage table for each repo, once.
  */
 import { projectOfIssue, readList, reader, type Reader } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { issueKey, parseKey } from "../../../lib/naming.ts";

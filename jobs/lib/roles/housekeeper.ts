@@ -10,9 +10,9 @@
 import { writeFileSync } from "node:fs";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { readFetched, readList } from "../../../lib/store.ts";
-import { priorityOf } from "../../../lib/todo.ts";
+import { priorityOf } from "../../../lib/issue-file.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
@@ -142,7 +142,7 @@ function section(repo: Repo, i: issues.Issue, tracked: string[], now: number): s
   ].filter(Boolean).join("\n\n");
 }
 
-export function prompt(b: Batch, now: number): string {
+function prompt(b: Batch, now: number): string {
   const all = (readList(b.repo)?.items ?? []).filter((i) => ["open", "parked"].includes(issues.status(i)));
   const tracked = git(b.repo.path, "ls-files").out.split("\n");
   const land = b.land && [

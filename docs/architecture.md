@@ -66,7 +66,7 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `issues/` | `issues/lib/issues.ts` (the `aleph issue` verbs) over the work store; `issues/cli.ts` parses and prints `aleph issue` |
 | `jobs/` | `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
-| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts`; the work store: `store.ts` (git I/O), `todo.ts` (file format), `projects.ts` (the registry's files) |
+| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts`; the work store: `store.ts` (git I/O), `issue-file.ts` (file format), `issue-spec.ts` (spec sections), `projects.ts` (the registry's files) |
 | `identity/` | The global `CLAUDE.md` and `VOICE.md` |
 | `compose/` | Langfuse in Docker |
 | `tests/` | Repo-wide tests, `tests/live/` against real services |
@@ -77,7 +77,7 @@ The modules of `jobs/lib/`, one folder per concern:
 |---|---|---|
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
 | Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `dispatch.ts`, `sweep.ts`, `baseline.ts`, `stall.ts`, `report.ts`, `tick.ts`, `launch.ts` |
-| Agent roles | `roles/` | `agent-call.ts`, `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `issue-spec.ts`, `role-skill.ts` |
+| Agent roles | `roles/` | `agent-call.ts`, `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `role-skill.ts` |
 | Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `holds.ts`, `pause.ts`, `gpu.ts`, `tables.ts`, `checks.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `related.ts` |
 | Land and recovery | `land/` | `landing.ts`, `rescue.ts` |
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |

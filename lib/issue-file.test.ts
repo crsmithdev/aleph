@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import * as issues from "./todo.ts";
+import * as issues from "./issue-file.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 
 test("titleProblem passes a part title with its group and refuses length, a final period and a prefix", () => {

@@ -3,9 +3,9 @@
  * reverted reopens, and a parent whose parts are done closes. See docs/factory.md.
  */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { close, reader, reopenReverted, type Reader } from "../../../lib/store.ts";
-import { partsOf, planSet } from "../../../lib/todo.ts";
+import { partsOf, planSet } from "../../../lib/issue-file.ts";
 import { fetchOrigin, git } from "../../../lib/git.ts";
 import { askOfItem } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";

@@ -11,12 +11,11 @@
  * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director` event in the job record of its item,
  * the record that later runs read, and log events (the Gates page log): one `escalated`, or one per applied action.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
-import { join } from "node:path";
 import { dispatchDetached } from "../transitions/launch.ts";
 import { afterFiling } from "../transitions/filing.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
 import { always, ASK_REASONS, askSub, logAlways, asking, LIMITS, keepsOpen, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn, askOfItem } from "../asks/ask.ts";
@@ -26,12 +25,12 @@ import { lock } from "../../../lib/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { issue as issueOf, openJob, openJobOfIssue, readFile } from "../records/job.ts";
+import { issue as issueOf, openJob, openJobOfIssue, readFile, tailOf } from "../records/job.ts";
 import { isRunning } from "../infra/process.ts";
 import { git, mainRef } from "../../../lib/git.ts";
 import { ofBranch } from "../records/jobdiff.ts";
 import { heldPaths, heldRule, NO_OUTPUT, securityChange } from "../gates/gate.ts";
-import { missingSections } from "./issue-spec.ts";
+import { missingSections } from "../../../lib/issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
@@ -40,9 +39,8 @@ import { because, detailOf as wordDetail, ISSUE_KEY, key, parseKey, refs as idsI
 import { DIRECTOR_CAP } from "../infra/settings.ts";
 import { readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
-import { readSection } from "../records/run-files.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";
-import { writeTitle } from "./title.ts";
+import { cutTitle } from "./title.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 const DIRECTOR_MODEL = () => readModels().director.model;
@@ -216,10 +214,6 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
 /** Whether closing or dropping this issue is Chris's: he filed it. */
 const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "chris";
 
-const lastLines = (s: string | undefined): string | null => { const t = s?.trimEnd(); return t ? t.split("\n").slice(-TAIL).join("\n") : null; };
-const tail = (folder: string, file: string): string | null => {
-  try { return lastLines(readFileSync(join(folder, file), "utf8")); } catch { return null; }
-};
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
 
 /** The review of a run: the result.md of the newest review job whose `prev` is the run, as the Jobs route shows it. */
@@ -256,7 +250,7 @@ ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${
 # Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${issues.sourceOf(item)})
 ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes", item.notes.join("\n"))}` : ""}${run ? `
 # The run ${c.on}
-${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("The review of the run", reviewOf(run))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of the checks log", lastLines(readSection(run.folder, "checks")))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
+${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tailOf(run, "prompt.md", TAIL))}${section("Tail of result.md", tailOf(run, "result.md", TAIL))}${section("The review of the run", reviewOf(run))}${section("Tail of the checks log", tailOf(run, "checks", TAIL))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
 const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
@@ -449,8 +443,6 @@ export function parseReply(raw: any, actions: string[]): Reply | string {
   return { escalate: text };
 }
 
-// Writing the case text.
-
 const sameAsk = (a: Ask | null | undefined, b: Ask): boolean => !!a && reasonOf(a.reason) === reasonOf(b.reason) && a.question === b.question && !a.situation?.trim();
 
 /** Whether the case's Ask is still the same one, with no case text. */
@@ -480,8 +472,6 @@ function writeCaseText(c: Case, t: Text): boolean {
 
 /** The case text when the director gave none that does: one sentence on why it reached Chris. */
 const fallback = (why: string): Text => ({ situation: `The director did not decide this Ask: ${why.replace(/\.$/, "")}.` });
-
-// Applying the actions.
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace them. */
 export interface Ports extends store.Effects {
@@ -578,7 +568,7 @@ async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule
   if (a.do === "add") {
     const missing = missingSections(a.body);
     if (missing.length) return no(a, `the body lacks ${missing.map((h) => `## ${h}`).join(", ")}`);
-    const title = issues.titleProblem(a.title) ? await writeTitle(a.title) : a.title;
+    const title = issues.titleProblem(a.title) ? cutTitle(a.title) : a.title;
     const w = store.writeFiling(repo, `todo: a fix job for ${id}`, "director", ports, (_, file) => file({ title, spec: a.body, source: "agent" }).id);
     if (!w) return no(a, "no issue written");
     store.note(repo, n!, `director: filed ${repo.key}-${w.value} as a fix job: ${title}`);

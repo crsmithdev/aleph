@@ -4,7 +4,7 @@ import { putJson } from "../../../lib/db.ts";
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { askOf } from "../asks/ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";

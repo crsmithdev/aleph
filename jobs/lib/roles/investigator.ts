@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import { projectOfIssue, readList } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { lock } from "../../../lib/locks.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { issueKey, parseKey } from "../../../lib/naming.ts";
@@ -70,7 +70,7 @@ function runLine(e: Entry): string {
   return `- ${e.id} ${r.role} ${r.state}${r.cause ? ` (${r.cause})` : ""}, ${r.started}${r.reason ? `: ${r.reason}` : ""}\n  ${folder}: ${files.join(", ") || "no files"}`;
 }
 
-export function prompt(c: Case): string {
+function prompt(c: Case): string {
   const times = c.runs.flatMap((e) => [e.run.started, e.run.ended ?? new Date().toISOString()]).sort();
   const settings = times.length ? eventsOf("settings").filter((e) => e.time >= times[0] && e.time <= times.at(-1)!) : [];
   const events = [c.subject, ...c.runs.map((e) => e.id)].flatMap((o) => eventsOf(o)).sort((a, b) => a.time.localeCompare(b.time));
@@ -116,7 +116,7 @@ function openKey(ref: string | null): string | null {
 }
 
 /** The reply with each cause and issue that has no evidence, and each issue whose title fails `titleProblem`, left out. */
-export const clean = (r: Result): Result => ({
+const clean = (r: Result): Result => ({
   ...r,
   causes: r.causes.filter((c) => c.evidence.length),
   issues: r.issues.filter((i) => i.evidence.length && !issues.titleProblem(i.title)).map((i) => ({ ...i, existing: openKey(i.existing) })),

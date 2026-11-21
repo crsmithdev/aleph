@@ -5,9 +5,9 @@
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
 import { parentIn, reader, type Reader } from "../../../lib/store.ts";
-import { areasOf } from "../../../lib/todo.ts";
-import * as issues from "../../../lib/todo.ts";
-import { surfacePaths } from "../roles/issue-spec.ts";
+import { areasOf } from "../../../lib/issue-file.ts";
+import * as issues from "../../../lib/issue-file.ts";
+import { surfacePaths } from "../../../lib/issue-spec.ts";
 import { openJob, stateOf, type Job } from "../records/job.ts";
 import { allRuns } from "../records/record.ts";
 import { isOpen, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
@@ -147,9 +147,8 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
-/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the issue; `file` says what. */
-function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; job: string; file: string } | null {
-  const lists = reader({ fetch: false });
+/** The first open job of the repo, not waiting for Chris, whose issue in `lists` `shares` something with the issue; `file` says what. */
+function openWait(repo: Repo, jobs: Job[], lists: Reader, shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; job: string; file: string } | null {
   for (const j of jobs) {
     const last = record.counting(j).run;
     const on = onOf(last);
@@ -170,7 +169,7 @@ const usesGptOss = (item: issues.Issue): boolean =>
  * of the two lands would conflict; or both use the gpt-oss server, which runs one build at a time.
  * A job waiting for Chris does not count, as it can wait for hours.
  */
-function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
+function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now: number, lists: Reader) {
   const counts = new Map<string, number>();
   for (const j of jobs) for (const { run } of j) {
     if (run.role !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
@@ -178,8 +177,8 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
   }
   const mine = surfacePaths(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
   const busy = (f: string | undefined) => (f ? { file: f, what: `both change the busy file ${f}` } : undefined);
-  const file = mine.length ? openWait(repo, jobs, (theirs) => busy(surfacePaths(theirs.spec).find((p) => mine.includes(p)))) : null;
-  return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
+  const file = mine.length ? openWait(repo, jobs, lists, (theirs) => busy(surfacePaths(theirs.spec).find((p) => mine.includes(p)))) : null;
+  return file ?? (usesGptOss(item) ? openWait(repo, jobs, lists, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
 }
 
 /** Orders entries by run ID, the order of `allRuns`: a clock step back leaves `started` out of order. */
@@ -203,7 +202,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
     name, ref: `${repo.key}-${item.id}`, item, parent: parentIn(repo.key, item, lists),
     open: open ? stateOf(open) : null,
     job: open ? record.counting(open).id : null,
-    busy: busyWait(repo, item, jobs, now),
+    busy: busyWait(repo, item, jobs, now, lists),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),
     startsInHour: agentStartsInHour(repo.key, name, jobs, now),

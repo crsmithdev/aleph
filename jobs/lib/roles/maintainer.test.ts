@@ -6,7 +6,7 @@ import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/record.ts";
-import { compileDay, render } from "./maintainer.ts";
+import { compileDay, related, render } from "./maintainer.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -128,4 +128,10 @@ test("render gives the frontmatter and the four body parts, and an empty Related
   expect(text).toContain("**Claim.** T was decided, as of 2026-11-03.");
   expect(text).toContain("## Related\n\n\n");
   expect(text).not.toContain("core");
+});
+
+test("related reads the Related section as the Memory page writes it, and as body writes it", () => {
+  expect(related("\n**Claim.** x\n\n## Related\n[[a]]\n")).toBe("[[a]]");
+  expect(related("\n**Claim.** x\n\n## Related\n\n- [[a]]\n- [[b]]\n")).toBe("- [[a]]\n- [[b]]");
+  expect(related("\n**Claim.** x\n")).toBe("");
 });

@@ -14,7 +14,7 @@ import { git } from "../../../lib/git.ts";
 import * as jobRecord from "../records/record.ts";
 import { jobOfFolder, jobSpecFile, logTo } from "../records/run-files.ts";
 import type { CheckResult, Entry, Repo, Run, TestRecord } from "../records/ledger.ts";
-import { oracleCommands, oraclePaths, outsideSurface } from "../roles/issue-spec.ts";
+import { oracleCommands, oraclePaths, outsideSurface } from "../../../lib/issue-spec.ts";
 import { skillSection } from "../roles/role-skill.ts";
 import { FOREGROUND, repeatedFailure } from "../transitions/continuation.ts";
 import { existsSync, readFileSync, rmSync } from "node:fs";
@@ -112,7 +112,6 @@ function reviewHold(done: number | undefined, earlier: Run[] | undefined, reason
 export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict> {
   const { earlier, done, rounds } = b;
   const facts = { ...b.facts };
-  // Verify: the checks, the keep-gate and the Oracle.
   const { stop, failed } = await p.checks();
   if (stop) {
     const check = backCheck(stop, failed);
@@ -131,7 +130,6 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (typeof bad === "object" && bad) return stopped({ cause: "infra", checkName: "oracle", reason: bad.noVerdict }, facts);
   if (bad) return stopped({ cause: "check", checkName: "oracle", reason: bad }, { ...facts, ...checkBack(done, "oracle", bad, rounds) });
 
-  // The reviewer.
   const stat = p.stat();
   let ms = 0, spent: number | undefined;
   const sessions: string[] = [];
@@ -260,7 +258,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
       const report = junitFile(folder, `${check}-base`);
       const command = `bun test ${[...new Set(failures.map((f) => `'./${f.file}'`))].join(" ")}`;
       const r = await (o.runner ?? runOnCommit)(repo, base, withJunit(command, report));
-      logTo(folder, "checks", `## ${check} on the base: exit ${r.code}\n$ ${command}\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}\n\n`);
+      logTo(folder, "checks", `## ${check} on the base: exit ${r.code}\n$ ${command}\n${lastLines(r.output)}\n\n`);
       // A base run with no verdict marks nothing: each test stays the head's alone.
       if (r.infra) return false;
       const failing = new Set(testRecord(report).failures.map((f) => `${f.file} > ${f.name}`));
@@ -320,7 +318,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, base: string,
     jobRecord.appendCheck(jobOfFolder(folder), { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) });
   };
   const noVerdict = (command: string, r: Ran): NoVerdict => {
-    logTo(folder, "checks", `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
+    logTo(folder, "checks", `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80)}\n\n`);
     result(false, true);
     return { noVerdict: `no verdict: oracle: ${command}` };
   };
@@ -351,7 +349,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, base: string,
       ran: tests.ran + rec.ran, passed: tests.passed + rec.passed, failed: tests.failed + rec.failed, skipped: tests.skipped + rec.skipped,
       failures: [...tests.failures, ...rec.failures].slice(0, 20),
     };
-    const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
+    const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80)}\n\n`;
     logTo(folder, "checks", out);
     if (r.code !== 0) { result(false); return `oracle failed: ${command}`; }
     if (rec?.ran === 0) { result(false); return `oracle ran 0 tests: ${command}`; }

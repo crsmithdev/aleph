@@ -1,15 +1,11 @@
 /** `/api/context`, `/api/context/:id`, `/api/context/:id/calls/:call`: the Context view's data, from the Claude Code transcripts under `~/.claude/projects/<project>/<session>.jsonl`. */
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
 import { threshold, window } from "../../lib/session-context.ts";
-import { find } from "../../lib/transcripts.ts";
+import { find, list } from "../../lib/transcripts.ts";
 import { call, parseExact } from "../context.ts";
 import type { Routes } from "../server.ts";
 
-const root = claudeProjects;
-const transcripts = () => existsSync(root()) ? [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root() })] : [];
 
 /** The last transcript read: the click on a call reads the one the click on its session just read, until the file is written again. */
 let held: { id: string; f: string; at: number; text: string } | undefined;
@@ -27,8 +23,8 @@ export const routes: Routes = {
   "GET /api/context": () => {
     touch("transcripts");
     return Response.json({
-      sessions: transcripts()
-        .map((f) => ({ id: f.slice(f.indexOf("/") + 1, -6), project: f.slice(0, f.indexOf("/")), updated: statSync(join(root(), f)).mtime.toISOString() }))
+      sessions: list()
+        .map((t) => ({ id: t.id, project: t.project, updated: new Date(t.at).toISOString() }))
         .sort((a, b) => b.updated.localeCompare(a.updated)),
     });
   },

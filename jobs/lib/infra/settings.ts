@@ -68,20 +68,20 @@ function cap(key: CapKey, dflt: number): number {
  * The most agent runs live at once: a sixth of the cores (4 of 24). A run's checks use half the cores (package.json),
  * so two suites fill the load limit while the other runs are in their worker step; more starts would only queue.
  */
-/** The live cap's default as the docs state it; the number depends on the machine. */
-export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
 export const LIVE_CAP = () => cap("live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most local-backend agent runs live at once, apart from the live cap: the one GPU serves one gpt-oss call. */
 export const LOCAL_CAP = 1;
 /** The most agent runs one issue starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
-export const RUN_CAP_DEFAULT = 3;
+const RUN_CAP_DEFAULT = 3;
 export const RUN_CAP = () => cap("run", RUN_CAP_DEFAULT);
+/** Runs of one issue in a row that may end with no commit before the dispatch stops starting it. */
+export const NO_COMMIT_LIMIT = 3;
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
-export const INTAKE_TRIES_DEFAULT = 2;
+const INTAKE_TRIES_DEFAULT = 2;
 export const INTAKE_TRIES = () => cap("intakeTries", INTAKE_TRIES_DEFAULT);
-export const JOB_SECONDS_DEFAULT = 1800;
+const JOB_SECONDS_DEFAULT = 1800;
 export const jobSeconds = () => cap("jobSeconds", JOB_SECONDS_DEFAULT);
 /** How long an agent call may print nothing before the stall watch stops it. */
 export const stallSeconds = (): number => num("ALEPH_STALL_SECONDS", 600);
@@ -90,16 +90,14 @@ export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
 export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
-export const FIX_ROUNDS_DEFAULT = 2;
+const FIX_ROUNDS_DEFAULT = 2;
 export const fixRounds = () => cap("fixRounds", FIX_ROUNDS_DEFAULT);
 /** How long a dispatch waits for another dispatch's issue lock before it skips the issue. */
 export const issueLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => num("ALEPH_PID_WAIT_MS", 10_000);
-export const LAND_BATCH_DEFAULT = 8;
+const LAND_BATCH_DEFAULT = 8;
 export const landBatch = () => Math.max(1, Math.floor(cap("landBatch", LAND_BATCH_DEFAULT)) || 1);
-/** The load limit's default as the docs state it; the number depends on the machine. */
-export const LOAD_LIMIT_DEFAULT = "cores";
 /** A check, a worker or a land starts only while the 1-minute load average is under this. */
 export const loadLimit = () => cap("loadLimit", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */

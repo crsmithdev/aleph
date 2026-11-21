@@ -4,7 +4,7 @@ import { readdirSync, watch } from "node:fs";
 import { join } from "node:path";
 import { readList, writeList } from "../../../lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { dispatchIssues } from "./dispatch.ts";
 import { setPaused } from "../gates/pause.ts";
 import { allJobs } from "../records/ledger.ts";

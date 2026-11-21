@@ -1,7 +1,7 @@
 // The hold record of an issue the dispatch skips: one per reason, for each reason the issue loop has.
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { writeList } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";

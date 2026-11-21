@@ -6,7 +6,7 @@
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
 import { closeAndFile, note, reader } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { filing } from "../transitions/filing.ts";
 import { fetchOrigin, followMain, git } from "../../../lib/git.ts";
 import { needsOf } from "../asks/ask.ts";
@@ -26,7 +26,7 @@ import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
 import { landBatch } from "../infra/settings.ts";
 import { systemctl } from "../infra/systemd.ts";
 import { jobOfFolder, logTo, runFile } from "../records/run-files.ts";
-import { writeTitle } from "../roles/title.ts";
+import { cutTitle } from "../roles/title.ts";
 import * as record from "../records/record.ts";
 import { trailerLine } from "../records/status.ts";
 
@@ -313,7 +313,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     for (const m of members.slice(1)) m.log(`taken into the batch of ${run.name}'s land ${id}`);
     if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
     // The title of each open manual check's issue, written before the land: closeItems runs after the push.
-    const checkTitles = new Map(await Promise.all(members.filter((m) => m.run.check === "open").map(async (m) => [m, await writeTitle(m.run.say ?? m.run.name)] as const)));
+    const checkTitles = new Map(members.filter((m) => m.run.check === "open").map((m) => [m, cutTitle(m.run.say ?? m.run.name)] as const));
 
     /** settleOnMain for a member, with its lines in the member's log. Returns the manual check's issue. */
     const settled = (m: Member, commit: string): number | undefined => {

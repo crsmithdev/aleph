@@ -27,7 +27,7 @@ export function mainState(repo: Repo, b = baselines()[repo.key]): MainState {
 }
 
 /** What a suite record holds for besides its commit: the setup and checks it ran. A change of either runs the suite again. */
-export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup ?? [], repo.checks ?? []]);
+export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup, repo.checks]);
 
 /**
  * Whether the repo's checks pass on its current origin/<main>: run once per

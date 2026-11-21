@@ -39,7 +39,7 @@ function parseVerdict(text: string): Verdict | null {
 export interface JudgeResult { verdict: Verdict | null; error?: string; ms: number; by?: "jev" | "haiku"; jev?: { pClaim: number | null; error?: string; cost: number } }
 
 /** Jev passes a turn alone only when its probability of a claim is below this. Measured on 517 stored turns, 27 Oct 2026. */
-export const JEV_PASS_BELOW = () => Number(process.env.ALEPH_JEV_PASS_BELOW ?? 0.05);
+const JEV_PASS_BELOW = () => Number(process.env.ALEPH_JEV_PASS_BELOW ?? 0.05);
 
 const CLAIM: Noul = {
   type: "noul",

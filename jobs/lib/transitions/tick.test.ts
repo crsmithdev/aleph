@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bu
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { factoryRepos, vault } from "../../../tests/git.testkit.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
@@ -16,7 +16,7 @@ import { setPaused } from "../gates/pause.ts";
 import { setTick, tickRows, writeBaseline, writeStalls } from "../gates/tables.ts";
 import { conn, getJson } from "../../../lib/db.ts";
 import { git } from "../../../lib/git.ts";
-import { specVersion } from "../roles/issue-spec.ts";
+import { specVersion } from "../../../lib/issue-spec.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { seed as seedJob } from "../../job.testkit.ts";

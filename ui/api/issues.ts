@@ -17,11 +17,11 @@ import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
 import { filed, isBuildable, MEDIA_TYPES, mediaFiles, everyFetched, readList, readLists } from "../../lib/store.ts";
-import { afterOf, mediaOf, parentOf, partsOf, priorityOf, referrersOf, refsOf } from "../../lib/todo.ts";
+import { afterOf, mediaOf, parentOf, partsOf, priorityOf, referrersOf, refsOf } from "../../lib/issue-file.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import * as todos from "../../lib/todo.ts";
+import * as todos from "../../lib/issue-file.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";

@@ -9,7 +9,7 @@ import { fit } from "../jobs/lib/roles/title.ts";
 import { refuse } from "../lib/refusal.ts";
 import { issueKey, parseId, parseKey, shownKey } from "../lib/naming.ts";
 import { jobId } from "../lib/env.ts";
-import * as issues from "../lib/todo.ts";
+import * as issues from "../lib/issue-file.ts";
 import * as store from "../lib/store.ts";
 import * as verbs from "./lib/issues.ts";
 

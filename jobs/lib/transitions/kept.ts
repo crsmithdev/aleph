@@ -3,7 +3,7 @@
  * kept ones. The roles' unit calls `start`, and the factory's dispatch calls `startKept`.
  */
 import { appendFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { reader } from "../../../lib/store.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { allJobs, isOpen, issueKeyOf, loadRegistry, onOf, type Run } from "../records/ledger.ts";

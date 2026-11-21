@@ -10,7 +10,7 @@ import { updater } from "./updater.ts";
 import { onLater } from "./build.ts";
 import { items } from "./memory-items.ts";
 import { writeList } from "../lib/store.ts";
-import { add } from "../lib/todo.ts";
+import { add } from "../lib/issue-file.ts";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore

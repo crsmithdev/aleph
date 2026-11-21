@@ -15,7 +15,7 @@
  */
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import { failedTests } from "./checks.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";

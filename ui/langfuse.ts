@@ -33,7 +33,7 @@ const load = (env: string, base: string): Kept | null => {
 };
 
 /** The observations of [from, to) of the `types`, as `slim` keeps them; inside a build pass, through the kept rows. Langfuse filters on one type per read. */
-export async function recent(lf: Langfuse, from: number, to: number, types: string[], slim: (o: any) => Observation): Promise<{ rows: Observation[]; partial: boolean }> {
+export async function recent(lf: Langfuse, from: number, to: number, types: string[], slim: (o: Observation) => Observation): Promise<{ rows: Observation[]; partial: boolean }> {
   const oldest = (rows: Observation[]) => rows.reduce((m, o) => Math.min(m, Date.parse(o.startTime ?? "") || Infinity), Infinity);
   // `cut` is the newest of the oldest rows of the types that stopped at the page limit.
   const read = async (a: number, b: number) => {

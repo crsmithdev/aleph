@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as store from "../lib/store.ts";
 import * as systemd from "../jobs/lib/infra/systemd.ts";
 import { writeList } from "../lib/store.ts";
-import { add, setStatus } from "../lib/todo.ts";
+import { add, setStatus } from "../lib/issue-file.ts";
 import { checkStatus, jobProjector, state } from "./state.ts";
 import { withEnv } from "./server.testkit.ts";
 import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";

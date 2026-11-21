@@ -22,8 +22,8 @@ import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { runNowOf } from "./issues.ts";
 import { readList } from "../../lib/store.ts";
-import { parentOf, partsOf } from "../../lib/todo.ts";
-import * as todos from "../../lib/todo.ts";
+import { parentOf, partsOf } from "../../lib/issue-file.ts";
+import * as todos from "../../lib/issue-file.ts";
 import { investigations, type Investigation } from "../../jobs/lib/roles/investigator.ts";
 
 /** `id` is the job key, the key of its logs; `job` is the key the page shows. */

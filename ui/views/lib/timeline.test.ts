@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { noteOf } from "../../../lib/todo.ts";
+import { noteOf } from "../../../lib/issue-file.ts";
 // @ts-ignore plain JS, shared with the page
 import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore

@@ -3,13 +3,13 @@
  * request's window and project come from the hook entries of the Claude Code transcripts under `~/.claude/projects`; the hooks come from
  * `hooks/hooks.json`, each with its files and its newest commit of the window. A hold's outcome is a keyword pass over its reply: a guide, not a measurement.
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { git } from "../../lib/git.ts";
 import { readJsonOr } from "../../lib/json.ts";
 import { jsonLines, type Entry } from "../../lib/jsonl.ts";
-import { claudeProjects } from "../../lib/paths.ts";
 import { touch } from "../../lib/sources.ts";
+import { list } from "../../lib/transcripts.ts";
 import type { Routes } from "../server.ts";
 import { scopeOf, traceProject, type Scope } from "./scope.ts";
 
@@ -82,8 +82,8 @@ let parsed = new Map<string, { at: number; holds: Hold[]; fails: Fail[] }>();
 /** The Stop-hook holds, newest first, and the hook errors of the scope's window and project. */
 function scan({ ms, project }: Scope): { holds: Hold[]; fails: Fail[] } {
   touch("transcripts");
-  const root = claudeProjects(), since = Date.now() - ms;
-  const files = (existsSync(root) ? [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root })] : []).map((f) => ({ f: join(root, f), at: statSync(join(root, f)).mtimeMs })).filter((x) => x.at >= since);
+  const since = Date.now() - ms;
+  const files = list().map((t) => ({ f: t.path, at: t.at })).filter((x) => x.at >= since);
   parsed = new Map(files.map(({ f, at }) => [f, parsed.get(f)?.at === at ? parsed.get(f)! : { at, ...parse(f) }]));
   const recent = (x: { t: string; project: string }) => Date.parse(x.t) >= since && (!project || x.project === project), all = [...parsed.values()];
   return { holds: all.flatMap((p) => p.holds).filter(recent).sort((a, b) => b.t.localeCompare(a.t)), fails: all.flatMap((p) => p.fails).filter(recent) };

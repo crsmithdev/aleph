@@ -7,7 +7,7 @@
  * returned. The same poll records what OpenRouter bills per list dollar.
  */
 import { readJsonOr } from "../lib/json.ts";
-import { conn } from "../lib/db.ts";
+import { jevCost } from "../lib/jev.ts";
 import { addKeyRow, addSnapshot, keyRows, snapshots, type Snapshot } from "../lib/usage.ts";
 
 export type { Snapshot };
@@ -51,7 +51,8 @@ const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
  * One call to the endpoint: a snapshot, or null on any error, with the reason on stderr. The token stays inside this function.
  * A failed read or parse of the credentials file logs fixed text, because a JSON parse error can quote the file.
  */
-async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
+async function fetchUsage(): Promise<Snapshot | null> {
+  const now = new Date();
   let token: unknown;
   try {
     token = readJsonOr<any>(credentialsFile(), null)?.claudeAiOauth?.accessToken;
@@ -96,13 +97,11 @@ export async function pollOnce(): Promise<Snapshot | null> {
   return snap;
 }
 
-/** Polls now and every `ms`, and calls `polled` after each snapshot it keeps. Returns a stop function. */
-export function startPoller(ms = POLL_MS, polled = () => {}): () => void {
+/** Polls now and every POLL_MS, and calls `polled` after each snapshot it keeps. */
+export function startPoller(polled: () => void): void {
   const poll = () => { void pollOnce().then((s) => { if (s) polled(); }); void pollOpenRouter().catch((e) => console.error(`ui/usage: cannot poll OpenRouter: ${e instanceof Error ? e.message : "error"}`)); };
   poll();
-  const timer = setInterval(poll, ms);
-  timer.unref?.();
-  return () => clearInterval(timer);
+  setInterval(poll, POLL_MS).unref?.();
 }
 
 /** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
@@ -212,7 +211,7 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
     const from = Date.parse(base.at);
     const list = (await need().hourly({ from: new Date(from), to: new Date(now) }, "usage").catch((e) => { if (langfuse()) console.error(`ui/usage: no hourly list price: ${errText(e)}`); return []; }))
       .filter((h) => viaOf(h.model) === "openrouter").reduce((a, h) => a + h.cost, 0);
-    const jev = jevRows().filter((j) => Date.parse(j?.at) > from && Date.parse(j.at) <= now).reduce((a, j) => a + (j.cost ?? 0), 0);
+    const jev = jevCost(from, now);
     const factor = (spent.total - base.usage - jev) / list;
     if (list >= MIN_LIST && factor > 0) row.factor = factor;
   }
@@ -222,9 +221,6 @@ export async function pollOpenRouter(now = Date.now()): Promise<void> {
     console.error(`ui/usage: cannot write the openrouter row: ${e instanceof Error ? e.message : "error"}`);
   }
 }
-
-/** The rows of the jev table in order, with `time` also as `at`. */
-const jevRows = (): any[] => conn().query("SELECT time AS at, * FROM jev ORDER BY seq").all();
 
 interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */

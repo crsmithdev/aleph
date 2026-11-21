@@ -330,19 +330,3 @@ export async function admit(say: (line: string) => void = () => {}, a: Admission
 
 /** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
-
-/** The agent output tags that a parser reads: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
-const TAGS = ["QUESTION", "VERDICT"] as const;
-export type Tag = (typeof TAGS)[number];
-
-/** One sentence for prompts that says how a tag line is read. */
-export const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such as `<TAG>: <value>`; leading spaces, backticks and `*` before the tag and trailing backticks and `*` after the value are ignored, and a lowercase tag is not read.";
-
-const tagValue = (line: string, tag: string): string | undefined => {
-  const m = line.match(/^\s*[`*]*([A-Z][A-Z-]*):(.*)$/);
-  return m && m[1] === tag ? m[2].replace(/^[`*]+(?=\s)/, "").replace(/[`*\s]+$/, "").trim() : undefined;
-};
-
-/** The value of the last line that carries the tag, or undefined when there is none. */
-export const lastTagged = (text: string, tag: Tag | string): string | undefined =>
-  text.split("\n").map((l) => tagValue(l, tag)).filter((v): v is string => v !== undefined).at(-1);

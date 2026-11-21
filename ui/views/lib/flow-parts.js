@@ -6,7 +6,7 @@ import { cardTrend, statCard } from "./html.js";
 import { BUCKETS } from "../../../lib/windows.ts";
 
 /** The period an answer covers, in words. */
-export const period = (d) => (d?.window === "hour" ? "hour" : plural(BUCKETS[d?.window]?.n ?? 7, bucketOf(d)));
+const period = (d) => (d?.window === "hour" ? "hour" : plural(BUCKETS[d?.window]?.n ?? 7, bucketOf(d)));
 /** The bucket of a window: a minute, an hour or a day. */
 export const bucketOf = (d) => BUCKETS[d?.window]?.name ?? "day";
 /** The last 24 hours are a different span from the window only in week and month. */

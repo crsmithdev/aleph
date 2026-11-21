@@ -2,12 +2,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { setPaused } from "../jobs/lib/gates/pause.ts";
-import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
-import { verdict } from "../lib/status-words.ts";
-import { closePass, openPass } from "../lib/sources.ts";
-import { stateBody } from "./api/now.ts";
-import { writeRepos } from "../tests/projects.testkit.ts";
+import { setPaused } from "../../jobs/lib/gates/pause.ts";
+import { withEnv, withServer, type TestServer } from "../server.testkit.ts";
+import { verdict } from "../../lib/status-words.ts";
+import { closePass, openPass } from "../../lib/sources.ts";
+import { stateBody } from "./now.ts";
+import { writeRepos } from "../../tests/projects.testkit.ts";
 
 let base: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 

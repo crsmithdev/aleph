@@ -49,11 +49,13 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 /** `aleph memory misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
  * Langfuse for about 35 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
  * and the 30 s Langfuse poll does not hold the build Worker with it. */
-const misses = (): Promise<unknown | null> => later("memory:misses", ["usage"], runMisses, null);
+const misses = (): Promise<Misses | null> => later("memory:misses", ["usage"], runMisses, null);
 /** The vault's notes, or none when it has no VAULT.md, read once until a file in the vault changes or the UI writes: a page
  * that wrote reads its write even when the watcher's event comes after its request. */
 const vaultNotes = async (root: string): Promise<Note[]> => (isVault(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
-async function runMisses(): Promise<unknown | null> {
+/** The output of `aleph memory misses`: each recall that found no note. */
+type Misses = { missed: { at: string; query: string }[] };
+async function runMisses(): Promise<Misses | null> {
   try {
     const p = Bun.spawn([...cli(), "memory", "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 180_000 });
     const text = await new Response(p.stdout).text();
@@ -149,7 +151,7 @@ async function log(url: URL): Promise<Response> {
     const titles = e.titles.filter(mine);
     if (titles.length) rows.push({ at: e.date, kind: "recall", op: "recall", note: titles[0], why: e.query, titles });
   }
-  const m: any = await slow;
+  const m = await slow;
   for (const x of m?.missed ?? []) rows.push({ at: x.at, kind: "miss", op: "miss", note: "", why: x.query, titles: [] });
   return json({ project, rows: rows.sort((a, b) => b.at.localeCompare(a.at)) });
 }

@@ -4,8 +4,8 @@
  * all read a spec through this module.
  */
 import { createHash } from "node:crypto";
-import { isJsTestFile } from "../../../lib/test-files.ts";
-import { section, type Issue } from "../../../lib/todo.ts";
+import { isJsTestFile } from "./test-files.ts";
+import { section, type Issue } from "./issue-file.ts";
 
 /** The sections an issue's spec has. */
 const REQUIRED = ["Goal", "Edit surface", "Oracle"] as const;

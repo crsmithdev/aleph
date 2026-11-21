@@ -23,7 +23,7 @@ import { entriesBackward, readText } from "./jsonl.ts";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;
-export const DEFAULT_WARN = 0.75;
+const DEFAULT_WARN = 0.75;
 
 export interface Reading {
   fill: number;

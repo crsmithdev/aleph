@@ -10,7 +10,7 @@ import { getRun, makeJob, patchRun, setState, allRuns } from "../records/record.
 import { lock, lockSync } from "../../../lib/locks.ts";
 import { roleSeconds } from "../infra/settings.ts";
 import { logStream, logTo, runFile } from "../records/run-files.ts";
-import { callAgent, type Ask, type Reply } from "./agent-call.ts";
+import { callAgent, subscriptionEnv, type Ask, type Reply } from "./agent-call.ts";
 import type { AgentRole } from "../../../lib/naming.ts";
 
 interface Call extends Pick<Ask, "cmd" | "fallback" | "slot" | "onSpawn"> {
@@ -109,7 +109,7 @@ export function openRun(o: Opening): AgentRun {
     if (!again) writeFileSync(log, "");
     const r = await callAgent(o.role === "review" ? "reviewer" : o.role, sent, {
       model: o.model, flags: resume ? [...o.flags, "--resume", resume] : o.flags, schema: o.schema, cwd: cwd ?? o.cwd,
-      env: o.env && { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...o.env },
+      env: o.env && { ...subscriptionEnv(), ...o.env },
       stdout: log, stderr: logStream(folder, "stderr"), limit: roleSeconds(o.role.toUpperCase(), o.seconds),
       cmd: o.cmd, fallback: o.fallback, slot: o.slot, onSpawn: o.onSpawn,
     });
@@ -147,7 +147,7 @@ function endAgentRun(id: string, reason: string, fields: Partial<Omit<Run, "stat
  * whole run, and `lockOf` names it, or gives null for a run to leave alone. When no wait gets the
  * lock, no process is running that run. A run whose lock is held stays as it is.
  */
-export async function endLost(role: Opening["role"], lockOf: (run: Run) => string | null, before = "a reply"): Promise<void> {
+export async function endLost(role: Opening["role"], lockOf: (run: Run) => string | null, before: string): Promise<void> {
   for (const { id, run } of allRuns()) {
     if (run.role !== role || run.state !== "running") continue;
     const name = lockOf(run);

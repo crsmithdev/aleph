@@ -2,6 +2,7 @@
 // `data` is /api/hooks in the scope of the address. The holds log filters by Who, Hook, Kind and Outcome from the address (`?who=workers&out=false`).
 // One hook's page, on /api/hooks/:event/:name, draws the same parts.
 import { scope, setQuery } from "./lib/address.js";
+import { sessionHref } from "../../lib/naming.ts";
 import { redraw } from "./lib/router.js";
 import { count, day, dur, when } from "./lib/format.js";
 import { DAY, WINDOWS } from "../../lib/windows.ts";
@@ -91,7 +92,7 @@ function holdsLog(holds, q, box, hookCol = true) {
   const shown = holds.filter((h) => (!f.who || whoOf(h) === f.who) && (!f.hook || h.hook === f.hook) && (!f.kind || h.kind === f.kind) && (!f.out || h.out === f.out));
   const rows = shown.map((h) => {
     const [, , , tone] = OUTS.find((o) => o[0] === h.out);
-    return row([`<td class="time lead">${esc(when(h.t))}</td>`, `<td>${idLink(h.sid.slice(0, 8), `#/sessions/${encodeURIComponent(h.sid)}`)}</td>`, ...(hookCol ? [cell(h.hook)] : []),
+    return row([`<td class="time lead">${esc(when(h.t))}</td>`, `<td>${idLink(h.sid.slice(0, 8), sessionHref(h.sid))}</td>`, ...(hookCol ? [cell(h.hook)] : []),
       cell(kindName(h.kind)), cell(h.who), `<td>${tag(h.out, tone)}</td>`, cell(h.why, { wide: true })]);
   });
   if (!holds.length) return box("Holds", "0", empty(), "holds");

@@ -10,7 +10,7 @@ import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { errText } from "../../lib/errtext.ts";
 
-export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
+const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
 type Kind = (typeof KINDS)[number];
 const FOLDERS: Record<Kind, string> = { decision: "decisions", concept: "concepts", entity: "entities", project: "projects", gotcha: "gotchas" };
 const CONFIDENCE = ["measured", "reported", "inferred"] as const;

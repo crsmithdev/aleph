@@ -100,7 +100,7 @@ The Status page shows the wrong weekly usage.
 - 2026-11-04T10:12:00.000Z: Reproduced on main at c26c10f
 ```
 
-`lib/todo.ts` (`parseItem`, `renderItem`) owns the format. Notes are append-only: two writers each add a line, and neither erases the other's.
+`lib/issue-file.ts` (`parseItem`, `renderItem`) owns the format. Notes are append-only: two writers each add a line, and neither erases the other's.
 
 | Field | Values | Meaning |
 |---|---|---|
@@ -124,7 +124,7 @@ The Status page shows the wrong weekly usage.
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
 
-An issue's children are the issues whose `from` names it (`partsOf` in `lib/todo.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
+An issue's children are the issues whose `from` names it (`partsOf` in `lib/issue-file.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
 
 ## Job rows and issue state: `aleph.db`
 

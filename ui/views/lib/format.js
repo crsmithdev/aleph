@@ -86,7 +86,7 @@ export const shortModel = (m) => bare(String(m ?? "")).replace(/^claude-/, "").r
 /** A count with its noun: "1 run", "2 runs"; `many` is for a plural that is not `one` + "s". */
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** A Title Case heading in sentence case, for an aria label: "Lead Time" is "Lead time". */
-export const sentence = (t) => t[0] + t.slice(1).toLowerCase();
+const sentence = (t) => t[0] + t.slice(1).toLowerCase();
 /** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */
 export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
 /** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Oct 25" in week and month. */

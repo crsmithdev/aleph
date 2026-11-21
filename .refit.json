@@ -90,8 +90,8 @@
     },
     {
       "copies": [
-        "lib/todo.ts:73-78",
-        "lib/todo.ts:75-80"
+        "lib/issue-file.ts:73-78",
+        "lib/issue-file.ts:75-80"
       ],
       "reason": "The two ranges overlap: they are the one-line field readers kindOf, sinceOf, created and closed, each reading a different frontmatter field."
     },

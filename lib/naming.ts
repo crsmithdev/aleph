@@ -127,6 +127,10 @@ export const issueHref = (s: unknown, repo?: string | null): string => {
 
 /** `#/jobs/a1430%232`: the page of the job with ID `id`. */
 export const jobHref = (id: string): string => `#/jobs/${encodeURIComponent(id)}`;
+/** The Memory page link of the note titled `title`. */
+export const noteHref = (title: string): string => `#/memory/${encodeURIComponent(title)}`;
+/** The Sessions page link of session `id`. */
+export const sessionHref = (id: string): string => `#/sessions/${encodeURIComponent(id)}`;
 
 /** Every full issue ID in free text, in order. Short IDs are never read from free text. */
 export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll(FREE)].map((m) => m[0]);
@@ -228,7 +232,7 @@ export function linked(text: string): Said[] {
   return at < text.length ? [...out, text.slice(at)] : out;
 }
 /** What an event is about: its job's target, else the object. */
-export const targetOf = (e: Partial<EventRow>): string => e.object_target ?? e.object ?? "";
+export const targetOf = (e: EventRow): string => e.object_target ?? e.object;
 
 /** An event's sentence in three parts: its ID and verb, the template's words after the verb, and a detail the template does not place. */
 function sentence(e: Partial<EventRow>): { verb: Said[]; rest: Said[]; after: Said[] } {
@@ -269,7 +273,17 @@ export const CLOSED = ["done", "dropped"];
 
 /** The four priorities, in rank order. */
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+/** The rank of priority `p` in PRIORITIES; none, or an unknown one, ranks as medium. */
+export const priorityRank = (p: unknown): number => { const i = (PRIORITIES as readonly unknown[]).indexOf(p); return i < 0 ? PRIORITIES.indexOf("medium") : i; };
 /** Who can raise an issue. */
 export const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
+/** The memory types aleph stores, in the Memory page's order: what each holds. */
+export const MEMORY_TYPES = [
+  { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },
+  { id: "procedural", name: "Procedural", holds: "rules, skills, hooks" },
+  { id: "episodic", name: "Episodic", holds: "daily log, sessions" },
+  { id: "working", name: "Working", holds: "handoffs" },
+  { id: "prospective", name: "Prospective", holds: "issues with an after" },
+] as const;
 /** A run kind as a line says it: a build run, once called `worker`, is "implement". */
 export const runWord = (kind: string): string => (kind === "build" || kind === "worker" ? NAMES.build.toLowerCase() : kind);

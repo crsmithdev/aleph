@@ -3,6 +3,7 @@
  * route reads it: null, undefined or "" is no filter, and everything belongs. A key that is not in the registry
  * is a filter that matches nothing.
  */
+import type { Trace } from "../../lib/langfuse.ts";
 import { scopeOfCwd } from "../../lib/paths.ts";
 import { once } from "../../lib/sources.ts";
 import { parseId, parseKey, type EventRow } from "../../lib/naming.ts";
@@ -79,4 +80,4 @@ export function traceProject(cwd: string | undefined, tags: string[] | undefined
 }
 
 /** Whether a Langfuse trace belongs to `project`. */
-export const traceIn = (t: any, project: Project) => !project || traceProject(t.metadata?.cwd, t.tags) === project;
+export const traceIn = (t: Pick<Trace, "metadata" | "tags">, project: Project) => !project || traceProject(t.metadata?.cwd, t.tags) === project;

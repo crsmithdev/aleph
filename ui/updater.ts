@@ -64,7 +64,7 @@ export function keyOf(url: URL): string {
 interface Got { answer: Answer; error?: string; since?: string }
 type Mark = { error: string; since: string };
 
-interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked?: number; built?: number; again?: boolean; building?: Promise<void> }
+interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; building?: Promise<void> }
 
 interface Deps {
   build: (key: string, gens: Record<string, number>) => Promise<Built>;
@@ -99,8 +99,8 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   const keysWith = (pick: (key: string, s: Slot) => boolean) => [...slots].filter(([k, s]) => pick(k, s)).map(([k]) => k);
   const bump = (source: string) => { gens[source] = (gens[source] ?? 0) + 1; };
   // A mark is cleared only by a build that started after it: an iteration already running read the sources before the change.
-  const mark = (s: Slot) => { s.marked = (s.marked ?? 0) + 1; };
-  const dirty = (s: Slot) => (s.marked ?? 0) > (s.built ?? 0);
+  const mark = (s: Slot) => { s.marked++; };
+  const dirty = (s: Slot) => s.marked > s.built;
   // A kept key mid-build builds once more; any other key waits for its next request. Rebuilding a key nobody asks
   // for kept a 30-day Sessions build running back to back, each poll ending in another.
   const due = (s: Slot) => { if (!kept(s)) mark(s); else if (s.building) s.again = true; };
@@ -135,7 +135,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     s.building = (async () => {
       do {
         s.again = false;
-        const marks = s.marked ?? 0;
+        const marks = s.marked;
         try {
           const { answer, sources } = await build(key, { ...gens });
           s.sources = new Set([...sources, "action"]);
@@ -187,7 +187,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     /** The answer of `key`: the kept one, or a build's when the key is new, failed or dirty. */
     async get(key: string): Promise<Got> {
       let s = slots.get(key);
-      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set() })); save(); }
+      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set(), marked: 0, built: 0 })); save(); }
       s.asked = now();
       load(key, s);
       if (s.answer && dirty(s) && readsLangfuse(key)) {
@@ -252,7 +252,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       const saved = readJsonOr<Record<string, number>>(f, {});
       for (const [k, asked] of Object.entries(saved)) {
         if (now() - asked >= DROP_MS || slots.has(k)) continue;
-        const s: Slot = { asked, sources: new Set() };
+        const s: Slot = { asked, sources: new Set(), marked: 0, built: 0 };
         slots.set(k, s);
         load(k, s);
         void run(k, s);

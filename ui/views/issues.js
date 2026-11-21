@@ -8,7 +8,7 @@ import { cardPct, count, days, plural, dur, money, when } from "./lib/format.js"
 import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, sortOf, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
 import { buckets, DAY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
+import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, priorityRank, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
 import { askCard } from "./lib/ask-cards.js";
 import { investigateButton, investigationPanel } from "./lib/investigation.js";
 import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
@@ -153,10 +153,9 @@ export function filterRows(rows, o = {}, skip = []) {
 
 // Column order: id, title, state badge, priority, project, labels, numbers, then time. [key, label, { num }]
 export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["priority", "Priority"], ["project", "Project"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated", { num: true }]];
-const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
-  priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -isoMs(r.createdTime),
+  priority: (r) => priorityRank(r.priority), notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -isoMs(r.createdTime),
 };
 /** The keys that start with the largest first. */
 const DOWN_FIRST = new Set(["updated", "priority", "notes", "runs", "cost", "age"]);
@@ -330,7 +329,6 @@ export const closeFrame = (c) => {
 };
 
 /** Each Issues chart panel: its key and its frame. */
-export const FRAMES = { flow: flowFrame, source: sourceFrame, close: closeFrame, levels: levelFrame };
 /** The key of an Issues chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `issues/${k}`;
 

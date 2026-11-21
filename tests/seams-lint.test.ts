@@ -77,7 +77,7 @@ test("only lib/layout.ts defines factoryDir or names dispatch.log", () => {
 });
 
 test("only lib/naming.ts builds an issue key", () => {
-  expect(offenders(/`issue\.\$\{/, ["lib/naming.ts", "lib/todo.ts"], ["{jobs,ui,vault,issues,hooks,lib}/**"])).toEqual([]);
+  expect(offenders(/`issue\.\$\{/, ["lib/naming.ts", "lib/issue-file.ts"], ["{jobs,ui,vault,issues,hooks,lib}/**"])).toEqual([]);
 });
 
 test("no file commits into the items repo but through the store", () => {
@@ -107,7 +107,7 @@ test("only jobs/lib/infra/process.ts signals a process group: a copy that signal
 });
 
 test("only the store and the issue verbs read or write an issue's fm field: a caller skips the store's rules for that field", () => {
-  expect(offenders(/\b(item|issue|i)\.fm[.[]/, ["lib/store.ts", "lib/todo.ts", "ui/fixtures/review/build.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
+  expect(offenders(/\b(item|issue|i)\.fm[.[]/, ["lib/store.ts", "lib/issue-file.ts", "ui/fixtures/review/build.ts"], ["{jobs,ui,vault,hooks,lib}/**"])).toEqual([]);
 });
 
 test("only jobs/lib/infra/settings.ts reads or writes the settings table; lib/db.ts defines it and lib/jev.ts keeps the judge row", () => {
@@ -120,6 +120,10 @@ test("only jobs/lib/records/status.ts writes or greps a Job: or Issue: trailer",
 
 test("only lib/usage.ts runs SQL on the usage or openrouter table; lib/db.ts holds their schema", () => {
   expect(offenders(/\b(FROM|INTO|UPDATE)\s+(usage|openrouter)\b/i, ["lib/usage.ts", "lib/db.ts"], ["{jobs,ui,vault,hooks,lib,ideas,issues}/**"])).toEqual([]);
+});
+
+test("only lib/jev.ts runs SQL on the jev table; lib/db.ts holds its schema", () => {
+  expect(offenders(/\b(FROM|INTO|UPDATE)\s+jev\b/i, ["lib/jev.ts", "lib/db.ts"], ["{jobs,ui,vault,hooks,lib,ideas,issues}/**"])).toEqual([]);
 });
 
 test("no file filters loadVault to the wiki: it reads archive and daily files it drops", () => {

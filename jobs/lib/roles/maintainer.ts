@@ -4,7 +4,7 @@
  * revertible vault commit and each refusal is the op's own. The model never writes a file and never sets `core:`
  * (core lines change only through an Ask). A dry compile runs the model, reports the notes and writes nothing.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
@@ -14,10 +14,11 @@ import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.t
 import { lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
+import { skillPart } from "./role-skill.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 /** The run's time box, in seconds. */
-export const SECONDS = 900;
+const SECONDS = 900;
 const MODEL = () => readModels().maintainer.model;
 /** Read-only: the vault's recall and Read. */
 const ALLOWED = ["Bash(aleph memory recall:*)", "Read"];
@@ -49,10 +50,7 @@ type Note = Record<string, any>;
 export interface Written { title: string; kind: string; commit?: string | null; rule?: string; refused?: string }
 interface CompileReport { day: string; dry: boolean; run?: string; notes: Written[]; skipped?: string; error?: string }
 
-/** The `## write` section of the vault skill: where the vault's write rules live. */
-const writeRules = (): string => /^## write\n[\s\S]*?(?=^## |(?![\s\S]))/m.exec(readFileSync(join(import.meta.dir, "../../../skills/vault/SKILL.md"), "utf8"))?.[0] ?? "";
-
-export function prompt(day: string, digest: string): string {
+function prompt(day: string, digest: string): string {
   return [
     `You are the memory maintainer. Below is the compile digest of ${day}: the day's turns, handoffs and daily note.`,
     "Write only what the day decided or learned that no existing note holds. Check with `aleph memory recall <query>` before you propose a note.",
@@ -61,11 +59,17 @@ export function prompt(day: string, digest: string): string {
     "Do not set `core`. Reply only with the JSON the schema asks for. Code writes each note from your fields; the vault refuses a note that breaks its rules.",
     "Each note gives `claim` as one or two sentences ending in `as of YYYY-MM-DD`, then `details`, `evidence` and `related` (titles of notes that exist).",
     "",
-    writeRules(),
+    skillPart("vault", "write"),
     "",
     digest,
   ].join("\n");
 }
+
+/** The text of the note body's Related section, the last section: the heading in any case, with or without a blank line after it (ui/api/memory.ts `withLink` writes none). */
+export const related = (text: string): string => {
+  const m = /^##\s+related\s*$/im.exec(text);
+  return m ? text.slice(m.index + m[0].length).trim() : "";
+};
 
 /** The note's body from its fields; `related` is the Related section's text. */
 export function body(n: Note, day: string, related: string): string {

@@ -9,7 +9,7 @@ import { latestJob } from "../../jobs/lib/records/job.ts";
 import { counting, allRuns } from "../../jobs/lib/records/record.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
-import { afterOf } from "../../lib/todo.ts";
+import { afterOf } from "../../lib/issue-file.ts";
 import { FULL, fullId } from "../../lib/naming.ts";
 import { aleph, fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";

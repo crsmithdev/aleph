@@ -14,10 +14,10 @@
  * A build or recheck whose failed check's tests all fail on main too waits while main is red, and is rechecked once when it turns green.
  */
 import { issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
-import { isVersion } from "../roles/issue-spec.ts";
+import * as issues from "../../../lib/issue-file.ts";
+import { isVersion } from "../../../lib/issue-spec.ts";
 import { close, reader, writeList } from "../../../lib/store.ts";
-import { partsOf, setPlan } from "../../../lib/todo.ts";
+import { partsOf, setPlan } from "../../../lib/issue-file.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STALL_MS } from "../gates/factory-status.ts";
 import { sandboxRepos } from "../gates/gpu.ts";

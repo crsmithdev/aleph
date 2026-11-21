@@ -3,10 +3,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { writeList } from "../../../lib/store.ts";
 import { ASK_REASONS, grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
-import { specVersion } from "./issue-spec.ts";
+import { specVersion } from "../../../lib/issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
 import { directorStep } from "../transitions/factory.ts";

@@ -88,7 +88,7 @@ export async function lock(name: string, waitMs = 20_000): Promise<(() => void) 
 }
 
 /** `lock` that blocks the thread while it waits. */
-export function lockSync(name: string, waitMs = 20_000): (() => void) | null {
+export function lockSync(name: string, waitMs: number): (() => void) | null {
   const it = tries(name, waitMs);
   for (let r = it.next(); ; r = it.next()) {
     if (r.done) return r.value;

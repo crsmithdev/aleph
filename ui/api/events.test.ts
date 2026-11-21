@@ -2,15 +2,15 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer, type TestServer } from "./server.testkit.ts";
-import { countsInFactory, countsInSkills } from "./updater.ts";
-import { pings } from "./api/events.ts";
-import { seed, reseed, type Seed } from "../jobs/job.testkit.ts";
-import { newItems, writeRepos } from "../tests/projects.testkit.ts";
-import { writeList } from "../lib/store.ts";
-import { add } from "../lib/todo.ts";
-import { git } from "../lib/git.ts";
-import { logEvent } from "../lib/layout.ts";
+import { withEnv, withServer, type TestServer } from "../server.testkit.ts";
+import { countsInFactory, countsInSkills } from "../updater.ts";
+import { pings } from "./events.ts";
+import { seed, reseed, type Seed } from "../../jobs/job.testkit.ts";
+import { newItems, writeRepos } from "../../tests/projects.testkit.ts";
+import { writeList } from "../../lib/store.ts";
+import { add } from "../../lib/issue-file.ts";
+import { git } from "../../lib/git.ts";
+import { logEvent } from "../../lib/layout.ts";
 
 let base: string, runs: string, factory: string, ref: string, main: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void, pingMs: number;
@@ -84,7 +84,7 @@ test("a run's write to its job row sends a change naming the kept key, and the r
 
 // AC1: the 3 s is the test's time limit, from the stream's first ping to the change.
 test("an event written by another process sends its change within 3 s", async () => {
-  const code = `import { logEvent } from "./lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
+  const code = `import { logEvent } from "../lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
   const text = await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); });
   expect(text).toMatch(/event: ev\ndata: .*"key":"issue:settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
 }, 3_000);

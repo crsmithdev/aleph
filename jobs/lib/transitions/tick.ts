@@ -18,7 +18,7 @@ import { alias } from "../roles/alias.ts";
 import { getJson, putJson, tx } from "../../../lib/db.ts";
 import { holdsWork } from "../infra/process.ts";
 import { fetchingOnce, reader, type Reader } from "../../../lib/store.ts";
-import { status } from "../../../lib/todo.ts";
+import { status } from "../../../lib/issue-file.ts";
 import { allIssueStates, answering, clearIssueState, getRun, keepingRuns, allRuns } from "../records/record.ts";
 import { ciRunning, ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";

@@ -5,7 +5,7 @@
  */
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 
-import { status, type Doc, areasOf } from "../../lib/todo.ts";
+import { status, type Doc, areasOf } from "../../lib/issue-file.ts";
 
 const CUT = 0.7;
 const MAX_QUESTIONS = 50;

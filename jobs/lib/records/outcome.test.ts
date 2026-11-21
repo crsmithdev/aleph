@@ -20,10 +20,11 @@ test("a run the API refused for credit has the credit cause it states", () => {
   expect(causeOf(run({ cause: "credit", reason: "API Error: 402 This request would exceed your available credits" }))).toBe("credit");
 });
 
-test("POLICY has one row per cause; only credit counts to no cap, has no rescue, holds its backend and waits", () => {
+test("POLICY has one row per cause; only credit counts to no cap, has no rescue, holds its backend and waits; credit and infra raise no size", () => {
   expect(Object.keys(POLICY).sort()).toEqual([...CAUSES].sort());
-  const plain = { countsToCap: true, rescuable: true, holdsBackend: false, waitMs: 0 };
-  for (const c of CAUSES) expect([c, POLICY[c]]).toEqual([c, c === "credit" ? { countsToCap: false, rescuable: false, holdsBackend: true, waitMs: 10 * 60_000 } : plain]);
+  const plain = { countsToCap: true, rescuable: true, holdsBackend: false, waitMs: 0, raisesSize: true };
+  const want = (c: string) => c === "credit" ? { countsToCap: false, rescuable: false, holdsBackend: true, waitMs: 10 * 60_000, raisesSize: false } : c === "infra" ? { ...plain, raisesSize: false } : plain;
+  for (const c of CAUSES) expect([c, POLICY[c]]).toEqual([c, want(c)]);
   expect(policyOf(undefined)).toBe(POLICY.other);
 });
 

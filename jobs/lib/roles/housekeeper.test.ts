@@ -3,7 +3,7 @@
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { itemsDir, readList, writeList } from "../../../lib/store.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";

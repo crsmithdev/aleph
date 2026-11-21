@@ -145,13 +145,13 @@
     {
       "name": "spec",
       "code": [
-        "jobs/lib/roles/issue-spec.ts"
+        "lib/issue-spec.ts"
       ],
       "notIn": [
         "**"
       ],
       "allow": [
-        "jobs/lib/roles/issue-spec.ts",
+        "lib/issue-spec.ts",
         "**/*.test.ts"
       ],
       "disable": [

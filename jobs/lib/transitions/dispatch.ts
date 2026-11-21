@@ -2,7 +2,7 @@
  * The dispatch: `aleph dispatch` starts every ready issue up to the live cap, or one issue now. See docs/factory.md.
  */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { buildableIssue, buildableIssues, reader } from "../../../lib/store.ts";
 import { askChris, plainAsk } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
@@ -21,10 +21,10 @@ import { holdIssue, recordHold } from "../gates/holds.ts";
 import { paused } from "../gates/pause.ts";
 import { sandboxRepos, logCap } from "../gates/gpu.ts";
 import { baselines } from "../gates/tables.ts";
-import { heldEvent, NO_COMMIT_LIMIT, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
+import { heldEvent, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
 import type { StartDecision } from "../gates/start-decision.ts";
 import { decider } from "../gates/decider.ts";
-import { issueLockWaitMs, rescueOn } from "../infra/settings.ts";
+import { issueLockWaitMs, NO_COMMIT_LIMIT, rescueOn } from "../infra/settings.ts";
 import { directIfNew, intakeQueued, starts, type Starts } from "./factory.ts";
 import { mainState } from "./baseline.ts";
 import { sweepRepo } from "./sweep.ts";

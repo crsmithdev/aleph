@@ -4,7 +4,7 @@
  */
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { readLists } from "../../lib/store.ts";
-import { status } from "../../lib/todo.ts";
+import { status } from "../../lib/issue-file.ts";
 import type { Routes } from "../server.ts";
 
 export const routes: Routes = {

@@ -14,8 +14,8 @@ import { fetchOrigin, fetchOriginAsync, followMain, git, readFiles, treeWithFile
 import { layout, logEvent } from "./layout.ts";
 import { next } from "./db.ts";
 import { CLOSED, issueKey, key as keyOf } from "./naming.ts";
-import * as issues from "./todo.ts";
-import { byPriority, closedWhy, isTracker, mediaOf, parentOf, parseItem, partsOf, planSet, renderItem, status, type Doc, type Issue } from "./todo.ts";
+import * as issues from "./issue-file.ts";
+import { byPriority, closedWhy, isTracker, mediaOf, parentOf, parseItem, partsOf, planSet, renderItem, status, type Doc, type Issue } from "./issue-file.ts";
 import { projectKey, projectName, readProjects, renderProject } from "./projects.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -99,8 +99,14 @@ function loadAll(dir: string, rev: string): Issue[] {
 /** The key of the project that holds the issue. */
 const projectOf = (item: Issue): string => String(item.fm.project);
 
+/** A projectName that reads the registry once per project key: projectName reads it on each call. */
+const namer = (): ((k: string) => string | undefined) => {
+  const names = new Map<string, string | undefined>();
+  return (k) => { if (!names.has(k)) names.set(k, projectName(k)); return names.get(k); };
+};
+
 /** The name of the project of each issue at `rev`, by issue number, with no fetch. */
-const projectsAt = (dir: string, rev: string): Map<number, string> => new Map(loadAll(dir, rev).flatMap((i) => { const name = projectName(projectOf(i)); return name ? [[i.id, name] as [number, string]] : []; }));
+const projectsAt = (dir: string, rev: string): Map<number, string> => { const nameOf = namer(); return new Map(loadAll(dir, rev).flatMap((i) => { const name = nameOf(projectOf(i)); return name ? [[i.id, name] as [number, string]] : []; })); };
 
 /** Whether the items repo has issue `n` on its origin/main as last fetched. */
 export const hasIssue = (n: number): boolean => loadAll(itemsDir(), `origin/${MAIN}`).some((i) => i.id === n);
@@ -140,9 +146,7 @@ export function readFetched(repo: Place, rev = `origin/${MAIN}`): Doc | null {
  * took about 1.2 s with its own fetch (12 projects, 1,489 issues, 2026-11-14).
  */
 export function everyFetched(): { repo: string; item: Issue }[] {
-  // projectName reads the registry on each call, so name each project once.
-  const names = new Map<string, string | undefined>();
-  const nameOf = (k: string) => { if (!names.has(k)) names.set(k, projectName(k)); return names.get(k); };
+  const nameOf = namer();
   return loadAll(itemsDir(), `origin/${MAIN}`).flatMap((item) => { const repo = nameOf(projectOf(item)); return repo ? [{ repo, item }] : []; });
 }
 
@@ -431,8 +435,8 @@ export function close(repo: Place, id: number | string, text: string, how: "done
   }
 }
 
-/** Item `id` reopened as one commit because its trailer commits on main are all reverted: `since` as `reopen` sets it, `text` as a note, and one `reopened` event as `by`. Returns why it could not, or null. */
-export function reopenReverted(repo: Place, id: number, text: string, since: string | null, by = "rule"): string | null {
+/** Item `id` reopened as one commit because its trailer commits on main are all reverted: `since` as `reopen` sets it, `text` as a note, and one `reopened` event by the rule. Returns why it could not, or null. */
+export function reopenReverted(repo: Place, id: number, text: string, since: string | null): string | null {
   try {
     const w = writeList(repo, `todo: item ${id} reopened: ${text}`, (doc) => {
       const item = issues.find(doc, id);
@@ -441,7 +445,7 @@ export function reopenReverted(repo: Place, id: number, text: string, since: str
       issues.note(item, text);
       return item;
     });
-    if (w) logEvent({ subject: by, action: "reopened", object: keyOf("issue", id), detail: text });
+    if (w) logEvent({ subject: "rule", action: "reopened", object: keyOf("issue", id), detail: text });
     return null;
   } catch (e) {
     return errText(e);

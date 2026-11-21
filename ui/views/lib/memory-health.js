@@ -1,14 +1,18 @@
 // The Health tab and the Needs-you strip of the Memory page. `m` is /api/memory with `processes` (/api/memory/processes)
 // and `rows` (/api/memory/log). Offered: the recall hook or `aleph memory recall` returned the note to an agent.
 // Offer dates start when the recall log does, so a note written before the first one may be unused or unrecorded.
+import { noteHref } from "../../../lib/naming.ts";
+import { quantile } from "../../../lib/windows.ts";
 import { count, day, localMs, pct, plural, when } from "./format.js";
 import { barList, barRow, card, dataTable, empty, esc, facts, heads, list, note, statCard, subHead, tag, tiles } from "./html.js";
 
 const DAY = 86_400_000;
-const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
-const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
+export const link = (title) => `<a href="${noteHref(title)}">${esc(title)}</a>`;
+export const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
 const age = (s, now = Date.now()) => Math.floor((now - localMs(String(s).slice(0, 10))) / DAY);
 const tab = (t) => `#/memory?tab=${t}`;
+/** Whether recall offered note `n` in the 7 days before `now`. */
+export const offered = (n, now = Date.now()) => !!n.read && now - localMs(n.read) <= 7 * DAY;
 /** The local day of a log row: a recall's `at` is a day, a write's an ISO time. */
 export const dayOf = (at) => (at.length === 10 ? at : new Date(at).toLocaleDateString("en-CA"));
 /** The local day `n` days before today. */
@@ -44,8 +48,6 @@ export function needs(m, now = Date.now()) {
   return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";
 }
 
-/** The value at quantile `q` of `xs`, sorted. */
-const quantile = (xs, q) => xs[Math.min(xs.length - 1, Math.floor(q * xs.length))];
 
 function offerCard(ms, rows) {
   if (!ms) return card("Offer Quality", empty());
@@ -66,7 +68,7 @@ const emptyCard = (ms) => card("Empty Recalls", ms?.missed.length
 /** The notes by when recall last offered them, and the never-offered ones, oldest written first. */
 function notOffered(notes, now = Date.now()) {
   if (!notes.length) return card("Not Offered in 7 Days", empty());
-  const week = notes.filter((n) => n.read && now - localMs(n.read) <= 7 * DAY).length, never = notes.filter((n) => !n.read);
+  const week = notes.filter((n) => offered(n, now)).length, never = notes.filter((n) => !n.read);
   const first = notes.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
   const bars = barList([["Offered, 7 days", week], ["Earlier", notes.length - week - never.length], ["Never", never.length]].map(([k, v]) => barRow(esc(k), (v / notes.length) * 100, count(v))).join(""));
   const oldest = [...never].sort((a, b) => a.updated.localeCompare(b.updated)), top = oldest.slice(0, 8);
@@ -117,10 +119,10 @@ function lintCard(lint, stale) {
 /** The Health tab's body: tiles, then offers, then the start context and lint. */
 export function renderHealth(m, now = Date.now()) {
   const notes = m.notes ?? [], ms = m.misses, rows = m.rows ?? [], lint = m.lint ?? { refuse: [], warn: [] };
-  const offered = notes.filter((n) => n.read && now - localMs(n.read) <= 7 * DAY).length, never = notes.filter((n) => !n.read).length;
+  const used = notes.filter((n) => offered(n, now)).length, never = notes.filter((n) => !n.read).length;
   const s = m.start?.aleph, w = writeWeeks(rows, now);
   const tileRow = tiles("Health", [
-    statCard({ k: "Offered, 7 days", v: count(offered), v2: count(notes.length), q: ["offered", "notes"] }),
+    statCard({ k: "Offered, 7 days", v: count(used), v2: count(notes.length), q: ["offered", "notes"] }),
     statCard({ k: "Never offered", v: count(never) }),
     statCard({ k: "Unoffered reads", v: count(ms?.unoffered_reads), note: "7 days" }),
     statCard({ k: "Start context", v: count(s?.cut), v2: count(s?.core.length), q: ["cut", "core lines"] }),

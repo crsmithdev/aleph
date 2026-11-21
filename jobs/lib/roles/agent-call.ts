@@ -144,6 +144,9 @@ function costOf(model: string | undefined, o: Outcome): number | undefined {
  * Call `role` with `prompt` on stdin. A call that the API refused for credit holds its model's backend.
  * A call that exited 0 with no `result` event, as a test's fake prints, has its stdout as its text.
  */
+/** `env` with no API key and no nested-session flag, so the call bills the subscription. */
+export const subscriptionEnv = (env: Record<string, string | undefined> = process.env): Record<string, string | undefined> => ({ ...env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined });
+
 export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promise<Reply> {
   const gpu = onGpu(o.model) && o.slot !== false;
   const release = gpu ? await gpuSlot(o.limit * 1000) : null;
@@ -153,7 +156,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
   // A run whose --allowedTools names Bash prefixes may run only those: hooks/bash-allow.ts reads them, since a user setting that allows plain Bash would let the rest through.
   const at = o.flags.indexOf("--allowedTools");
   const list = at < 0 ? [] : o.flags[at + 1]?.split(",").flatMap((t) => t.match(/^Bash\((.+):\*\)$/)?.[1] ?? []);
-  const env = { ...(o.env ?? { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }), ...modelEnv(model), ALEPH_BASH_ALLOW: list.length ? JSON.stringify(list) : undefined };
+  const env = { ...(o.env ?? subscriptionEnv()), ...modelEnv(model), ALEPH_BASH_ALLOW: list.length ? JSON.stringify(list) : undefined };
   const seen = statSync(o.stdout, { throwIfNoEntry: false })?.size ?? 0;
   let step: Step;
   try {
@@ -179,7 +182,7 @@ export function chatCommand(session: string, fresh: boolean, system: string): { 
     "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     "--append-system-prompt", system, fresh ? "--session-id" : "--resume", session,
   ], true);
-  const env = { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(OPUS_MODEL) };
+  const env = { ...subscriptionEnv(), ...modelEnv(OPUS_MODEL) };
   return { argv, env };
 }
 

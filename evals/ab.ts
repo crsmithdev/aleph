@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { parseArgs } from "node:util";
 import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import { postScore } from "../lib/otlp.ts";
+import { subscriptionEnv } from "../jobs/lib/roles/agent-call.ts";
 
 interface Variant { name: string; dir: string }
 export interface Case { prompt: string; cwd: string }
@@ -57,7 +58,7 @@ export function unblind(answer: { scores: { label: string; scores: Record<string
 /** One `claude -p --output-format json` call: its parsed result event. */
 async function claude(cmd: string, flags: string[], prompt: string, cwd: string): Promise<any> {
   const p = Bun.spawn([cmd, "-p", "--output-format", "json", ...flags], {
-    cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Response(prompt), stdout: "pipe", stderr: "pipe",
+    cwd, env: subscriptionEnv(), stdin: new Response(prompt), stdout: "pipe", stderr: "pipe",
   });
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   if (code !== 0) throw new Error(`${cmd} exited ${code}: ${err.slice(0, 300)}`);

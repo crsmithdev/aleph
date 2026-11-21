@@ -6,7 +6,7 @@ import { readJsonOr } from "../lib/json.ts";
 import { logOnce } from "./state.ts";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { clip, issueHref } from "../lib/naming.ts";
+import { clip, issueHref, MEMORY_TYPES, noteHref, sessionHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { claimLine, recall } from "../vault/lib/index.ts";
 import { dailyNotes, readMemoryMd, scopeOf, type Note } from "../vault/lib/vault.ts";
@@ -14,8 +14,8 @@ import { skillsDir } from "../jobs/lib/infra/settings.ts";
 import { claudeSettings } from "../lib/session-context.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { readLists } from "../lib/store.ts";
-import { afterOf, priorityOf } from "../lib/todo.ts";
-import * as todos from "../lib/todo.ts";
+import { afterOf, priorityOf } from "../lib/issue-file.ts";
+import * as todos from "../lib/issue-file.ts";
 import { activity } from "./activity.ts";
 import { langfuse } from "../lib/langfuse.ts";
 import { sessionRows, windowTraces } from "./api/sessions.ts";
@@ -24,8 +24,8 @@ import { handoffs, intent, type Handoff } from "../lib/handoffs.ts";
 import { memoryIn } from "./api/scope.ts";
 import { errText } from "../lib/errtext.ts";
 
-const TYPES = ["semantic", "procedural", "episodic", "working", "prospective"] as const;
-type Type = (typeof TYPES)[number];
+const TYPES = MEMORY_TYPES.map((t) => t.id);
+type Type = (typeof MEMORY_TYPES)[number]["id"];
 
 /** One memory. `body` is the text a search matches; the page gets `text`, a line of it. */
 export type Item = {
@@ -94,7 +94,7 @@ function semantic(root: string, wiki: Note[], log: Record<string, string>): Item
     const scope = scopeOf(n), core = typeof n.fm.core === "string" ? n.fm.core : undefined;
     return {
       type: "semantic", source: "note", key: n.title, title: n.title, text: clip(claimLine(n).replace(/^\*\*Claim\.\*\*\s*/, ""), 240), scope,
-      at: String(n.fm.updated ?? ""), read: log[n.title] ?? null, core, kind: String(n.fm.kind ?? ""), body: n.body, href: `#/memory/${encodeURIComponent(n.title)}`,
+      at: String(n.fm.updated ?? ""), read: log[n.title] ?? null, core, kind: String(n.fm.kind ?? ""), body: n.body, href: noteHref(n.title),
       effect: core ? `Its core line is in the start context of every ${scope} session.` : "Reaches a session when vault recall or the vault-recall hook returns it.",
     };
   });
@@ -159,7 +159,7 @@ async function episodic(root: string): Promise<Item[]> {
   }
   for (const s of (await sessions()) ?? []) {
     out.push({ type: "episodic", source: "session", key: s.id, title: `session ${s.id.slice(0, 8)}`, text: s.firstPrompt, scope: s.project, at: s.last, read: null, body: s.firstPrompt,
-      href: `#/sessions/${encodeURIComponent(s.id)}`, effect: `A Langfuse trace of ${s.turns} turns; retro reads it.` });
+      href: sessionHref(s.id), effect: `A Langfuse trace of ${s.turns} turns; retro reads it.` });
   }
   return out;
 }

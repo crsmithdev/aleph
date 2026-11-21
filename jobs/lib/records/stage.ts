@@ -11,7 +11,7 @@ import { isWaiting, type Run, type State, isOpen } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { counting } from "./record.ts";
 import { eventsOf } from "../../../lib/layout.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { issueKey, parseKey, say, sayText, type StageName } from "../../../lib/naming.ts";
 
 

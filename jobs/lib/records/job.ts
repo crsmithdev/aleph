@@ -31,8 +31,6 @@ export const jobsNamed = (name: string, repo?: string | null, jobs = allJobs()):
 /** The open job called `name`, else the newest. */
 export const findJob = (name: string, repo?: string | null, jobs = allJobs()): Job | undefined => openJob(name, repo, jobs) ?? latestJob(name, repo, jobs);
 
-/** The last job of the work that is not a reviewer's: the job its state and its folder are about. */
-export const lastRun = (j: Job): Entry => j.findLast((e) => e.run.role !== "review")!;
 
 /** The repo issue the job works on: the latest run that names one. */
 export const issue = (j: Job): number | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);

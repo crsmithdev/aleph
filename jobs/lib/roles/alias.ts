@@ -101,7 +101,7 @@ export async function findMisses(root: string, notes: Note[], now: number): Prom
   return fresh.filter((m, i) => !ranked[i].slice(0, DEPTH[m.source]).some((r) => r.note.rel === m.note.rel));
 }
 
-export function prompt(misses: Miss[], day: string): string {
+function prompt(misses: Miss[], day: string): string {
   return [
     `You are the memory maintainer. Today is ${day}. Each miss below is a query that did not find a note, and the same turn then read that note.`,
     "An alias is a short name a reader would search for: 1 to 6 words, a term or a phrase from the query, not the query itself. The vault matches a query against titles and aliases, so a good alias makes the next such query find the note.",

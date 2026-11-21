@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from "b
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "./todo.ts";
+import * as issues from "./issue-file.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as store from "./store.ts";
 import * as verbs from "../issues/lib/issues.ts";

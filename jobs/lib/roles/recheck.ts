@@ -12,7 +12,7 @@ import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { fileIssue, writeList } from "../../../lib/store.ts";
-import { find, note, parseIssueRef, setStatus } from "../../../lib/todo.ts";
+import { find, note, parseIssueRef, setStatus } from "../../../lib/issue-file.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
@@ -21,7 +21,7 @@ import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { answering } from "../records/record.ts";
-import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
+import { body, pass, reason, related, scratch, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
@@ -54,7 +54,7 @@ type Verdict = { title: string; verdict: string; why: string; claim?: string; de
 interface Rechecked { title: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
 interface RecheckReport { day: string; dry: boolean; run?: string; notes: Rechecked[]; skipped?: string; error?: string }
 
-export function prompt(notes: Note[], day: string): string {
+function prompt(notes: Note[], day: string): string {
   const repos = Object.values(loadRegistry()).map((r) => `- ${r.key}: ${r.path}`).join("\n");
   return [
     `You are the memory maintainer. Today is ${day}. Each note below passed its decay window, so its claim needs a re-check.`,
@@ -76,8 +76,7 @@ export function prompt(notes: Note[], day: string): string {
 function text(n: Note, v: Verdict, day: string): string | null {
   if (v.verdict === "refresh") return serializeFrontmatter({ ...n.fm, updated: day }) + n.body;
   if (!v.claim || !v.details || !v.evidence) return null;
-  const related = /^## Related\n\n([\s\S]*)$/m.exec(n.body)?.[1].trim() || "";
-  return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related);
+  return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related(n.body));
 }
 
 type Held = Verdict & { day: string; issue: string };

@@ -16,3 +16,7 @@ export function skillSection(name: string, title: string): string {
   const body = splitFrontmatter(readFileSync(join(dir, "SKILL.md"), "utf8")).body.trim().replace(/\]\((\.\.?\/[^)]+)\)/g, (_, rel) => `](${join(dir, rel)})`);
   return `## ${title}\n\n${body}`;
 }
+
+/** The `## <heading>` section of `skills/<name>/SKILL.md`, up to the next `## ` heading; empty when it has none. */
+export const skillPart = (name: string, heading: string): string =>
+  new RegExp(`^## ${heading}\\n[\\s\\S]*?(?=^## |(?![\\s\\S]))`, "m").exec(readFileSync(join(import.meta.dir, "..", "..", "..", "skills", name, "SKILL.md"), "utf8"))?.[0] ?? "";

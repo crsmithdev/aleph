@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { triage } from "./triage.ts";
-import * as issues from "../../lib/todo.ts";
+import * as issues from "../../lib/issue-file.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;

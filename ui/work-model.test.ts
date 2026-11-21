@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../lib/store.ts";
-import { add, setStatus } from "../lib/todo.ts";
+import { add, setStatus } from "../lib/issue-file.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { logEvent } from "../lib/layout.ts";

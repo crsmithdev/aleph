@@ -5,7 +5,7 @@
  * factory-status.ts. Its state lives in ~/.aleph/factory. See docs/factory.md.
  */
 import { issueKey } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { reader, type Reader } from "../../../lib/store.ts";
 import { git } from "../../../lib/git.ts";
 import { askOfItem } from "../asks/ask.ts";

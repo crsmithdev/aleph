@@ -2,8 +2,8 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { routes } from "./api/hooks.ts";
-import { withEnv } from "./server.testkit.ts";
+import { routes } from "./hooks.ts";
+import { withEnv } from "../server.testkit.ts";
 
 // The Hooks page's routes on fixture transcripts, with the clock fixed so the 7-day window is known.
 const NOW = new Date("2026-11-19T12:00:00Z"), HOUR_AGO = "2026-11-19T11:00:00.000Z", DAYS_AGO = "2026-11-16T12:00:00.000Z", OLD = "2026-11-10T12:00:00.000Z";

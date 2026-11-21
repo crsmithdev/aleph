@@ -7,7 +7,7 @@ import { join } from "node:path";
 import * as record from "../records/record.ts";
 import type { Entry } from "../records/ledger.ts";
 import { seed } from "../../job.testkit.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { readList } from "../../../lib/store.ts";
 import { takeOnTimeout } from "../transitions/tick.ts";
 import { ctx, mk, newIssue, setup, teardown } from "../transitions/factory.testkit.ts";

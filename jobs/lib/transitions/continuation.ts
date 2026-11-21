@@ -14,11 +14,14 @@ import { git } from "../../../lib/git.ts";
 import { jobsNamed, notes, readFile, type Job } from "../records/job.ts";
 import { jobOfRun } from "../records/record.ts";
 import { runsBunTest } from "../gates/checks.ts";
-import { isAgentRun, isBuild, lastTagged, onOf, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
+import { isAgentRun, isBuild, onOf, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
 import { jobOfFolder, jobSpec, readSection } from "../records/run-files.ts";
 import { eventsOf, logEvent } from "../../../lib/layout.ts";
+
+/** One sentence for prompts that says how a tag line such as `QUESTION:` is read: questionOf reads it this way. */
+const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such as `<TAG>: <value>`; leading spaces, backticks and `*` before the tag and trailing backticks and `*` after the value are ignored, and a lowercase tag is not read.";
 
 // The worker brief
 
@@ -96,7 +99,7 @@ export function brief(id: string, run: Run, repo: Repo): string {
   }
   if (run.resumed) return notes(jobOfRun(run.job)).at(-1)!.text.trim() + "\n";
   const spec = jobSpec(run);
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${spec}`];
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks) : FIXED(run)), `## Spec\n\n${spec}`];
   const n = onOf(run);
   const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
   if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);
@@ -278,7 +281,9 @@ export function repeatedFailure(folder: string, check: string, earlier: { id: st
 }
 
 /** The worker's question: the text of its last `QUESTION:` line, or undefined when it has none. */
-export const questionOf = (result: string): string | undefined => lastTagged(result, "QUESTION");
+export const questionOf = (result: string): string | undefined =>
+  result.split("\n").map((l) => /^\s*[`*]*QUESTION:(.*)$/.exec(l)?.[1].replace(/^[`*]+(?=\s)/, "").replace(/[`*\s]+$/, "").trim())
+    .filter((v) => v !== undefined).at(-1);
 
 // The rescue of a returned or failed run: which case it is, and the step
 

@@ -3,12 +3,13 @@
 // agent, when it was written and offered, its links, and the writes it takes. Health and Log: memory-health.js and
 // renderLog(). The Needs-you strip heads every tab.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
+import { MEMORY_TYPES as TYPES } from "../../lib/naming.ts";
 import { get, redraw } from "./lib/router.js";
-import { daysBack, dayOf, isEpisode, needs, renderHealth, writeWeeks } from "./lib/memory-health.js";
+import { daysBack, dayOf, isEpisode, link, needs, offered, renderHealth, shortDay, writeWeeks } from "./lib/memory-health.js";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel } from "./lib/timeline.js";
 import { goQuery, hashQuery, postJson, setQuery, scope } from "./lib/address.js";
-import { count, day, localMs, when } from "./lib/format.js";
+import { count, localMs, when } from "./lib/format.js";
 import { actButton, badge, chip, fold, list as stack, linkButton, codeText, facts, field, inputBox, note, setting, form, meta, heads, pagedTable, priorityBadge, card, crumb, empty, error, esc, filterBar, arm, loadingLine, md, miss, pageHead, pager, say, searchBox, subHead } from "./lib/html.js";
 
 export const view = {
@@ -27,20 +28,10 @@ export const view = {
 };
 const TABS = ["health", "log"];
 
-const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
 const q = (s) => `<span class="quiet">${s}</span>`;
 const DAY = 86_400_000, STEP = 50;
-const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
 const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
 
-/** The types aleph stores, in the page's order: what each holds. */
-export const TYPES = [
-  { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },
-  { id: "procedural", name: "Procedural", holds: "rules, skills, hooks" },
-  { id: "episodic", name: "Episodic", holds: "daily log, sessions" },
-  { id: "working", name: "Working", holds: "handoffs" },
-  { id: "prospective", name: "Prospective", holds: "issues with an after" },
-];
 const typeName = (id) => TYPES.find((t) => t.id === id)?.name ?? id;
 const dot = (type) => `<i class="mdot t-${esc(type)}" aria-hidden="true"></i>`;
 
@@ -49,7 +40,7 @@ const STATUS = { use: "in use", stale: "stale", never: "never offered", lint: "l
 export function noteStatus(n, now = Date.now()) {
   if (n.problems?.length) return "lint";
   if (!n.read) return "never";
-  return now - localMs(n.read) <= 7 * DAY ? "use" : "stale";
+  return offered(n, now) ? "use" : "stale";
 }
 /** The note rows of the overview with their status. */
 export const noteRows = (m, now = Date.now()) => (m.notes ?? []).map((n) => ({ ...n, status: noteStatus(n, now) }));

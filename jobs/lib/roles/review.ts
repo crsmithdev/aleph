@@ -14,7 +14,7 @@ import type { Run } from "../records/ledger.ts";
 import { jobOfFolder, jobSpec, runFile } from "../records/run-files.ts";
 import { readModels } from "../routing/models.ts";
 import { agentEnv, openRun } from "./agent-run.ts";
-import { outsideSurface } from "./issue-spec.ts";
+import { outsideSurface } from "../../../lib/issue-spec.ts";
 
 /**
  * The range the reviewer reads: from the merge base to the tip; for a merge run, the newest merge commit

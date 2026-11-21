@@ -3,7 +3,7 @@
  * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
  */
 import { readFetched, readList } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { parseId, parseKey, tail } from "../../../lib/naming.ts";
 import { fetchOrigin, git } from "../../../lib/git.ts";

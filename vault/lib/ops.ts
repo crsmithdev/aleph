@@ -32,7 +32,7 @@ export interface Committed { commit: string | null }
 
 /** Thrown inside an op to end it; `op` turns it into a `Refused`. */
 class Stop extends Error { constructor(readonly findings: Finding[], readonly hint?: string, readonly error?: string) { super("refused"); } }
-export function fail(error: string): never { throw new Stop([], undefined, error); }
+function fail(error: string): never { throw new Stop([], undefined, error); }
 function refuse(findings: Finding[], hint?: string): never { throw new Stop(findings, hint); }
 
 /** Run `body` as one op: its value, or the refusal it ended with. `w` collects the warnings, whichever way it ends. */

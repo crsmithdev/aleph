@@ -22,7 +22,7 @@ import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { factsOf, parseKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../lib/store.ts";
-import { noteOf } from "../../lib/todo.ts";
+import { noteOf } from "../../lib/issue-file.ts";
 import { NOTE } from "../../jobs/lib/roles/recheck.ts";
 import { intervalOf, setTimerInterval, TIMERS } from "../../jobs/lib/infra/systemd.ts";
 
@@ -148,7 +148,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
 const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo, state: b.ok ? "green" : "red", line: b.ok ? `${b.repo} ${b.commit.slice(0, 7)}` : `${b.repo} ${redLine(b)}` }));
 
 /** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
-export function repoHeld(): { repo: string; held: string[] }[] {
+function repoHeld(): { repo: string; held: string[] }[] {
   return sandboxRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
 }
 
@@ -160,7 +160,7 @@ export function repoHeld(): { repo: string; held: string[] }[] {
 /** The settings the Controls panel edits besides the two caps, as the factory reads them now. */
 const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds(), fixRounds: fixRounds(), landBatch: landBatch(), loadLimit: loadLimit() });
 
-export function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
+function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   const rows = tickRows(), missed = tickMissed();
   const times = ["ci", "firefight"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));

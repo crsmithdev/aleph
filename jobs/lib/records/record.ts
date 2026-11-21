@@ -39,13 +39,8 @@ type Change = Partial<Omit<Run, "state" | "job">>;
 // The fields of a run that are columns; every other field of a run is in `extra`. The project column holds the run's repo key.
 const COLUMNS = new Set(["id", "role", "state", "started", "ended", "model", "size", "cost", "commit", "target", "prev", "retryOf", "repo", "made", "by", "job", "ask"]);
 
-const projectOf = (repo: string | undefined): string | null => repo ?? null;
-const repoOf = (project: string | null): string | undefined => project ?? undefined;
-
 /** The rows' order: the job number, so job.10 comes after job.9. */
 const ORDER = "ORDER BY CAST(substr(id, 5) AS INTEGER)";
-
-// Reading.
 
 /** The first job of the `prev` chain of each row of `rows` (which are in number order, a job after its `prev`). */
 function rootsOf(rows: Row[]): Map<string, string> {
@@ -56,7 +51,7 @@ function rootsOf(rows: Row[]): Map<string, string> {
 
 function fromRow(r: Row, root: string, ask: Ask | undefined): RunRecord {
   const run: Record<string, unknown> = { ...JSON.parse(r.extra ?? "{}"), id: r.id, job: root, role: r.role, by: r.by, state: r.state, made: r.made, started: r.started };
-  const col = { ended: r.ended, model: r.model, size: r.size, cost: r.cost, commit: r.commit_sha, target: r.target, prev: r.prev, retryOf: r.retry_of, repo: repoOf(r.project) };
+  const col = { ended: r.ended, model: r.model, size: r.size, cost: r.cost, commit: r.commit_sha, target: r.target, prev: r.prev, retryOf: r.retry_of, repo: r.project };
   for (const [k, v] of Object.entries(col)) if (v !== null && v !== undefined) run[k] = v;
   if (ask) run.ask = ask;
   return run as unknown as RunRecord;
@@ -65,7 +60,7 @@ function fromRow(r: Row, root: string, ask: Ask | undefined): RunRecord {
 function toRow(id: string, run: Partial<Run>): Omit<Row, "pid" | "exit_code" | "was"> {
   const extra = Object.fromEntries(Object.entries(run).filter(([k, v]) => !COLUMNS.has(k) && v !== undefined));
   return {
-    id, role: run.role!, by: run.by ?? "rule", state: run.state!, project: projectOf(run.repo), made: run.made!, started: run.started!, ended: run.ended ?? null,
+    id, role: run.role!, by: run.by ?? "rule", state: run.state!, project: run.repo ?? null, made: run.made!, started: run.started!, ended: run.ended ?? null,
     model: run.model ?? null, size: run.size ?? null, cost: run.cost ?? null, commit_sha: run.commit ?? null, target: run.target ?? null, prev: run.prev ?? null,
     retry_of: run.retryOf ?? null, extra: Object.keys(extra).length ? JSON.stringify(extra) : null,
   };
@@ -170,8 +165,6 @@ export function roundsOf(target: string): number {
 /** The sum of the costs of the jobs on `target`, in dollars at API rates. */
 export const costOf = (target: string): number =>
   Math.round((conn().query("SELECT coalesce(sum(cost), 0) AS c FROM jobs WHERE target = ?").get(target) as { c: number }).c * 1e6) / 1e6;
-
-// Writing a job.
 
 /** The fields of a new job: `role` and `name`; the rest has defaults. `state` starts at `running`. */
 export type NewJob = Change & Pick<Run, "role" | "name"> & { state?: State };
@@ -295,8 +288,6 @@ export function endRun(id: string, change: Partial<Run> & { state: State }, deci
 export const decisions = <T>(): T[] =>
   (conn().query(`SELECT json_extract(extra, '$.decision') AS d FROM jobs WHERE role = 'director' AND json_extract(extra, '$.decision') IS NOT NULL ${ORDER}`).all() as { d: string }[]).map((r) => JSON.parse(r.d));
 
-// What the issue and its jobs share.
-
 /** The live machine state of one issue: its Ask and its CI result. */
 interface IssueState {
   /** What the issue or its run waits on from Chris, or null. */
@@ -377,8 +368,6 @@ export function answering<T>(key: string, by: Answer, fn: () => T): T {
 /** Delete the row of `key` when its issue closes: the Ask (the run's too) and the CI result. */
 export const clearIssueState = (key: string): void =>
   editIssueState(key, (s) => { s.ask = null; s.askJob = undefined; s.ci = undefined; }, deciding?.key === key ? deciding.by : undefined);
-
-// The next step.
 
 /** What the work does next: a function of its runs and its issue's state only. The fields are the event fields of docs/naming.md. */
 export interface Step {

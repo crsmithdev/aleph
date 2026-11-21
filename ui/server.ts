@@ -163,7 +163,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
     },
   });
   // The weekly plan usage is polled every 10 minutes while the server runs; each snapshot changes the usage fit.
-  if (warm) startPoller(undefined, () => updater.changed("usage"));
+  if (warm) startPoller(() => updater.changed("usage"));
   stopUpdater();
   startUpdater({ restore: warm });
   return server;

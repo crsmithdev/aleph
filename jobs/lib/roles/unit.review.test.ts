@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { Runner } from "../gates/checks.ts";
 import { nextBrief } from "../transitions/continuation.ts";
 import { git } from "../../../lib/git.ts";
-import { outsideSurface } from "./issue-spec.ts";
+import { outsideSurface } from "../../../lib/issue-spec.ts";
 import { type Repo, type Run } from "../records/ledger.ts";
 import { getRun } from "../records/record.ts";
 import { logTo, readSection, runFile } from "../records/run-files.ts";

@@ -19,7 +19,7 @@ import { withProjects } from "./api/scope.ts";
 import type { Context as HeraldContext } from "./herald.ts";
 import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
-import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/todo.ts";
+import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/issue-file.ts";
 import { summary, type Wk } from "./usage.ts";
 import { awaiting, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
@@ -31,7 +31,7 @@ import { errText } from "../lib/errtext.ts";
 const logged = new Set<string>();
 
 /** Logs a failed UI read once per process and message: the write touches the events source, so a build that logs each time would rebuild and log again. */
-export function logOnce(subject: string, e: any) {
+export function logOnce(subject: string, e: unknown) {
   const note = errText(e), key = `${subject} ${note}`;
   if (logged.has(key)) return;
   logged.add(key);

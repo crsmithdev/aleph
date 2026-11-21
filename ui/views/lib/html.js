@@ -3,7 +3,7 @@
 
 import { hashQuery, issueApi, keep, kept, setQuery } from "./address.js";
 import { count, money, pct, wkText } from "./format.js";
-import { PRIORITIES, shortId, shortText } from "../../../lib/naming.ts";
+import { noteHref, PRIORITIES, priorityRank, shortId, shortText } from "../../../lib/naming.ts";
 
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -47,7 +47,7 @@ function inline(text) {
       out += emph(esc(p.slice(last, m.index)));
       // [[Title]] or [[Title|label]] links to the vault note's page.
       out += m[1] !== undefined
-        ? `<a href="#/memory/${encodeURIComponent(m[1].trim())}">${esc((m[2] || m[1]).trim())}</a>`
+        ? `<a href="${noteHref(m[1].trim())}">${esc((m[2] || m[1]).trim())}</a>`
         : `<a href="${esc(safeHref(m[4]))}">${emph(esc(m[3]))}</a>`;
       last = m.index + m[0].length;
     }
@@ -244,7 +244,7 @@ export const badge = (state) => tag(state, tone(state));
 /** A priority as a badge: critical is the alert tone, high the warning tone, medium and low quiet. Missing or unknown reads medium. */
 const PRIORITY_TONES = ["quiet", "quiet", "need", "error"];
 export function priorityBadge(p) {
-  const j = PRIORITIES.indexOf(p), i = j < 0 ? PRIORITIES.indexOf("medium") : j;
+  const i = priorityRank(p);
   return tag(PRIORITIES[i], PRIORITY_TONES[i], PRIORITIES[i]);
 }
 /** The status row of a detail page around its built parts: the state, the priority, then the labels. */

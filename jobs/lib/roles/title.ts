@@ -20,6 +20,3 @@ export function cutTitle(source: string, max = TITLE): string {
 
 /** `group` and `cutTitle(rest)` in the room `group` leaves. */
 export const fit = async (group: string, rest: string): Promise<string> => group + cutTitle(rest, TITLE - group.length);
-
-/** `cutTitle(source)`. */
-export const writeTitle = (source: string): Promise<string> => fit("", source);

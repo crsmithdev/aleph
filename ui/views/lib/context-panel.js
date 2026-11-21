@@ -118,7 +118,7 @@ function parts(r, s) {
 /** The session the tab loaded last, through keep(): `{ n, session }`, with `n` the request of the query it was loaded for. */
 const KEPT = "session.context";
 /** The kept session when it is `id` and the query names the same request, else null: a redraw then needs no load. */
-export function held(id, query) {
+function held(id, query) {
   const k = kept(KEPT, null);
   return k && k.session?.id === id && k.n === (query.get("n") ?? "") ? k.session : null;
 }

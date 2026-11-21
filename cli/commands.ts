@@ -14,13 +14,14 @@ import { uiPort, workerCmd } from "../jobs/lib/infra/settings.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
 import { isLive } from "../jobs/lib/infra/process.ts";
 import { findJob, issue as issueOf, issueTitle, readFile, stateOf, view, type Job } from "../jobs/lib/records/job.ts";
-import { counting, patchRun, setState, allRuns } from "../jobs/lib/records/record.ts";
+import { counting, keepingRuns, patchRun, setState, allRuns } from "../jobs/lib/records/record.ts";
+import { fetchingOnce } from "../lib/store.ts";
 import { unit } from "../jobs/lib/roles/unit.ts";
 import { onMain } from "../jobs/lib/records/status.ts";
 import { settleOnMain } from "../jobs/lib/land/landing.ts";
 import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
-import * as issues from "../lib/todo.ts";
+import * as issues from "../lib/issue-file.ts";
 import { yesterday } from "../lib/day.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import { addDevice, devices, dropDevice } from "../ui/pair.ts";
@@ -265,8 +266,10 @@ async function intakeCmd(ctx: Ctx): Promise<void> {
 
 /** `aleph dispatch`: start every ready issue up to the live cap. A run's end and `aleph issue` call it. With an issue key it starts that one issue now (Run now), or refuses with the text of the gate. */
 async function dispatchCmd(ctx: Ctx): Promise<void> {
-  if (!ctx.rest[0]) return ctx.out(await runDispatch());
-  const d = await runNow(ctx.rest[0]);
+  // One pass reads the jobs table and fetches the items store once, as the tick does: each read in it would do both again.
+  const pass = <T>(fn: () => Promise<T>) => keepingRuns(() => fetchingOnce(fn));
+  if (!ctx.rest[0]) return ctx.out(await pass(() => runDispatch()));
+  const d = await pass(() => runNow(ctx.rest[0]));
   if (d.refused) refuse(d.refused);
   ctx.out(d);
 }

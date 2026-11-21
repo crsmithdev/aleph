@@ -3,7 +3,7 @@
  * Roles and lands that file issues take them from here, not from the orchestrator (factory.ts).
  */
 import { logEvent } from "../../../lib/layout.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { buildableIssue, reader, type Effects, type Place } from "../../../lib/store.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { decider } from "../gates/decider.ts";

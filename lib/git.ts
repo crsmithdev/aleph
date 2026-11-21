@@ -16,7 +16,7 @@ const baseEnv = (): Record<string, string | undefined> => {
 };
 
 /** `Bun.spawnSync` for git. A spawn that throws is rethrown with the original as `cause` and a one-line message that says where and with which PATH it ran. */
-export function spawnGit(cmd: string[], opts: { cwd?: string; env?: Record<string, string | undefined>; stdin?: "ignore" | Blob; stdout: "pipe"; stderr: "pipe" | "ignore" }): { exitCode: number | null; stdout: Buffer; stderr: Buffer } {
+function spawnGit(cmd: string[], opts: { cwd?: string; env?: Record<string, string | undefined>; stdin?: "ignore" | Blob; stdout: "pipe"; stderr: "pipe" | "ignore" }): { exitCode: number | null; stdout: Buffer; stderr: Buffer } {
   try {
     return Bun.spawnSync(cmd, opts) as { exitCode: number | null; stdout: Buffer; stderr: Buffer };
   } catch (e) {

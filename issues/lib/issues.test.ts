@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../lib/todo.ts";
+import * as issues from "../../lib/issue-file.ts";
 import * as store from "../../lib/store.ts";
 import * as issueOps from "./issues.ts";
 import { Refusal } from "../../lib/refusal.ts";

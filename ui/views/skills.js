@@ -1,5 +1,6 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
 // The list of skills is in sessions.js.
+import { sessionHref } from "../../lib/naming.ts";
 import { redraw } from "./lib/router.js";
 import { setQuery } from "./lib/address.js";
 import { count, when } from "./lib/format.js";
@@ -7,7 +8,6 @@ import { chips, codeText, crumb, dataTable, esc, heads, idLink, notice, pageHead
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, renderKpis } from "./lib/timeline.js";
 
-const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
 
 /** The key of the uses panel: its frame, its kept form and its kept hidden series are the skill's own. */
 export const chartKey = (name) => `skills/${name}`;

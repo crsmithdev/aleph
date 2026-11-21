@@ -10,7 +10,7 @@ import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { archive, outcome, write } from "../../../vault/lib/ops.ts";
 import { listOf, lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
-import { body, pass, reason, scratch, TEXT } from "./maintainer.ts";
+import { body, pass, reason, related, scratch, TEXT } from "./maintainer.ts";
 
 /** Pairs worked per run, most similar first. */
 export const PAIRS = 5;
@@ -38,7 +38,7 @@ type Pair = [Note, Note];
 interface Resolved { a: string; b: string; verdict: string; why: string; commit?: string | null; rule?: string; refused?: string }
 interface DedupeReport { day: string; dry: boolean; run?: string; pairs: Resolved[]; skipped?: string; error?: string }
 
-export function prompt(pairs: Pair[], day: string): string {
+function prompt(pairs: Pair[], day: string): string {
   return [
     `You are the memory maintainer. Today is ${day}. Each pair of notes below shares words in its titles and may say the same thing.`,
     "Read both notes of a pair, and check the claims against the code when they differ. Reply one verdict per pair, with `a` and `b` as the titles given and a one-line `why`:",
@@ -59,8 +59,7 @@ function change(a: Note, b: Note, v: Verdict, day: string): { title: string; tex
   if (v.verdict !== "merge") return { bad: `unknown verdict ${v.verdict}` };
   if (!v.keep || !pair.includes(v.keep) || !v.claim || !v.details || !v.evidence) return { bad: "merge verdict has no keep of the pair, claim, details and evidence" };
   const [k, o] = v.keep === a.title ? [a, b] : [b, a];
-  const related = /^## Related\n\n([\s\S]*)$/m.exec(k.body)?.[1].trim() || "";
-  return { title: k.title, text: serializeFrontmatter({ ...k.fm, updated: day, supersedes: [...listOf(k, "supersedes"), o.title] }) + body(v as any, day, related) };
+  return { title: k.title, text: serializeFrontmatter({ ...k.fm, updated: day, supersedes: [...listOf(k, "supersedes"), o.title] }) + body(v, day, related(k.body)) };
 }
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */

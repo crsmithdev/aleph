@@ -216,9 +216,9 @@ const writeHidden = (wt: string, files: Record<string, string>) => {
   for (const [name, text] of Object.entries(files)) writeFileSync(join(wt, ".hidden", name), text);
 };
 
-/** The last `n` lines of `text`, on one line (an issue note is one line), each cut to 200 characters. */
+/** The last `n` lines of `text`, each cut to 200 characters. */
 export const lastLines = (text: string, n = 40): string =>
-  text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
+  text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join("\n");
 
 /** `infra` marks a fault of the set-up, not a result of the command. */
 export interface Ran { code: number; output: string; infra?: boolean }
@@ -375,7 +375,7 @@ export async function keepGate(repo: Repo, base: string, tip: string, tests: New
 /** A keep-gate step whose command could not run to a verdict: neither a list nor a failure of the branch. */
 export interface KeepNoVerdict { noVerdict: true; reason: string; log: string }
 const noVerdict = (what: string, r: Ran): KeepNoVerdict =>
-  ({ noVerdict: true, reason: `no verdict: keep-gate: ${what}`, log: `No verdict: ${what}:\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}` });
+  ({ noVerdict: true, reason: `no verdict: keep-gate: ${what}`, log: `No verdict: ${what}:\n${lastLines(r.output)}` });
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
 export async function baselineChecks(repo: Repo, commit: string, logs: string, record?: CheckTask["record"]): Promise<ChecksStop | null> {

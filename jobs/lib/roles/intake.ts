@@ -9,9 +9,9 @@
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
-import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setAfter, setIntake, setPlan, sourceOf } from "../../../lib/todo.ts";
+import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setAfter, setIntake, setPlan, sourceOf } from "../../../lib/issue-file.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { always, answerDetail, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { onOf, type Repo, type Run } from "../records/ledger.ts";
@@ -32,7 +32,7 @@ import { NO_OUTPUT } from "../gates/gate.ts";
 import type { Decider } from "../gates/decider.ts";
 import { filing } from "../transitions/filing.ts";
 import { jsTestFilesInText, testFileInText } from "../../../lib/test-files.ts";
-import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "./issue-spec.ts";
+import { commandsIn, hasPlaceholder, inSurface, nameFilters, specText, type Spec } from "../../../lib/issue-spec.ts";
 import { errText } from "../../../lib/errtext.ts";
 
 /** The model an intake run asks for. */

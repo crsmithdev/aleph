@@ -1,6 +1,6 @@
 /** Claude Code's transcripts: the file of a session, and each tool call with its result. */
-import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import type { Entry } from "./jsonl.ts";
 import { claudeProjects } from "./paths.ts";
 
@@ -12,6 +12,16 @@ export function find(id: string): string | undefined {
   const root = claudeProjects();
   if (!existsSync(root)) return undefined;
   for (const p of readdirSync(root)) { const f = join(root, p, `${id}.jsonl`); if (existsSync(f)) return f; }
+}
+
+/** Every transcript: its session id, its project folder, its path and its mtime in ms. */
+export function list(): { id: string; project: string; path: string; at: number }[] {
+  const root = claudeProjects();
+  if (!existsSync(root)) return [];
+  return [...new Bun.Glob("*/*.jsonl").scanSync({ cwd: root })].map((f) => {
+    const path = join(root, f);
+    return { id: basename(f, ".jsonl"), project: dirname(f), path, at: statSync(path).mtimeMs };
+  });
 }
 
 /** Each tool call of `entries` with its result, by tool_use id, in the order the calls were made. */

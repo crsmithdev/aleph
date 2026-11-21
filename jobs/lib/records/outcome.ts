@@ -11,26 +11,26 @@ export type Cause = (typeof CAUSES)[number];
 /**
  * What a cause means to the factory. `countsToCap`: the run counts toward the run cap. `rescuable`: a returned or
  * failed run goes to the rescue. `holdsBackend`: the call's backend is held until a probe succeeds. `waitMs`: the
- * issue waits this long after the run before it starts again.
+ * issue waits this long after the run before it starts again. `raisesSize`: a failed build run raises its rerun one size.
  */
-export interface Policy { countsToCap: boolean; rescuable: boolean; holdsBackend: boolean; waitMs: number }
+export interface Policy { countsToCap: boolean; rescuable: boolean; holdsBackend: boolean; waitMs: number; raisesSize: boolean }
 
 // A run the API refused for credit did no work: it counts to no cap, no rescue case covers it, its backend is held,
 // and the issue waits 10 minutes instead of starting again at once.
 // prettier-ignore
 export const POLICY: Record<Cause, Policy> = {
-  "no-commit":  { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  timeout:      { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  stalled:      { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  infra:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  locked:       { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  credit:       { countsToCap: false, rescuable: false, holdsBackend: true,  waitMs: 10 * 60_000 },
-  check:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  conflict:     { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  moved:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  review:       { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  unanswered:   { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
-  other:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0 },
+  "no-commit":  { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  timeout:      { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  stalled:      { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  infra:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: false },
+  locked:       { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  credit:       { countsToCap: false, rescuable: false, holdsBackend: true,  waitMs: 10 * 60_000, raisesSize: false },
+  check:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  conflict:     { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  moved:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  review:       { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  unanswered:   { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
+  other:        { countsToCap: true,  rescuable: true,  holdsBackend: false, waitMs: 0, raisesSize: true  },
 };
 
 /** The policy of `cause`; a run with no known cause has the policy of `other`. */

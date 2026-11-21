@@ -59,6 +59,11 @@ export async function decide(state: unknown, questions: Record<string, Question>
 }
 
 /** decide() for yes-or-no questions: each question's probability of yes, by id. */
+/** The dollars that jev calls cost in (`from`, `to`], both in ms. */
+export const jevCost = (from: number, to: number): number =>
+  conn().query<{ time: string; cost: number | null }, []>("SELECT time, cost FROM jev").all()
+    .filter((r) => { const at = Date.parse(r.time); return at > from && at <= to; }).reduce((a, r) => a + (r.cost ?? 0), 0);
+
 export async function nouls(state: unknown, questions: Record<string, Noul>, timeoutMs?: number): Promise<{ p: Record<string, number>; cost: number }> {
   const d = await decide(state, questions, timeoutMs);
   const p = Object.fromEntries(Object.keys(questions).map((id) => [id, (d.answers[id] as { noul: number }).noul]));

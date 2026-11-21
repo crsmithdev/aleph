@@ -7,7 +7,7 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
 import { next } from "./db.ts";
-import { ISSUE_KINDS, issueKey, parseId, parseKey, PRIORITIES, shownKey, SOURCES, STATUSES } from "./naming.ts";
+import { ISSUE_KINDS, issueKey, parseId, parseKey, PRIORITIES, priorityRank, shownKey, SOURCES, STATUSES } from "./naming.ts";
 
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["project", "created"] as const;
@@ -110,10 +110,7 @@ export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 /** The red-main fix issue: `add` writes the label into `areas`; an older issue carries it in `labels`. */
 export const isRedMain = (item: Issue): boolean => areasOf(item).includes("red-main") || labels(item).includes("red-main");
 /** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
-function rank(item: Issue): number {
-  const i = (PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
-  return i < 0 ? (PRIORITIES as readonly string[]).indexOf("medium") : i;
-}
+const rank = (item: Issue): number => priorityRank(item.fm.priority);
 /** An item's priority; none, or an unknown one, reads medium. */
 export const priorityOf = (item: Issue): string => PRIORITIES[rank(item)];
 

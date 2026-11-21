@@ -12,7 +12,7 @@ import { isWaiting, isAgentRun, isBuild, loadRegistry, onOf, repoOf, type Repo }
 import { lock } from "../../../lib/locks.ts";
 import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
-import { addNote, issue as issueOf, lastRun, latestJob, openJob, stateOf } from "../records/job.ts";
+import { addNote, issue as issueOf, latestJob, openJob, stateOf } from "../records/job.ts";
 import { counting, getRun, makeJob, patchRun, setState, type Answer, type NewJob, allRuns } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
@@ -28,7 +28,7 @@ import { raise, route, type Size } from "../routing/route.ts";
 import { heldEvent, type Gate, type Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { detailOf, key, parseId } from "../../../lib/naming.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
 import { logTo, runFile } from "../records/run-files.ts";
@@ -289,7 +289,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
   let s: Start;
   try {
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-    const last = lastRun(runs);
+    const last = counting(runs);
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
     if (!isAgentRun(r.role)) refuse(`${name}: the last job is not an agent job`);
@@ -320,7 +320,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
   checkName(name);
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
-  const last = lastRun(runs);
+  const last = counting(runs);
   // Chris's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.
   const answer = a.answer ?? (a.quiet ? undefined : { subject: "human", answer: actionsOn(reasonOf(last.run.ask?.reason))[a.answered ? 0 : 1] });
   const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
@@ -362,7 +362,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, size?: Size | null, now?: boolean): Promise<Refused | null> {
   const picked = size !== undefined ? size : await route(spec, name);
   // A rerun of an issue whose build run failed takes the next level up; a run that did no work (credit) or hit the host (infra) does not count.
-  const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).countsToCap && causeOf(e.run) !== "infra");
+  const failed = allRuns().some((e) => e.run.name === name && isBuild(e.run.role) && e.run.state === "failed" && policyOf(causeOf(e.run)).raisesSize);
   const routed = picked && failed ? raise(picked) : picked;
   const model = routed ? readModels()[routed].model : null;
   logEvent({ subject: "rule", action: "started", object: name, detail: detailOf("started", "model", model ?? "default"), size: routed });

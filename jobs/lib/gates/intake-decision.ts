@@ -6,8 +6,8 @@
  * a red main turns a close into an Ask.
  */
 import { isSorted } from "../../../lib/store.ts";
-import { afterOf, planSet } from "../../../lib/todo.ts";
-import * as issues from "../../../lib/todo.ts";
+import { afterOf, planSet } from "../../../lib/issue-file.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { pendingWaits } from "./issue-decision.ts";
 import type { Repo } from "../records/ledger.ts";
 

@@ -2,6 +2,7 @@
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
 import { setQuery, hashQuery, wireScope, scope } from "./lib/address.js";
+import { sessionHref } from "../../lib/naming.ts";
 import { redraw } from "./lib/router.js";
 import { cardPct, count, plural, money, when } from "./lib/format.js";
 import { actButton, badCount, cell, chip, chipRow, codeText, fold, notice, barList, barRow, legendHtml, linkButton, meter, miss, row, card, chips, costHtml, tag, dataTable, empty, error, esc, heads, idLink, onTile, pageHead, pager, searchBox, sortHead, sortOf, pageOf, pageRows, sortRows, wireTable, statCard, tiles } from "./lib/html.js";
@@ -119,7 +120,7 @@ function renderSessionsTable(d, o) {
   if (!all.length) return empty();
   const shown = pageRows(all, o.page, STEP);
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
-  const rows = shown.map((s) => row([`<td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`, { title: s.id })}</td>`,
+  const rows = shown.map((s) => row([`<td>${idLink(s.label ?? s.id.slice(0, 8), sessionHref(s.id), { title: s.id })}</td>`,
     cell(s.firstPrompt, { wide: true }), s.project ? cell(s.project) : `<td>${miss("No project")}</td>`,
     `<td title="${esc(s.taskTypes.join(", "))}">${chips([...s.taskTypes.slice(0, 2), ...(s.taskTypes.length > 2 ? [`+${s.taskTypes.length - 2}`] : [])])}</td>`,
     cell(count(s.turns), { num: true }), `<td class="num">${costHtml(s.cost, s.wk)}</td>`, `<td class="time">${esc(when(s.start))}</td>`, `<td class="time">${esc(when(s.last))}</td>`])).join("");

@@ -7,7 +7,7 @@ import { seed, type Seed } from "./job.testkit.ts";
 import { readSection, type Section } from "./lib/records/run-files.ts";
 import { unitAlive } from "./lib/infra/process.ts";
 import { projectOf, writeRepos } from "../tests/projects.testkit.ts";
-import { renderItem } from "../lib/todo.ts";
+import { renderItem } from "../lib/issue-file.ts";
 import { fixture } from "../tests/git.testkit.ts";
 import { issueKey } from "../lib/naming.ts";
 

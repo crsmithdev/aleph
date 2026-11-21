@@ -6,15 +6,12 @@
  * The dispatch asks the gates in the order of GATES; the first that binds skips the issue,
  * and its word is the kind of the decision and of the hold record.
  */
-import { afterOf, isRedMain } from "../../../lib/todo.ts";
-import { RUN_CAP } from "../infra/settings.ts";
-import * as issues from "../../../lib/todo.ts";
+import { afterOf, isRedMain } from "../../../lib/issue-file.ts";
+import { NO_COMMIT_LIMIT, RUN_CAP } from "../infra/settings.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { detailOf, type Event } from "../../../lib/naming.ts";
 import { POLICY } from "../records/outcome.ts";
 import { askDetail } from "../asks/ask.ts";
-
-/** Runs of one issue in a row that may end with no commit before the dispatch stops starting it. */
-export const NO_COMMIT_LIMIT = 3;
 
 /** The dispatch's gates, in the order it asks them. Loop guard is last, so it counts only issues that would start. */
 export const GATES = ["paused", "waiting", "red", "done", "after", "job", "full", "file", "credit", "ask"] as const;

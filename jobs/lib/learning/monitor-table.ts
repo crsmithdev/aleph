@@ -19,7 +19,7 @@ import { layout } from "../../../lib/layout.ts";
 import { causeOf } from "../records/outcome.ts";
 import { snapshots } from "../../../lib/usage.ts";
 import { flakeTracker, reader, storeLog, type Reader, type StoreChange } from "../../../lib/store.ts";
-import * as issues from "../../../lib/todo.ts";
+import * as issues from "../../../lib/issue-file.ts";
 import { addDays } from "../../../lib/day.ts";
 import { money as dollars } from "../../../lib/money.ts";
 import { quantile } from "../../../lib/windows.ts";

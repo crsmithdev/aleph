@@ -14,7 +14,7 @@ import { Refusal, refuse } from "../../lib/refusal.ts";
 import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
-import * as issues from "../../lib/todo.ts";
+import * as issues from "../../lib/issue-file.ts";
 import * as store from "../../lib/store.ts";
 import { always, answerDetail, answerOf, askIfPartDropped, askOfItem, clearAsk, decideAsk, DROP_WAITER, logAlways, refIn } from "../../jobs/lib/asks/ask.ts";
 import * as record from "../../jobs/lib/records/record.ts";
