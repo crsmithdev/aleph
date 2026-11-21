@@ -41,8 +41,10 @@ erDiagram
 | Idea | `items/ideas/<n>/idea.md` | Idea |
 | Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution in one role (`ROLES` in `lib/naming.ts`). A work is a `prev` chain of jobs |
 | Job folder | `jobs/<n>/` | The files of a job |
-| Issue state | A row of `issue_state` | The Ask, the wait and the CI result of an issue |
-| Ask | `issue_state.ask` (`ask_job` names the job that holds it) | Decision that waits |
+| Issue state | A row of `issue_state` | Issue |
+| Ask | `issue_state.ask` | Decision that waits |
+
+[Model: Work tracking](naming.md#model-work-tracking) gives the identity, lifecycle, owner, invariants and relations of the issue, the job, the Ask and the issue state.
 
 ## Registry: `items/projects/`
 
