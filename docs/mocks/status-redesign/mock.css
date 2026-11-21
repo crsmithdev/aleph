@@ -1,0 +1,90 @@
+/* The Status redesign mocks: the parts ui/app.css does not have yet, in its tokens only. README lists each as a new part. */
+
+/* The mock's own bar: not part of the design. */
+.mockbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-8); padding: var(--sp-6) var(--sp-24); border-bottom: 1px dashed var(--rule); background: var(--bg); color: var(--muted); font-size: var(--fs-xs); }
+.mockbar b { color: var(--ink); font-weight: var(--fw-strong); margin-right: var(--sp-8); }
+.mockbar a { color: var(--muted); text-decoration: none; padding: var(--sp-2) var(--sp-8); border-radius: var(--r-ctl); }
+.mockbar a:hover { color: var(--ink); }
+.mockbar a[aria-current] { color: var(--ink); background: var(--rule-2); font-weight: var(--fw-strong); }
+.mockbar .mb-r { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-8); margin-left: auto; }
+.mockbar .seg { min-height: 22px; font-size: var(--fs-xs); }
+.thumb .mockbar { display: none; }
+.overview { max-width: none; }
+.overview .shot { display: block; aspect-ratio: 16 / 11; overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-ctl); }
+.overview .shot iframe { width: 1600px; height: 1100px; border: 0; transform-origin: 0 0; transform: scale(var(--k, 0.3)); pointer-events: none; }
+
+/* A row of status lights. */
+.lights { display: inline-flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-14); }
+.card .sh .aside .light { font-size: var(--fs-xs); color: var(--muted); }
+
+/* A meter fill in the need tone: a run past its usual slow end, a budget near its end. */
+.m-need { background: var(--need); }
+.tile .meter { margin: var(--sp-2) 0; }
+
+/* The Now card: the elapsed meter keeps a narrow column; a sub-head carries a count. */
+.now .tbl td:has(> .meter) { width: 16%; min-width: 96px; }
+.sub-count { display: flex; align-items: baseline; gap: var(--sp-8); }
+.sub-count .count, .bhead .count, .barrow .bl .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+.wtitle { color: var(--ink-2); }
+.needs > .sh { margin-bottom: var(--sp-10); }
+.needs { margin: 0; }
+
+/* A problem row: what it is in ink, the detail after it muted. */
+.pwhat { color: var(--ink); font-weight: var(--fw-mid); }
+.pdetail { color: var(--muted); }
+.triage td.acts { white-space: nowrap; }
+
+/* A meter that takes the card's width, over its legend. */
+.wide-meter { display: flex; }
+.wide-meter .meter { flex: 1; }
+.flow .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* A small column chart drawn as SVG in the chart's colours. */
+.cols { display: block; overflow: visible; }
+.cols rect { fill: var(--muted); }
+.cols text { font: var(--fs-2xs) var(--sans); fill: var(--muted); font-variant-numeric: tabular-nums; }
+.cols text.v { fill: var(--ink-2); }
+
+/* The event viewer: its filter row, and a feed that keeps a height where the card is not a rail. */
+.evbar { display: flex; flex-wrap: wrap; gap: var(--sp-8); align-items: center; }
+.evbar .fbar { margin: 0; }
+.evbar .fbar:last-child { flex: 1 1 200px; }
+.events [data-kind][hidden] { display: none; }
+.card.events .herald-feed { max-height: 520px; }
+
+/* The rail's column: what needs Chris over the events. It takes the place and the height of the live Herald card, and in one column what needs Chris leads the page. */
+.rail > .rail-side { position: sticky; top: var(--sp-16); align-self: stretch; contain: size; min-height: 560px; max-height: calc(100vh - 2 * var(--sp-16)); display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.rail-side > .needs { flex: none; max-height: 70%; overflow-y: auto; }
+.rail-side > .herald-card { flex: 1; min-height: 0; }
+@media (max-width: 1100px) { .rail > .rail-side { display: contents; } .rail .needs { order: -1; max-height: none; } }
+
+/* The board: a column per stage, split by rules, in one card. */
+.board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.bcol { min-width: 0; padding: 0 var(--sp-14); border-left: 1px solid var(--rule); }
+.bcol:first-child { padding-left: 0; border-left: 0; }
+.bcol:last-child { padding-right: 0; }
+.bhead { display: flex; align-items: baseline; gap: var(--sp-6); }
+.bhead .sub-head { margin: 0; }
+.bstat { margin: var(--sp-2) 0 var(--sp-8); font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bitem { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: var(--sp-2) var(--sp-8); padding: var(--sp-8) 0; border-top: 1px solid var(--rule-2); }
+.bitem .num { font-size: var(--fs-xs); color: var(--ink-2); }
+.bitem .t, .bitem .why, .bitem .meter { grid-column: 1 / -1; }
+.bitem .t { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bitem .why { font-size: var(--fs-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bitem .meter { margin-top: var(--sp-2); }
+@media (max-width: 1100px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--sp-16); } .bcol:nth-child(odd) { padding-left: 0; border-left: 0; } }
+
+/* A stack of cards in one column of a split. */
+.stack { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+.sp > .split { gap: var(--gap); }
+.split.wide-left { grid-template-columns: minmax(0, 5fr) minmax(0, 2fr); }
+/* In one column the cards of both stacks are the grid's items, so what needs Chris still leads. */
+@media (max-width: 1100px) { .split.wide-left { grid-template-columns: minmax(0, 1fr); } .split.wide-left > .stack { display: contents; } .split.wide-left .needs { order: -2; } .split.wide-left #problems { order: -1; } }
+
+/* The timeline's lanes inside a card: the card gives the padding, and the rows sit closer. */
+.motion .dp-scroll { padding: 0; }
+.motion .dp-row { padding: var(--sp-4) 0; }
+.motion .dp-tl { grid-template-columns: minmax(180px, 300px) minmax(300px, 1fr) 76px 64px 56px; }
+.motion .dp-head .t a { margin-right: var(--sp-4); }
+.motion .dp-bar.live { border-radius: var(--r-hair) 0 0 var(--r-hair); }
+.motion .more-lanes > summary { padding: var(--sp-6) 0; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
