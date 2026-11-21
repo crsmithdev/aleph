@@ -10,9 +10,7 @@ and pleasing as possible."
 ## State
 
 - Done: the audit of the seven pages, the design in this file, `snapshot.ts`, `data.public.json`, the kit
-  (`build.ts`, `kit.ts`, `mock.css`, `mock.js`), the overview `index.html` and the Issues page.
-- Not built: the views of the other six pages. Each `pages/<id>.ts` holds its registry entry and attention rows, and
-  its views draw "Not built".
+  (`build.ts`, `kit.ts`, `mock.css`, `mock.js`), the overview `index.html` and all seven pages.
 - Not committed: `data.json`. It holds session prompts and vault note text, and this repo is public. The `.gitignore`
   here keeps it out.
 - Not verified: the values of `data.json` against the live API. The script ran once and wrote 284,083 bytes.
