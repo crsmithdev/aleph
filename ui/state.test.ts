@@ -406,3 +406,20 @@ describe("the status events", () => {
     } finally { tick.mockRestore(); putJson("state", "ci", {}); }
   });
 });
+
+describe("a backend hold", () => {
+  test("reaches the state with the backend's name and the reason, and the status sentence of the page and of the server names it", () => {
+    const why = "API Error: 402 Insufficient credits";
+    // A stopped tick is one more alert, and the sentence says three parts: the hold would not be one of them.
+    const tick = spyOn(systemd, "timer").mockReturnValue({ next: NOW + 60_000, running: false, err: null });
+    try {
+      expect(state(now).factory.backend).toBeNull();
+      putJson("state", "backend-hold", { via: "openrouter", why, since: ago(1) });
+      const s = state(now);
+      expect(s.factory.backend).toEqual({ via: "OpenRouter", why });
+      expect(verdict(s).text).toContain("OpenRouter");
+      checkStatus(now);
+      expect(readEvents().filter((e) => e.action === "status").at(-1)?.detail).toContain("OpenRouter");
+    } finally { tick.mockRestore(); putJson("state", "backend-hold", null); }
+  });
+});

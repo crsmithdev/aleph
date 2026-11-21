@@ -47,7 +47,9 @@ const rank = (t: string) => { const k = ALERTS.findIndex(([, said]) => said === 
 /** The facts of a state the verdict reads: the /api/factory state with its asks and usage. */
 export interface Facts {
   now: string;
-  factory: { paused: boolean; nextTick?: string | null; tickInProgress?: boolean; health?: { text: string; kind: string; key?: string }[] };
+  factory: { paused: boolean; nextTick?: string | null; tickInProgress?: boolean; health?: { text: string; kind: string; key?: string }[];
+    /** The backend the factory holds: its name and the line of the call that failed. */
+    backend?: { via: string; why: string } | null };
   errored: unknown[];
   /** An Ask with `escalated: false` is still with the director. */
   asks?: { escalated?: boolean }[];
@@ -87,7 +89,7 @@ function errorLines(s: Facts): ErrorLine[] {
 
 /**
  * The status of a state: "Alert: " and what is wrong; otherwise what asks for Chris, which leads, or the fine
- * sentence; then a weekly usage of WEEKLY_WARN or more and the warning health lines. At most MAX_SAID parts. A
+ * sentence; then a backend hold, a weekly usage of WEEKLY_WARN or more and the warning health lines. At most MAX_SAID parts. A
  * `stale` state says first that it is out of date.
  */
 export function verdict(s: Facts, stale = false): Verdict {
@@ -101,6 +103,8 @@ export function verdict(s: Facts, stale = false): Verdict {
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#awaiting" });
   if (f.paused && alerts.size) said.push({ text: PAUSED, href: "" });
+  // The words of the Automation page (ui/views/gates.js).
+  if (f.backend) said.push({ text: `waiting for ${f.backend.via}: ${f.backend.why}`, href: "" });
   const week = s.usage?.now?.seven_day ?? 0;
   if (week >= WEEKLY_WARN) said.push({ text: weekly(week), href: "" });
   for (const l of f.health ?? []) if (l.kind === "warn") said.push({ text: shortText(l.text.replace(/^health:\s*/, "")), href: "" });

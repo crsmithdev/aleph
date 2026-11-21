@@ -23,6 +23,7 @@ test("verdict gives each state its tone, label and sentence", () => {
     ["weekly usage at 90%",    at({ usage: { now: { seven_day: 90 } } }),                "warning", "Warn",  "Everything is fine; weekly usage is at 90%."],
     ["weekly usage at 89.6%",  at({ usage: { now: { seven_day: 89.6 } } }),              "fine",    "Fine",  "Everything is fine."],
     ["a warning health line",  at({}, { health: [slow] }),                               "warning", "Warn",  "Everything is fine; aleph full suite took 135 s."],
+    ["a backend hold",         at({}, { backend: { via: "OpenRouter", why: "API Error: 402 Insufficient credits" } }), "warning", "Warn", "Everything is fine; waiting for OpenRouter: API Error: 402 Insufficient credits."],
     ["alerts ranked",          at({ errored: [{}] }, { health: [mainRed, ciRed] }),        "alert",   "Alert", "Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy."],
     ["a failed flow load",     at({ flow: { error: "Could not load Flow (500)." } }),    "alert",   "Alert", "Alert: The flow data did not load."],
     ["an errored job, flow failed", at({ errored: [{}], flow: { error: "Could not load Flow (500)." } }), "alert", "Alert", "Alert: Jobs are unhealthy; the flow data did not load."],

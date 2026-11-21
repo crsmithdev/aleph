@@ -27,6 +27,8 @@ import { timer } from "../jobs/lib/infra/systemd.ts";
 import { probe } from "../lib/git.ts";
 import { dueAt } from "../jobs/lib/asks/timeout.ts";
 import { errText } from "../lib/errtext.ts";
+import { backendHold } from "../jobs/lib/gates/holds.ts";
+import { BACKENDS } from "../jobs/lib/routing/models.ts";
 
 const logged = new Set<string>();
 
@@ -162,6 +164,8 @@ export interface State {
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
     health: { text: string; kind: "alert" | "warn"; key?: string }[];
+    /** The backend the factory holds after the API credit error: its name and the line of the call that failed. Null with no hold. */
+    backend: { via: string; why: string } | null;
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
@@ -459,8 +463,9 @@ function statusOf(now: Date, jobs: Runs[]) {
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingOf(slots, picks) });
   const timers = tickTimer();
-  const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers }, errored, asks: att.items, usage: summary(now.getTime()) });
-  return { projector, errored, running, slots, picks, gated, factory, att, timers, v };
+  const hold = backendHold(), backend = hold ? { via: BACKENDS[hold.via], why: hold.why } : null;
+  const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers, backend }, errored, asks: att.items, usage: summary(now.getTime()) });
+  return { projector, errored, running, slots, picks, gated, factory, att, timers, backend, v };
 }
 
 /** Logs a `status` event when the verdict at `now` differs in tone or text from the last one logged. The events table holds the last one, so it outlives a restart. */
@@ -473,12 +478,12 @@ export function checkStatus(now = new Date()): void {
 export function state(now = new Date()): State {
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs();
-  const { projector, errored, running, slots, picks, gated, factory, att, timers } = statusOf(now, jobs);
+  const { projector, errored, running, slots, picks, gated, factory, att, timers, backend } = statusOf(now, jobs);
   const { done, doneStamps } = doneOf(slots, picks, projector);
   const events = heraldEvents(now.getTime());
   return {
     now: now.toISOString(),
-    factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
+    factory: { ...factory, judge: judgeChoice(), ...timers, backend, monitor: monitorPanel() },
     herald: { seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
     asks: att.items, done, doneStamps,
     errored, running, runningIssues: runningIssuesOf(slots, picks),
