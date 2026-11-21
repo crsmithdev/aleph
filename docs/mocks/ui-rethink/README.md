@@ -9,14 +9,31 @@ and pleasing as possible."
 
 ## State
 
-- Done: the audit of the seven pages, the design in this file, and `snapshot.ts`.
+- Done: the audit of the seven pages, the design in this file, `snapshot.ts` and `data.public.json`.
 - Not built: the rendered pages. `build.ts`, `mock.css` and the HTML do not exist yet.
 - Not committed: `data.json`. It holds session prompts and vault note text, and this repo is public. The `.gitignore`
   here keeps it out.
-- Not verified: the contents of `data.json`. The script ran once and wrote 284,083 bytes.
+- Not verified: the values of `data.json` against the live API. The script ran once and wrote 284,083 bytes.
 
 `bun docs/mocks/ui-rethink/snapshot.ts` reads the live UI API at `http://127.0.0.1:3020` and writes `data.json`. One
 run takes more than 5 minutes, because `/api/issues`, `/api/jobs` and `/api/sessions` are slow.
+
+## Data
+
+`data.public.json` is the `data.json` that `snapshot.ts` wrote at 2026-11-21T19:45:55Z, with each private text
+replaced. The filler has the length of the text it replaces, so a drawn row keeps its real width. Replaced:
+
+- Session prompts: `sessions.yours[].prompt`, `sessions.yours[].turnList[].prompt` and `sessions.factory[].prompt`.
+- Vault note text: `memory.notes.semantic[].text` and `memory.notes.working[].text`.
+- Recall queries, which are prompt text: `memory.log[].why` of each `recall` row.
+- The text of an issue from another repo: `request`, `spec`, `note.text` and `runs[].reason` where `repo` is not
+  `aleph`.
+
+Vault note titles, hold reasons and issue titles stay, because `docs/mocks/memory-v3/data.json`,
+`docs/mocks/hooks/holds.json` and `docs/mocks/status-panels/data.json` show them already.
+
+Two shapes matter to a builder. `issues.closed[].runs` is the list of runs for the first 12 rows and a count for the
+others. A running run has a negative `secs`.
 
 ## What is wrong today
 
@@ -111,8 +128,8 @@ Detail of each list view:
 
 ## Next steps
 
-1. Run `snapshot.ts` and check `data.json` against the API shapes. Keep session prompts and vault note text out of
-   each committed file: draw Sessions and Memory with those texts replaced.
+1. Draw from `data.public.json`. A new run of `snapshot.ts` writes `data.json` with the private texts in it: replace
+   the texts that the Data section lists before a commit.
 2. Write `build.ts` and `mock.css`, with `app.css` as a real copy of `ui/app.css`, because the shelf does not serve
    symlinks.
 3. Draw one page per sidebar page plus an overview, verify them in a browser, and put them on the shelf.
