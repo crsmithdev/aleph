@@ -3,7 +3,7 @@
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { keep, kept, scope } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
+import { ago, cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
 import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, nextSort, tag, tone } from "./lib/html.js";
 import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
 import { panelOf, title as chartTitle } from "./lib/chart.js";
@@ -23,7 +23,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   live: true,
   // `s.flow` is /api/flow for the window with its baseline and `s.memory` the Memory page's data, which `more` adds; the page draws without them first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderPipeline(f, q, (s.errored ?? []).length)}${renderIssues(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page, q)}</div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderPipeline(f, q, (s.errored ?? []).length)}${renderIssues(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page)}</div></div>`; },
   more: async (s, q) => { const [flow, memory] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q)]); return { ...s, flow, memory }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
@@ -215,8 +215,8 @@ function active(s) {
 /** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class", or "failures" with no target. */
 const INSPECT = "herald.inspect";
 
-/** The Inspector pane: the issues of the kept stage or class in `d`, /api/flow for the window, else its failed issues; `at` is the kept target. */
-function inspector(d, at, q) {
+/** The Inspector pane: the failed issues of the kept stage, the issues of the kept class, else all failed issues, in `d`, /api/flow for the window; `at` is the kept target. */
+function inspector(d, at) {
   if (!d) return loadingLine("the issues");
   if (d.error) return error(d.error);
   const id = (x) => `<td>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`;
@@ -228,8 +228,8 @@ function inspector(d, at, q) {
     return `<div class="inspect-head">${subHead("Failures")}</div>` + table(heads(["Issue", "Title", "Stage", "Failed"], ["Failed"]), rows);
   }
   if (at.kind === "stage") {
-    const rows = d.stages.issues[at.target].map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(count(x.runs), { num: true }), cell(dur(x.secs), { num: true }), `<td>${x.failed ? tag("failed", tone("failed")) : ""}</td>`]));
-    return `<div class="inspect-head">${subHead(PIPE[at.target])}<span>${back} <a href="${esc(drillHref(at.target, q))}">All jobs</a></span></div>` + table(heads(["Issue", "Title", "Runs", "Time", ""], ["Runs", "Time"]), rows);
+    const rows = d.stages.issues[at.target].filter((x) => x.failed).map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(ago(x.failedAt), { num: true })]));
+    return `<div class="inspect-head">${subHead(`${PIPE[at.target]} Failures`)}</div>` + table(heads(["Issue", "Title", "Failed"], ["Failed"]), rows);
   }
   const rows = d.classes.find((c) => c.key === at.target).top.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(hours(x.hours), { num: true })]));
   return `<div class="inspect-head">${subHead(at.target)}${back}</div>` + table(heads(["Issue", "Title", "Hours"], ["Hours"]), rows);
@@ -249,8 +249,8 @@ function wireInspect(root) {
   });
 }
 
-/** The Herald panel: its tabs as the head, the alerts under them on every tab, then an Events tab with the rolling event history stream, an Active tab and an Inspector tab. `st` is the state it keeps between draws; `q` the page's query, the address's by default. */
-export function renderHerald(s, st = page, q) {
+/** The Herald panel: its tabs as the head, the alerts under them on every tab, then an Events tab with the rolling event history stream, an Active tab and an Inspector tab. `st` is the state it keeps between draws. */
+export function renderHerald(s, st = page) {
   // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks).map((i) => askCard(i, s.now));
   const errored = (s.errored ?? []).map(errorRow(s));
@@ -270,7 +270,7 @@ export function renderHerald(s, st = page, q) {
   const feed = rows.map((r) => heraldRow(r).replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
   const at = kept(INSPECT, { tab: "events" });
-  const panes = { events: `${runNow(s)}<div class="herald-feed">${feed}</div>`, active: active(s), inspector: inspector(s.flow, at, q) };
+  const panes = { events: `${runNow(s)}<div class="herald-feed">${feed}</div>`, active: active(s), inspector: inspector(s.flow, at) };
   const chipHtml = word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : "";
   return card("", tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, at.tab, { aside: chipHtml, top: sticky }), { id: "herald", cls: "herald-card", label: "Herald" });
 }

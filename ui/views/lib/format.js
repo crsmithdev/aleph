@@ -35,6 +35,11 @@ export function dur(s) {
   const h = Math.floor(m / 60);
   return h < 24 ? `${h}h ${pad(m % 60)}m` : `${Math.floor(h / 24)}d ${pad(h % 24)}h`;
 }
+/** The time since `ts` in its largest whole unit: "40s ago", "2m ago", "3h ago", "5d ago". A browser clock behind the server's reads "0s ago". */
+export function ago(ts, now = Date.now()) {
+  const s = Math.max(0, Math.floor((now - Date.parse(ts)) / 1000));
+  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.floor(s / 60)}m ago` : s < 86400 ? `${Math.floor(s / 3600)}h ago` : `${Math.floor(s / 86400)}d ago`;
+}
 /** The line for data that failed to rebuild: "`name` is `age` old: `error`", from its mark `{ error, since }`. */
 export const markLine = (name, { error, since }, now = Date.now()) => `${name} is ${dur((now - Date.parse(since)) / 1000)} old: ${error}`;
 /** Milliseconds, for a span that can be under a second: "850ms", "1.5s", then as `dur`; "" for none. */

@@ -61,14 +61,14 @@ test("each Pipeline stage name and each outcome in its legend is an Inspector ta
 const issue = (n: number, title: string, x: object) => ({ issue: `aleph-${n}`, title, href: `#/issues/aleph/${n}`, ...x });
 const flow = {
   window: "day",
-  stages: { rows: [], issues: { intake: [], queue: [], build: [issue(8, "Fix the gate", { runs: 2, secs: 300, failed: true }), issue(7, "Add a tab", { runs: 1, secs: 900, failed: false })], review: [], recheck: [], land: [] } },
+  stages: { rows: [], issues: { intake: [], queue: [], build: [issue(8, "Fix the gate", { runs: 2, secs: 300, failed: true, failedAt: "2026-11-20T14:58:00" }), issue(7, "Add a tab", { runs: 1, secs: 900, failed: false })], review: [], recheck: [], land: [] } },
   classes: [{ key: "returned", lost: true, hours: 3, top: [issue(9, "Split the store", { hours: 2.5 }), issue(3, "Trim a test", { hours: 0.5 })] }],
   failures: [issue(4, "Drop a flag", { stage: "recheck", at: "2026-11-20T12:05:00" }), issue(8, "Fix the gate", { stage: "build", at: "2026-11-20T09:30:00" })],
 };
-/** The Herald drawn with `at` as the kept tab and target, in the day window of the aleph project; `d` is its /api/flow. */
+/** The Herald drawn with `at` as the kept tab and target; `d` is its /api/flow. */
 const inspected = (at: object | null, d: object = flow) => {
   (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.inspect" && at ? JSON.stringify(at) : null), setItem() {} };
-  try { return view.renderHerald({ ...calm, flow: d }, { stale: false, live: null }, new URLSearchParams("window=day&project=aleph")); }
+  try { return view.renderHerald({ ...calm, flow: d }, { stale: false, live: null }); }
   finally { delete (globalThis as any).localStorage; }
 };
 /** The issue IDs of an Inspector list, in order. */
@@ -118,13 +118,18 @@ test("with no job, the Active pane lists the running issue above the queued one 
   expect(pane.match(/<table/g)?.length).toBe(1);
 });
 
-test("a kept Inspector tab on the build stage lists its issues, failed first, under an All jobs link to the stage's Jobs in the window and project", () => {
+test("a kept Inspector tab on the build stage lists only its failed issues, with the time since the latest failed run ended", () => {
+  setSystemTime(new Date(2026, 10, 20, 15));
   const h = inspected({ tab: "inspector", kind: "stage", target: "build" });
+  setSystemTime();
   expect(h).toContain('<section data-pane="events" hidden>');
-  expect(h).toContain('<h3 class="sub-head">Implement</h3><span><button type="button" class="pgo" data-inspect="failures">Failures</button> <a href="#/factory/jobs?stage=implement&amp;role=worker&amp;window=day&amp;project=aleph">All jobs</a></span>');
-  expect(listed(h)).toEqual(["aleph-8", "aleph-7"]);
-  expect(h).toContain('<td class="wide" title="Fix the gate">Fix the gate</td><td class="num">2</td><td class="num">5m 00s</td><td><span class="badge error">failed</span></td>');
-  expect(h).toContain('<td class="num">15m 00s</td><td></td>');
+  expect(h).toContain('<div class="inspect-head"><h3 class="sub-head">Implement Failures</h3></div>');
+  expect(h).not.toContain('data-inspect="failures"');
+  expect(h).not.toContain("All jobs");
+  expect(listed(h)).toEqual(["aleph-8"]);
+  expect(h).toContain('<td class="wide" title="Fix the gate">Fix the gate</td><td class="num">2m ago</td>');
+  expect(h).not.toMatch(/>(Runs|Time)</);
+  expect(h).not.toContain("badge error");
 });
 
 test("a kept Inspector tab on the returned class lists its issues with their hours, most hours first", () => {

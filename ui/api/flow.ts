@@ -209,8 +209,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
 
 /** The Pipeline's stages. Queue is the wait before an issue's first agent run, so its rows have no runs. */
 const PIPELINE = ["intake", "queue", "build", "review", "recheck", "land"] as const;
-/** One issue in one stage: `secs` sums its runs' seconds there (a Queue row's is its wait); `failed` says a run gave nothing usable. */
-type StageIssue = { issue: string; title?: string; href?: string; runs: number; secs: number; failed: boolean };
+/** One issue in one stage: `secs` sums its runs' seconds there (a Queue row's is its wait); `failed` says a run gave nothing usable, and `failedAt` is when the latest such run ended (its start when it records no end). */
+type StageIssue = { issue: string; title?: string; href?: string; runs: number; secs: number; failed: boolean; failedAt?: string };
 
 /** Each Pipeline stage's issues in `since`..`now`, failed first, then most seconds. A run on no issue is in no row. */
 function stageIssues(entries: Entry[], times: IssueTimes[], since: number, now: number): Speed["stages"]["issues"] {
@@ -219,7 +219,8 @@ function stageIssues(entries: Entry[], times: IssueTimes[], since: number, now: 
     const key = issueOf(x.run), rows = by.get(x.stage);
     if (!key || !rows) continue;
     const row = rows.get(key) ?? { issue: key, runs: 0, secs: 0, failed: false };
-    rows.set(key, { ...row, runs: row.runs + 1, secs: row.secs + (x.secs ?? 0), failed: row.failed || x.unusable });
+    const at = x.run.ended ?? x.run.started, latest = x.unusable && !(Date.parse(at) < Date.parse(row.failedAt ?? ""));
+    rows.set(key, { ...row, runs: row.runs + 1, secs: row.secs + (x.secs ?? 0), failed: row.failed || x.unusable, ...(latest ? { failedAt: at } : {}) });
   }
   for (const t of times) if (t.queue !== null) by.get("queue")!.set(t.id, { issue: t.id, runs: 0, secs: t.queue, failed: false });
   const sorted = (rows: Map<string, StageIssue>) => [...rows.values()].map((r) => ({ ...r, secs: round(r.secs), href: issueHref(r.issue) })).sort((a, b) => Number(b.failed) - Number(a.failed) || b.secs - a.secs);
