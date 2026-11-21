@@ -1,19 +1,19 @@
 # Naming
 
-This page is the standard for the names, keys and status words that aleph shows and stores. `lib/naming.ts` owns every set and format on this page. No other file defines a key pattern, a state list or an event phrase. The plan is `docs/specs/2026-11-14-storage-ids.md`, and the hold model is decided in [Holds are events](adr/0001-holds-are-events.md).
+This page is the standard for the names, keys and status words that aleph shows and stores. `lib/naming.ts` owns every set and format on this page. No other file defines a key pattern, a state list or an event phrase. The hold model is decided in [Holds are events](adr/0001-holds-are-events.md), and the detail word in [Detail word has one writer](adr/0002-detail-word-has-one-writer.md). [The storage-ids spec](specs/2026-11-14-storage-ids.md) is the history of the keys.
 
 ## Terms
 
 | Term | Definition |
 |---|---|
 | Project | A repo that aleph works on. It has a unique `code` of 1 or 2 lower-case letters. |
-| Issue | One request in the work store: title, spec, status, priority and links. |
+| Issue | One request in the items repo: title, spec, status, priority and links. |
 | Idea | A note of something to build. |
-| Job | One execution: an intake, build, review, land, recheck, monitor, housekeeper, maintainer or plain run. It has a role, a state, a cost and a folder. |
+| Job | One execution in one of the roles of the Role row, such as an intake, a build, a review or a land. It has a role, a state, a cost and a folder. |
 | Role | What a job does. A job has one role. |
 | Size | Which model a build job's worker runs on, as the router picks it: `small` (`haiku`), `medium` (`sonnet`) or `large` (`opus`). Each has an entry in the `models` setting. A build's job row and its start event hold the size word in `size`. |
 | Role model | The model of one role other than the worker: `review`, `intake`, `director`, `monitor`, `housekeeper`, `maintainer`, `judge` or `investigator`. Each has an entry in the `models` setting. |
-| Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `related`. A hierarchy is a link, never part of a key. |
+| Link | A relation between two stored things. A job has `target`, `prev` and `retry_of`. An issue has `from`, `after` and `refs`. A hierarchy is a link, never part of a key. |
 | Issue state | The live machine state of one issue: its Ask and its CI result. It outlives each job on the issue. |
 | Event | One sentence of 6 fields that says who did what to which thing. |
 | Subject | Who acted in an event. |
@@ -47,7 +47,7 @@ Code that the plan has not reached still writes the old forms: the issue ID `ale
 - **Issue**
   - Identity: `issue.<n>`. One counter covers every project. The counter never falls below the highest issue folder.
   - Lifecycle: open, parked, done, dropped. The status is derived from the stored `closed_as` and `parked` fields. Any move is allowed. A close clears `parked`. A trailer commit on main never sets it: done is the stored status; the sweep closes an issue whose work is on main and reopens one whose commits are all reverted.
-  - Owner: the work store. One door files a new issue. Every close logs `done` or `dropped`.
+  - Owner: the items repo. One door files a new issue. Every close logs `done` or `dropped`.
   - Invariants: each new issue logs one `filed` event. A part of a parked parent is not buildable. An `after` link to a dropped issue parks the waiter and asks.
   - Relations: one project. Many links. Many jobs, through the `target` column of each job. At most one issue state.
 - **Job**
@@ -135,7 +135,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Issue kind | yes | task, bug, check, flake |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened, status |
+| Action | yes | the job states; held, gpu, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, started, missed, skipped, filed, escalated, changed, answered, routed, stalled, reopened, status |
 | Hold | yes | factory gates: pause, credit, cap; issue holds: after, job, file, red, credit |
 | Subject | yes | gate, rule, human, claude; worker, reviewer, check, intake, director, monitor, firefighter |
 | Ask action | yes | approve, disapprove, resolve, dismiss, continue, discontinue |
@@ -147,11 +147,11 @@ Every value is lower case, in storage and on the page. A word means one thing in
 
 An issue kind is `task` (any work), `bug` (something broken), `check` (a manual check after a land) or `flake` (a flaky-test sighting, noted on the tracker and never built).
 
-`done` is a job that ended with no land: an intake, director, monitor, review or plain job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke. `stalled` is a job that wrote no output for its stall time. The last six subjects of the Subject row are role words of events written before jobs had keys: code reads them and writes only `gate`, `rule`, `human`, `claude` and job keys, except where live code still names a role.
+`done` is a job that ended with no land: an intake, director, monitor, review or plain job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke. `stalled` is a job that wrote no output for its stall time. The last seven subjects of the Subject row are role words of events written before jobs had keys: code reads them and writes only `gate`, `rule`, `human`, `claude` and job keys, except where live code still names a role.
 
 ### Old words
 
-A writer writes only the new words, and a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, actor and act maps that live code still uses. `OLD_HOLDS` lists the hold actions of events written before an issue hold was one `held` event (paused, red, after, full, busy, looping, credit): readers read them, and no code writes them. The migration of the storage plan rewrites the old words and then removes the maps.
+A writer writes only the new words, and a reader reads the stored words as they are. `OLD` in `lib/naming.ts` keeps the ask, actor and act maps that live code still uses. `OLD_HOLDS` lists the hold actions of events written before an issue hold was one `held` event (paused, red, after, full, busy, looping, credit): readers read them, and no code writes them.
 
 | Set | Old → new |
 |---|---|

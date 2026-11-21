@@ -4,7 +4,7 @@ Aleph registers its hooks in `hooks/hooks.json`. `.claude-plugin/plugin.json` po
 
 After you change a hook, run `/reload-plugins`.
 
-## Map
+## Hooks by event
 
 | Event | Matcher | Script | Timeout (s) | Does |
 |---|---|---|---|---|
@@ -15,7 +15,7 @@ After you change a hook, run `/reload-plugins`.
 | `SessionStart` | | `cli/cli.ts help --brief` | 10 | Injects one line per `aleph` command, for factory agents too |
 | `UserPromptSubmit` | | `verify-gate.ts` | 10 | Snapshots the repo for the Stop check |
 | `UserPromptSubmit` | | `vault-recall.ts` | 5 | Injects up to 3 vault notes |
-| `PreToolUse` | `Edit\|Write\|NotebookEdit` | `git-guard.ts` | 10 | Denies edits on `main`, in the work store and on `VAULT.md` |
+| `PreToolUse` | `Edit\|Write\|NotebookEdit` | `git-guard.ts` | 10 | Denies edits on `main`, in the items repo and on `VAULT.md` |
 | `PreToolUse` | `Bash` | `secret-scan.ts` | 10 | Denies a commit that adds a secret or a debug leftover |
 | `PreToolUse` | `Bash` | `gh-guard.ts` | 15 | Asks before a `gh` write to a repo of another owner |
 | `PreToolUse` | `Bash` | `bash-allow.ts` | 10 | Denies a Bash command outside the run's own `Bash(...)` list |
@@ -56,7 +56,7 @@ It fetches `origin` only for the sandbox repos. It prints nothing when `ALEPH_AG
 
 ### vault-recall
 
-`hooks/vault-recall.ts` skips prompts under 20 characters. It ranks the wiki notes (`rankNotes` in `vault/lib/index.ts`), leaves out core notes and the notes this session has already seen, and asks Jev one yes/no question for each of the top 20, with a 1.5-second timeout. It injects at most 3 notes with p ≥ 0.85. It swallows every error. The judge choice `haiku` turns it off.
+`hooks/vault-recall.ts` skips prompts under 20 characters. It ranks the wiki notes (`rankNotes` in `vault/lib/index.ts`), leaves out core notes and the notes this session has already seen, and asks Jev one yes/no question for each of the top 100, 20 to a request in parallel, with a 1.5-second timeout. It injects at most 3 notes with p ≥ 0.85. It swallows every error. The judge choice `haiku` turns it off.
 
 ## Guards
 
@@ -134,8 +134,8 @@ The design is in [the context gate decision](context-gate.md).
 |---|---|---|
 | Turn tracing on; read from the environment or `~/.aleph/.env` | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | Tracing is off |
 | The Langfuse server | `LANGFUSE_BASE_URL` | `http://127.0.0.1:3010` |
-| The environment label: `headless` or `interactive` | `ALEPH_ENV` | `ALEPH_ENV`, else `interactive`; `headless` when an ancestor process is `claude -p` |
-| Hand-off files between hooks; pruned after 1 day | `ALEPH_SPOOL` | `ALEPH_SPOOL`, else `~/.aleph/spool` |
+| The environment label: `headless` or `interactive` | `ALEPH_ENV` | `headless` if an ancestor process is `claude -p`, else `interactive` |
+| Hand-off files between hooks; pruned after 1 day | `ALEPH_SPOOL` | `~/.aleph/spool` |
 | Claude Code's settings file, which the context gate and the Memory page read | `ALEPH_CLAUDE_SETTINGS` | `~/.claude/settings.json` |
 
 Setup and the trace contents are in [Langfuse](langfuse.md).

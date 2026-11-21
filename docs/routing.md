@@ -6,13 +6,15 @@ This page states which model or command does each piece of work, with which tool
 
 | Role | Model | Tools | Runs in | Time box | Output |
 |---|---|---|---|---|---|
-| Intake | `claude-opus-5-5` | Read, Grep, Glob | A temp clone of `origin/main` | 900 s | `INTAKE_SCHEMA`: a route |
+| Intake | `claude-opus-5-5` | Read, Grep, Glob; Bash for `git log` only | A temp clone of `origin/main` | 900 s | `INTAKE_SCHEMA`: a route |
 | Worker | The routed size, else the CLI default | Read, Write, Edit, Bash, Grep, Glob | `<repo>/.worktrees/job-<name>` | `ALEPH_JOB_TIMEOUT` (1800 s) | `WORKER_SCHEMA` |
 | Merge worker | `haiku`, or the model of the `small` size | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
 | Reviewer | `claude-opus-5-5` | Read, Grep, Glob, Bash | A detached worktree at the branch tip | `ALEPH_REVIEW_TIMEOUT` (600 s) | `REVIEW_SCHEMA`: `pass` or `hold` |
 | Director | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
 | Monitor | `deepseek-v4.1-flash` | None | | 600 s | Numbered findings |
-| Judge | Jev, then `haiku` or the `judge` role model | None, 1 turn | | 30 s | `{verdict, reason}` |
+| Housekeeper | `claude-opus-5-5` | Read, Grep, Glob; read-only `git` and `ls` | The repo's main checkout | 1 hour | Actions on parked issues |
+| Investigator | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `aleph status`, `aleph issue show\|list`, `aleph models` | The repo's main checkout | 1800 s | Recommended issues |
+| Judge | Jev, then `haiku` or the `judge` role model | None, 1 turn | | 35 s | `{verdict, reason}` |
 
 The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, maintainer `jobs/lib/roles/maintainer.ts`, titles `jobs/lib/roles/title.ts`, judge `jobs/lib/roles/judge.ts`.
 
@@ -20,7 +22,7 @@ The maintainer's daily compile starts one read-only `claude -p` run (role model 
 
 ## How a run starts
 
-`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the judge through `oneShot`:
+`callAgent` in `jobs/lib/roles/agent-call.ts` makes the call of every role but the judge. The one-reply roles reach it through `openRun` in `jobs/lib/roles/agent-run.ts`, and the worker and the reviewer through `jobs/lib/roles/unit.ts`. The judge calls `oneShot` instead. `callAgent` runs this command:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -73,19 +75,19 @@ The dispatch also routes when the live cap holds an issue: if a size on the loca
 | `step-3.5-flash` | OpenRouter | `stepfun/step-3.5-flash` |
 | `mimo-v2.6-flash` | OpenRouter | `xiaomi/mimo-v2.6-flash` |
 
-The `models` setting maps each size and role model ([Naming](naming.md#terms)) to `{enabled, model}`. Each offers its default first and every model Claude does not serve; `review`, `intake`, `director`, `monitor` and `maintainer` also offer the other Claude models:
+The `models` setting maps each size and role model ([Naming](naming.md#terms)) to `{enabled, model}`. Each offers its default first and every model Claude does not serve; `review`, `intake`, `director`, `monitor`, `housekeeper`, `maintainer` and `investigator` also offer the other Claude models:
 
 | Size or role model | Default |
 |---|---|
 | `small` | `haiku` |
 | `medium` | `sonnet` |
 | `large` | `claude-opus-5-5` |
-| `review`, `intake`, `director` | `claude-opus-5-5` |
+| `review`, `intake`, `director`, `housekeeper`, `investigator` | `claude-opus-5-5` |
 | `monitor` | `deepseek-v4.1-flash` |
 | `maintainer` | `sonnet` |
 | `judge` | `haiku` |
 
-Any one size can be off, but one size stays on. A role model is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
+You can disable any size except the last one that is on. A role model is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
 ```bash
 aleph models                          # show the sizes and role models
@@ -93,7 +95,7 @@ aleph models set small deepseek-v4.1-flash
 aleph models disable large            # one size stays on
 ```
 
-A build routed to a size records the model that ran as `model` and the size word as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
+A build routed to a size records the model that ran as `model` and the size word as `size`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
 
 **OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
 
@@ -101,7 +103,7 @@ A build routed to a size records the model that ran as `model` and the size word
 
 ## Judge
 
-`judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the `judge` setting. If neither is set, the default is `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
+`judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the `judge` setting. If neither is set, the judge is `jev`. `aleph judge [jev|haiku]` sets it.
 
 - **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
 - **Haiku** is `claude -p --model haiku --setting-sources "" --max-turns 1 --tools ""` with a rubric as the system prompt, up to 2 tries.

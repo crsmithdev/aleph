@@ -63,10 +63,10 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
 | `vault/` | `vault/lib/`, run by `aleph memory`: notes, the FTS index, git |
 | `cli/` | `cli/cli.ts` (the `aleph` entry) and `cli/commands.ts` (the command table) |
-| `issues/` | `issues/lib/issues.ts` (the `aleph issue` verbs) over the work store; `issues/cli.ts` parses and prints `aleph issue` |
+| `issues/` | `issues/lib/issues.ts` (the `aleph issue` verbs) over the items repo; `issues/cli.ts` parses and prints `aleph issue` |
 | `jobs/` | `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
-| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts`; the work store: `store.ts` (git I/O), `issue-file.ts` (file format), `issue-spec.ts` (spec sections), `projects.ts` (the registry's files) |
+| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts`; the items repo: `store.ts` (git I/O), `issue-file.ts` (file format), `issue-spec.ts` (spec sections), `projects.ts` (the registry's files) |
 | `identity/` | The global `CLAUDE.md` and `VOICE.md` |
 | `compose/` | Langfuse in Docker |
 | `tests/` | Repo-wide tests, `tests/live/` against real services |
@@ -105,16 +105,29 @@ The tests, fixtures and testkits of a module are in its folder.
 
 ### The UI read path
 
-The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`). The updater learns of a write to `aleph.db` by polling `PRAGMA data_version` every 100 ms: a new event row changes the source `events`. It watches the files that stay files (the items repo, job and factory folders, the skills, the vault, the handoffs, the annotations); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the work store, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
+The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYED` list answer from it, and it builds them in a worker thread (`ui/build.ts`, `ui/build-worker.ts`). Each build records the sources it read (`lib/sources.ts`). The updater learns of a write to `aleph.db` by polling `PRAGMA data_version` every 100 ms: a new event row changes the source `events`. It watches the files that stay files (the items repo, job and factory folders, the skills, the vault, the handoffs, the annotations); when a source changes, the updater builds the kept keys again and then sends `change` with their keys. `ui/state.ts` reads the job records, the factory directory and the items repo, and writes nothing. Other `ui/api/*.ts` routes read Langfuse for sessions and skills. Every POST goes through `ui/action.ts`, which runs the `aleph` command for the action in its own process where one exists, so the UI and the CLI have one write path, and a failure is a 4xx or 5xx with `{ error }`.
 
 ## Invariants
 
-- **One writer per store.** `aleph issue` writes the work store; `git-guard` denies a direct edit. `aleph memory` writes the vault. `record.ts` is the only module that opens a job record.
+- **One writer per store.** `aleph issue` writes the items repo; `git-guard` denies a direct edit. `aleph memory` writes the vault. `record.ts` is the only module that opens a job record.
 - **Work happens in worktrees.** No edit lands on a main checkout. A worker cannot push; only the land pushes.
-- **The record is on `origin/main`.** The work store reads and writes `origin/main`. An issue is done when a commit on main names it in an `Issue:` trailer.
+- **The record is on `origin/main`.** The items repo reads and writes `origin/main`. An issue is done when a commit on main names it in an `Issue:` trailer.
 - **Transitions start the next step.** No step waits for the tick. The tick's sweep reports a missed transition as a bug.
 - **A check with no verdict is not a failure.** A time-out or a kill is `infra`, and the rescue checks again.
 - **Agents cannot widen their own power.** Code checks each director action. Security paths and `bun.lock` wait for Chris, unless he sets a land timeout for the reason.
+
+### What a worker can change
+
+A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so the gates stop a careless worker, not a hostile one.
+
+| A worker can | Stopped | Seen |
+|---|---|---|
+| Edit a file an Oracle command names, on the base and outside the Edit surface | Yes: Verify fails | The check `oracle-pin` on the run |
+| Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate lists each new test that passes on the base, and the reviewer holds it for a bug fix or a behaviour change |
+| Change its issue's spec with `aleph issue edit` | Yes, for the running job: the job reads the spec copied at dispatch | The store write records the actor `worker` |
+| Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for Chris | The Ask |
+| Write the job folder's `spec.md`, `aleph.db` or the items repo directly | No | No |
+| Push to `origin/main` itself | Yes: the worker's git rewrites a push to `git@github.com:` to a dead remote (`agent-run.ts`) | The run's log |
 
 ## Cross-cutting concerns
 

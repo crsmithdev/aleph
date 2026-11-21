@@ -6,6 +6,8 @@ A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` i
 
 ## Set it up
 
+The units need a systemd user session. Under WSL, set `systemd=true` in `/etc/wsl.conf` and turn on linger (`loginctl enable-linger $USER`), so the units run with no terminal open. The alert posts to Sidetone (`SIDETONE_TELL_URL`). Without Sidetone, the alert unit fails and the factory runs on. `aleph doctor` checks `aleph.home`, which home-proxy serves ([UI](ui.md)).
+
 ```bash
 systemctl --user link ~/aleph/jobs/systemd/aleph-alert@.service
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
@@ -18,58 +20,62 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 
 ## Commands
 
+`aleph help` prints each command with its usage, and `aleph <command> --help` prints one. This table says what each factory command is for.
+
 | Command | Does |
 |---|---|
-| `aleph dispatch` | Starts a run for each ready issue, up to the caps |
+| `aleph dispatch` | Starts a run for each ready issue, up to the caps, or one issue now |
 | `aleph tick` | Does the periodic work that is due, and the sweep; the timer runs it |
 | `aleph suite` | Runs the full checks on `origin/main` of each factory repo whose main moved since the last run, and records the baseline; its timer runs it |
-| `aleph intake <repo>-<n>` | Takes in one issue now |
-| `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
-| `aleph jobs [<name>]` | Open jobs, then the jobs that ended in the last 24 hours, or one job |
-| `aleph jobs <name> --resume` | Opens the Claude Code session of the job's latest run that has one, with `claude --resume` in the run's worktree. It refuses when no run has a session or the worktree is gone |
+| `aleph intake` | Takes in one issue now |
+| `aleph status` | The state of one issue, or of each open issue in the recent repos |
+| `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours, or one job. With `--resume`, opens the Claude Code session of the job's latest run in its worktree |
+| `aleph job`, `aleph run` | Starts a worker job on a spec, or a command as a tracked plain job, by hand |
 | `aleph report` | Runs not yet shown (one block per issue, under the lane of its newest run), each open issue with an Ask, how far each checkout is behind `origin/main`, and health lines |
-| `aleph land <name>` | Lands a held or reviewed run, with `Held-by: Chris` |
-| `aleph drop <name>` | Drops a run and deletes its branch |
-| `aleph recheck <name>` | Merges main into a returned or failed run's branch and checks it again, without a worker |
-| `aleph pause` / `aleph resume` | Stops and restarts new runs |
-| `aleph always <list\|grant <reason> <action>\|revoke <reason>>` | Lists or changes the Always rules |
-| `aleph always timeout [<reason> <minutes> [pick\|drop]]` | Lists or sets the no-answer timeouts; 0 removes one |
-| `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
-| `aleph judge [jev\|haiku]` | Shows or sets the model that judges for the hooks |
-| `aleph models [set <name> <model>\|enable <size>\|disable <size>]` | Shows or sets the model of each size and role model |
+| `aleph land` | Lands a passed run, or one that waits on a `held-path` or `review-held` Ask. A land of a waiting run writes `Held-by: Chris` |
+| `aleph checked` | Marks a landed job's check as done, so it leaves `aleph jobs` |
+| `aleph drop` | Drops a run and deletes its branch |
+| `aleph recheck` | Merges main into a returned or failed run's branch and checks it again, without a worker |
+| `aleph pause`, `aleph resume` | Stops and restarts new runs |
+| `aleph always` | Lists or changes the Always rules and the no-answer timeouts |
+| `aleph doctor` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
+| `aleph judge` | Shows or sets the model that judges for the hooks |
+| `aleph models` | Shows or sets the model of each size and role model |
 | `aleph director` | Runs the director on the Asks that have no case text |
 | `aleph monitor` | Writes the monitor's report for a day |
 | `aleph housekeep` | Reviews the parked issues that a land touched, or every parked issue once a day |
-| `aleph investigate <issue.N\|job.N> [--detach]` | Traces what happened to an issue or a job and recommends issues; the Investigate button starts it detached |
+| `aleph investigate` | Traces what happened to an issue or a job and recommends issues; the Investigate button starts it detached |
 
-## How an issue becomes a commit
+## aleph doctor
 
-[Workflow](workflow.md) follows an issue from intake to `main`: the gates, checks, review, land, rescue, Asks and the director, with each send-back.
+`aleph doctor` prints one line per check, each `ok` or a fault (`jobs/lib/infra/doctor.ts`). `--json` prints the same as JSON.
 
-## What a worker can change
+| Check | A fault means |
+|---|---|
+| `wall clock` | The wall clock stepped more than 1000 ms against the monotonic clock while the check watched it |
+| `WSL clock` | The WSL clock is more than 5 s from the Windows time |
+| `empty objects` | A git object file of a registered repo is empty. `--fix` leaves it, so you decide |
+| `gc log` | A leftover `gc.log` stops git's automatic cleanup. `--fix` deletes it |
+| `git fsck` | `git fsck --no-dangling` fails in a registered repo |
+| `unit <name>` | `aleph-ui`, `home-proxy` or a timer is not active, or a tick or suite service failed |
+| `<timer> next run` | The tick or suite timer has no next run and its service is not running |
+| `aleph.home` | `ALEPH_HOME_URL` or its `/api/factory` route does not answer, or the gzipped JSON does not parse |
+| `lost runs` | A run's process is gone and the run has no result |
+| `unit links` | A link in the unit folder points into a worktree or at a missing file. Link the unit again from the main checkout, as in Set it up |
 
-A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so the gates stop a careless worker, not a hostile one.
-
-| A worker can | Stopped | Seen |
-|---|---|---|
-| Edit a file an Oracle command names, on the base and outside the Edit surface | Yes: Verify fails | The check `oracle-pin` on the run |
-| Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate lists each new test that passes on the base, and the reviewer holds it for a bug fix or a behaviour change |
-| Change its issue's spec with `aleph issue edit` | Yes, for the running job: the job reads the spec copied at dispatch | The store write records the actor `worker` |
-| Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for Chris | The Ask |
-| Write the job folder's `spec.md`, `aleph.db` or the items repo directly | No | No |
-| Push to `origin/main` itself | No: no setting or rule in `identity/AGENT.md` forbids it | Not checked |
+`aleph doctor --fix` starts `aleph-tick.service` and deletes each `gc.log`. It changes nothing else.
 
 ## The tick
 
-The tick starts only periodic work, each step on its own due rule: the maintainer (mechanical vault pass and the compile of yesterday) and the monitor once a day (from a local hour set on the Automation page, 0 by default), the housekeeper once a day and after a move of a main (at most once an hour, each call capped at an hour, and an issue it changed left out for a day), the CI read and the firefighter every 5 minutes, or every minute while a GitHub CI run on a factory repo's main is in progress (by the last CI read) or a land on that main ended in the last 15 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready issue with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
+The tick starts only periodic work, each step on its own due rule: the maintainer (mechanical vault pass and the compile of yesterday) once a day from 03:00, the monitor once a day (from a local hour set on the Automation page, 0 by default), the housekeeper once a day and after a move of a main (at most once an hour, each call capped at an hour, and an issue it changed left out for a day), the CI read and the firefighter every 5 minutes, or every minute while a GitHub CI run on a factory repo's main is in progress (by the last CI read) or a land on that main ended in the last 15 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready issue with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep logs a `missed` event with the key as its subject, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
 
-## Flakes and health
+## Flakes
 
-A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out or a kill, which give no verdict).
+A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out or a kill, which give no verdict). A check that passes on this rerun counts as passed, and its flake goes to the `flaky` table of `aleph.db`. Two flakes of one check in 7 days raise a health line in `aleph report`.
 
-## Load
+## Load limit
 
-A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue, and the run's phase says why. The wait fails nothing and counts against no time limit. A start that had to wait keeps the queue for 15 seconds, so the load average shows it before the next start reads the load. The full suite runs on half the cores (`ALEPH_TEST_PARALLEL` in `package.json`). If it passes, it counts as passed, and the flake goes to the `flaky` table of `aleph.db`. Two flakes of one check in 7 days raise a health line in `aleph report`.
+A check, a worker and a land wait for the load average ([Workflow](workflow.md#2-dispatch-and-its-gates) has the rule), and the run's phase says why. A start that had to wait keeps the queue for 15 seconds, so the load average shows it before the next start reads the load. The full suite runs on half the cores (`ALEPH_TEST_PARALLEL` in `package.json`).
 
 ## Settings
 
@@ -78,10 +84,12 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | Variable | Default | Does |
 |---|---|---|
 | `ALEPH_LIVE_CAP` | cores / 6, at least 1 | Runs live at once (4 on a machine with 24 cores) |
+| `ALEPH_RUN_CAP` | 3 | Starts of one issue in 60 minutes before a `run-cap` Ask |
 | `ALEPH_LOAD_LIMIT` | cores | The 1-minute load average under which a check, a worker or a land starts |
 | `ALEPH_JOB_TIMEOUT` | 1800 | Seconds in a worker's time box |
 | `ALEPH_CHECK_TIMEOUT` | 1200 | Seconds for the checks |
 | `ALEPH_REVIEW_TIMEOUT` | 600 | Seconds for a review |
+| `ALEPH_SUITE_BUDGET_S` | 120 | Seconds a repo's full suite may take before the Status page warns |
 | `ALEPH_REVIEW_DIFF_MAX` | 200000 | Characters of diff the reviewer gets |
 | `ALEPH_STALL_SECONDS` | 600 | Seconds without output before a run is stopped |
 | `ALEPH_FIX_ROUNDS` | 2 | Fix rounds per job |
@@ -89,8 +97,6 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_INTAKE_CAP` | 5 | Intake runs one dispatch starts |
 | `ALEPH_INTAKE_TRIES` | 2 | Intake runs with no reply before an Ask |
 | `ALEPH_DIRECTOR_CAP` | 3 | Director runs per `aleph director`, one per Ask |
-| `ALEPH_WORKER_CMD` | `claude` | The worker command |
-| `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 | `ALEPH_MONITOR` | on | `off` turns off the tick's daily monitor step |
 | `ALEPH_RESCUE` | on | `off` leaves a returned or failed run as it is, so its open job keeps its issue not ready |
 | `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A project's own `env` wins |
@@ -100,7 +106,7 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_WINDOWS_TIME_CMD` | none | A shell command that prints the Windows time in milliseconds (`powershell.exe` reads it when unset); `aleph doctor` compares it with the WSL clock |
 | `SIDETONE_TELL_URL` | `https://127.0.0.1:3100/tell` | Where the factory posts a line when a run ends |
 
-For each agent role (`INTAKE`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.
+[Routing](routing.md#overrides) lists the variables that replace the worker, reviewer, role and judge commands.
 
 ### Internal variables
 

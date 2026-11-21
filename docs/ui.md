@@ -21,7 +21,24 @@ If the host already has a plain file at `~/.config/systemd/user/aleph-ui.service
 
 ## Access
 
-The UI has no login. The server binds `127.0.0.1` and answers every request, whatever its Host header. home-proxy serves it on the LAN as `aleph.home`, so any device on the LAN can read and drive it.
+The server binds `127.0.0.1`. home-proxy serves it on the LAN as `aleph.home`, so any device on the LAN can read it. A POST needs a paired device (`ui/pair.ts`), and the UI answers any other POST with a 401.
+
+| Command | Does |
+|---|---|
+| `aleph ui pair [label]` | Prints a `/pair#<token>` link. Open it once on the device to pair it. |
+| `aleph ui unpair <label>` | Drops the device |
+| `aleph ui devices` | Lists the paired devices and the date of each |
+
+`~/.aleph/ui-tokens` keeps the hash of each device's token.
+
+## Status in a herdr panel
+
+The Status page also runs as text in a [herdr](https://herdr.dev) side panel. It redraws every 10 s and on a resize; `q` or Ctrl-C quits.
+
+```bash
+herdr plugin link ~/aleph/herdr
+herdr plugin pane open --plugin aleph.status --entrypoint status --placement split --direction right --width 30% --no-focus
+```
 
 ## Usage and skills
 
@@ -30,6 +47,9 @@ The UI has no login. The server binds `127.0.0.1` and answers every request, wha
 | `ALEPH_USAGE_URL` | `https://api.anthropic.com/api/oauth/usage` | The address that the UI polls for the Claude plan usage |
 | `ALEPH_CLAUDE_CREDENTIALS` | `~/.claude/.credentials.json` | The file with the OAuth token for that poll |
 | `ALEPH_SKILLS_DIR` | the `skills` directory of the repo | The directory of the skills that the Skills and Memory pages list |
+| `ALEPH_SKILLS_STORE` | `~/.aleph/skills-store.json` | The base name of the Skills page's cache of Langfuse observations, one file per Langfuse base |
+| `ALEPH_CHAT_IDLE_MS` | 600000 | Milliseconds the chat panel's process waits for the next turn before it ends |
+| `ALEPH_TOOLS` | `~/aleph-tools` | The aleph-tools checkout that holds the shelf and the dock. The UI runs without it |
 
 ## Routes
 
@@ -53,7 +73,7 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `POST /api/jobs/:id/{land,recheck,drop,wait,answer}` | Acts on that job only |
 | `GET /api/sessions` | The Sessions page; `?window=` (week, month or quarter), and `?limit=` and `?before=` for the session list. `partial` says Langfuse held more pages than a read takes |
 | `GET /api/sessions/:id`, `/chat`, `/turns/:n`, `GET /api/skills/:name` | One session, its chat, one turn, one skill |
-| `GET /api/projects` | A map of each project key to its code |
+| `GET /api/projects` | Each project key to its code, its count of open issues and `onboarded` |
 | `GET /api/views` | The files under `ui/views/` |
 
 Times are ISO 8601 UTC strings and durations are in seconds. `ui/schemas.ts` holds the schema of each GET route, and `ui/schemas.test.ts` checks every route against it.
@@ -69,14 +89,17 @@ Add two files and change no shared file.
    export const view = {
      path: "/widgets/:name",   // the hash route; a path with a :param stays out of the sidebar
      title: "Widget",
-     group: "factory",         // work, factory or claude
+     group: "factory",         // factory or claude
      order: 50,                // sorts the page in its group
      icon: "cube",             // a Font Awesome name
      api: "/api/widgets/:name",   // or a function of (params, query); a list of URLs needs combine(answers)
      refresh: 30,              // seconds between reloads
+     live: true,               // also redraw on a pushed change
      render: (data, params) => data ? `<h1>${esc(data.name)}</h1>` : empty("No widget."),
+     mount: (root) => { root.onclick = (e) => {}; },   // runs after each render: use on* properties, not addEventListener
    };
    ```
+   [Views](design.md#views) lists each field and the rules for `mount`.
 2. `ui/api/<page>.ts` exports `routes`, a map from a method and path to a handler:
    ```ts
    import type { Routes } from "../server.ts";
@@ -87,6 +110,10 @@ Add two files and change no shared file.
    };
    ```
 
+3. Add the route's schema to `ui/schemas.ts`.
+4. Restart `aleph-ui`. The server loads every `ui/api/*.ts` at start, and `bun --watch` does not see a new file.
+5. Open `#/widgets/<name>` and see the page.
+
 A view that needs a second answer after its data returns the data with it from `more(data, query)`: the first load draws before `more` ends and again after it. After a choice changes the address (`setQuery`) or an action changes the server's data, the view calls `redraw()` or `redraw(true)` from `ui/views/lib/router.js`, which draws through the router's one draw and keeps the open folds, the focus and the typed text. A view never sets its own root's `innerHTML`.
 
-Add the route's schema to `ui/schemas.ts`. The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to the module of `ui/views/lib/` that holds its kind (`format.js`, `html.js`, `address.js`, `chart-theme.js` or `decisions.js`) without changing what is there. A route reads Langfuse only through the port in `lib/langfuse.ts` (`langfuse()`, `need()`) and the UI's reads of it in `ui/langfuse.ts` (`list()`, `recent()`); a test gives it rows with `use(memory(...))`.
+To share a helper, add it to the module of `ui/views/lib/` that holds its kind (`format.js`, `html.js`, `address.js`, `chart-theme.js` or `decisions.js`) without changing what is there. A route reads Langfuse only through the port in `lib/langfuse.ts` (`langfuse()`, `need()`) and the UI's reads of it in `ui/langfuse.ts` (`list()`, `recent()`); a test gives it rows with `use(memory(...))`.

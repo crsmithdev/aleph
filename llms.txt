@@ -11,12 +11,14 @@ The `aleph` CLI (cli/cli.ts) is the entry point for issues and the factory. `ale
 - [Architecture](https://github.com/crsmithdev/aleph/blob/main/docs/architecture.md): Processes, folders, key flows and invariants
 - [Workflow](https://github.com/crsmithdev/aleph/blob/main/docs/workflow.md): The path from issue to main, with each gate, send-back, rescue and Ask
 - [Data model](https://github.com/crsmithdev/aleph/blob/main/docs/data-model.md): Each store and file under ~/.aleph and its fields
+- [Naming](https://github.com/crsmithdev/aleph/blob/main/docs/naming.md): The names, keys and status words aleph shows and stores
+- [Observability](https://github.com/crsmithdev/aleph/blob/main/docs/observability.md): The event log and traces: what writes each and who reads it
 - [Hooks](https://github.com/crsmithdev/aleph/blob/main/docs/hooks.md): Each hook, what it reads and what it decides
 - [Routing](https://github.com/crsmithdev/aleph/blob/main/docs/routing.md): The model, tools and time box of each agent role
 - [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Set-up, commands, the tick, load and settings
-- [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues, the `aleph issue` commands and fields
+- [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The items repo, issues, the `aleph issue` commands and fields
 - [Vault](https://github.com/crsmithdev/aleph/blob/main/docs/vault.md): The memory vault, its commands and its note format
-- [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, log in, and add a page
+- [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, pair a device, and add a page
 - [UI design reference](https://github.com/crsmithdev/aleph/blob/main/docs/design.md): Tokens, formats, tables, charts and components of the UI
 - [Langfuse](https://github.com/crsmithdev/aleph/blob/main/docs/langfuse.md): Set up tracing, and what a trace holds
 
@@ -24,6 +26,8 @@ The `aleph` CLI (cli/cli.ts) is the entry point for issues and the factory. `ale
 
 - [Verify gate](https://github.com/crsmithdev/aleph/blob/main/docs/verify-gate.md): Why and how the Stop hook judges claims of completion
 - [Context gate](https://github.com/crsmithdev/aleph/blob/main/docs/context-gate.md): Why and how the Stop hook warns on context fill and asks for a handoff
+- [Holds are events](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0001-holds-are-events.md): ADR 0001
+- [Detail word has one writer](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0002-detail-word-has-one-writer.md): ADR 0002
 
 ## Optional
 

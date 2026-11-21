@@ -4,7 +4,7 @@ The memory vault is an Obsidian vault at `~/.aleph/vault` (`ALEPH_VAULT` overrid
 
 Each op that commits also pushes to the vault's `origin`. Each op prints JSON on stdout and findings on stderr, and exits 1 when it refuses.
 
-## Use it
+## Start the vault and write notes
 
 ```bash
 aleph memory init                                    # once, to create the vault
@@ -31,8 +31,18 @@ In a session, the `vault` skill runs these for you.
 | `delete <title> --why <text>` | Removes a note no live note links to; git keeps it |
 | `compile [date]` | Prints a digest of a day's Langfuse turns, handoffs and daily note, and records the day in a file outside git |
 | `misses [--days N]` | Read-only: the recall misses that Langfuse recorded |
-| `maintain [--dry]` | `aleph memory maintain` runs the whole maintainer: the mechanical pass (this op, no model), and the compile of yesterday by the maintainer role when `compiledDays` lacks it. Then three role runs work the queues: the re-check of the most recalled stale notes, the overlap pairs, and the misses of the last day. A miss is a query that did not surface a note the same turn then read, and that today's ranking still misses; its verdict adds an alias to the note or skips it. The compile writes the missed notes with `write`, with no approval step; each write is a pushed, revertible commit. `--dry` writes no notes but records its run. The mechanical pass: `lint --fix`, `adopt`, repeated core links, handoffs older than 30 days whose day `compile` ran moved to `~/.aleph/backups/maintain/<day>/`, a failed push retried, the pre-commit hook installed when it is missing; reports the decay, overlap and misses queues (the overlap queue shows at most 10 entries; the count is the full number). `--dry` changes nothing |
+| `maintain [--dry]` | Runs the whole maintainer: the mechanical pass, the compile of yesterday, and the queues ([Maintainer](#maintainer)). `--dry` writes no notes |
 | `precommit` | Refuses the staged commit when it grows a scope's start context past 6,000 bytes; the vault's pre-commit hook runs it |
+
+## Maintainer
+
+`aleph memory maintain` runs the mechanical pass (no model), and the compile of yesterday by the maintainer role when `compiledDays` lacks it. Then three role runs work the queues: the re-check of the most recalled stale notes, the overlap pairs, and the misses of the last day.
+
+A miss is a query that did not surface a note the same turn then read, and that today's ranking still misses. Its verdict adds an alias to the note or skips it.
+
+The compile writes the missed notes with `write`, with no approval step. Each write is a pushed commit that can be reverted. `--dry` writes no notes but records its run.
+
+The mechanical pass runs `lint --fix` and `adopt`, and fixes repeated core links. It moves handoffs older than 30 days, whose day `compile` ran, to `~/.aleph/backups/maintain/<day>/`. It retries a failed push and installs the pre-commit hook when it is missing. It reports the decay, overlap and misses queues; the overlap queue shows at most 10 entries, and the count is the full number. With `--dry` the mechanical pass changes nothing.
 
 ## Note format
 
@@ -51,4 +61,4 @@ tags: []
 ---
 ```
 
-`write` refuses a note with a bad schema, a duplicate, a dangling link, a folder that does not match its kind, a broken template, or one over the budget. It warns on an orphan, a stale measured claim, and an overlap with a note of the same scope. A plain `git commit` in the vault runs `precommit` through the pre-commit hook that `init` lays down, and its refusal names each scope with its bytes before and after. An op's own commit skips the hook, because the op checks its notes itself. The maintainer's daily compile is the safety net for what the agent did not write on the day. It writes the missed notes itself with `write`; a compile by hand still proposes and waits for approval.
+`write` refuses a note with a bad schema, a duplicate, a dangling link, a folder that does not match its kind, a broken template, or one that grows its scope's start context past 6,000 bytes. It warns on an orphan, a stale measured claim, and an overlap with a note of the same scope. A plain `git commit` in the vault runs `precommit` through the pre-commit hook that `init` lays down, and its refusal names each scope with its bytes before and after. An op's own commit skips the hook, because the op checks its notes itself. The maintainer's daily compile is the safety net for what the agent did not write on the day. It writes the missed notes itself with `write`, with no approval. `aleph memory compile <date>` only prints the digest: a session that compiles by hand proposes the notes and waits for approval.

@@ -4,10 +4,11 @@ The hooks send each Claude Code session to a self-hosted [Langfuse](https://lang
 
 ## Set it up
 
-1. Fill in the compose secrets. Use `openssl rand -hex 32` for each secret:
+1. From the repo root, copy the example file:
    ```bash
    cp .env.example .env
    ```
+   Set each of `POSTGRES_PASSWORD`, `CLICKHOUSE_PASSWORD`, `MINIO_ROOT_PASSWORD`, `REDIS_AUTH`, `NEXTAUTH_SECRET`, `LANGFUSE_SALT` and `LANGFUSE_ENCRYPTION_KEY` to the output of `openssl rand -hex 32`. Fill in the `LANGFUSE_INIT_*` block: its key pair is the one step 3 uses.
 2. Start Langfuse and check its health:
    ```bash
    docker compose -p aleph-langfuse --env-file .env -f compose/langfuse.yml up -d
@@ -20,8 +21,12 @@ The hooks send each Claude Code session to a self-hosted [Langfuse](https://lang
    LANGFUSE_PUBLIC_KEY=pk-lf-…
    LANGFUSE_SECRET_KEY=sk-lf-…
    ```
+4. Prove that a trace arrives:
+   ```bash
+   ALEPH_LIVE=1 bun test tests/live/langfuse.test.ts
+   ```
 
-[compose/README.md](../compose/README.md) covers Docker inside WSL2 and checks the project with the API.
+[Run Langfuse on Docker in WSL2](../compose/README.md) covers the Docker engine and checks the project with the API.
 
 ## What a trace holds
 
@@ -53,4 +58,4 @@ At `Stop`, the hook reads the generations from the transcript, one per `requestI
 
 ## Factory traces
 
-After each factory run, the factory sends the worker's stream-json, and the reviewer's, as one trace named `factory <job>` with the job id as its session id. It makes one span per tool call (`jobs/lib/learning/trace.ts`). A failed post writes one line to `trace.log` in the run folder and changes nothing else.
+After each factory run, the factory sends the worker's stream-json, and the reviewer's, as one trace named `factory <job>` with the job id as its session id. It makes one span per tool call (`jobs/lib/learning/trace.ts`). A failed post writes one line to the `dispatch` section of `log.txt` in the job folder and changes nothing else.

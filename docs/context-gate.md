@@ -50,7 +50,7 @@ Stop   context-gate.ts
 `systemMessage` on `Stop` displays to Chris without blocking; `{"decision":"block"}`
 is the shape `Stop` honors, as with the verify gate.
 
-## Where the rest of the aggression lives
+## Other ways to keep context small
 
 - Delegate read-heavy and search-heavy sweeps. Measured: 3% of the tokens, 0.3k
   back into the parent.

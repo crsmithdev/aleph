@@ -39,7 +39,7 @@ erDiagram
 | Issue | `items/issues/<n>/issue.md` | Request |
 | Sub-issue | `items/issues/<n>/issue.md` with `from` | Issue that intake split from a parent issue |
 | Idea | `items/ideas/<n>/idea.md` | Idea |
-| Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution: build, review, land, recheck, intake, director, monitor, housekeeper, maintainer, investigator or plain. A work is a `prev` chain of jobs |
+| Job | A row of the `jobs` table of `aleph.db`, key `job.<n>` | One execution in one role (`ROLES` in `lib/naming.ts`). A work is a `prev` chain of jobs |
 | Job folder | `jobs/<n>/` | The files of a job |
 | Issue state | A row of `issue_state` | The Ask, the wait and the CI result of an issue |
 | Ask | `issue_state.ask` (`ask_job` names the job that holds it) | Decision that waits |
@@ -128,7 +128,7 @@ An issue's children are the issues whose `from` names it (`partsOf` in `lib/issu
 
 ## Job rows and issue state: `aleph.db`
 
-`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row; `setState` and `endRun` write its state, and `endRun` writes the state, the end and `next` in one transaction; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `size`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`. `model` is the model that ran, and `size` is the size word of a build (`small`, `medium` or `large`), null for any other job. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder, see below.
+`jobs/lib/records/record.ts` is the only module that reads or writes a job row or an issue state row. `makeJob` creates a row; `setState` and `endRun` write its state, and `endRun` writes the state, the end and `next` in one transaction; each logs the state as an event in the same transaction. The columns hold what every job has: `id` (`job.<n>`), `role`, `by`, `state`, `project`, `made`, `started`, `ended`, `model`, `size`, `cost`, `commit_sha`, `pid`, `exit_code`, `target`, `prev`, `retry_of`. `model` is the model that ran, and `size` is the size word of a build (`small`, `medium` or `large`), null for any other job. Every other field of a `Run` is the JSON `extra` column. The files of a job are in its folder ([Job folders](#job-folders-jobs)).
 
 A work is a `prev` chain of jobs. `rounds` and `cost` are queries over the jobs of one target, not stored.
 
@@ -161,7 +161,7 @@ A change of the Ask logs `question` or `answered` on the key. The other events (
 
 | Field | Values |
 |---|---|
-| `role` | `build`, `plain`, `land`, `review`, `intake`, `recheck`, `director`, `monitor`, `housekeeper`, `maintainer`, `investigator` |
+| `role` | One of `ROLES` in `lib/naming.ts`; [Naming](naming.md#word-sets) lists them |
 | `state` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
 | `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `credit`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
 | `fate` | `duplicate`, `met`, `manual` |
@@ -206,7 +206,7 @@ The reviewer is a job of its own (`role review`, `prev` the build). It runs insi
 | Table | Holds | Writer |
 |---|---|---|
 | `tick` | One row per step: `step`, `last` (the time it last ran) and `result` (`ok`, a short summary or `failed: <error>`). The periodic steps `ci` and `firefight` keep their due time in `last`. Each suite (`suite <repo>`) and the monitor have a row | Tick and every step |
-| `settings` | Rows `caps` (`{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}`; an env var wins), `models` (`{<size or role model>: {enabled, model}}`), `always` (`{<reason>: {action, at}}`), `timeouts` (`{<reason>: {minutes, then}}`; `then` is `pick` or `drop`; a bare number is minutes with `pick`), `paused` (the time of the pause, `null` when resumed) and `judge` (`jev` or `haiku`). Value is JSON | Automation page, Gates page, `aleph pause`, `aleph models`, `aleph always`, `aleph judge` |
+| `settings` | Rows `caps` (`{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}`; an env var wins), `models` (`{<size or role model>: {enabled, model}}`), `always` (`{<reason>: {action, at}}`), `timeouts` (`{<reason>: {minutes, then}}`; `then` is `pick` or `drop`; a bare number is minutes with `pick`), `paused` (the time of the pause, `null` when resumed) and `judge` (`jev` or `haiku`). Value is JSON | Automation page, `aleph pause`, `aleph models`, `aleph always`, `aleph judge` |
 | `state` | Rows `baseline` (`{<repo>: {commit, ok, failed?}}`), `ci` (GitHub CI state per repo), `stalls` (stall first-seen times), `smoke` (failures in a row), `backend-hold`, `reran` (CI runs rerun), `recheck-held`, `housekeeper`, `tick.missed` and `tick.suite`. Value is JSON | Tick, suite, firefighter, housekeeper |
 | `usage` | `seq`, `time`, `seven_day`, `seven_day_resets_at`: one row per 10 minutes; `pollOnce` writes all three | `pollOnce` in `ui/usage.ts` |
 | `openrouter` | `seq`, `time`, `usage`, `factor`: the key's lifetime USD and the rate per list dollar | `pollOpenRouter` in `ui/usage.ts` |

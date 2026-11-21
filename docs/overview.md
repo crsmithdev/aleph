@@ -7,38 +7,37 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 
 [PRINCIPLES.md](../PRINCIPLES.md) holds the rules that decide design: solo use, the system decides what it can, every fact about a change is visible, and a gate stays only while its record shows faults it caught.
 
-## Parts
+## Parts of aleph
 
 | Part | Is | Code | Doc |
 |---|---|---|---|
 | Hooks | Scripts on Claude Code hook events | `hooks/` | [Hooks](hooks.md) |
 | Skills | Methods a session runs as `/aleph:<name>` | `skills/` | Each `SKILL.md` |
 | Vault | Notes that a session reads and writes, in an Obsidian vault | `vault/` | [Vault](vault.md) |
-| Issue store | One issue list per repo, in a private git repo | `issues/` | [Issues](issues.md) |
+| Items repo | The issues of every project, in a private git repo | `issues/` | [Issues](issues.md) |
 | Factory | The `aleph` CLI and the processes that build issues | `jobs/` | [Factory](factory.md), [Workflow](workflow.md) |
 | UI | `aleph-ui`: Status, issues, jobs, sessions, memory | `ui/` | [UI](ui.md), [Design](design.md) |
 | Tracing | Self-hosted Langfuse | `compose/` | [Langfuse](langfuse.md) |
 | Identity | The global `CLAUDE.md` and code style the hooks assume | `identity/` | |
 
-## Stack
+## Tech stack
 
 - TypeScript on [Bun](https://bun.sh): the runtime, the package manager and the test runner. No build step.
 - Claude Code 2.1 or later, through `claude -p` on the subscription for every agent run.
-- Jev on OpenRouter for cheap typed judgments: is this a claim of completion, does this note bear on the prompt, which model tier fits this spec.
-- An optional local `gpt-oss-20b` under `llama-server`, or a model on OpenRouter, for the small tiers.
-- git for the work store and the vault, JSON and JSONL files for the rest of the state, SQLite only for the vault's search index.
+- Jev on OpenRouter for cheap typed judgments: is this a claim of completion, does this note bear on the prompt, which model size fits this spec.
+- An optional local `gpt-oss-20b` under `llama-server`, or a model on OpenRouter, for the small sizes.
+- git for the items repo and the vault, SQLite (`aleph.db`) for the jobs, events, issue state and settings, and JSON files for the rest. The vault keeps its own search index.
 - systemd user units for the timers and the UI.
 - The UI is plain ES modules and ECharts, served by `Bun.serve`.
 
-## Words
+## Glossary
 
 | Word | Means |
 |---|---|
 | Issue | What someone asks for: Chris, a worker or a session |
 | Sub-issue | An issue that intake split from a large issue, with a `from` link to the parent |
 | Spec | Goal, Edit surface and Oracle: what to change, where, and the check that proves it |
-| Job | All the runs on one issue, with one record |
-| Run | One process: intake, a worker, a land, the director |
+| Job | One execution: an intake, a build, a review, a land or another role. [Naming](naming.md#terms) has every term. |
 | Fix round | A send-back of a failed check or a review hold to the same worker branch |
 | Land | The squash push of a passed branch onto `origin/main` |
 | Ask | A decision the factory cannot make by itself |

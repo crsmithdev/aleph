@@ -1569,7 +1569,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
 - **Long page:** page head, then `toc()` around the rest (Structure, Contents).
 
-#### Needs-you strip
+### Needs-you strip
 
 The Needs-you strip lists what in the memory waits for Chris. An item shows only while its number is over its act-threshold.
 
@@ -1622,21 +1622,19 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 
 | Deviation | Where | Fix |
 |---|---|---|
-| Time column names differ | Tables | aleph-1360 (pending) |
+| Time column names differ | Tables | follow-up |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
 | Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Jobs in `ui/views/lib/processes.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the feed's rows (`div.event-row`, `div.event-brief`) | `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
-| Light `--series-3` to `--series-5` are under 3:1 on `--surface` (2.82, 2.17, 2.69); the legend and the tooltip carry the key | `ui/app.css` | aleph-1806 (pending) |
-| Dark `--chart-6` and `--chart-7` are outside the lightness band, and `--chart-7` reads grey; light `--chart-6` and `--chart-7` are 6.5 apart under deuteranopia | `ui/app.css` | aleph-1807 (pending) |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | A chart outside the chart panel: the session waterfall | `ui/views/session.js` | allowed |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
 | The `@container` queries at 560px (a split card) and 420px (a card) have no breakpoint token: a container query cannot read a custom property | `ui/app.css` | allowed |
 | The `@media (min-width: 721px)` query for the collapsed sidebar has no breakpoint token: a media query cannot read a custom property | `ui/app.css` | allowed |
-| The Herald card keeps a visible `--rule` border and a pulse ring: the pulse draws on that border, and aleph-1913 changes the Herald's states | `.herald-card` in `ui/app.css` | aleph-1913 (pending) |
+| The Herald card keeps a visible `--rule` border and a pulse ring; the pulse draws on that border | `.herald-card` in `ui/app.css` | follow-up |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/design.js` | allowed |
 | The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |

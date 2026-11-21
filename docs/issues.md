@@ -8,7 +8,7 @@ An **issue** is what someone asks for: Chris, a worker or the correction memory.
 
 Each is one file: `issues/<n>/issue.md`. The path is the key, `issue.<n>`: the file has no `id` field. The number comes from one counter for all projects, so a number never repeats and a failed push can leave a gap. A file holds a small frontmatter header and three parts under the headings `# Request`, `# Spec` and `# Notes`. Status is a field, never a folder: a finished issue stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
-## Use it
+## File and list issues
 
 ```bash
 aleph issue add aleph "The Status page shows the wrong weekly usage" --priority high
@@ -28,7 +28,7 @@ An issue added with `--spec -` is ready to build in a repo without `"author": tr
 | Command | Does |
 |---|---|
 | `add <repo> "<title>" [--request -] [--spec -] [--priority p] [--labels a,b] [--after <key>] [--refs <key,…>] [--media <file>]...` | Adds an issue; `-` reads stdin |
-| `list [<repo>] [--status open\|done\|dropped] [--label <area>] [--json]` | Lists issues |
+| `list [<repo>] [--status open\|parked\|done\|dropped] [--label <area>] [--json]` | Lists issues |
 | `show <repo> <id> [--json]` | Prints one issue, its spec and its notes |
 | `edit <repo> <id> [--title t] [--request -] [--spec -] [--priority p] [--labels a,b] [--source s] [--after <key>] [--refs <key,…>]` | Changes fields |
 | `note <repo> <id> "<text>"` | Adds one line with a time stamp; it never rewrites a line |
@@ -37,8 +37,9 @@ An issue added with `--spec -` is ready to build in a repo without `"author": tr
 | `done <repo> <id> ["<summary>"]` | Closes the issue as done |
 | `drop <repo> <id> "<reason>"` | Closes the issue as dropped |
 | `lint [<repo>] [--fix]` | Checks every file; `--fix` repairs what is mechanical |
+| `retitle <repo>` | Gives each open or parked issue whose title breaks the title rule a new title, and notes the old one |
 
-`--after` takes issue keys such as `issue.5`. With no repo, `list` and `lint` cover the recent repos: those with a run or an issue change in the last 7 days, latest first.
+`add`, `list` and `edit` take `--kind task|bug|check|flake`. `--after` takes issue keys such as `issue.5`. With no repo, `list` and `lint` cover the recent repos: those with a run or an issue change in the last 7 days, latest first.
 
 ## Media
 
@@ -48,14 +49,10 @@ Intake gets each file's path in its prompt, with `--add-dir` on the issue's fold
 
 ## How the store works
 
-The store's `origin/main` is the record. A read fetches it and reads it there. A write is one commit on it, made without a working tree, and then the store's checkout fast-forwards. A change to an issue never moves a product repo's `main`. An issue closes in the store after its landing commit is pushed.
+[Data model](data-model.md#items-repo-items) says how a read and a write work, and lists each frontmatter field. A change to an issue never moves a product repo's `main`. An issue closes in the store after its landing commit is pushed. Closing an issue, by `done`, `drop`, a land or the director, logs one `done` or `dropped` event on `issue.<n>` after the push, in one code path, so a close has one event and one reason in `closed_why`. Code writes no note: a note is what a person or an agent said.
 
-A write takes the issue number from the counter in `aleph.db` before the push. If the push is refused, the number stays used. Closing an issue, by `done`, `drop`, a land or the director, logs one `done` or `dropped` event on `issue.<n>` after the push, in one code path, so a close has one event and one reason in `closed_why`. Code writes no note: a note is what a person or an agent said.
+An Ask is not in the store: it is `issue_state.ask` in `aleph.db` ([Data model](data-model.md#asks)).
 
-## Fields
-
-[Data model](data-model.md#items-repo-items) lists each frontmatter field and the file format. The status is a result of the fields: `closed_as` (`done` or `dropped`), else `parked`, else `open`. An Ask is not in the store; it is on the job record.
-
-Notes are append-only. That is the lost update this format prevents: two writers each add a line, and neither erases the other's.
+## Lint
 
 `lint` exits 1 on a missing or malformed key, a missing `project` or `created`, an unknown status, a malformed `from` or `after`, or a retired field, and names the file and the field. `--fix` drops a stale `id` or `updated`, renames `created_time` to `created` and `closed_time` to `closed_at`, and repairs a bare scalar where a list belongs, and still exits 1 if anything is left.

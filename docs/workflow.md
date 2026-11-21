@@ -105,7 +105,7 @@ Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factor
 | Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`): its newest build run, or with no run yet, any size's model | Skip. Jobs on that backend do not start; jobs on other backends do. Once Chris moves every size off that backend, an issue with no run starts before the probe lifts the hold |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
-| Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |
+| Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a size with room |
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
 | Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or the `caps` setting sets | A `no-commit` or `run-cap` Ask in place of a start; its `question` event is the only event |
 
@@ -184,7 +184,7 @@ Lands of one repo go one at a time, in the order they became ready (`landing.ts`
 1. Merge the branch onto `origin/main` in memory (`git merge-tree`).
 2. Refuse a change to the repo's own to-do list (cause `other`): the worker gets it back with a note.
 3. Run the land checks: the test files the change reaches, the repo's `critical` globs, and every check that is not a test. A change to a file that is not a module runs every test. When `origin/main` has not moved since the run's checks, only the critical tests run.
-4. Push one squash commit with the trailers `Issue: <repo>-<n>` and `Job: <job>`, and `Held-by:` for a held land.
+4. Push one squash commit with the trailers `Issue: issue.<n>` and `Job: job.<n>`, and `Held-by:` for a held land.
 5. Fast-forward the repo's main checkout if it is clean. `aleph-ui` restarts by itself: its unit runs `bun --watch`. When the move changes a file under `jobs/systemd/`, run `systemctl --user daemon-reload`; a failed reload does not fail the land.
 
 **Batch.** The land that takes the lock also takes up to `ALEPH_LAND_BATCH` (8) passed runs queued behind it. It checks the last commit once and pushes all of them. On a failure it splits the batch in half until it finds the run that fails.
@@ -239,7 +239,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 
 The first verb of a pair goes ahead and the second drops the issue; the second takes an optional typed reason. `approve` lands the job or applies the core-note change. `resolve` takes an option, the recommendation or a typed answer; a `part-dropped` Ask offers the options "Close as done" and "Keep open". `continue` starts the job or intake again. `disapprove` on `core-change` keeps the note. The six words are `ASK_ACTIONS` in `lib/naming.ts`.
 
-**The director.** Every new Ask goes to the director first. It is one read-only Fable run per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-issue`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
+**The director.** Every new Ask goes to the director first. It is one read-only run of the `director` role model per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-issue`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 
 - closing or dropping an issue Chris filed;
 - landing a branch that changes a security path or `bun.lock`;
@@ -256,23 +256,23 @@ The first verb of a pair goes ahead and the second drops the issue; the second t
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the table above, `discontinue` for `intake-failed`, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason takes `user`, through `aleph always grant <reason> user` or the Gates page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
+**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the reasons table of [Asks](#8-asks-the-director-and-always-rules), `discontinue` for `intake-failed`, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason takes `user`, through `aleph always grant <reason> user` or the Automation page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
-**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Gates page set, for any reason in the table above but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
+**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Automation page set, for any reason in that reasons table but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
 
 ## 9. Human controls
 
 | To | CLI | UI |
 |---|---|---|
 | Stop and restart new work | `aleph pause`, `aleph resume` | Pause button |
-| Land a passed, held or reviewed run | `aleph land <name>` | Land it |
+| Land a passed run, or one that waits on a `held-path` or `review-held` Ask | `aleph land <name>` | Land it |
 | Drop a run and its branch | `aleph drop <name> [reason]` | Drop the job |
 | Check a returned or failed run again, keeping its work | `aleph recheck <name>` | Recheck |
 | Answer an issue that waits | `aleph issue decide <repo> <id> "<text>"` or `note` | Decide, Note |
 | Change an issue's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
-| Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Gates page |
-| Set a no-answer timeout | `aleph always timeout <reason> <minutes> [pick\|drop]` | Gates page |
-| Set caps and models | `aleph models`, the `caps` setting | Gates page, Agents page |
+| Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Automation page |
+| Set a no-answer timeout | `aleph always timeout <reason> <minutes> [pick\|drop]` | Automation page |
+| Set caps and models | `aleph models`, the `caps` setting | Automation page, Agents page |
 
 A write to an issue starts intake or a dispatch at once. A land by hand writes `Held-by:` with the lander's name.
 
@@ -280,7 +280,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 
 | Task | Trigger | Does | Stops duplicate work |
 |---|---|---|---|
-| Firefighter | Tick, each 5 minutes, or each minute while a CI run on main is in progress or a land ended in the last 15 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
+| Firefighter | Tick, each 5 minutes, or each minute while a CI run on main is in progress or a land ended in the last 15 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; one Ask per land run, under the lock `rescue-<repo>-<name>` |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
 | Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, and compiles yesterday into vault notes | The vault run record and `compiledDays` |
 | Monitor | Tick, daily from its local hour (0 to 23, 0 by default; set on the Automation page) | Reads the day's records and writes numbered findings for the Status page | One per day |
@@ -289,7 +289,7 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 
 | To learn | Read |
 |---|---|
-| Why an issue did not start | The `hold` events in `~/.aleph/jobs/<repo>-<n>.json`, or the Holds panel on Status |
+| Why an issue did not start | The issue's `held` events in `aleph.db`, or the Holds panel on Status |
 | Why a run stopped | `aleph status <repo>-<n>`, or the job page |
 | What a check printed | the `checks` section of `~/.aleph/jobs/<n>/log.txt` |
 | What the director decided | The Automation page |
