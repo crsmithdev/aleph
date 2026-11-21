@@ -34,8 +34,8 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
 }
 
-/** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.role) && isRunning(e));
+/** Agent runs live now, and those started whose unit has not written `pid` yet. Only a `running` run is stat'ed: the unit writes `exit` just after the state that ends it. */
+export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.role) && e.run.state === "running" && isRunning(e));
 
 /** Whether a build run is on the local backend: unit.ts sets its model to its size's, and before that its size's model is the local one. */
 export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Name, Setting>): boolean => viaOfRun(run, models) === "local";

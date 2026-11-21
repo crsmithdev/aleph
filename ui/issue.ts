@@ -3,13 +3,16 @@
  * card of the Status page. Every route that shows an issue builds it here, so the link, the stage and the Ask card
  * read the same on every page.
  */
-import { issueHref } from "../lib/naming.ts";
+import { issueHref, issueKey } from "../lib/naming.ts";
 import { askOfItem, asking, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import { afterOf, areasOf, priorityOf, sourceOf } from "../lib/issue-file.ts";
 import * as todos from "../lib/issue-file.ts";
 import { today } from "../lib/day.ts";
 import type { NewIssue } from "./state.ts";
+import { decider } from "../jobs/lib/gates/decider.ts";
+import { allJobs, type Repo } from "../jobs/lib/records/ledger.ts";
+import { isBuildable } from "../lib/store.ts";
 
 /** The stage the UI shows: parked when parked, else the stage its jobs give, else its status. */
 export const stageOf = (item: todos.Issue, st?: Pick<Stage, "stage">): string =>
@@ -51,4 +54,15 @@ export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask):
 export function awaiting(repo: string, item: todos.Issue, stage: string): NewIssue | null {
   const ask = askOfItem(item);
   return asking(item, ask) && (todos.status(item) === "parked" || stage === "waiting") ? card(repo, item, "waiting", ask) : null;
+}
+
+/**
+ * What `aleph dispatch <key>` (Run now) would do with an open issue: `runNow` is null when it starts the issue, else the text of
+ * the gate that binds, as the dispatch reads the same facts. Nothing for a closed issue.
+ */
+export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
+  if (todos.status(item) !== "open") return {};
+  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueKey(item.id)} is not a queued issue` };
+  const d = decider({ fresh: false, jobs }).decide(repo, item, { jobs });
+  return { runNow: d.kind === "ready" ? null : d.text };
 }

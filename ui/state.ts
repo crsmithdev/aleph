@@ -12,11 +12,11 @@ import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { pendingWaits, waitsOf, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
 import { stateOf, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { counting, isError } from "../jobs/lib/records/record.ts";
+import { allRuns, counting, isError } from "../jobs/lib/records/record.ts";
 import { type Cause } from "../jobs/lib/records/outcome.ts";
 import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
-import { withProjects } from "./api/scope.ts";
-import type { Context as HeraldContext } from "./herald.ts";
+import { eventIn, factoryWide, withProjects } from "./api/scope.ts";
+import { heraldRows, type Context as HeraldContext } from "./herald.ts";
 import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
 import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/issue-file.ts";
@@ -484,4 +484,13 @@ export function state(now = new Date()): State {
     errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),
   };
+}
+
+/** `events` narrowed to `project`'s: none of a factory-wide job. */
+export const mineOf = (events: EventRow[], project: string | null) => (project ? events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)) : events);
+
+/** The Herald's rows for one project (null for all) as of now, with the `seq` of the newest event: what the `ev` stream sends when an event is added. */
+export function heraldNow(project: string | null) {
+  const events = heraldEvents(Date.now()), mine = mineOf(events, project);
+  return { seq: events.at(-1)?.seq ?? 0, rows: heraldRows(mine, heraldContext(mine, allRuns(), reader())) };
 }

@@ -4,7 +4,9 @@
  */
 import { SENT_BACK } from "../jobs/lib/gates/worker-verdict.ts";
 import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
-import { jobHref, parseId, refs, word } from "../lib/naming.ts";
+import { jobHref, parseId, parseKey, refs, word } from "../lib/naming.ts";
+import { askReason } from "../jobs/lib/gates/factory-status.ts";
+import { readEvents } from "../lib/layout.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
@@ -243,3 +245,17 @@ export function errorBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: st
   return null;
 }
 
+/** One Ask of an issue: the reason, when it came and, once decided, when it went. From the `question` and `answered` events of the issue. */
+export interface AskSpan { issue: string; reason: string; set: string; cleared?: string }
+
+/** Every Ask of every issue, oldest first. */
+export function askHistory(): AskSpan[] {
+  const out: AskSpan[] = [], open = new Map<string, AskSpan>();
+  for (const e of readEvents(0)) {
+    if (parseKey(e.object)?.kind !== "issue") continue;
+    // The gate sets each Ask; whoever answered it, or `rule` when it went with no answer, clears it.
+    if (e.subject === "gate" && e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
+    else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; open.delete(e.object); } }
+  }
+  return out;
+}

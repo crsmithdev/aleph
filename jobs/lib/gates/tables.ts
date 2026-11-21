@@ -52,14 +52,14 @@ export const appendSuiteHistory = (r: SuiteRecord): void => {
 
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 
-/** A red main: a failed baseline or a red GitHub CI streak. `id` names the red commit or streak; `line` says it with the repo. */
-interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string }
+/** A red main: a failed baseline or a red GitHub CI streak. `id` names the red commit or streak; `line` says it with the repo; `commit` is empty for a CI run with no head sha. */
+interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string; commit: string; url?: string }
 
-/** Every red main now, the baselines first: what the health lines and the Gates page report, and the firefighter files. */
+/** Every red main now, the baselines first: what the health lines and the Gates page report. The firefighter files each one with a commit. */
 export function redMains(): RedMain[] {
   const base = Object.values(baselines()).filter((b) => !b.ok)
-    .map((b): RedMain => ({ repo: b.repo, source: "baseline", id: `red:${b.repo}:${b.commit}`, line: `${b.repo} ${redLine(b)}` }));
-  const ci = redCi().map((c): RedMain => ({ repo: c.repo, source: "ci", id: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, line: ciLine(c) }));
+    .map((b): RedMain => ({ repo: b.repo, source: "baseline", id: `red:${b.repo}:${b.commit}`, line: `${b.repo} ${redLine(b)}`, commit: b.commit }));
+  const ci = redCi().map((c): RedMain => ({ repo: c.repo, source: "ci", id: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, line: ciLine(c), commit: c.sha, url: c.url }));
   return [...base, ...ci];
 }
 

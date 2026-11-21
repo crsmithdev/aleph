@@ -21,17 +21,15 @@ async function toolSessions(toolTraces: Record<string, string[]>, days: number, 
 }
 
 /** The response of `GET /api/sessions` for `url`. */
-async function load(req: Request, url: URL): Promise<Response> {
+async function load(url: URL): Promise<Response> {
     const sc = scopeOf(url, "week", SESSIONS);
     if (sc instanceof Response) return sc;
     const { days, project } = sc;
-    const inner = new URL(url);
-    inner.searchParams.set("window", sc.window);
-    const innerReq = new Request(inner, req);
+    const limit = url.searchParams.get("limit"), before = url.searchParams.get("before");
     const [act, skills, sessions] = await Promise.all([
       activity(days, project),
-      partOf(listSkills(innerReq)),
-      partOf(listSessions(innerReq)),
+      partOf(listSkills(sc)),
+      partOf(listSessions(sc, { limit: limit === null ? undefined : Number(limit), before })),
     ]);
     const { toolTraces = {}, ...rest } = act;
     const links = sessions.error ? {} : await toolSessions(toolTraces, days, project).catch((e) => { console.error(`ui/agents: no tool sessions: ${errText(e)}`); return {}; });
@@ -40,5 +38,5 @@ async function load(req: Request, url: URL): Promise<Response> {
     return Response.json({ window: days, project, partial, activity: rest, skills, sessions, toolSessions: links });
 }
 
-export const routes: Routes = { "GET /api/sessions": (req, _p, url) => load(req, url) };
+export const routes: Routes = { "GET /api/sessions": (_req, _p, url) => load(url) };
 

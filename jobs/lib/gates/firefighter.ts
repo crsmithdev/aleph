@@ -19,10 +19,10 @@ import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import { failedTests } from "./checks.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
-import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
+import { ciOf, gh, type Gh } from "./ci.ts";
 import { paused } from "./pause.ts";
 import { sandboxRepos } from "./gpu.ts";
-import { baselines, redLine } from "./tables.ts";
+import { redMains } from "./tables.ts";
 import { git } from "../../../lib/git.ts";
 import { readSection } from "../records/run-files.ts";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -102,17 +102,11 @@ const oneLine = (text: string): string => {
 export function reds(ports: Ports = defaultPorts): Red[] {
   const reg = loadRegistry();
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const out: Red[] = [];
-  for (const b of Object.values(baselines())) {
-    if (b.ok || !keys.has(b.repo)) continue;
-    out.push({ repo: b.repo, commit: b.commit, source: "baseline", line: `${b.repo} ${redLine(b)}`, log: () => readSection(join(factoryDir(), "baseline", b.repo), "checks") ?? "" });
-  }
-  for (const c of redCi()) {
-    if (!keys.has(c.repo) || !c.sha) continue;
+  return redMains().filter((r) => keys.has(r.repo) && r.commit).map((r) => {
     let log: string | undefined;
-    out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => (log ??= ciLog(ports, reg[c.repo], c.url)), url: c.url });
-  }
-  return out;
+    const read = r.source === "baseline" ? () => readSection(join(factoryDir(), "baseline", r.repo), "checks") ?? "" : () => (log ??= ciLog(ports, reg[r.repo], r.url!));
+    return { repo: r.repo, commit: r.commit, source: r.source, line: r.line, log: read, ...(r.url ? { url: r.url } : {}) };
+  });
 }
 
 const mark = (commit: string) => `Failing commit: ${commit}`;

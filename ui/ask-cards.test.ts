@@ -8,7 +8,7 @@ import * as view from "./views/now.js";
 // @ts-ignore cards.js is plain JS, shared with the page
 import { askCard } from "./views/lib/ask-cards.js";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { decided, denyReasons, endDraw, startDraw } from "./views/lib/decisions.js";
+import { drawAt, keepReason, record } from "./views/lib/decisions.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { when } from "./views/lib/format.js";
 import { shortId } from "../lib/naming.ts";
@@ -163,10 +163,10 @@ test("a decide card marks the recommendation once, on the action when one carrie
   expect(held).toContain('<li class="rec"><b>Split it</b>');
 });
 
-test("the reason box is an inputBox() with its attributes and the reason kept in denyReasons", () => {
-  denyReasons.set("tools-4", "not now");
+test("the reason box is an inputBox() with its attributes and the reason kept by keepReason", () => {
+  keepReason("tools", 4, "not now");
   const row = askCard(plain({ actions: [{ act: "dismiss", label: "Drop the issue", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "Chris denied: " } }] }), "2026-10-27T17:00:00Z");
-  denyReasons.delete("tools-4");
+  keepReason("tools", 4, "");
   const input = row.match(/<input [^>]*>/)![0];
   expect(input.startsWith('<input name="reason" type="text" value="not now"')).toBe(true);
   for (const a of ['aria-label="Reason to dismiss tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
@@ -174,13 +174,13 @@ test("the reason box is an inputBox() with its attributes and the reason kept in
 
 test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {
   const [a, b] = four(), s = { ...withFactory({}), asks: [a, b], errored: [] };
-  const draw = (state: object, at = 2) => { startDraw(); const h = view.renderHerald(state); endDraw(at); return h; };
-  decided.set(a.id, 1);
+  const draw = (state: object, at = 2) => drawAt(at, () => view.renderHerald(state));
+  record(a.id, 1);
   const h = draw(s);
   expect(h).not.toContain(`data-ask="${a.id}"`);
   expect(h).toContain(`data-ask="${b.id}"`);
   // A draw of a view that lists no asks, and a state loaded before the decision that drops it, keep the decision.
-  startDraw(); endDraw(2);
+  drawAt(2, () => "");
   draw({ ...s, asks: [b] }, 0);
   expect(draw(s)).not.toContain(`data-ask="${a.id}"`);
   draw({ ...s, asks: [b] });

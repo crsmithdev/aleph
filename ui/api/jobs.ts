@@ -20,7 +20,7 @@ import { issueHref, shownId } from "../../lib/naming.ts";
 import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
-import { runNowOf } from "./issues.ts";
+import { runNowOf } from "../issue.ts";
 import { readList } from "../../lib/store.ts";
 import { parentOf, partsOf } from "../../lib/issue-file.ts";
 import * as todos from "../../lib/issue-file.ts";

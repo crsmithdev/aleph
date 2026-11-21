@@ -18,6 +18,7 @@ import { issueFacts } from "./factory-status.ts";
 import { decideIntake } from "./intake-decision.ts";
 import { issueDecision, refDone, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
 import { decideStart, type Route, type StartDecision } from "./start-decision.ts";
+import { sandboxRepos } from "./gpu.ts";
 import { mainRed } from "./tables.ts";
 
 /**
@@ -79,7 +80,13 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   /** The decision of intake for `item` of `doc`, its repo's list. */
   const intake = (repo: Repo, item: issues.Issue, doc: issues.Doc) => decideIntake(repo, item, { doc, done, red: redOf(repo) });
 
-  return { lists, done, stagesOf, decide, intake };
+  /** Each issue of the sandbox repos, in list order, that intake lets in. */
+  const intakeCandidates = (): { repo: Repo; item: issues.Issue }[] => sandboxRepos().flatMap((repo) => {
+    const doc = lists.list(repo.key);
+    return (doc?.items ?? []).filter((item) => intake(repo, item, doc!).kind !== "none").map((item) => ({ repo, item }));
+  });
+
+  return { lists, done, stagesOf, decide, intake, intakeCandidates };
 }
 
 export type Decider = ReturnType<typeof decider>;

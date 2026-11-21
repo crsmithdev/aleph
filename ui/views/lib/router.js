@@ -13,7 +13,7 @@
 import { Idiomorph } from "../../vendor/idiomorph.js";
 import { setCodes } from "../../../lib/naming.ts";
 import { postJson, parseHash, scope } from "./address.js";
-import { actMessages, decided, denyReasons, endDraw, openDiffs, startDraw } from "./decisions.js";
+import { actMessages, drawAt, keepReason, openDiffs, record } from "./decisions.js";
 import { failMessage, markLine } from "./format.js";
 import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
 
@@ -256,9 +256,7 @@ export async function start() {
     // A view's `swap` sees the page before the redraw replaces it; the function it returns runs after, as for motion.
     const swapped = first ? null : view.swap?.($("view"));
     try {
-      startDraw();
-      const out = view.render(data, params, query);
-      endDraw(at);
+      const out = drawAt(at, () => view.render(data, params, query));
       // A refresh of a view whose path is in `morph` is merged into the page by idiomorph, which keeps the elements that match.
       if (morph.has(view.path) && !first) Idiomorph.morph($("view"), out, { morphStyle: "innerHTML", ignoreActiveValue: true });
       else $("view").innerHTML = out;
@@ -405,7 +403,7 @@ export async function start() {
 
   document.addEventListener("input", (e) => {
     const f = e.target.closest && e.target.closest("input.reason[data-id]");
-    if (f) f.value ? denyReasons.set(`${f.dataset.repo}-${f.dataset.id}`, f.value) : denyReasons.delete(`${f.dataset.repo}-${f.dataset.id}`);
+    if (f) keepReason(f.dataset.repo, f.dataset.id, f.value);
   });
 
   // The Always hint's revoke command names the key the picked scope grants.
@@ -484,10 +482,10 @@ async function dispatch(e) {
   if (name) actMessages.delete(name);
   try {
     await postJson(b.dataset.path, body);
-    if (box?.dataset.id) denyReasons.delete(`${box.dataset.repo}-${box.dataset.id}`);
+    if (box?.dataset.id) keepReason(box.dataset.repo, box.dataset.id, "");
   } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
   const row = b.closest("article.issue-row");
-  if (row?.dataset.ask) decided.set(row.dataset.ask, Date.now());
+  if (row?.dataset.ask) record(row.dataset.ask);
   row?.remove();
   page.reload();
 }

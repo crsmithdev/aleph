@@ -9,7 +9,7 @@ import { readJsonOr, writeJson } from "../../lib/json.ts";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { parseScope, scopeOf, traceProject } from "./scope.ts";
+import { scopeOf, traceProject, type Scope } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../lib/sources.ts";
@@ -252,10 +252,7 @@ function detail(a: Analysis, name: string) {
 }
 
 /** The analysis of the window `url` names; a Langfuse failure throws its message. */
-async function analysed(url: URL): Promise<Analysis> {
-  const sc = parseScope(url, "month", SESSIONS);
-  if ("error" in sc) throw new Error(sc.error);
-  const { days, project } = sc;
+async function analysed({ days, project }: Pick<Scope, "days" | "project">): Promise<Analysis> {
   try { return await once(`skills:${langfuse()?.base}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
   catch (e) { throw new Error(`Langfuse failed: ${(e as Error).message}`); }
 }
@@ -264,14 +261,14 @@ async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<
   const sc = scopeOf(url, "month", SESSIONS);
   if (sc instanceof Response) return sc;
   let a: Analysis;
-  try { a = await analysed(url); }
+  try { a = await analysed(sc); }
   catch (e) { return Response.json({ error: (e as Error).message }, { status: 502 }); }
   const value = make(a);
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });
 }
 
-/** The skills of a window, for the Agents view; a bad window or a Langfuse failure throws its message. */
-export const listSkills = async (req: Request) => summary(await analysed(new URL(req.url)));
+/** The skills of a scope, for the Agents view; a Langfuse failure throws its message. */
+export const listSkills = async (sc: Pick<Scope, "days" | "project">) => summary(await analysed(sc));
 
 export const routes: Routes = {
   "GET /api/skills/:name": (_req, p, url) => cached(url, (a) => {

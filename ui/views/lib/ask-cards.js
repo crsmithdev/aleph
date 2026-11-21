@@ -1,5 +1,5 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
-import { actMessages, denyReasons, openDiffs } from "./decisions.js";
+import { actMessages, openDiffs, reasonOf } from "./decisions.js";
 import { clock, dur, span, when } from "./format.js";
 import { actButton, fold, codeText, diffHtml, esc, inputBox, meta, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
 import { shortText, shortId, jobHref, parseId } from "../../../lib/naming.ts";
@@ -99,7 +99,7 @@ export function askCard(i, now = new Date().toISOString()) {
     if (a.input?.name === "reason") {
       const p = parseId(i.id);
       const n = p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "";
-      return inputBox("reason", denyReasons.get(i.id), { attrs: ` class="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to ${esc(a.act)} ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}"` });
+      return inputBox("reason", reasonOf(i.id), { attrs: ` class="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to ${esc(a.act)} ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}"` });
     }
     return a.input ? inputBox(a.input.name, "", { attrs: ` class="reason" maxlength="500" placeholder="Answer" hidden aria-label="Answer for ${esc(i.id)}"` }) : "";
   };

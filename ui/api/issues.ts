@@ -5,7 +5,7 @@
  * takes `?project=<key>` and shows only that project. A read is the work store's origin/main; a write runs
  * `aleph issue <verb>` through ui/action.ts, so the CLI stays the one writer.
  */
-import { specs } from "./specs.ts";
+import { specs } from "../specs.ts";
 import { aleph, fail, post } from "../action.ts";
 import { allJobs, issueKeyOf, loadRegistry, onOf, runsByIssue, type Repo } from "../../jobs/lib/records/ledger.ts";
 import { allRuns } from "../../jobs/lib/records/record.ts";
@@ -16,7 +16,7 @@ import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { filed, isBuildable, MEDIA_TYPES, mediaFiles, everyFetched, readList, readLists } from "../../lib/store.ts";
+import { filed, MEDIA_TYPES, mediaFiles, everyFetched, readList, readLists } from "../../lib/store.ts";
 import { afterOf, mediaOf, parentOf, partsOf, priorityOf, referrersOf, refsOf } from "../../lib/issue-file.ts";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -25,12 +25,11 @@ import * as todos from "../../lib/issue-file.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
-import { awaiting, row, stageOf, type Row } from "../issue.ts";
+import { awaiting, row, runNowOf, stageOf, type Row } from "../issue.ts";
 import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { answerHeld, NOTE } from "../../jobs/lib/roles/recheck.ts";
-import { decider } from "../../jobs/lib/gates/decider.ts";
 import { readHolds } from "../../jobs/lib/gates/holds.ts";
 import { projectOf, repoIn } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -79,17 +78,6 @@ function list(url: URL): Response {
 function jobRow(runs: ReturnType<typeof allJobs>[number]) {
   const v = view(runs);
   return { id: v.run.id, name: v.name, state: v.state, kind: v.run.role, started: v.started, ended: v.ended ?? null, cost: v.cost ?? null, runs: runs.length };
-}
-
-/**
- * What `aleph dispatch <key>` (Run now) would do with an open issue: `runNow` is null when it starts the issue, else the text of
- * the gate that binds, as the dispatch reads the same facts. Nothing for a closed issue.
- */
-export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
-  if (todos.status(item) !== "open") return {};
-  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueKey(item.id)} is not a queued issue` };
-  const d = decider({ fresh: false, jobs }).decide(repo, item, { jobs });
-  return { runNow: d.kind === "ready" ? null : d.text };
 }
 
 function detail(params: Record<string, string>, url: URL): Response {

@@ -111,13 +111,13 @@ test("outsideSurface lists the changed files the Edit surface does not name, and
   expect(reviewPrompt("n", spec, "diff", [])).not.toContain("## Changes outside the Edit surface");
 });
 
-/** Main gets `x.test.ts`; `work` edits it. The spec's Edit surface is `surface`. Returns the verdict with a runner that passes. */
-const pinVerdict = (surface: string) => {
+/** Main gets `x.test.ts`; `work` edits it, by `edit`. The spec's Edit surface is `surface`. Returns the verdict with a runner that passes. */
+const pinVerdict = (surface: string, edit = () => commit(repo.path, "x.test.ts", "2\n", "weaken")) => {
   git(repo.path, "switch", "-q", "main");
   commit(repo.path, "x.test.ts", "1\n", "test on main");
   git(repo.path, "switch", "-q", "work");
   git(repo.path, "rebase", "-q", "main");
-  commit(repo.path, "x.test.ts", "2\n", "weaken");
+  edit();
   git(repo.path, "switch", "-q", "main");
   writeFileSync(runFile(folder, "spec.md"), `## Edit surface\n- ${surface}\n\n## Oracle\n- \`bun test ./x.test.ts\` passes.\n`);
   const base = git(repo.path, "rev-parse", "main").out;
@@ -130,6 +130,12 @@ test("a branch that edits an Oracle file on main outside the Edit surface fails 
   const r = await pinVerdict("job.txt");
   expect(r.outcome).toMatchObject({ state: "returned", checkName: "oracle", reason: expect.stringContaining("oracle-pin: the branch edits a file the Oracle runs, outside the Edit surface: x.test.ts") });
   expect(getRun(id)!.checks!.at(-1)).toEqual({ name: "oracle-pin", ok: false, seconds: 0 });
+});
+
+test("a rename of an Oracle file to a path the Edit surface names fails oracle-pin on the old path", async () => {
+  git(repo.path, "branch", "-f", "work", "main");
+  const r = await pinVerdict("y.test.ts", () => { git(repo.path, "mv", "x.test.ts", "y.test.ts"); git(repo.path, "commit", "-qm", "move"); });
+  expect(r.outcome).toMatchObject({ state: "returned", reason: expect.stringContaining("outside the Edit surface: x.test.ts") });
 });
 
 test("an edit of an Oracle file that the Edit surface names passes the pin", async () => {

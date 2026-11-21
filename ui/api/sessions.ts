@@ -4,8 +4,7 @@ import { LangfuseError, need, type Langfuse, type Observation, type Trace } from
 import { list } from "../langfuse.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { allRuns } from "../../jobs/lib/records/record.ts";
-import { projectOf as projectOfUrl, parseScope, traceIn, traceProject } from "./scope.ts";
-import { SESSIONS } from "../../lib/windows.ts";
+import { projectOf as projectOfUrl, traceIn, traceProject, type Scope } from "./scope.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
@@ -242,13 +241,8 @@ function turnOf(id: string, ts: Trace[], i: number, obs: Observation[], fit: Par
   return { n: i + 1, ...wkOf(fit, cost, job?.cost ? job.model : model), traceId: t.id, start: t.timestamp, model, seconds: secondsOf(t), cost };
 }
 
-/** The sessions of a window for the Agents view: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. A bad query or a Langfuse failure throws its message. */
-export async function listSessions(req: Request) {
-  const url = new URL(req.url);
-  const sc = parseScope(url, "week", SESSIONS);
-  if ("error" in sc) throw new Error(sc.error);
-  const { days, project } = sc;
-  const limit = Number(url.searchParams.get("limit") ?? LIMIT), before = url.searchParams.get("before");
+/** The sessions of a scope for the Agents view: newest last turn first, `limit` of them before the `before` time, and `next`, the `before` of the next page. A bad page or a Langfuse failure throws its message. */
+export async function listSessions({ days, project }: Pick<Scope, "days" | "project">, { limit = LIMIT, before = null }: { limit?: number; before?: string | null } = {}) {
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX) throw new Error(`limit must be 1 to ${MAX}`);
   if (before !== null && Number.isNaN(Date.parse(before))) throw new Error("before must be an ISO time");
   const lf = need();

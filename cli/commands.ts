@@ -14,11 +14,10 @@ import { uiPort, workerCmd } from "../jobs/lib/infra/settings.ts";
 import { runFile } from "../jobs/lib/records/run-files.ts";
 import { isLive } from "../jobs/lib/infra/process.ts";
 import { findJob, issue as issueOf, issueTitle, readFile, stateOf, view, type Job } from "../jobs/lib/records/job.ts";
-import { counting, keepingRuns, patchRun, setState, allRuns } from "../jobs/lib/records/record.ts";
+import { counting, keepingRuns, patchRun, allRuns } from "../jobs/lib/records/record.ts";
 import { fetchingOnce } from "../lib/store.ts";
 import { unit } from "../jobs/lib/roles/unit.ts";
 import { onMain } from "../jobs/lib/records/status.ts";
-import { settleOnMain } from "../jobs/lib/land/landing.ts";
 import { fetchOrigin, git } from "../lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../lib/issue-file.ts";
@@ -44,8 +43,7 @@ import { runMonitor, tableOf } from "../jobs/lib/roles/monitor.ts";
 import { housekeep } from "../jobs/lib/roles/housekeeper.ts";
 import { caseOf, investigate, lockOf } from "../jobs/lib/roles/investigator.ts";
 import { held } from "../lib/locks.ts";
-import { cutTitle } from "../jobs/lib/roles/title.ts";
-import { checkName, checked, drop, land, recheck, startJob, startPlain, type Start } from "../jobs/lib/transitions/transitions.ts";
+import { checkName, checked, drop, foundOnMain, land, recheck, startJob, startPlain, type Start } from "../jobs/lib/transitions/transitions.ts";
 import type { Fate } from "../jobs/lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
 import * as doctor from "../jobs/lib/infra/doctor.ts";
@@ -189,8 +187,7 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
     }
     const found = onMain(repo, { jobs: runs.map((e) => e.id), branch: last.run.branch, fetch: false });
     if (found) {
-      setState(last.id, "landed", { commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
-      const { todo } = settleOnMain(repo, last.run, found.commit, cutTitle(last.run.say ?? last.run.name));
+      const todo = foundOnMain(repo, last, found);
       if (todo && todo !== "done") ctx.err(`warn: issue ${issueOf(runs)} not closed: ${todo}`);
       continue;
     }

@@ -9,7 +9,7 @@
 import { plainAsk, type AskReason } from "../asks/ask.ts";
 import { checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, runsBunTest, stopFields, testRecord, withJunit, type ChecksStop, type Ran, type Runner } from "./checks.ts";
 import { buildChecks } from "./related.ts";
-import { heldRule, securityChange, testFindings } from "./gate.ts";
+import { changedPaths, heldRule, securityChange, testFindings } from "./gate.ts";
 import { git } from "../../../lib/git.ts";
 import * as jobRecord from "../records/record.ts";
 import { jobOfFolder, jobSpecFile, logTo } from "../records/run-files.ts";
@@ -322,8 +322,8 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, base: string,
     result(false, true);
     return { noVerdict: `no verdict: oracle: ${command}` };
   };
-  // The worker must not edit a file its Oracle runs that is on the base and outside the Edit surface.
-  const pinned = outsideSurface(spec, git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean))
+  // The worker must not edit a file its Oracle runs that is on the base and outside the Edit surface; a rename edits its old path.
+  const pinned = outsideSurface(spec, changedPaths(repo.path, base, tip))
     .filter((f) => oraclePaths(spec).includes(f) && git(repo.path, "cat-file", "-e", `${base}:${f}`).ok);
   if (pinned.length) {
     jobRecord.appendCheck(jobOfFolder(folder), { name: "oracle-pin", ok: false, seconds: 0 });

@@ -22,7 +22,7 @@ import * as issues from "../../../lib/issue-file.ts";
 import { change, ctx, dispatch, fakes, newIssue, mk, setup, sh, teardown } from "./factory.testkit.ts";
 import { readList, writeList } from "../../../lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
-import { runNowOf } from "../../../ui/api/issues.ts";
+import { runNowOf } from "../../../ui/issue.ts";
 import { loadRegistry } from "../records/ledger.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */

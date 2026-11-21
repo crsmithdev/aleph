@@ -142,8 +142,7 @@ const CASE = /\b(test|it|describe|expect)\s*(\.\w+\s*)?\(/;
  */
 export function heldPaths(cwd: string, held: string[], base: string, tip: string): string[] {
   const isHeld = (p: string) => held.some((g) => new Bun.Glob(g).match(p));
-  const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  return rows.flatMap(([, ...paths]) => paths).filter((p) => isHeld(p) && !isGateTest(p));
+  return changedPaths(cwd, base, tip).filter((p) => isHeld(p) && !isGateTest(p));
 }
 
 /** The held rule the diff from `base` to `tip` breaks, `held path <first held path>`, or null. */
@@ -151,6 +150,13 @@ export function heldRule(cwd: string, held: string[], base: string, tip: string)
   const [p] = heldPaths(cwd, held, base, tip);
   return p ? `held path ${p}` : null;
 }
+
+/** The diff from `base` to `tip` by file: its status letter, then its path, or a rename's old and new paths. */
+const diffRows = (cwd: string, base: string, tip: string): string[][] =>
+  git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
+
+/** Each path the diff from `base` to `tip` changes; a rename gives both its old and new path. */
+export const changedPaths = (cwd: string, base: string, tip: string): string[] => diffRows(cwd, base, tip).flatMap(([, ...paths]) => paths);
 
 /**
  * The review and safety checks. A diff that changes one waits for Chris
@@ -160,8 +166,7 @@ export const SECURITY_PATHS = ["hooks/", "jobs/lib/gates/gate.ts", "package.json
 
 /** A security path the diff from `base` to `tip` changes that is not a test, or null. A rename counts both of its paths. */
 export function securityChange(cwd: string, base: string, tip: string): string | null {
-  const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
-  for (const [, ...paths] of rows) for (const p of paths) if (!isGateTest(p) && SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s))) return p;
+  for (const p of changedPaths(cwd, base, tip)) if (!isGateTest(p) && SECURITY_PATHS.some((s) => (s.endsWith("/") ? p.startsWith(s) : p === s))) return p;
   return null;
 }
 
@@ -172,7 +177,7 @@ export function securityChange(cwd: string, base: string, tip: string): string |
  * The reviewer judges them against the issue; they do not hold the run.
  */
 export function testFindings(cwd: string, base: string, tip: string): string[] {
-  const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));
+  const rows = diffRows(cwd, base, tip);
   const lines = (f: string, sign: "+" | "-") => git(cwd, "diff", base, tip, "--", f).out.split("\n").filter((l) => l.startsWith(sign) && !l.startsWith(sign.repeat(3)));
   const found: string[] = [];
   for (const [status, from, to] of rows) {

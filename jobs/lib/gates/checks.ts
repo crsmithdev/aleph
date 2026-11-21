@@ -6,6 +6,7 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { changedPaths } from "./gate.ts";
 import { recordFlake } from "./tables.ts";
 import { admit, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
 import type { Stated } from "../records/outcome.ts";
@@ -294,8 +295,8 @@ const removedCases = (diff: string): string[] =>
  * also removes from a test file is a move, not a new case: a split, a rename or a delete of its file.
  */
 export function newTests(cwd: string, base: string, tip: string): NewTests[] {
-  // A renamed test file lists as its new path alone, so `--no-renames` keeps the old path, which holds the moved cases.
-  const files = git(cwd, "diff", "--name-only", "--no-renames", base, tip).out.split("\n").filter((f) => isJsTestFile(f));
+  // A renamed test file keeps its old path too, which holds the moved cases.
+  const files = changedPaths(cwd, base, tip).filter((f) => isJsTestFile(f));
   const diffs = files.map((path) => ({ path, diff: git(cwd, "diff", base, tip, "--", path).out }));
   const moved = new Set(diffs.flatMap((d) => removedCases(d.diff)));
   return diffs.flatMap(({ path, diff }) => {

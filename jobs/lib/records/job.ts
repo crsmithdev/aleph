@@ -6,6 +6,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { lock } from "../../../lib/locks.ts";
 import { needsOf, plainAsk, type Ask } from "../asks/ask.ts";
 import { causeOf, failedCheckOf, type Cause } from "./outcome.ts";
 import { allJobs, isOpen, onOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
@@ -150,3 +151,6 @@ export function view(j: Job): JobView {
   if (isLost(last.folder)) v.lost = true;
   return v;
 }
+
+/** The lock of job `name` in `repo`; a plain run has no repo. Each verb that changes the job takes it. */
+export const jobLock = (repo: string | undefined, name: string, waitMs?: number) => lock(`job-${repo ?? ""}-${name}`, waitMs);

@@ -36,14 +36,9 @@ export const starts: Starts = { intake: intakeDetached, director: directorDetach
  * each detached. While the live cap binds it starts none: the dispatch at the end of the next run calls it again.
  * Returns the issues it started an intake for.
  */
-export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false }), at = decider({ fresh: false, lists })): string[] {
+export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), at = decider({ fresh: false, lists: reader({ fetch: false }) })): string[] {
   if (gates({ only: ["paused", "full"], jobs: [runs] })) return [];
-  const queue: { repo: Repo; item: issues.Issue }[] = [];
-  for (const repo of sandboxRepos()) {
-    const doc = lists.list(repo.key);
-    for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") queue.push({ repo, item });
-  }
-  queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
+  const queue = at.intakeCandidates().sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
   for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
     const name = issueKey(item.id);

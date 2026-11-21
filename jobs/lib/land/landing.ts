@@ -20,7 +20,7 @@ import { removeWorktree } from "../infra/git.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
 import { LOCK_BUSY, type Cause } from "../records/outcome.ts";
-import { hasFile } from "../records/job.ts";
+import { hasFile, jobLock } from "../records/job.ts";
 import { onMain } from "../records/status.ts";
 import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
 import { landBatch } from "../infra/settings.ts";
@@ -292,7 +292,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
   const phase = (p: string) => record.patchRun(jobOfFolder(folder), { phase: p });
   const fail =(cause: Cause, reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
 
-  const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
+  const release = await jobLock(repo.key, run.name, 60_000);
   if (!release) return fail("locked", LOCK_BUSY);
   let releaseRepo: (() => void) | null = null;
   try {

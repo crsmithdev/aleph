@@ -8,14 +8,15 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { actionsOn, needsOf, reasonOf } from "../asks/ask.ts";
-import { isWaiting, isAgentRun, isBuild, loadRegistry, onOf, repoOf, type Repo } from "../records/ledger.ts";
+import { isWaiting, isAgentRun, isBuild, loadRegistry, onOf, repoOf, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
 import { isLive, isRunning, markEnded, stop, unitOf, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.ts";
-import { addNote, issue as issueOf, latestJob, openJob, stateOf } from "../records/job.ts";
+import { addNote, issue as issueOf, jobLock, latestJob, openJob, stateOf } from "../records/job.ts";
 import { counting, getRun, makeJob, patchRun, setState, type Answer, type NewJob, allRuns } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
-import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
+import { agentOf, landTerms, removeBranch, settleOnMain } from "../land/landing.ts";
+import { cutTitle } from "../roles/title.ts";
 import { git } from "../../../lib/git.ts";
 import { find } from "../../../lib/transcripts.ts";
 import { onMain } from "../records/status.ts";
@@ -161,7 +162,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     if (!issues.find(doc, on)) refuse(`${repo.key} has no issue ${on}`);
   }
 
-  const release = await lock(`job-${repo.key}-${name}`);
+  const release = await jobLock(repo.key, name);
   if (!release) refuse(`job ${name} is busy`);
   try {
     const open = openJob(name);
@@ -198,7 +199,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
 export async function startPlain(a: { name: string; argv: string[]; cwd: string }, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   if (!a.argv.length) refuse("usage: aleph run <name> -- <command> [args...]");
-  const release = await lock(`job--${name}`);
+  const release = await jobLock(undefined, name);
   if (!release) refuse(`${name} is busy`);
   try {
     const live = openJob(name);
@@ -261,6 +262,12 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
   }
 }
 
+/** A job that `found` shows on main: its last run `last` becomes landed as that commit, and its issue settles. Returns the issue's close, as settleOnMain gives it. */
+export function foundOnMain(repo: Repo, last: Entry, found: { commit: string; how: string }): string | undefined {
+  setState(last.id, "landed", { commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
+  return settleOnMain(repo, last.run, found.commit, cutTitle(last.run.say ?? last.run.name)).todo;
+}
+
 /** `aleph checked`: close the manual check of a job that landed with it open, and its issue. */
 export function checked(name: string): { job: string; name: string; state: "landed"; check: "done" } {
   checkName(name);
@@ -284,7 +291,7 @@ export function checked(name: string): { job: string; name: string; state: "land
 export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
   checkName(name);
   const found = openJob(name) ?? refuse(`no open job named ${name}`);
-  const release = await lock(`job-${found.at(-1)!.run.repo ?? ""}-${name}`);
+  const release = await jobLock(found.at(-1)!.run.repo, name);
   if (!release) refuse(`job ${name} is busy`);
   let s: Start;
   try {
@@ -323,7 +330,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
   const last = counting(runs);
   // Chris's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.
   const answer = a.answer ?? (a.quiet ? undefined : { subject: "human", answer: actionsOn(reasonOf(last.run.ask?.reason))[a.answered ? 0 : 1] });
-  const release = await lock(`job-${last.run.repo ?? ""}-${name}`);
+  const release = await jobLock(last.run.repo, name);
   if (!release) refuse(`job ${name} is busy`);
   try {
     if (runs.some((e) => e.run.role === "land" && isLive(e.folder))) refuse("landing");

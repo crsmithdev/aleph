@@ -17,7 +17,7 @@ import { decider, type Decider } from "../gates/decider.ts";
 export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = decider({ fresh: true, jobs, lists })): Promise<string[]> {
   if (paused()) return [];
   const runs = jobs.flat();
-  const live = (kind: string) => runs.some((e) => e.run.role === kind && isLive(e.folder));
+  const live = (kind: string) => runs.some((e) => e.run.role === kind && e.run.state === "running" && isLive(e.folder));
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
     for (const { repo, item } of buildableIssues(sandboxRepos(), lists)) {
@@ -26,10 +26,7 @@ export async function stalled(jobs = allJobs(), lists = reader(), at: Decider = 
     }
   }
   if (!live("intake") && !gates({ only: ["full"], jobs })) {
-    for (const repo of sandboxRepos()) {
-      const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) if (at.intake(repo, item, doc!).kind !== "none") out.push(`ingest:${issueKey(item.id)}`);
-    }
+    for (const { item } of at.intakeCandidates()) out.push(`ingest:${issueKey(item.id)}`);
   }
   return out;
 }

@@ -14,7 +14,7 @@ import { git } from "../../../lib/git.ts";
 import { jobsNamed, notes, readFile, type Job } from "../records/job.ts";
 import { jobOfRun } from "../records/record.ts";
 import { runsBunTest } from "../gates/checks.ts";
-import { isAgentRun, isBuild, onOf, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
+import { isAgentRun, onOf, type Check, type Entry, type FailedTest, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
 import * as record from "../records/record.ts";
 import { jobOfFolder, jobSpec, readSection } from "../records/run-files.ts";
@@ -167,7 +167,7 @@ export const MERGE_SECONDS = 600;
  * `lands` is the job's land runs, read from the ledger when absent.
  */
 export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"] {
-  if (isBuild(run.role) && run.failed) return "worker";
+  if (record.sentBack(run)) return "worker";
   if (isAgentRun(run.role)) return run.state === "passed" && (run.land || autoland) ? "land" : undefined;
   return run.role === "land" ? afterLand(run, lands) : undefined;
 }

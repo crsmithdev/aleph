@@ -9,7 +9,7 @@
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { askReason } from "../../jobs/lib/gates/factory-status.ts";
+import { askHistory } from "../asks.ts";
 import { allHolds, backendHold, stopsStart } from "../../jobs/lib/gates/holds.ts";
 import { sandboxRepos } from "../../jobs/lib/gates/gpu.ts";
 import { baselines, redLine, tickMissed, tickRows } from "../../jobs/lib/gates/tables.ts";
@@ -19,7 +19,7 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { factsOf, parseKey, type EventRow } from "../../lib/naming.ts";
+import { factsOf, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../lib/store.ts";
 import { noteOf } from "../../lib/issue-file.ts";
@@ -41,21 +41,6 @@ type LogEntry = EventRow & { times?: number; first?: string };
 const automatic = (e: LogEntry) => !(e.action === "answered" && !factsOf(e)) && (e.subject === "rule" || (e.subject === "director" && e.action !== "escalated"));
 /** Whether an entry is Chris's answer to an Ask: his rule changes are not. */
 const answer = (e: LogEntry) => e.subject === "human" && e.action !== "changed";
-
-/** One Ask of an issue: the reason, when it came and, once decided, when it went. From the `question` and `answered` events of the issue. */
-export interface AskSpan { issue: string; reason: string; set: string; cleared?: string }
-
-/** Every Ask of every issue, oldest first. */
-export function askHistory(): AskSpan[] {
-  const out: AskSpan[] = [], open = new Map<string, AskSpan>();
-  for (const e of readEvents(0)) {
-    if (parseKey(e.object)?.kind !== "issue") continue;
-    // The gate sets each Ask; whoever answered it, or `rule` when it went with no answer, clears it.
-    if (e.subject === "gate" && e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
-    else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; open.delete(e.object); } }
-  }
-  return out;
-}
 
 /**
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what the `always` setting grants.
@@ -200,7 +185,7 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
     else if (stopsStart(h) && !(h.name in open)) open[h.name] = Date.parse(h.at);
   }
   for (const name of Object.keys(open)) close(name, now);
-  const sent = jobs.flatMap((j) => j.flatMap(({ run: x }, i) => x.role === "build" && x.failed && Date.parse(x.started) >= from
+  const sent = jobs.flatMap((j) => j.flatMap(({ run: x }, i) => record.sentBack(x) && Date.parse(x.started) >= from
     ? [j.slice(i + 1).some(({ run: y }) => y.role === "build" && !y.failed && (y.state === "passed" || y.state === "landed"))]
     : []));
   return {

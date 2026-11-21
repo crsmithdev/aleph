@@ -7,7 +7,7 @@
  */
 import { flakes } from "../../jobs/lib/gates/tables.ts";
 import { decisions, roundsByJob, allRuns } from "../../jobs/lib/records/record.ts";
-import { askHistory, type AskSpan } from "./gates.ts";
+import { askHistory, type AskSpan } from "../asks.ts";
 import { isAgentRun, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, duration } from "../../jobs/lib/infra/process.ts";
 import { type StageRow, stageRows, stageRuns } from "../../jobs/lib/learning/monitor-table.ts";

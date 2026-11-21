@@ -9,7 +9,7 @@
  */
 import { eventsAfter, lastSeq } from "../../lib/layout.ts";
 import { eventIn, projectOf, withProjects } from "./scope.ts";
-import { heraldNow } from "./now.ts";
+import { heraldNow } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { eventTails, updater } from "../updater.ts";
 
