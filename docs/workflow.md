@@ -1,6 +1,6 @@
 # Workflow
 
-This page follows one change from an issue to a commit on `main`. It names each point where the factory can hold the change, send it back, retry it, rescue it, split it or ask Chris. The code is in `jobs/lib/`. [Factory](factory.md) has the commands and settings. [Routing](routing.md) has the model for each step.
+This page follows one change from an issue to a commit on `main`. It names each point where the factory can hold the change, send it back, retry it, rescue it, split it or ask Chris. The code is in `jobs/lib/`. [Factory](factory.md) has the commands and settings. [Routing](routing.md) has the model for each step. [Find why an issue stopped](find-why-stopped.md) has the records to read and the controls to use when a change stops.
 
 ## The path
 
@@ -260,22 +260,6 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 
 **No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Automation page set, for any reason in that reasons table but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
 
-## 9. Human controls
-
-| To | CLI | UI |
-|---|---|---|
-| Stop and restart new work | `aleph pause`, `aleph resume` | Pause button |
-| Land a passed run, or one that waits on a `held-path` or `review-held` Ask | `aleph land <name>` | Land it |
-| Drop a run and its branch | `aleph drop <name> [reason]` | Drop the job |
-| Check a returned or failed run again, keeping its work | `aleph recheck <name>` | Recheck |
-| Answer an issue that waits | `aleph issue decide <repo> <id> "<text>"` or `note` | Decide, Note |
-| Change an issue's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
-| Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Automation page |
-| Set a no-answer timeout | `aleph always timeout <reason> <minutes> [pick\|drop]` | Automation page |
-| Set caps and models | `aleph models`, the `caps` setting | Automation page, Agents page |
-
-A write to an issue starts intake or a dispatch at once. A land by hand writes `Held-by:` with the lander's name.
-
 ## Background tasks
 
 | Task | Trigger | Does | Stops duplicate work |
@@ -284,13 +268,3 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
 | Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, and compiles yesterday into vault notes | The vault run record and `compiledDays` |
 | Monitor | Tick, daily from its local hour (0 to 23, 0 by default; set on the Automation page) | Reads the day's records and writes numbered findings for the Status page | One per day |
-
-## Where to look
-
-| To learn | Read |
-|---|---|
-| Why an issue did not start | The issue's `held` events in `aleph.db`, or the Holds panel on Status |
-| Why a run stopped | `aleph status <repo>-<n>`, or the job page |
-| What a check printed | the `checks` section of `~/.aleph/jobs/<n>/log.txt` |
-| What the director decided | The Automation page |
-| What the sweep caught | the event log, events with the action `missed` |

@@ -2,7 +2,7 @@
 
 The factory builds issues without you. It takes in each open issue, starts a worker for each ready issue, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
-A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps.
+A project with `sandbox: true` in its `~/.aleph/items/projects/<n>/project.md` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps. When an issue or a run stops, follow [Find why an issue stopped](find-why-stopped.md).
 
 ## Set it up
 
