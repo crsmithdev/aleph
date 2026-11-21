@@ -1,17 +1,16 @@
-// The mock's only behaviour: the Keep / Drop / Edit picks, the tally, the fix count, and the buttons that go to the next step.
-const v = document.getElementById("view");
-const tally = () => {
-  const t = v.querySelector("#tally"); if (!t) return;
-  const n = (p) => v.querySelectorAll(`tr[data-pick="${p}"]`).length;
-  t.textContent = `Keep ${n("keep")} · Edit ${n("edit")} · Drop ${n("drop")}`;
+// The mock's only behaviour: switch the card's state, pick per feature, and let state 2 turn into 3 as the agent would.
+const go = (s) => {
+  document.body.dataset.state = s;
+  for (const b of document.querySelectorAll(".flow [data-go]")) b.toggleAttribute("aria-current", b.dataset.go === s);
+  if (s === "2") setTimeout(() => document.body.dataset.state === "2" && go("3"), 1500);
 };
-const fixes = () => { const b = v.querySelector("[data-fix='']"); if (b) b.textContent = `Fix ${v.querySelectorAll("input[data-fix]:checked").length}`; };
-v.addEventListener("click", (e) => {
-  const b = e.target.closest("button"); if (!b) return;
-  if (b.closest(".seg")) for (const x of b.parentElement.children) x.setAttribute("aria-pressed", String(x === b));
-  const p = b.dataset.pick, row = b.closest("tr[data-row]");
-  if (p && row) { row.dataset.pick = p; tally(); }
-  if (b.dataset.go) location.href = b.dataset.go;
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go], .picks button"); if (!b) return;
+  e.preventDefault();
+  if (b.closest(".picks")) {
+    for (const x of b.parentElement.children) x.setAttribute("aria-pressed", String(x === b));
+    b.closest("li").dataset.pick = b.dataset.pick;
+  } else if (b.dataset.go === "pin") document.querySelector(".target .pin")?.focus();
+  else go(b.dataset.go);
 });
-v.addEventListener("change", fixes);
-tally(); fixes();
+addEventListener("keydown", (e) => { if (e.key === "c" && document.body.dataset.state === "1") go("2"); });

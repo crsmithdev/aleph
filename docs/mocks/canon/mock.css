@@ -1,62 +1,81 @@
-/* The mock's own parts: the step bar, the hand-drawn annotate widget, and the guide layout. Tokens of ui/app.css only. */
-.flow { display: flex; gap: var(--sp-4); margin: 0 0 var(--sp-16); font: var(--fs-sm) var(--sans); }
-.flow a { padding: var(--sp-4) var(--sp-10); border: 1px solid var(--rule); border-radius: var(--r-ctl); color: var(--muted); text-decoration: none; }
-.flow a b { color: var(--focus); margin-right: var(--sp-4); }
-.flow a[aria-current] { color: var(--ink); background: var(--rule-2); font-weight: var(--fw-strong); }
-.specimen { display: inline-flex; gap: var(--sp-12); align-items: center; flex-wrap: wrap; padding: var(--sp-12); background: var(--bg); border: 1px dashed var(--rule); border-radius: var(--r-ctl); }
-.specimen.dark { --bg: #202331; --surface: #292D3E; --ink: #EEF1F8; --muted: #9AA2C6; --rule: #3A3F58; --rule-2: #2E3245; --focus: #C792EA; color: var(--ink); }
-.design-row { display: flex; gap: var(--sp-12); flex-wrap: wrap; align-items: flex-start; }
-.two { display: grid; grid-template-columns: 3fr 2fr; gap: var(--sp-16); }
-.lg-done { background: var(--done); } .lg-need { background: var(--need); } .lg-error { background: var(--error); }
-pre.code { margin: 0; padding: var(--sp-8) var(--sp-10); background: var(--sunk); border-radius: var(--r-tag); font: var(--fs-xs)/1.5 var(--mono); white-space: pre; overflow: auto; }
+/* The mock's own parts: the state switch and the annotate card drawn after ~/aleph-tools/annotate.js. Tokens of ui/app.css only. */
+.flow { display: flex; gap: var(--sp-4); align-items: center; margin: var(--sp-16) 0; font: var(--fs-sm) var(--sans); }
+.flow button, .flow a { all: unset; cursor: pointer; padding: var(--sp-4) var(--sp-10); border: 1px solid var(--rule); border-radius: var(--r-ctl); color: var(--muted); }
+.flow b { color: var(--focus); margin-right: var(--sp-4); }
+.flow [aria-current] { color: var(--ink); background: var(--rule-2); font-weight: var(--fw-strong); }
+.flow a { margin-left: auto; }
+
+/* One state at a time. */
+.st { display: none; }
+body[data-state="1"] .s1, body[data-state="2"] .s2, body[data-state="3"] .s3, body[data-state="4"] .s4, body[data-state="5"] .s5 { display: block; }
+body[data-state="4"] .s4p { display: inline-grid; }
+
+/* The control under the pointer, and the card beside it. */
+.target { position: relative; display: inline-block; margin-bottom: var(--sp-8); }
+body:not([data-state="5"]) .target > .seg { outline: 2px solid var(--focus); outline-offset: 3px; }
+.target > .st { position: absolute; left: calc(100% + 16px); top: -8px; z-index: 5; }
+.ann { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); box-shadow: var(--float); padding: var(--sp-10); font: var(--fs-sm) var(--sans); color: var(--ink); }
+.ann code { color: var(--muted); font: var(--fs-xs) var(--mono); }
+.ann .m, .ann .sub { color: var(--muted); font-size: var(--fs-xs); margin: 0; }
+.ann .tag { display: inline-block; margin-right: var(--sp-4); padding: 0 var(--sp-6); border-radius: var(--r-tag); font-size: var(--fs-xs); font-weight: var(--fw-strong); background: color-mix(in srgb, var(--focus) 14%, transparent); color: var(--focus); }
+.ann button { font: inherit; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); border-radius: var(--r-ctl); padding: var(--sp-2) var(--sp-8); cursor: pointer; }
+.menu { display: flex; flex-direction: column; min-width: 140px; padding: var(--sp-4); }
+.menu button { all: unset; display: flex; justify-content: space-between; padding: var(--sp-4) var(--sp-8); border-radius: var(--r-tag); cursor: pointer; }
+.menu button:hover { background: var(--sunk); }
+.menu .new { color: var(--focus); font-weight: var(--fw-strong); background: color-mix(in srgb, var(--focus) 10%, transparent); }
 kbd { font: var(--fs-xs) var(--mono); padding: 0 var(--sp-4); border: 1px solid var(--rule); border-radius: var(--r-tag); color: var(--muted); margin-left: var(--sp-6); }
-/* The annotate widget as ~/aleph-tools/annotate.js draws it. */
-.card-ann { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); box-shadow: var(--float); font: var(--fs-sm) var(--sans); }
-.ann-glow { position: relative; display: inline-block; outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-ctl); box-shadow: 0 0 0 8px color-mix(in srgb, var(--focus) 14%, transparent); }
-.ann-menu { position: absolute; left: calc(100% + 14px); top: -6px; z-index: 5; display: flex; flex-direction: column; min-width: 140px; padding: var(--sp-4); }
-.ann-menu > * { all: unset; display: flex; justify-content: space-between; padding: var(--sp-4) var(--sp-8); border-radius: var(--r-tag); cursor: pointer; color: var(--ink); }
-.ann-menu > *:hover { background: var(--sunk); }
-.ann-menu .new { color: var(--focus); font-weight: var(--fw-strong); background: color-mix(in srgb, var(--focus) 10%, transparent); }
+.edit { width: 300px; display: grid; gap: var(--sp-8); }
+.edit.wide { width: 440px; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-4); }
+.chips button { border-radius: var(--r-pill); padding: 1px 9px; font-size: var(--fs-xs); }
+.chips [aria-pressed="true"] { border-color: var(--focus); color: var(--focus); }
+.chips .new { border-style: dashed; }
+.replies { display: grid; gap: var(--sp-4); font-size: var(--fs-xs); }
+.replies p { margin: 0; } .replies b { color: var(--muted); }
+.spin { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--rule); border-top-color: var(--focus); border-radius: 50%; animation: r 1s linear infinite; vertical-align: -1px; }
+@keyframes r { to { transform: rotate(1turn); } }
+.ch { display: flex; gap: var(--sp-6); align-items: baseline; }
+.feats { list-style: none; margin: 0; padding: 0; display: grid; }
+.feats li { display: grid; grid-template-columns: 64px 1fr auto auto; gap: var(--sp-6); align-items: center; padding: var(--sp-4) 0; border-top: 1px solid var(--rule-2); }
+.feats .fn { font-weight: var(--fw-strong); font-size: var(--fs-xs); }
+.feats .fc { font-size: var(--fs-xs); }
+.feats li[data-pick="drop"] .fn, .feats li[data-pick="drop"] .fc { opacity: .45; text-decoration: line-through; }
+.feats li[data-pick="edit"] .fc { color: var(--focus); }
+.picks { display: inline-flex; }
+.picks button { padding: 0 var(--sp-6); border-radius: 0; margin-left: -1px; color: var(--muted); }
+.picks button:first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); } .picks button:last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
+.picks [aria-pressed="true"] { background: var(--rule-2); color: var(--ink); font-weight: var(--fw-strong); }
+.edit-row { display: grid; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--muted); }
+.edit-row input { font: var(--fs-sm) var(--sans); }
+.edit details { font-size: var(--fs-xs); } .edit details p { margin: var(--sp-4) 0 0; }
+.answer { min-height: 32px; font: var(--fs-sm) var(--sans); resize: vertical; }
+.acts { display: flex; gap: var(--sp-6); }
+.acts .del { margin-right: auto; }
+.acts .save { background: var(--focus); border-color: var(--focus); color: var(--on-fill); }
+.offs { margin: 0; padding-left: var(--sp-16); font-size: var(--fs-xs); display: grid; gap: var(--sp-2); }
+
+/* Agent pins: numbered dots; hover or focus opens their card. */
+.pin { position: absolute; right: -12px; top: -12px; z-index: 4; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--focus); color: var(--on-fill); font: var(--fw-strong) var(--fs-xs)/1 var(--sans); cursor: pointer; }
+.pin-card { display: none; position: absolute; left: 28px; top: -6px; text-align: left; font-weight: 400; cursor: auto; }
+.pin-card p { margin: 0; }
+.pin:hover .pin-card, .pin:focus-within .pin-card, .pin.open .pin-card { display: grid; }
+.pin.open { display: inline-grid; }
+.tiles-wrap { position: relative; }
+.tiles-wrap > .pin { right: auto; left: 33%; }
+
+/* Browse: the hover chip and the annotate panel's Canon list. */
+.hover-hint { position: absolute; left: 0; top: calc(100% + 10px) !important; z-index: 5; }
+.chip-tip { width: 240px; line-height: 1.7; }
+body[data-state="5"] .target > .seg { outline: 2px dashed var(--focus); outline-offset: 3px; }
+.pop { position: fixed; right: 20px; bottom: 72px; width: 300px; display: grid; gap: var(--sp-8); }
+.pop .head { display: flex; justify-content: space-between; align-items: center; }
+.canons { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); }
+.canons li { display: flex; gap: var(--sp-6); align-items: baseline; padding: var(--sp-4) var(--sp-6); background: var(--sunk); border-radius: var(--r-ctl); }
+.canons .badge { margin-left: auto; }
 .ann-dock { position: fixed; right: 20px; bottom: 20px; }
 .ann-dock .fab { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--focus); color: var(--bg); font-size: 18px; box-shadow: var(--float); }
-.ann-dock .count { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ink); color: var(--bg); font: 600 10px/18px var(--sans); text-align: center; }
-.thread { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-8); }
-.thread li { padding: var(--sp-8) var(--sp-10); background: var(--sunk); border-radius: var(--r-ctl); }
-.thread li.agent { border-left: 3px solid var(--focus); }
-.thread b { margin-right: var(--sp-6); }
-/* The shelf item's frame. */
-.shelf-bar { display: flex; gap: var(--sp-12); align-items: baseline; padding: var(--sp-8) var(--sp-12); margin-bottom: var(--sp-16); background: var(--sunk); border-radius: var(--r-ctl); font: var(--fs-sm) var(--sans); }
-.shelf-mark { font-weight: var(--fw-strong); color: var(--focus); }
-.why { font-size: var(--fs-xs); margin-top: var(--sp-2); }
-tr[data-pick="drop"] td:not(.acts) { opacity: .45; text-decoration: line-through; }
-.edit-box input { margin-top: var(--sp-4); width: 100%; font: var(--fs-sm) var(--sans); }
-.decide { display: flex; gap: var(--sp-10); align-items: center; margin: var(--sp-16) 0; }
-.decide textarea { flex: 1; min-height: var(--ctl-h); font: var(--fs-sm) var(--sans); }
-ul.off { margin: 0; padding-left: var(--sp-16); font-size: var(--fs-sm); }
-/* Before and after. */
-.ba { margin: var(--sp-12) 0 var(--sp-20); }
-.ba h4 { margin: 0 0 var(--sp-6); }
-.ba-row { display: flex; gap: var(--sp-16); }
-.ba figure { margin: 0; } .ba figcaption { font-size: var(--fs-xs); color: var(--muted); margin-bottom: var(--sp-4); }
-/* The annotate widget's action chips, as they look today: own colours, 4px radius, gaps. */
-.ann-chips { display: flex; gap: 4px; }
-.ann-chips button { all: unset; height: 24px; padding: 0 8px; border-radius: 4px; font: 12px var(--sans); background: #ECEAF6; color: #555; cursor: pointer; }
-.ann-chips button[aria-pressed="true"] { background: #2f8a6a; color: #fff; }
-/* The guide. */
-.guide-wrap { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--sp-20); }
-.guide-toc { position: sticky; top: var(--sp-16); align-self: start; font: var(--fs-sm) var(--sans); }
-.guide-toc input { width: 100%; margin-bottom: var(--sp-8); }
-.guide-toc h4 { margin: var(--sp-12) 0 var(--sp-4); font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.guide-toc ul { list-style: none; margin: 0; padding: 0; }
-.guide-toc a { display: flex; justify-content: space-between; gap: var(--sp-6); padding: var(--sp-2) var(--sp-8); border-radius: var(--r-tag); color: var(--ink); text-decoration: none; }
-.guide-toc a[aria-current] { background: var(--rule-2); font-weight: var(--fw-strong); }
-.entry-head { display: flex; gap: var(--sp-10); align-items: baseline; }
-.entry-head h2 { margin: 0; } .spacer { flex: 1; }
-.hd-row { display: flex; gap: var(--sp-28, 28px); align-items: center; padding: var(--sp-20) var(--sp-12) 90px; }
-.hd-item { position: relative; display: inline-block; border-radius: var(--r-ctl); }
-.hd-item:hover { outline: 2px solid var(--focus); outline-offset: 3px; }
-.hd-tip { display: none; position: absolute; left: 0; top: calc(100% + 10px); z-index: 5; min-width: 180px; padding: var(--sp-8) var(--sp-10); line-height: 1.6; }
-.hd-item:hover .hd-tip { display: block; }
-.flow { margin-top: var(--sp-16); }
-#features td.acts, #matches td.acts { width: 1%; white-space: nowrap; }
-#features .seg, #matches .seg { overflow: visible; }
+.ann-dock .count { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ink); color: var(--bg); font: var(--fw-strong) 10px/18px var(--sans); text-align: center; }
+.target { align-self: flex-start; width: max-content; }
+.ann .tag { justify-self: start; }
+.docked { position: fixed; right: 20px; bottom: 72px; z-index: 5; }
+.feats code { white-space: nowrap; }
