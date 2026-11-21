@@ -18,7 +18,7 @@ import { afterOf, priorityOf } from "../lib/issue-file.ts";
 import * as todos from "../lib/issue-file.ts";
 import { activity } from "./activity.ts";
 import { langfuse } from "../lib/langfuse.ts";
-import { sessionRows, windowTraces } from "./api/sessions.ts";
+import { sessionRows, windowTraces } from "./api/session-list.ts";
 import { later } from "../lib/sources.ts";
 import { handoffs, intent, type Handoff } from "../lib/handoffs.ts";
 import { memoryIn } from "./api/scope.ts";

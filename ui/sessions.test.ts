@@ -8,7 +8,8 @@ import { memory, use } from "../lib/langfuse.ts";
 import { when } from "./views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead } from "./views/lib/html.js";
-import { listSessions, routes } from "./api/sessions.ts";
+import { routes } from "./api/sessions.ts";
+import { listSessions } from "./api/session-list.ts";
 import { parseScope } from "./api/scope.ts";
 import { SESSIONS } from "../lib/windows.ts";
 

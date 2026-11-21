@@ -5,7 +5,7 @@
  */
 import type { Routes } from "../server.ts";
 import { activity } from "../activity.ts";
-import { listSessions, windowTraces } from "./sessions.ts";
+import { listSessions, windowTraces } from "./session-list.ts";
 import { listSkills } from "./skills.ts";
 import { scopeOf } from "./scope.ts";
 import { SESSIONS } from "../../lib/windows.ts";

@@ -113,13 +113,15 @@
     {
       "name": "session rows",
       "code": [
-        "ui/api/sessions.ts"
+        "ui/api/sessions.ts",
+        "ui/api/session-list.ts"
       ],
       "notIn": [
         "**"
       ],
       "allow": [
         "ui/api/sessions.ts",
+        "ui/api/session-list.ts",
         "**/*.test.ts"
       ],
       "disable": [
