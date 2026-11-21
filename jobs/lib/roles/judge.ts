@@ -8,7 +8,7 @@
  * which alone can deny, because a denial must name the claim and Jev returns
  * no text. Jev is weak where the verdict must be derived (matching claims to
  * command output) and strong where it can be read off the text: see
- * docs/verify-gate.md "Jev screen".
+ * docs/adr/0003-verify-gate-judges-substance.md "Jev screen".
  */
 import { judgeChoice, nouls, type Noul } from "../../../lib/jev.ts";
 import { oneShot } from "./one-shot.ts";

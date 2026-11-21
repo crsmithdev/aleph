@@ -1,5 +1,5 @@
 /**
- * The verify gate's ladder. docs/verify-gate.md is the contract.
+ * The verify gate's ladder. docs/hooks.md is the contract.
  *
  *   UserPromptSubmit  snapshot the repo (and its worktrees) into the spool
  *   Stop              unchanged tree and no edits → pass silently

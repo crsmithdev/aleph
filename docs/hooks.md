@@ -99,7 +99,17 @@ With the variable set, the hook denies a command that is not a prefix or a prefi
 3. The gate has denied twice this turn: pass.
 4. Else the judge decides (see [Routing](routing.md#judge)).
 
-A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot answer passes the turn as `fail-open`. Each outcome posts a `guardrail` span and a `verified` score to Langfuse. The design and the evidence are in [the verify gate decision](verify-gate.md).
+A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot answer passes the turn as `fail-open`. Each outcome posts a `guardrail` span and a `verified` score to Langfuse. The reason for each decision and the measurements are in [ADR 0003](adr/0003-verify-gate-judges-substance.md).
+
+- **Rule.** Each claim of completion or correctness about code that the turn changed must trace to a run of the turn, after the last edit, whose output shows the result. An edit backs only a claim about the edit. A plain statement of what was not verified passes on that point. `RUBRIC` in `jobs/lib/roles/judge.ts` is the judge's prompt, and it lists the claims that are out of scope. The Verification section of `identity/CLAUDE.md` gives Claude the same rule.
+- **Scope.** The gate runs on the main agent's `Stop` only: `SubagentStop` runs only `obs.ts`. In a factory agent (`ALEPH_AGENT` set) the gate does nothing.
+- **Snapshot.** For the cwd repo and each worktree it lists, the snapshot holds `HEAD` and a hash of each dirty file: a file changed against `HEAD`, or untracked and not ignored. It leaves out the subagent worktrees under `.claude/worktrees/`, except the one that holds the cwd. The spool file is `snap:<prompt_id>.json`.
+- **Changed files.** These are the dirty files whose hash differs, and the files in the commits that a `HEAD` gained and no earlier `HEAD` reaches. A change in a worktree that does not hold the cwd, the main checkout included, counts only when an edit path or a path in a Bash command of the turn lies in that worktree. A path resolves from the `cwd` of its transcript entry, else from the Stop cwd, with `~` and `$HOME` expanded. It belongs to the deepest worktree that holds it. Outside git, an edit tool call on a code file counts. The gate does not see a change in another repo.
+- **Denials.** The count is per `prompt_id`, and the third `Stop` is a forced pass. A `Stop` that follows a deny (`stop_hook_active`) is judged as any other.
+- **Digest.** `hooks/lib/digest.ts` reads the prompt's entries from the transcript: each edit (tool, file), each Bash command with the first and last 500 characters of its output, each other tool call with 200 characters of its result, and the final message. It keeps the last 12,000 characters of the tool calls. The final message is the Stop input's `last_assistant_message`, else the last text in the transcript.
+- **Jev screen.** With the judge `jev`, Jev answers one `noul` question on the final message alone: does it claim that work is complete, fixed, working, passing, landed or verified? Below `ALEPH_JEV_PASS_BELOW` (0.05) the turn passes on Jev's answer. Each other turn, an empty final message and a Jev error go to Haiku, so only Haiku can deny, and each deny names its claim.
+- **Budget.** The judge has 35 s in all, which ends 10 s before the hook's timeout. The Jev screen (at most 15 s), the GPU slot wait and each Haiku try use only the time left. When the budget is spent, the turn passes as `fail-open`. Haiku runs with `MAX_THINKING_TOKENS=0` and answers strict JSON: `{"verdict":"pass"|"deny","reason":"…"}`.
+- **Record.** The span has the verdict, the reason, the digest size, the judge's time, `judge_by` for a judged turn, and `jev_p_claim` when Jev answered. The `verified` score is 1 for a pass or a skip, 0 for a deny and 0.5 for a forced pass. A forced pass and a `fail-open` have the level `WARNING`, and a `fail-open` has no score. A turn with no code change posts nothing.
 
 ### context gate
 
@@ -108,7 +118,13 @@ A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot
 - At 0.75 of that threshold, it prints a `systemMessage` warning. `ALEPH_CONTEXT_WARN` (0.75) changes the fraction.
 - After the session's first compaction, it blocks once and asks for a handoff.
 
-The design is in [the context gate decision](context-gate.md).
+The measurements and the reason for each decision are in [ADR 0004](adr/0004-context-gate-ends-a-session-early.md).
+
+- **Fill.** The fill is the input, cache-read and cache-creation tokens of the last main-thread assistant request in the transcript.
+- **Window.** With the 400k `autoCompactWindow` that ADR 0004 decides, the threshold is 367k and the warning starts at 275k.
+- **Warning.** The text is `Context 290k of the 367k budget. /aleph:handoff then /clear keeps the next turn sharp.`, and the turn passes. A session that has compacted gets no warning.
+- **Block.** The block is `{decision: "block", reason: "Context gate: …"}`, and its reason asks for the `aleph:handoff` skill and then `/clear`. The gate blocks once per session, marked by the spool file `ctx:<session_id>.json`, and never on a retry (`stop_hook_active`). Only a `compact_boundary` entry or a compact summary counts as a compaction. A `microcompact_boundary` does not.
+- **Scope.** The gate runs on the main agent's `Stop` in an interactive session only. In a factory run (`ALEPH_JOB_ID` set) or an SDK session (`CLAUDE_CODE_ENTRYPOINT` starts with `sdk`) it does nothing. It posts no span and no score.
 
 ### refit-code
 

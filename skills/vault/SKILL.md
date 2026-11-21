@@ -54,7 +54,7 @@ re-derive at any price. Prefer them.
    confidence: measured    # measured (you ran it) | reported (someone said) | inferred
    updated: 2026-09-04
    supersedes: []
-   sources: [trace:<id>, docs/verify-gate.md, chris]
+   sources: [trace:<id>, docs/hooks.md, chris]
    tags: []
    core: <optional: one line, at most 160 characters, always on in this scope>
    ---

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * The context gate. docs/context-gate.md is the contract.
+ * The context gate. docs/hooks.md is the contract.
  *
  *   Stop  fill below the warn fraction     → pass silently
  *         above it                         → pass, warn Chris

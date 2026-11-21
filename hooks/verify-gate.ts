@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * The verify gate's hook: the ladder is in hooks/lib/gate.ts. docs/verify-gate.md is the contract.
+ * The verify gate's hook: the ladder is in hooks/lib/gate.ts. docs/hooks.md is the contract.
  */
 import { gate } from "./lib/gate.ts";
 

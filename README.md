@@ -20,7 +20,7 @@ Aleph loads into each Claude Code session and adds memory, tracing and a few che
 ## Features
 
 - **Memory.** Notes live in an Obsidian vault. Each session starts with the core notes, and each prompt gets up to 3 more that fit it. [Vault](docs/vault.md)
-- **Verify gate.** Claude cannot say "done" after a code change unless a run after the last edit backs it up. [Verify gate](docs/verify-gate.md)
+- **Verify gate.** Claude cannot say "done" after a code change unless a run after the last edit backs it up. [Verify gate](docs/hooks.md#verify-gate)
 - **Guards.** No edits on `main` outside a worktree. No commits with a secret or a stray `debugger`. A `gh` write to someone else's repo asks first. [Hooks](docs/hooks.md)
 - **Handoffs.** A warning when the context fills up. After a compaction, Claude writes a handoff and the next session picks it up.
 - **Tracing.** Each turn is one Langfuse trace, with each tool call, subagent and model call and what it cost. [Langfuse](docs/langfuse.md)
@@ -98,6 +98,5 @@ A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-
 - [Langfuse](docs/langfuse.md): set up tracing
 - [Naming](docs/naming.md): the names, keys and status words aleph shows and stores
 - [UI design reference](docs/design.md): tokens, formats and components of the UI
-- [Verify gate](docs/verify-gate.md) and [Context gate](docs/context-gate.md): why each Stop hook works as it does
 - [Start at boot](docs/start-at-boot.md): start WSL, the UI and the tick after a Windows restart
-- [Decision records](docs/adr/): [Holds are events](docs/adr/0001-holds-are-events.md), [Detail word has one writer](docs/adr/0002-detail-word-has-one-writer.md)
+- [Decision records](docs/adr/): [Holds are events](docs/adr/0001-holds-are-events.md), [Detail word has one writer](docs/adr/0002-detail-word-has-one-writer.md), [Verify gate judges substance](docs/adr/0003-verify-gate-judges-substance.md), [Context gate ends a session early](docs/adr/0004-context-gate-ends-a-session-early.md)

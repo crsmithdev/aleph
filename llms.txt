@@ -24,10 +24,10 @@ The `aleph` CLI (cli/cli.ts) is the entry point for issues and the factory. `ale
 
 ## Decision records
 
-- [Verify gate](https://github.com/crsmithdev/aleph/blob/main/docs/verify-gate.md): Why and how the Stop hook judges claims of completion
-- [Context gate](https://github.com/crsmithdev/aleph/blob/main/docs/context-gate.md): Why and how the Stop hook warns on context fill and asks for a handoff
 - [Holds are events](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0001-holds-are-events.md): ADR 0001
 - [Detail word has one writer](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0002-detail-word-has-one-writer.md): ADR 0002
+- [Verify gate judges substance](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0003-verify-gate-judges-substance.md): ADR 0003
+- [Context gate ends a session early](https://github.com/crsmithdev/aleph/blob/main/docs/adr/0004-context-gate-ends-a-session-early.md): ADR 0004
 
 ## Optional
 
