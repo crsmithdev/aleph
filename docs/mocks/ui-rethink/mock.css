@@ -1,0 +1,144 @@
+/* The UI re-think mock: layout and the parts of the page grammar (README), in the tokens of ui/app.css only. */
+
+/* The mock's own bar: not part of the design. */
+.mockbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-8); padding: var(--sp-6) var(--sp-24); border-bottom: 1px dashed var(--rule); background: var(--bg); color: var(--muted); font-size: var(--fs-xs); }
+.mockbar b { color: var(--ink); font-weight: var(--fw-strong); margin-right: var(--sp-8); }
+.mockbar a { color: var(--muted); text-decoration: none; padding: var(--sp-2) var(--sp-8); border-radius: var(--r-ctl); }
+.mockbar a:hover { color: var(--ink); }
+.mockbar a[aria-current] { color: var(--ink); background: var(--rule-2); font-weight: var(--fw-strong); }
+.mockbar .mb-r { display: flex; align-items: center; gap: var(--sp-8); margin-left: auto; }
+.mockbar .seg { min-height: 22px; font-size: var(--fs-xs); }
+.thumb .mockbar { display: none; }
+
+/* The page: one column of blocks; a pane is a view. */
+.rt-page, .rt-pane { display: flex; flex-direction: column; gap: var(--gap-in); min-width: 0; }
+.rt-page > .ph { margin: 0; }
+.rt-pane[hidden] { display: none; }
+/* app.css gives a section of a page a bottom margin; here the gaps of the column space the blocks. */
+.rt-page section, .rt-over section { margin: 0; }
+
+/* Sidebar: a page's tone dot sits at the right of its link. */
+.rt-dot { display: inline-flex; margin-left: auto; }
+
+/* Page head: the tabs beside the title. */
+.rt-head { align-items: center; }
+.rt-head .rt-scope[hidden] { display: none; }
+
+/* Attention rows: one surface per problem, its tone as a bar at the left. */
+.rt-att { display: flex; flex-direction: column; gap: var(--sp-8); }
+.rt-arow { display: flex; align-items: center; gap: var(--sp-10); padding: var(--sp-8) var(--sp-14); border-radius: var(--r-ctl); background: var(--surface); box-shadow: inset 3px 0 0 var(--c), var(--card-lift); color: var(--ink); }
+.rt-arow.error { --c: var(--error); }
+.rt-arow.need { --c: var(--need); }
+.rt-arow .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+
+/* Facts line: figures at text size, split by a dot. */
+.rt-facts { margin: 0; color: var(--ink-2); }
+.rt-facts > span + span::before { content: "\00b7"; margin: 0 var(--sp-8) 0 var(--sp-4); color: var(--muted); }
+.rt-facts > span { white-space: nowrap; }
+.rt-facts b { font-weight: var(--fw-strong); color: var(--ink); }
+
+/* Figure band: one surface, a figure per cell, split by hairlines. */
+.rt-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-lift); }
+.rt-fig { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-14) var(--sp-18); border-left: 1px solid var(--rule-2); min-width: 0; }
+.rt-fig:first-child { border-left: 0; }
+.rt-fig .k { font-size: var(--fs-xs); color: var(--muted); }
+.rt-fig b { font: var(--fw-strong) var(--fs-2xl)/1.1 var(--metric); letter-spacing: var(--ls-display); color: var(--ink); }
+.rt-fig .cmp { font-size: var(--fs-xs); color: var(--muted); }
+.rt-fig .cmp.good { color: var(--good); }
+.rt-fig .cmp.warn { color: var(--need); }
+
+/* List surface: the rows of every group on one grid, so the columns line up. */
+.rt-list .fbar { margin: 0; }
+.rt-rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) repeat(var(--n), max-content); column-gap: var(--sp-14); }
+.rt-rows > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; }
+.rt-ghead { padding: var(--sp-16) var(--sp-8) var(--sp-4); }
+.rt-ghead:first-child { padding-top: var(--sp-4); }
+.rt-ghead .gt { grid-column: 1 / 3; display: flex; align-items: baseline; gap: var(--sp-8); }
+.rt-ghead .sub-head { margin: 0; }
+.rt-ghead .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+.rt-ghead .h { text-align: right; font: var(--fw-strong) var(--fs-xs) var(--sans); color: var(--muted); }
+.rt-row { padding: var(--sp-8); border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); cursor: pointer; transition: background-color .15s ease-out; }
+.rt-row:hover { background: var(--sunk); }
+.rt-row[hidden], .rt-ghead[hidden], .rt-more[hidden] { display: none; }
+.rt-row .main { display: flex; align-items: baseline; gap: var(--sp-6); min-width: 0; }
+.rt-row .main .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.rt-row .main .chips, .rt-row .main .badge { flex: none; }
+.rt-row .c { text-align: right; white-space: nowrap; color: var(--ink-2); font-family: var(--num); font-variant-numeric: tabular-nums; }
+.rt-none, .rt-more { padding: var(--sp-6) var(--sp-8); border-top: 1px solid var(--rule-2); }
+.rt-more { grid-column: 1 / -1; display: block; font-size: var(--fs-xs); color: var(--muted); }
+@media (max-width: 720px) {
+  .rt-rows { display: block; }
+  .rt-rows > li { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: var(--sp-2) var(--sp-10); }
+  .rt-rows > li.rt-ghead { justify-content: flex-start; }
+  .rt-row .main { flex: 1 1 75%; flex-wrap: wrap; row-gap: var(--sp-2); }
+  .rt-row .main .t { flex: 1 1 100%; }
+  .rt-row .c:empty, .rt-ghead .h { display: none; }
+  .rt-row .c { font-size: var(--fs-xs); }
+}
+
+/* Inspector: the selected row's detail, at the right; app.css .browse puts it below the list under 1100px. */
+.rt-ins { gap: var(--sp-10); }
+.rt-ins .inspect-head { align-items: center; }
+.rt-ins .facts { margin: 0; }
+.rt-ins .sub-head { margin: var(--sp-6) 0 0; }
+.rt-ins .status-row { margin: 0; }
+.rt-clip { margin: 0; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+
+/* Setting rows: Save waits for a change (README, Decision 8). */
+.settings .srow:not(.dirty) .sctl > button[type="submit"] { display: none; }
+
+/* Charts: 2 across, 1 under 1100px; inline SVG in chart tokens. */
+.rt-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-in); }
+@media (max-width: 1100px) { .rt-charts { grid-template-columns: minmax(0, 1fr); } }
+.rt-chart { display: block; overflow: visible; }
+.rt-chart text { font: var(--fs-2xs) var(--sans); fill: var(--muted); font-variant-numeric: tabular-nums; }
+.rt-chart .grid { stroke: var(--rule-2); stroke-dasharray: 3 3; }
+.rt-chart .base { stroke: var(--rule); }
+.rt-chart rect { fill: var(--c); }
+.rt-chart polyline { fill: none; stroke: var(--c); stroke-width: 2; }
+.rt-chart circle { fill: var(--c); stroke: var(--surface); stroke-width: 1; }
+.legend i[class^="k-"] { background: var(--c); }
+.k-series-1 { --c: var(--series-1); }
+.k-series-2 { --c: var(--series-2); }
+.k-series-3 { --c: var(--series-3); }
+.k-series-4 { --c: var(--series-4); }
+.k-series-5 { --c: var(--series-5); }
+.k-done { --c: var(--done); }
+.k-run { --c: var(--run); }
+.k-error { --c: var(--error); }
+.k-need { --c: var(--need); }
+.k-muted { --c: var(--muted); }
+
+/* A meter on a log scale: its p90 mark over its p50 fill. */
+.rt-log .meter > i { background: var(--run); }
+
+/* ---- The overview ---- */
+.rt-over { display: flex; flex-direction: column; gap: calc(2 * var(--gap)); max-width: 1600px; }
+.rt-over > section { display: flex; flex-direction: column; gap: var(--gap-in); margin: 0; }
+.rt-over .md { max-width: var(--measure); color: var(--ink-2); }
+.rt-over .md ol { margin: 0; padding-left: var(--indent-list); }
+.rt-over .md li + li { margin-top: var(--sp-6); }
+.rt-spec { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr)); gap: var(--gap); }
+.rt-spec > div { display: flex; flex-direction: column; gap: var(--sp-8); min-width: 0; }
+.rt-spec > .wide { grid-column: 1 / -1; }
+.rt-spec .sub-head { margin: 0; }
+.rt-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); align-items: start; }
+.rt-two > div { display: flex; flex-direction: column; gap: var(--sp-8); min-width: 0; }
+.rt-two .sub-head { margin: 0; }
+@media (max-width: 720px) { .rt-two { grid-template-columns: minmax(0, 1fr); } }
+/* A specimen stays a column with its group heads: app.css turns .side and #nav into one row under 720px. */
+.rt-two .side { position: static; height: auto; flex-direction: column; align-items: stretch; border: 1px solid var(--rule); border-radius: var(--r-card); }
+.rt-two #nav { flex: none; }
+.rt-two #nav ul { display: block; }
+.rt-two #nav li.head { display: list-item; }
+.rt-say { margin: 0; font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); color: var(--ink); }
+.rt-say.warning { color: var(--need); }
+.rt-map td .event-dot { display: inline-block; margin-right: var(--sp-6); vertical-align: middle; }
+.rt-map td div + div { margin-top: var(--sp-2); }
+.rt-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: var(--gap); }
+.rt-shots figure { margin: 0; display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; }
+.rt-shots figcaption { display: flex; gap: var(--sp-8); font-size: var(--fs-sm); color: var(--muted); }
+.rt-shots figcaption a { color: var(--ink); }
+.shot { display: block; aspect-ratio: 1440 / 1000; overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-ctl); background: var(--bg); }
+.shot iframe { width: 1440px; height: 1000px; border: 0; transform-origin: 0 0; transform: scale(var(--k, 0.3)); pointer-events: none; }
+.shot.none { display: grid; place-items: center; }
