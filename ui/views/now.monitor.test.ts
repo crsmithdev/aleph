@@ -17,6 +17,8 @@ import { job } from "../fixtures/status-state.ts";
 const calm = { ...withFactory({}), asks: [], errored: [] };
 /** The text of each body row of the Pipeline table, its cells joined by " | ". */
 const rowsOf = (h: string) => [...h.matchAll(/<tr>(.*?)<\/tr>/g)].slice(1).map((m) => [...m[1].matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((c) => c[1].replace(/<[^>]*>/g, "")).join(" | "));
+/** An OK or a Not OK badge in any tone. */
+const OK = /class="badge \w+">(Not )?OK</;
 const FIG = { kept: 3, hours: 1 }, CLASSES = [{ key: "landed", lost: false, hours: 3 }, { key: "reran", lost: true, hours: 1 }];
 
 test("the Pipeline card shows the 6 stages in order, each a row of runs per issue, p90, failed share and agent hours, and no other role", () => {
@@ -141,16 +143,16 @@ test("a Pipeline stage with an unusable run links its failed share to the unusab
   expect(h.match(/class="pf/g)).toHaveLength(1);
 });
 
-test("the Herald shows its alerts under a Not OK badge in the worst alert's tone, then the events", () => {
+test("the Herald shows its alerts with no OK badge, then the events", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
   const h = view.renderHerald({ ...calm, asks: [ask], errored: [], running: [], runningIssues: [], done: [], queued: [] });
-  expect(h).toContain('<span class="badge need">Not OK</span>');
+  expect(h).not.toMatch(OK);
   expect(h).toContain('id="awaiting"');
   expect(h).not.toContain("Sticky Alerts");
   expect(h).not.toContain("data-herald-tab");
   expect(h).toContain('class="herald-feed"');
   const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }] } });
-  expect(red).toContain('<span class="badge error">Not OK</span>');
+  expect(red).not.toMatch(OK);
 });
 
 test("the Herald lists each running job as a row on the feed grid between the alerts and the feed, and no section with none", () => {
@@ -189,25 +191,35 @@ test("the Herald's tabs are its head and its alerts sit above every pane, outsid
   expect(h).toStartWith('<section class="card herald-card" id="herald" aria-label="Herald"><div class="tabs"><div class="sh"><div class="seg" role="group" aria-label="Herald"><button type="button" data-tab="events"');
   const head = h.slice(h.indexOf('<div class="sh">'), needs);
   expect(head).toContain('data-tab="inspector"');
-  expect(head).toContain('<span class="aside"><span class="badge error">Not OK</span></span>');
+  expect(head).toContain('<span class="aside"></span>');
   expect(h).not.toMatch(/<h\d[^>]*>Herald</);
 });
 
-test("the Herald panel shows an OK badge with no alerts and no alert row", () => {
+test("the Herald panel shows no OK badge and no alert row with no alerts", () => {
   const h = view.renderHerald(calm);
   expect(h).not.toContain("No active alerts");
   expect(h).not.toContain("herald-sticky");
-  expect(h).toContain('<span class="badge done">OK</span>');
+  expect(h).not.toMatch(OK);
 });
 
-test("an error is not pinned: the badge says Not OK, and no row repeats the error lines or a health prefix", async () => {
+test("an error is not pinned: no badge says Not OK, and no row repeats the error lines or a health prefix", async () => {
   const v = await fresh();
   const h = v.renderHerald({ ...calm, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
   expect(h).not.toContain("ask-head");
   expect(h).not.toContain("No active alerts");
-  expect(h).toContain('<span class="badge error">Not OK</span>');
+  expect(h).not.toMatch(OK);
   expect(h).not.toContain("Alert: Health:");
   expect(h).not.toContain("aleph main is red");
+});
+
+test("with a word filter kept, the Herald's aside holds the word chip and no badge", () => {
+  (globalThis as any).localStorage = { getItem: (k: string) => (k === "aleph.herald.word" ? JSON.stringify("landed") : null), setItem: () => {} };
+  try {
+    const h = view.renderHerald(calm);
+    expect(h.match(/<span class="aside">([^]*?)<\/span><\/div>/)![1]).toBe('<span class="chip ref-chip herald-word">landed <button type="button" class="ref-x" aria-label="Clear">×</button></span>');
+  } finally {
+    delete (globalThis as any).localStorage;
+  }
 });
 
 // The stream path keeps its rows in now.js for the page's life: each such test takes a copy of the module of its own.

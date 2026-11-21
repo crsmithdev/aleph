@@ -1368,7 +1368,7 @@ A tab card is a card whose head is its tabs. The segmented control takes the pla
 
 | Do | Don't |
 |---|---|
-| `card("", tabs("Herald", items, panes, tab, { aside: badge, top: alerts }), { label: "Herald" })` | a title over the tab bar that repeats the card's name |
+| `card("", tabs("Herald", items, panes, tab, { aside: chip, top: alerts }), { label: "Herald" })` | a title over the tab bar that repeats the card's name |
 
 #### Select
 

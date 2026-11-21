@@ -251,11 +251,9 @@ function wireInspect(root) {
 
 /** The Herald panel: its tabs as the head, the alerts under them on every tab, then an Events tab with the rolling event history stream, an Active tab and an Inspector tab. `st` is the state it keeps between draws; `q` the page's query, the address's by default. */
 export function renderHerald(s, st = page, q) {
-  const cur = verdict(s, st.stale);
   // An error is not pinned: the newest event already says it.
   const asks = undecided(s.asks).map((i) => askCard(i, s.now));
   const errored = (s.errored ?? []).map(errorRow(s));
-  const errors = cur.errors.length;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
   const sticky = asks.length + errored.length > 0
@@ -271,13 +269,10 @@ export function renderHerald(s, st = page, q) {
   const rows = (live?.rows ?? []).filter((r) => !word || r.word === word).sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
   const feed = rows.map((r) => heraldRow(r).replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
 
-  // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
-  const badgeHtml = asks.length + errored.length + errors > 0 ? tag("Not OK", tone(errored.length || errors ? "failed" : "waiting")) : tag("OK", tone("done"));
-
   const at = kept(INSPECT, { tab: "events" });
   const panes = { events: `${runNow(s)}<div class="herald-feed">${feed}</div>`, active: active(s), inspector: inspector(s.flow, at, q) };
   const chipHtml = word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : "";
-  return card("", tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, at.tab, { aside: `${chipHtml}${badgeHtml}`, top: sticky }), { id: "herald", cls: "herald-card", label: "Herald" });
+  return card("", tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, at.tab, { aside: chipHtml, top: sticky }), { id: "herald", cls: "herald-card", label: "Herald" });
 }
 
 /** The Herald's animated rows: the running jobs and the feed's top rows. */
