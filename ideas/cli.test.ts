@@ -111,3 +111,9 @@ test("show prints idea.md", async () => {
   expect((await aleph(["idea", "show", "nope"])).code).toBe(1);
   expect((await aleph(["idea", "show", "9"])).code).toBe(1);
 });
+
+test("memory --help lists rename-scope and precommit", async () => {
+  const { out } = await aleph(["memory", "--help"]);
+  expect(out).toContain("|rename-scope|");
+  expect(out).toContain("|precommit>");
+});

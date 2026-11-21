@@ -91,7 +91,7 @@ const COMMANDS: Record<string, { usage: string; purpose: string }> = {
   models: { usage: "aleph models [set <name> <model> | enable <size> | disable <size>]", purpose: "list and change the model of each size and role model" },
   judge: { usage: "aleph judge [jev|haiku]", purpose: "show or set the judge" },
   doctor: { usage: "aleph doctor [--fix] [--json]", purpose: "check the setup and fix what it can" },
-  memory: { usage: "aleph memory <init|write|adopt|recall|lint|archive|delete|compile|misses|maintain> ...", purpose: "run a vault op" },
+  memory: { usage: "aleph memory <init|write|adopt|rename-scope|recall|lint|archive|delete|compile|misses|maintain|precommit> ...", purpose: "run a vault op" },
   help: { usage: "aleph help [--brief]", purpose: "list each command with its usage and purpose" },
 };
 const usage = (cmd: string) => `usage: ${COMMANDS[cmd].usage}`;
