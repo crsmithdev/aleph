@@ -1,15 +1,11 @@
 /**
  * The maintainer's compile: one read-only `claude -p` run per day reads the compile digest of yesterday and replies
- * typed notes. Code renders each note and writes it with the vault `write` op in-process, so each write is a pushed,
+ * typed notes. Code builds each note and writes it with the vault `put` op in-process, so each write is a pushed,
  * revertible vault commit and each refusal is the op's own. The model never writes a file and never sets `core:`
  * (core lines change only through an Ask). A dry compile runs the model, reports the notes and writes nothing.
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { compileDigest } from "../../../vault/lib/compile.ts";
-import { outcome, write } from "../../../vault/lib/ops.ts";
+import { outcome, put, type Draft } from "../../../vault/lib/ops.ts";
 import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.ts";
 import { lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
@@ -78,20 +74,10 @@ export function body(n: Note, day: string, related: string): string {
   return `\n**Claim.** ${claim}\n\n## Details\n\n${n.details}\n\n## Evidence\n\n${n.evidence}\n\n## Related\n\n${related}\n`;
 }
 
-/** The note's file text: frontmatter from its fields, then the body. */
-export function render(n: Note, day: string): string {
+/** The note's draft: frontmatter from its fields, then the body. */
+export function draft(n: Note, day: string): Draft {
   const fm = { aliases: n.aliases ?? [], kind: n.kind, scope: n.scope, confidence: n.confidence, updated: day, supersedes: [], sources: n.sources ?? [], tags: n.tags ?? [] };
-  return serializeFrontmatter(fm) + body(n, day, (n.related ?? []).map((t: string) => `- [[${t}]]`).join("\n"));
-}
-
-/** A scratch dir for the files of one pass; `fn` gets it and it is removed after. */
-export async function scratch<T>(prefix: string, fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), `${prefix}-`));
-  try {
-    return await fn(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  return { title: n.title, fm, body: body(n, day, (n.related ?? []).map((t: string) => `- [[${t}]]`).join("\n")) };
 }
 
 /** The `--why` of a vault op: who, which pass, which day, then the reason when there is one. */
@@ -149,18 +135,12 @@ export async function pass(report: { run?: string; error?: string; skipped?: str
   }
 }
 
-/** Write each note through the vault `write` op; a refusal is kept with its rule and the rest go on. */
-const put = (root: string, notes: Note[], day: string): Promise<Written[]> => scratch("maintainer", async (dir) => {
+/** Write each note through the vault `put` op; a refusal is kept with its rule and the rest go on. */
+async function place(root: string, notes: Note[], day: string): Promise<Written[]> {
   const out: Written[] = [];
-  for (const n of notes) {
-    const w: Written = { title: String(n.title), kind: String(n.kind) };
-    if (!n.title || /[\/\\:*?"<>|]/.test(n.title)) { out.push({ ...w, rule: "title", refused: "the title is empty or has a character a file name cannot" }); continue; }
-    const file = join(dir, `${n.title}.md`);
-    writeFileSync(file, render(n, day));
-    out.push({ ...w, ...outcome(await write(root, file, reason("compile", day))) });
-  }
+  for (const n of notes) out.push({ title: String(n.title), kind: String(n.kind), ...outcome(await put(root, draft(n, day), reason("compile", day))) });
   return out;
-});
+}
 
 /**
  * Compile `day` under the vault at `root`. A real compile writes the notes and records the day; a dry one does neither.
@@ -175,7 +155,7 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
   }
   await pass(report, {
     label: "maintainer", root, record: "compile", day, dry, schema: MAINTAINER_SCHEMA, allowed: ALLOWED, key: "notes", prompt: prompt(day, digest.text),
-    act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await put(root, list, day); },
+    act: async (list) => { report.notes = dry ? list.map((n) => ({ title: String(n.title), kind: String(n.kind) })) : await place(root, list, day); },
     done: () => {
       const wrote = report.notes.filter((n) => !n.refused).length;
       return `${wrote} notes${report.notes.length > wrote ? `, ${report.notes.length - wrote} refused` : ""}`;

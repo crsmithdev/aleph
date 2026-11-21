@@ -10,10 +10,10 @@ import { add, status } from "../../../lib/issue-file.ts";
 import { askOf } from "../asks/ask.ts";
 import { eventsOf } from "../../../lib/layout.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
-import { write } from "../../../vault/lib/ops.ts";
+import { put } from "../../../vault/lib/ops.ts";
 import { lintVault, loadVault, readRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
-import { render } from "./maintainer.ts";
+import { draft } from "./maintainer.ts";
 import { answerHeld, BUDGET, recheck } from "./recheck.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
 
@@ -32,10 +32,8 @@ const read = (t: string) => readFileSync(page(t), "utf8");
 
 /** A stale note, written through the vault op so git tracks it, with `n` recalls in the log. */
 async function seed(title: string, n = 0, extra: Record<string, unknown> = {}) {
-  const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, OLD);
-  writeFileSync(file, extra.core ? text.replace("\nsupersedes", `\ncore: ${extra.core}\nsupersedes`) : text);
-  const r = await write(root, file, "seed");
+  const d = draft({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, OLD);
+  const r = await put(root, extra.core ? { ...d, fm: { ...d.fm, core: String(extra.core) } } : d, "seed");
   expect(r.ok).toBe(true);
   const log = join(root, ".recall-log.jsonl");
   const lines = Array.from({ length: n }, () => JSON.stringify({ date: today(), title, query: "q", session: null, source: "cli" })).join("\n");

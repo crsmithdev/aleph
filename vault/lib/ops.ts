@@ -2,7 +2,7 @@
  * The ops of `aleph memory`, each a function of the vault root with typed arguments. An op returns its value or a
  * refusal as data and prints nothing; vault/lib/cli.ts parses argv and prints.
  */
-import { copyFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuse } from "../../lib/langfuse.ts";
@@ -200,10 +200,27 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
 
   const draft = readNote(srcPath, inside ? root : dirname(srcPath));
   const folder = folderFor(String(draft.fm.kind ?? ""));
-  const dest = folder ? join(root, folder, `${draft.title}.md`) : srcPath;
-  const notes = (await loadVault(root)).filter((n) => n.path !== srcPath && n.path !== dest);
-  const placed: Note = { ...draft, path: dest, rel: relative(root, dest), wiki: true, archived: false };
   if (inside && folder && dirname(rel!) !== folder) refuse([{ note: draft.title, rule: "folder", detail: `kind ${draft.fm.kind} belongs in ${folder}/, file is in ${dirname(rel!)}/` }]);
+  return accept(root, w, draft, folder ? join(root, folder, `${draft.title}.md`) : srcPath, srcPath, why);
+});
+
+/** The fields of a note that a writer chooses; the vault picks its path. */
+export type Draft = Pick<Note, "title" | "fm" | "body">;
+
+/** Write `draft` into its kind's folder with the checks and the commit of `write`, from no file. */
+export const put = (root: string, draft: Draft, why: string) => op<Written>(async (w) => {
+  requireVault(root);
+  // An unknown kind is refused by validateNote, so its folder never holds the file.
+  const dest = join(root, folderFor(String(draft.fm.kind ?? "")) ?? "wiki", `${draft.title}.md`);
+  // The title is kept whole, so a "/" in it is refused and does not name a subfolder.
+  const note = { ...parseNote(dest, root, serializeFrontmatter(draft.fm) + draft.body), title: draft.title };
+  return accept(root, w, note, dest, dest, why);
+});
+
+/** Check `draft` against the vault, place it at `dest` and commit; `src` is the file it came from, `dest` for a `put`. */
+async function accept(root: string, w: string[], draft: Note, dest: string, src: string, why: string): Promise<Written> {
+  const notes = (await loadVault(root)).filter((n) => n.path !== src && n.path !== dest);
+  const placed: Note = { ...draft, path: dest, rel: relative(root, dest), wiki: true, archived: false };
   const findings = validateNote(placed, notes);
   const supersedes = Array.isArray(draft.fm.supersedes) ? draft.fm.supersedes : [];
   const old: Note[] = [];
@@ -256,9 +273,7 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
   const touched: string[] = [dest];
   const log = (o: Op) => { const p = writeDaily(root, o); if (!touched.includes(p)) touched.push(p); };
   mkdirSync(dirname(dest), { recursive: true });
-  const stamped = stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined);
-  if (srcPath !== dest) copyFileSync(srcPath, dest);
-  if (stamped !== draft.text) writeFileSync(dest, stamped);
+  writeFileSync(dest, stampProvenance(draft, process.env.CLAUDE_CODE_SESSION_ID || undefined));
   const archived: string[] = [];
   for (const o of old) {
     const target = join(root, "archive", `${o.title}.md`);
@@ -283,7 +298,7 @@ export const write = (root: string, src: string, why: string) => op<Written>(asy
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
   const commit = commitAndPush(root, w, subject, touched);
   return { op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit };
-});
+}
 
 // A query returns the best few: an agent reads the top of the list, and a full match list ran to 10,323 lines.
 const TOP = 10;

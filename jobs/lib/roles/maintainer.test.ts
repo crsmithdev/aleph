@@ -6,7 +6,9 @@ import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/record.ts";
-import { compileDay, related, render } from "./maintainer.ts";
+import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
+import type { Draft } from "../../../vault/lib/ops.ts";
+import { compileDay, draft, related } from "./maintainer.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -26,6 +28,8 @@ const note = (title: string, extra: Record<string, unknown> = {}) => ({
   title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} was decided.`,
   details: "It came up in the day's work.", evidence: "The handoff says so.", related: [], ...extra,
 });
+/** A draft's file text, as the vault op writes it. */
+const text = (d: Draft) => serializeFrontmatter(d.fm) + d.body;
 const reply = (notes: unknown[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, result: "", structured_output: { notes } }) + "\n");
 
 beforeEach(() => {
@@ -52,6 +56,13 @@ afterEach(() => {
 });
 
 const notes = () => allRuns().filter((e) => e.run.role === "maintainer");
+
+test("a note whose title has a slash is refused for its title and writes no file", async () => {
+  reply([note("A/B")]);
+  const r = await compileDay(root, DAY, false);
+  expect(r.notes.map((n) => [n.title, !!n.commit, n.rule])).toEqual([["A/B", false, "title"]]);
+  expect(existsSync(join(root, "wiki", "decisions", "A"))).toBe(false);
+});
 
 test("a real compile writes each note through the vault write op, keeps a refusal with its rule, drops core and records the day", async () => {
   reply([note("Keep The Digest"), note("Bad Link", { related: ["No Such Note"] }), note("Core Try", { core: "always on" })]);
@@ -85,7 +96,7 @@ test("a dry compile runs the model, reports the titles, writes nothing and recor
 const recallOf = (dry: boolean) => {
   process.env.FAKE_RECALL = join(import.meta.dir, "../../../cli/cli.ts");
   mkdirSync(join(root, "wiki", "decisions"), { recursive: true });
-  writeFileSync(join(root, "wiki", "decisions", "Keep The Digest.md"), render(note("Keep The Digest"), DAY));
+  writeFileSync(join(root, "wiki", "decisions", "Keep The Digest.md"), text(draft(note("Keep The Digest"), DAY)));
   reply([]);
   return compileDay(root, DAY, dry);
 };
@@ -122,12 +133,12 @@ test("a failed run is in the report and leaves the day uncompiled", async () => 
   expect(retryDays(root)).toEqual([]);
 });
 
-test("render gives the frontmatter and the four body parts, and an empty Related when no note is related", () => {
-  const text = render(note("T", { related: [], aliases: ["t"], tags: ["x"], core: "no" }), DAY);
-  expect(text).toStartWith("---\naliases: [t]\nkind: decision\nscope: aleph\nconfidence: reported\nupdated: 2026-11-03\nsupersedes: []\nsources: [\"trace:abc123\"]\ntags: [x]\n---\n");
-  expect(text).toContain("**Claim.** T was decided, as of 2026-11-03.");
-  expect(text).toContain("## Related\n\n\n");
-  expect(text).not.toContain("core");
+test("draft gives the frontmatter and the four body parts, and an empty Related when no note is related", () => {
+  const t = text(draft(note("T", { related: [], aliases: ["t"], tags: ["x"], core: "no" }), DAY));
+  expect(t).toStartWith("---\naliases: [t]\nkind: decision\nscope: aleph\nconfidence: reported\nupdated: 2026-11-03\nsupersedes: []\nsources: [\"trace:abc123\"]\ntags: [x]\n---\n");
+  expect(t).toContain("**Claim.** T was decided, as of 2026-11-03.");
+  expect(t).toContain("## Related\n\n\n");
+  expect(t).not.toContain("core");
 });
 
 test("related reads the Related section as the Memory page writes it, and as body writes it", () => {

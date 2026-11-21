@@ -154,3 +154,7 @@ for (const [name, re] of Object.entries({
     expect(offenders(re, [], ["{jobs,ui,issues,hooks}/**"], "{ts,js}")).toEqual([]);
   });
 }
+
+test("roles hand the vault a draft through put and write no note file", () => {
+  expect(offenders(/\bserializeFrontmatter\b/, [], ["jobs/lib/roles/**"])).toEqual([]);
+});

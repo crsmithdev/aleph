@@ -4,13 +4,10 @@
  * revertible vault commit and each refusal is the op's own. The model never writes a file, and a pair with a note
  * that has a `core:` line is never touched.
  */
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
-import { archive, outcome, write } from "../../../vault/lib/ops.ts";
+import { archive, outcome, put, type Draft } from "../../../vault/lib/ops.ts";
 import { listOf, lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
-import { body, pass, reason, related, scratch, TEXT } from "./maintainer.ts";
+import { body, pass, reason, related, TEXT } from "./maintainer.ts";
 
 /** Pairs worked per run, most similar first. */
 export const PAIRS = 5;
@@ -51,41 +48,37 @@ function prompt(pairs: Pair[], day: string): string {
   ].join("\n");
 }
 
-/** The note title and file text to write, or the `archive` op's target, for a verdict, or a reason it is malformed. */
-function change(a: Note, b: Note, v: Verdict, day: string): { title: string; text: string } | { drop: string } | { bad: string } {
+/** The draft to write, or the `archive` op's target, for a verdict, or a reason it is malformed. */
+function change(a: Note, b: Note, v: Verdict, day: string): Draft | { drop: string } | { bad: string } {
   const pair = [a.title, b.title];
-  if (v.verdict === "distinct") return { title: a.title, text: serializeFrontmatter({ ...a.fm, distinct: [...listOf(a, "distinct"), b.title] }) + a.body };
+  if (v.verdict === "distinct") return { title: a.title, fm: { ...a.fm, distinct: [...listOf(a, "distinct"), b.title] }, body: a.body };
   if (v.verdict === "archive") return v.drop && pair.includes(v.drop) ? { drop: v.drop } : { bad: "archive verdict names no drop of the pair" };
   if (v.verdict !== "merge") return { bad: `unknown verdict ${v.verdict}` };
   if (!v.keep || !pair.includes(v.keep) || !v.claim || !v.details || !v.evidence) return { bad: "merge verdict has no keep of the pair, claim, details and evidence" };
   const [k, o] = v.keep === a.title ? [a, b] : [b, a];
-  return { title: k.title, text: serializeFrontmatter({ ...k.fm, updated: day, supersedes: [...listOf(k, "supersedes"), o.title] }) + body(v, day, related(k.body)) };
+  return { title: k.title, fm: { ...k.fm, updated: day, supersedes: [...listOf(k, "supersedes"), o.title] }, body: body(v, day, related(k.body)) };
 }
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. */
 async function apply(root: string, pairs: Pair[], verdicts: Verdict[], day: string): Promise<Resolved[]> {
-  return scratch("dedupe", async (dir) => {
-    const out: Resolved[] = [];
-    const gone = new Set<string>();
-    for (const [x, y] of pairs) {
-      const v = verdicts.find((z) => (z.a === x.title && z.b === y.title) || (z.a === y.title && z.b === x.title));
-      if (!v) continue;
-      const w: Resolved = { a: x.title, b: y.title, verdict: v.verdict, why: v.why };
-      if (gone.has(x.title) || gone.has(y.title)) { out.push({ ...w, rule: "gone", refused: "a note of this pair was archived by an earlier verdict" }); continue; }
-      // An earlier verdict may have rewritten a note of this pair, so read both again.
-      const live = new Map((await loadWiki(root)).map((n) => [n.title, n]));
-      const [a, b] = [live.get(x.title)!, live.get(y.title)!];
-      const c = change(a, b, v, day);
-      if ("bad" in c) { out.push({ ...w, rule: "reply", refused: c.bad }); continue; }
-      const why = reason("dedupe", day, v.why);
-      const file = "text" in c ? join(dir, `${c.title}.md`) : "";
-      if ("text" in c) writeFileSync(file, c.text);
-      const r = await ("drop" in c ? archive(root, c.drop, why) : write(root, file, why));
-      if (r.ok && v.verdict !== "distinct") gone.add(v.verdict === "archive" ? v.drop! : v.keep === x.title ? y.title : x.title);
-      out.push({ ...w, ...outcome(r) });
-    }
-    return out;
-  });
+  const out: Resolved[] = [];
+  const gone = new Set<string>();
+  for (const [x, y] of pairs) {
+    const v = verdicts.find((z) => (z.a === x.title && z.b === y.title) || (z.a === y.title && z.b === x.title));
+    if (!v) continue;
+    const w: Resolved = { a: x.title, b: y.title, verdict: v.verdict, why: v.why };
+    if (gone.has(x.title) || gone.has(y.title)) { out.push({ ...w, rule: "gone", refused: "a note of this pair was archived by an earlier verdict" }); continue; }
+    // An earlier verdict may have rewritten a note of this pair, so read both again.
+    const live = new Map((await loadWiki(root)).map((n) => [n.title, n]));
+    const [a, b] = [live.get(x.title)!, live.get(y.title)!];
+    const c = change(a, b, v, day);
+    if ("bad" in c) { out.push({ ...w, rule: "reply", refused: c.bad }); continue; }
+    const why = reason("dedupe", day, v.why);
+    const r = await ("drop" in c ? archive(root, c.drop, why) : put(root, c, why));
+    if (r.ok && v.verdict !== "distinct") gone.add(v.verdict === "archive" ? v.drop! : v.keep === x.title ? y.title : x.title);
+    out.push({ ...w, ...outcome(r) });
+  }
+  return out;
 }
 
 /**

@@ -6,9 +6,7 @@
  * dir and put to Chris as a core-change Ask on a parked issue, and the note is not re-checked while its held verdict
  * waits. His Approve applies the verdict through the same ops; his Decline keeps the claim and bumps `updated`.
  */
-import { writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
+import { resolve } from "node:path";
 import { getJson, putJson } from "../../../lib/db.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { fileIssue, writeList } from "../../../lib/store.ts";
@@ -16,12 +14,12 @@ import { find, note, parseIssueRef, setStatus } from "../../../lib/issue-file.ts
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
 import { clearAsk, setAsk } from "../asks/ask.ts";
 import { decayQueue } from "../../../vault/lib/maintain.ts";
-import { archive, outcome, write } from "../../../vault/lib/ops.ts";
+import { archive, outcome, put, type Draft } from "../../../vault/lib/ops.ts";
 import { lintVault, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { answering } from "../records/record.ts";
-import { body, pass, reason, related, scratch, TEXT } from "./maintainer.ts";
+import { body, pass, reason, related, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
@@ -72,11 +70,11 @@ function prompt(notes: Note[], day: string): string {
   ].join("\n");
 }
 
-/** The note's file text for a verdict: `refresh` bumps `updated`, `correct` rewrites the claim and keeps the frontmatter and Related. */
-function text(n: Note, v: Verdict, day: string): string | null {
-  if (v.verdict === "refresh") return serializeFrontmatter({ ...n.fm, updated: day }) + n.body;
+/** The note's draft for a verdict: `refresh` bumps `updated`, `correct` rewrites the claim and keeps the frontmatter and Related. */
+function draft(n: Note, v: Verdict, day: string): Draft | null {
+  if (v.verdict === "refresh") return { title: n.title, fm: { ...n.fm, updated: day }, body: n.body };
   if (!v.claim || !v.details || !v.evidence) return null;
-  return serializeFrontmatter({ ...n.fm, updated: day }) + body(v, day, related(n.body));
+  return { title: n.title, fm: { ...n.fm, updated: day }, body: body(v, day, related(n.body)) };
 }
 
 type Held = Verdict & { day: string; issue: string };
@@ -95,27 +93,23 @@ function hold(n: Note, v: Verdict, day: string): void {
 
 /** Apply each verdict through the vault ops; a refusal is kept with its rule and the rest go on. `approved` applies a held core verdict. */
 async function apply(root: string, notes: Note[], verdicts: Verdict[], day: string, approved = false): Promise<Rechecked[]> {
-  return scratch("recheck", async (dir) => {
-    const out: Rechecked[] = [];
-    for (const n of notes) {
-      const v = verdicts.find((x) => x.title === n.title);
-      if (!v) continue;
-      const w: Rechecked = { title: n.title, verdict: v.verdict, why: v.why };
-      if (n.fm.core && v.verdict !== "refresh" && !approved) {
-        hold(n, v, day);
-        out.push({ ...w, rule: "core", refused: "held for Chris" });
-        continue;
-      }
-      const why = reason("recheck", day, v.why);
-      const file = join(dir, `${n.title}.md`);
-      const t = v.verdict === "archive" ? "" : text(n, v, day);
-      if (t === null) { out.push({ ...w, rule: "reply", refused: `${v.verdict} verdict has no claim, details and evidence` }); continue; }
-      writeFileSync(file, t);
-      const r = await (v.verdict === "archive" ? archive(root, n.title, why) : write(root, file, why));
-      out.push({ ...w, ...outcome(r) });
+  const out: Rechecked[] = [];
+  for (const n of notes) {
+    const v = verdicts.find((x) => x.title === n.title);
+    if (!v) continue;
+    const w: Rechecked = { title: n.title, verdict: v.verdict, why: v.why };
+    if (n.fm.core && v.verdict !== "refresh" && !approved) {
+      hold(n, v, day);
+      out.push({ ...w, rule: "core", refused: "held for Chris" });
+      continue;
     }
-    return out;
-  });
+    const why = reason("recheck", day, v.why);
+    const d = v.verdict === "archive" ? null : draft(n, v, day);
+    if (v.verdict !== "archive" && !d) { out.push({ ...w, rule: "reply", refused: `${v.verdict} verdict has no claim, details and evidence` }); continue; }
+    const r = await (d ? put(root, d, why) : archive(root, n.title, why));
+    out.push({ ...w, ...outcome(r) });
+  }
+  return out;
 }
 
 /**

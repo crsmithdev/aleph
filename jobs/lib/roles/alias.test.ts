@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
-import { write } from "../../../vault/lib/ops.ts";
+import { put } from "../../../vault/lib/ops.ts";
 import { loadWiki } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { alias, findMisses, MISSES } from "./alias.ts";
-import { render } from "./maintainer.ts";
+import { draft } from "./maintainer.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -25,10 +25,8 @@ const read = (t: string) => readFileSync(join(root, rel(t)), "utf8");
 const notes = () => loadWiki(root);
 
 async function seed(title: string, core?: string) {
-  const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "d", evidence: "e", related: [] }, today());
-  writeFileSync(file, core ? text.replace("\nsupersedes", `\ncore: ${core}\nsupersedes`) : text);
-  expect((await write(root, file, "seed")).ok).toBe(true);
+  const d = draft({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "d", evidence: "e", related: [] }, today());
+  expect((await put(root, core ? { ...d, fm: { ...d.fm, core } } : d, "seed")).ok).toBe(true);
 }
 
 /** One turn: its prompt, the hook's span (asked paths, offered), then each recall and read in order. */

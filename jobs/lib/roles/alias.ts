@@ -1,19 +1,16 @@
 /**
  * The maintainer's misses queue: one read-only `claude -p` run per pass looks at the queries that missed a note a turn
  * then read, and replies one verdict per miss: an alias for the note, or skip. Code adds each alias through the vault's
- * `write` op in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model
+ * `put` op in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model
  * never writes a file, and a note with a `core:` line is never touched: its line is in the start context already.
  */
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
 import { recallAll } from "../../../vault/lib/index.ts";
-import { outcome, write } from "../../../vault/lib/ops.ts";
+import { outcome, put } from "../../../vault/lib/ops.ts";
 import { recallQuery } from "../../../vault/lib/recall-query.ts";
 import { listOf, loadWiki, type Note } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
-import { pass, reason, scratch, TEXT } from "./maintainer.ts";
+import { pass, reason, TEXT } from "./maintainer.ts";
 
 /** Misses worked per run, oldest first. */
 export const MISSES = 8;
@@ -114,27 +111,23 @@ function prompt(misses: Miss[], day: string): string {
   ].join("\n");
 }
 
-/** Add each `alias` verdict's aliases through the `write` op; a refusal is kept with its rule and the rest go on. */
+/** Add each `alias` verdict's aliases through the `put` op; a refusal is kept with its rule and the rest go on. */
 async function apply(root: string, misses: Miss[], verdicts: Verdict[], day: string): Promise<Aliased[]> {
-  return scratch("alias", async (dir) => {
-    const out: Aliased[] = [];
-    for (const [i, m] of misses.entries()) {
-      const v = verdicts.find((x) => x.miss === i + 1 && x.note === m.note.title);
-      if (!v) continue;
-      const w: Aliased = { query: m.query, note: m.note.title, verdict: v.verdict, why: v.why, ...(v.aliases ? { aliases: v.aliases } : {}) };
-      if (v.verdict === "skip") { out.push(w); continue; }
-      // An earlier verdict may have added aliases to this note, so read it again.
-      const n = (await loadWiki(root)).find((x) => x.title === m.note.title);
-      const have = new Set([n?.title ?? "", ...(n ? listOf(n, "aliases") : [])].map((a) => a.toLowerCase()));
-      const add = [...new Set((v.aliases ?? []).map((a) => a.trim()).filter((a) => a && !have.has(a.toLowerCase())))];
-      if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
-      const file = join(dir, `${n.title}.md`);
-      writeFileSync(file, serializeFrontmatter({ ...n.fm, aliases: [...listOf(n, "aliases"), ...add] }) + n.body);
-      const r = await write(root, file, reason("alias", day, v.why));
-      out.push({ ...w, aliases: add, ...outcome(r) });
-    }
-    return out;
-  });
+  const out: Aliased[] = [];
+  for (const [i, m] of misses.entries()) {
+    const v = verdicts.find((x) => x.miss === i + 1 && x.note === m.note.title);
+    if (!v) continue;
+    const w: Aliased = { query: m.query, note: m.note.title, verdict: v.verdict, why: v.why, ...(v.aliases ? { aliases: v.aliases } : {}) };
+    if (v.verdict === "skip") { out.push(w); continue; }
+    // An earlier verdict may have added aliases to this note, so read it again.
+    const n = (await loadWiki(root)).find((x) => x.title === m.note.title);
+    const have = new Set([n?.title ?? "", ...(n ? listOf(n, "aliases") : [])].map((a) => a.toLowerCase()));
+    const add = [...new Set((v.aliases ?? []).map((a) => a.trim()).filter((a) => a && !have.has(a.toLowerCase())))];
+    if (v.verdict !== "alias" || !n || !add.length) { out.push({ ...w, rule: "reply", refused: !n ? "the note is gone" : v.verdict !== "alias" ? `unknown verdict ${v.verdict}` : "alias verdict names no new alias" }); continue; }
+    const r = await put(root, { title: n.title, fm: { ...n.fm, aliases: [...listOf(n, "aliases"), ...add] }, body: n.body }, reason("alias", day, v.why));
+    out.push({ ...w, aliases: add, ...outcome(r) });
+  }
+  return out;
 }
 
 /**

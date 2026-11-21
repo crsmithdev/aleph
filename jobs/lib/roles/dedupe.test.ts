@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../../lib/langfuse.ts";
 import { vault } from "../../../tests/git.testkit.ts";
-import { write } from "../../../vault/lib/ops.ts";
+import { put } from "../../../vault/lib/ops.ts";
 import { readRun } from "../../../vault/lib/vault.ts";
 import { today } from "../../../lib/day.ts";
 import { dedupe, PAIRS } from "./dedupe.ts";
-import { render } from "./maintainer.ts";
+import { draft } from "./maintainer.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -25,10 +25,8 @@ const archived = (t: string) => existsSync(join(root, "archive", `${t}.md`));
 
 /** A note written through the vault op so git tracks it. */
 async function seed(title: string, extra: Record<string, unknown> = {}) {
-  const file = join(base, `${title}.md`);
-  const text = render({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, today());
-  writeFileSync(file, extra.core ? text.replace("\nsupersedes", `\ncore: ${extra.core}\nsupersedes`) : text);
-  const r = await write(root, file, "seed");
+  const d = draft({ title, kind: "decision", scope: "aleph", confidence: "reported", sources: ["trace:abc123"], claim: `${title} is true.`, details: "old details", evidence: "old evidence", related: [], ...extra }, today());
+  const r = await put(root, extra.core ? { ...d, fm: { ...d.fm, core: String(extra.core) } } : d, "seed");
   expect(r.ok).toBe(true);
 }
 const v = (a: string, b: string, verdict: string, more: Record<string, unknown> = {}) => ({ a, b, verdict, why: "w", ...more });
