@@ -119,17 +119,22 @@ Detail of each list view:
 - A sidebar entry gets a tone dot when its page has an attention row, as Status has today.
 - The detail pages (one issue, one job, one session, one hook) are out of scope.
 
-## Open choices for Chris
+## Choices
 
-1. Sidebar groups: keep Factory and Claude (recommended), or group by job: Work (Issues, Jobs, Sessions) and System
-   (Automation, Agents, Memory, Hooks).
-2. Analysis views: open with a figure band (recommended), or with one sentence as Status does.
-3. The cuts in the Pages table.
+Chris decided these on 2026-11-22, from the mock on the shelf.
 
-## Next steps
+1. Sidebar groups: keep Factory and Claude.
+2. Analysis views: open with a figure band.
+3. The cuts in the Pages table: accepted. These go from the pages: the Notes and Jobs columns of Issues, the Holds by
+   Day chart of Hooks, the defaults in rows, and the 5 buttons on each chart.
 
-1. Draw from `data.public.json`. A new run of `snapshot.ts` writes `data.json` with the private texts in it: replace
-   the texts that the Data section lists before a commit.
-2. Write `build.ts` and `mock.css`, with `app.css` as a real copy of `ui/app.css`, because the shelf does not serve
-   symlinks.
-3. Draw one page per sidebar page plus an overview, verify them in a browser, and put them on the shelf.
+## Open points
+
+1. Automation: cut a column that shows only a default, such as No Answer, which reads "wait" on every rule.
+2. Agents: the switch on every role, or on the 3 worker sizes only, as the live page has it.
+3. Hooks: fold the events with one hook into one group, because the List view is 1931 px tall at 1440 px.
+
+## Rebuild
+
+A new run of `snapshot.ts` writes `data.json` with the private texts in it. Replace the texts that the Data section
+lists, save the result as `data.public.json`, then run `bun docs/mocks/ui-rethink/build.ts`.
