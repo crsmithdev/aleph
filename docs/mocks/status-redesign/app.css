@@ -1,5 +1,5 @@
 /* Breakpoints (custom properties do not work in @media): 720px (phone) and 1100px (wide). */
-/* Light is a lavender match for Palenight; dark is Chris's VS Code theme, Palenight (Mild Contrast). */
+/* Light is a lavender match for Palenight; dark is the user's VS Code theme, Palenight (Mild Contrast). */
 :root {
   color-scheme: light dark;
   --bg: #F4F3FA;  /* the page */
@@ -199,7 +199,7 @@
     --decide: #C792EA; --decide-bg: #3A3150; --decide-ring: #5B4A7A;
     --unstick: #F07178; --unstick-bg: #3D2C39; --unstick-ring: #65404D;
 }
-/* The palettes of the dock's theme picker (aleph-tools theme-picker.js sets data-palette on <html>), picked by Chris
+/* The palettes of the dock's theme picker (aleph-tools theme-picker.js sets data-palette on <html>), picked by the user
    from docs/mocks/theme-palettes. Each sets the neutrals and the accent; the status and chart colours stay, so a state
    keeps its colour. No data-palette is the default, Lavender, above. Dark comes twice, as above: by the system's scheme
    and by data-theme. Poimandres has no light variant of its own, and Nordfox's light is Nord Light's. */

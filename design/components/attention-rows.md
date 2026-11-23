@@ -3,7 +3,7 @@
 An attention row is one problem of a page: its tone, one line and the action that removes it.
 
 - Use: under the page head, one row for each problem.
-- Not for: an Ask that waits for Chris; use an ask card.
+- Not for: an Ask that waits for the user; use an ask card.
 - Not for: a number to watch; use the facts line or a metric card.
 
 ## Helper

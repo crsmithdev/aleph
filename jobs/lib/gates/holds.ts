@@ -73,7 +73,7 @@ export const holdBound = (h: BackendHold): Bound =>
 /**
  * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
  * the issue (`holdIssue`) and a size still runs on the held backend, so the dispatch does not route the issue
- * again while the hold lasts, and routes it once Chris moves every size off that backend.
+ * again while the hold lasts, and routes it once the user moves every size off that backend.
  */
 export function heldIssue(name: string): Bound | null {
   const h = backendHold();
@@ -89,7 +89,7 @@ export function holdIssue(name: string): void {
 }
 
 /**
- * Holds the backend of a call that ended with the API credit error, and tells Chris once. A backend already held keeps
+ * Holds the backend of a call that ended with the API credit error, and tells the user once. A backend already held keeps
  * its line, so the jobs that follow it write no second alert.
  */
 export async function holdBackend(via: Via, why: string, tell: Tell = realTell): Promise<void> {

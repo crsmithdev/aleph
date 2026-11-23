@@ -125,7 +125,7 @@ const c1 = sized(`<section class="card" id="pipeline" aria-label="Pipeline"><div
   `</div></div></section>`);
 const c1Css = `<style>#pipeline{padding-top:var(--sp-14);padding-bottom:var(--sp-14)}#pipeline .pnode{width:72px}</style>`;
 
-// C2: Chris's sketch of round 4. B2's stage rows on the left, a rule, and three stats on the right, split 3 : 1.
+// C2: the user's sketch of round 4. B2's stage rows on the left, a rule, and three stats on the right, split 3 : 1.
 const stat2 = (k: string, v: string, q: string, t = "") => `<div style="display:flex;flex-direction:column;gap:2px"><span style="color:var(--muted);font:var(--fw-strong) var(--fs-2xs)/1.2 var(--sans);letter-spacing:var(--ls-caps);text-transform:uppercase">${k}</span>` +
   `<span style="display:flex;align-items:baseline;gap:var(--sp-6)"><b style="font:var(--fw-strong) 26px/1 var(--metric);letter-spacing:var(--ls-display);font-variant-numeric:tabular-nums;color:var(--${t || "ink"})">${v}</b><span style="font-size:var(--fs-xs);color:var(--muted);white-space:nowrap">${q}</span></span></div>`;
 const table2 = `<table style="width:100%;border-collapse:collapse;font-size:var(--fs-xs)"><thead><tr>${th("Stage", false)}${th("Runs / issue")}${th("p90")}${th("Failed")}<th></th>${th("Agent")}</tr></thead><tbody>${STAGES.map(srow).join("")}</tbody></table>`;

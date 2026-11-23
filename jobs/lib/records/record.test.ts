@@ -227,7 +227,7 @@ test("next: each run state gives its step", () => {
     [[{ state: "passed", next: "land" }, { role: "director", state: "passed" }], "land"],
     [[{ state: "passed" }, { role: "review", state: "done" }], "wait"],
     [[{ state: "waiting" }], "ask"],
-    // A failed run the factory asked Chris about waits; a land asked about while live (a slow land) and failed later goes to the rescue.
+    // A failed run the factory asked the user about waits; a land asked about while live (a slow land) and failed later goes to the rescue.
     [[{ state: "failed", asked: { at: AT, question: "q" } }], "wait"],
     [[{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T10:30:00.000Z", asked: { at: AT, question: "slow land" } }], "rescue"],
     [[{ role: "land", state: "failed", cause: "check", ended: "2026-11-04T09:30:00.000Z", asked: { at: AT, question: "slow land" } }], "wait"],

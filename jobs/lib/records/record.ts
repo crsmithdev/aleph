@@ -290,9 +290,9 @@ export const decisions = <T>(): T[] =>
 
 /** The live machine state of one issue: its Ask and its CI result. */
 interface IssueState {
-  /** What the issue or its run waits on from Chris, or null. */
+  /** What the issue or its run waits on from the user, or null. */
   ask: Ask | null;
-  /** The run whose Ask `ask` is, while that run waits for Chris; absent when the Ask is on the issue. */
+  /** The run whose Ask `ask` is, while that run waits for the user; absent when the Ask is on the issue. */
   askJob?: string;
   /**
    * The red GitHub CI on main the issue was filed for (firefighter.ts): its run, its commit and the failure the briefs
@@ -380,7 +380,7 @@ export interface Step {
   on?: string[];
   /** The fix round of the work: `<rounds> / <fixRounds()>`. */
   count?: string;
-  /** `human` for a step that waits for Chris. */
+  /** `human` for a step that waits for the user. */
   to?: string;
 }
 
@@ -403,9 +403,9 @@ export const isError = (r: Pick<Run, "state" | "next">): boolean => (r.state ===
 export interface Live { ask: Ask | null }
 
 /**
- * The next step of the work. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
+ * The next step of the work. An Ask waits for the user; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
- * goes to the rescue, unless the factory asked Chris about it after it ended or its cause is not `rescuable` (`POLICY`): then it
+ * goes to the rescue, unless the factory asked the user about it after it ended or its cause is not `rescuable` (`POLICY`): then it
  * waits; a landed, done or dropped work does nothing; an issue
  * with no open run starts. The run that counts is the newest one that `counts`: a director
  * run changes the step through the Ask and the decision it writes, never as the run that counts.

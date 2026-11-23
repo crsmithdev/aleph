@@ -59,7 +59,7 @@ export function teardown(): void {
 export const newIssue = (areas: string[] = [], key = "fac"): number =>
   writeList({ key }, "add an issue", (doc) => { const item = issues.add(doc, "ship it", { labels: areas, spec: "Do the thing." }); return item.id; }, true)!.value;
 
-/** Change item `id` in the store, as Chris would while the baseline runs. */
+/** Change item `id` in the store, as the user would while the baseline runs. */
 export const change = (id: number, f: (item: issues.Issue) => void) =>
   writeList({ key: "fac" }, "edit", (doc) => { f(issues.find(doc, id)!); return true; });
 

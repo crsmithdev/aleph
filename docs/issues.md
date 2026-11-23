@@ -4,7 +4,7 @@ Issues, ideas and projects live in one git repo, the items repo, cloned at `~/.a
 
 ## Issues and sub-issues
 
-An **issue** is what someone asks for: Chris, a worker or the correction memory. The request stays as written in the request part of the file. Intake writes a spec on it, or splits a large issue into **sub-issues**, each with its own spec and a `from:` link to it. A sub-issue never has sub-issues.
+An **issue** is what someone asks for: the user, a worker or the correction memory. The request stays as written in the request part of the file. Intake writes a spec on it, or splits a large issue into **sub-issues**, each with its own spec and a `from:` link to it. A sub-issue never has sub-issues.
 
 Each is one file: `issues/<n>/issue.md`. The path is the key, `issue.<n>`: the file has no `id` field. The number comes from one counter for all projects, so a number never repeats and a failed push can leave a gap. A file holds a small frontmatter header and three parts under the headings `# Request`, `# Spec` and `# Notes`. Status is a field, never a folder: a finished issue stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
@@ -33,7 +33,7 @@ An issue added with `--spec -` is ready to build in a repo without `"author": tr
 | `edit <repo> <id> [--title t] [--request -] [--spec -] [--priority p] [--labels a,b] [--source s] [--after <key>] [--refs <key,…>]` | Changes fields |
 | `note <repo> <id> "<text>"` | Adds one line with a time stamp; it never rewrites a line |
 | `attach <repo> <id> <file>...` | Attaches images or PDFs |
-| `decide <repo> <id> "<text>"` | Answers an issue that waits for Chris, and clears its Ask |
+| `decide <repo> <id> "<text>"` | Answers an issue that waits for the user, and clears its Ask |
 | `done <repo> <id> ["<summary>"]` | Closes the issue as done |
 | `drop <repo> <id> "<reason>"` | Closes the issue as dropped |
 | `lint [<repo>] [--fix]` | Checks every file; `--fix` repairs what is mechanical |

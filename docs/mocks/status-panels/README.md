@@ -1,6 +1,6 @@
 # Status panels mocks
 
-Chris asked on 2026-11-20: combine Pipeline, Agent Time and Active Issues into two panels, each the size of Agent
+The user asked on 2026-11-20: combine Pipeline, Agent Time and Active Issues into two panels, each the size of Agent
 Time, and use the space left for a panel of memory stats, issues and needs.
 
 `build.ts` draws each board. `parts/` holds the live Status page's rendered HTML (scorecard, Agent Time, Pipeline,
@@ -10,7 +10,7 @@ Rebuild with `bun docs/mocks/status-panels/build.ts`. Not built.
 At 1600 px, Agent Time is 216 px tall and the three cards fill 806 px. Two panels of 216 px and two 24 px gaps leave
 326 px for the new panel.
 
-Round 2, on Chris's notes: the new panel becomes Memory, with memory content only, and Agent Time and Pipeline are
+Round 2, on the user's notes: the new panel becomes Memory, with memory content only, and Agent Time and Pipeline are
 redrawn as one panel. Active Issues is the second panel. Round 1 (A1, A2 and the Attention panel) is in git history.
 
 | Board | File | Shows |
@@ -18,8 +18,8 @@ redrawn as one panel. Active Issues is the second panel. Round 1 (A1, A2 and the
 | B1 | `b1-implement-opens.html` | The pipeline row, with Implement opened into a wide block that holds Agent Time: share reached main, the outcome bar and its hours. The other stages keep 44 px rings. |
 | B2 | `b2-stage-rows.html` | One row per stage: runs per issue, p90, failed share and agent hours on one scale. Implement's bar is the outcome bar. The share reached main moves to the head. |
 
-| C1 | `c1-split.html` | Round 3, on Chris's notes: one panel split 7 : 2 (587 px and 168 px at 1600 px). The live Pipeline rings on the left. Three metric cards on the right: reached main (68%, 54h of 80h, with the outcome bar), first run landed (69%, 189 of 273) and failed runs (18%, 279 of 1,519). |
-| C2 | `c2-rows-stats.html` | Round 4, from Chris's sketch: B2's stage rows on the left, a rule, and three stats on the right, split 3 : 1 (581 px and 194 px at 1600 px). The outcome legend moves to the Pipeline head; the stats drop C1's card boxes. |
+| C1 | `c1-split.html` | Round 3, on the user's notes: one panel split 7 : 2 (587 px and 168 px at 1600 px). The live Pipeline rings on the left. Three metric cards on the right: reached main (68%, 54h of 80h, with the outcome bar), first run landed (69%, 189 of 273) and failed runs (18%, 279 of 1,519). |
+| C2 | `c2-rows-stats.html` | Round 4, from the user's sketch: B2's stage rows on the left, a rule, and three stats on the right, split 3 : 1 (581 px and 194 px at 1600 px). The outcome legend moves to the Pipeline head; the stats drop C1's card boxes. |
 | D1 | `d1-filed-closed.html` | Round 5: C2's Pipeline; Memory cut to 216 px; Active Issues at half width beside Filed and Closed per day, with the net backlog change (−129 in 6 days). |
 | D2 | `d2-lost-causes.html` | Round 5: as D1, with Lost Time beside Active Issues: the 26h of lost time by cause, largest first. |
 | D3 | `d3-issue-counts.html` | Round 5: as D1, with an Issues panel of six week counts: filed 573, intake 231, landed 273, dropped 270, open 5 (+ 6 parked), errored 0 now. |

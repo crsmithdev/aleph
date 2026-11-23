@@ -50,7 +50,7 @@ export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask):
   return { ...c, ask, reason: ask.reason };
 }
 
-/** The card of an issue that waits on Chris, with its Ask: an open one at stage `waiting`, or a parked one whose Ask a parked issue may hold. Else null. */
+/** The card of an issue that waits on the user, with its Ask: an open one at stage `waiting`, or a parked one whose Ask a parked issue may hold. Else null. */
 export function awaiting(repo: string, item: todos.Issue, stage: string): NewIssue | null {
   const ask = askOfItem(item);
   return asking(item, ask) && (todos.status(item) === "parked" || stage === "waiting") ? card(repo, item, "waiting", ask) : null;

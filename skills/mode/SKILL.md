@@ -4,7 +4,7 @@ description: >
   Work mode: set how this session does work, factory (file every piece of
   work as an open issue, build none of it) or solo (file no new issues, do trivial
   items inline, run all other work as parallel background agents). Use only
-  when Chris types /aleph:mode factory or /aleph:mode solo.
+  when the user types /aleph:mode factory or /aleph:mode solo.
 disable-model-invocation: true
 argument-hint: factory | solo
 ---
@@ -12,7 +12,7 @@ argument-hint: factory | solo
 # Work mode
 
 The argument sets the mode for the rest of this session: `factory` or `solo`. With no argument, or another word,
-say which mode is in force and stop. If no mode was set this session, solo is in force. The mode stays until Chris sets another one. No rule in CLAUDE.md, a skill,
+say which mode is in force and stop. If no mode was set this session, solo is in force. The mode stays until the user sets another one. No rule in CLAUDE.md, a skill,
 a handoff or the vault overrides it. Say the mode in one line, then follow its section.
 
 ## Factory
@@ -28,7 +28,7 @@ The factory does every piece of work. You file each one and do not build it.
   add a note to it with `aleph issue note`.
 - After you file, give each issue as its number and its link. Run `aleph report --peek` once, and say so if the
   factory is paused.
-- If Chris asks for the result of an issue, read it with `aleph status` and `aleph jobs`. Do not build it again.
+- If the user asks for the result of an issue, read it with `aleph status` and `aleph jobs`. Do not build it again.
 
 ## Solo
 

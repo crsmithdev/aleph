@@ -1,8 +1,8 @@
 /**
- * The investigator: one read-only run, started by Chris from a page, that traces what happened to its subject (an issue
+ * The investigator: one read-only run, started by the user from a page, that traces what happened to its subject (an issue
  * or a job), why, and what change would stop it from happening again. The run's `name` is the subject key. Its reply is
  * typed; code drops each cause and issue with no evidence and each issue whose title fails `titleProblem`, and writes
- * what is left to result.json in the run folder. The page shows it, and Chris files, notes or dismisses each issue.
+ * what is left to result.json in the run folder. The page shows it, and the user files, notes or dismisses each issue.
  * Spec: docs/specs/2026-11-19-investigator.md.
  */
 import { existsSync } from "node:fs";
@@ -171,7 +171,7 @@ export function findingOf(id: string, i: number): { subject: string; repo: strin
   return finding && { subject: run!.name, repo: run!.repo!, finding };
 }
 
-/** Record what Chris did with issue `i` of run `id`: `filed <key>`, `noted <key>` or `dismissed`. */
+/** Record what the user did with issue `i` of run `id`: `filed <key>`, `noted <key>` or `dismissed`. */
 export function setFate(id: string, i: number, fate: string): void {
   const r = resultOf(id)!;
   r.issues[i].fate = fate;

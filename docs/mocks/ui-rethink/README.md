@@ -3,7 +3,7 @@
 A re-think of how the seven sidebar pages present information: Automation, Agents, Issues, Jobs, Sessions, Memory and
 Hooks. Status is out of scope, because another mock covers it (`docs/mocks/status-redesign/`).
 
-Request (Chris, 2026-11-21): "a clean re-think of how information is presented on the ui, without constraints. I want
+Request (the user, 2026-11-21): "a clean re-think of how information is presented on the ui, without constraints. I want
 less clutter, better organization, easier access to the most important information, and for the layout to be as clean
 and pleasing as possible."
 
@@ -55,7 +55,7 @@ others. A running run has a negative `secs`.
 Each decision names the rule behind it.
 
 1. **The page named X opens on the list of X.** Issues opens on issues and Hooks opens on hooks. Rule: Principle 3,
-   "Anything wrong or waiting for Chris shows at the top, with no scroll", and the request for easier access.
+   "Anything wrong or waiting for the user shows at the top, with no scroll", and the request for easier access.
 2. **Each page has at most three views, in one order:** the things, then the analysis, then the log or the settings.
    The views are tabs in the page head. Rule: `aleph:datavis`, "Keep status and analysis on separate pages".
 3. **One attention row per problem, drawn only when the problem exists.** It uses a tone colour and names the action.
@@ -67,7 +67,7 @@ Each decision names the rule behind it.
    its success rate against the baseline. Rule: Principle 4, "A mechanism earns its place with evidence".
 6. **A row hides its defaults.** No `medium`, no `aleph`, no zero, and a muted `done`. Rule: `design.md`,
    Principles 5 and 6 (terse UI text).
-7. **Row select opens an inspector at the right.** The detail pages stay, behind "Open page". Rule: Chris's wish of
+7. **Row select opens an inspector at the right.** The detail pages stay, behind "Open page". Rule: the user's wish of
    2026-11-20 to look into a hook "without a hook detail page". `.browse` and the Memory inspector exist already.
 8. **A setting shows Save only after a change.** One menu replaces the 5 chart form buttons. The dock moves to the
    foot of the sidebar.
@@ -100,7 +100,7 @@ The first tab names the things the page lists. Where that is the page's own name
 
 Detail of each list view:
 
-- **Automation, Rules:** 10 rows. Each shows the ask, the count of fires, who decided (rule, director, Chris) as a bar,
+- **Automation, Rules:** 10 rows. Each shows the ask, the count of fires, who decided (rule, director, the user) as a bar,
   the result with no answer, and the mode. Limits holds the 7 caps, the 3 schedules and the held paths as setting rows.
 - **Agents, Roles:** rows in three groups (workers, review and intake, oversight). Each shows the model select, the
   switch, runs, success against the baseline, p50, cost and cost per output.
@@ -108,7 +108,7 @@ Detail of each list view:
   search box still files its text as an issue with Ctrl+Enter.
 - **Jobs, Runs:** one row per issue with a strip of its runs. The width of a segment is its duration and the colour is
   its state. System runs (maintainer, monitor, housekeeper, director) are a second group.
-- **Sessions, List:** opens on Chris's own sessions. Factory and headless sessions are a filter. The facts line splits
+- **Sessions, List:** opens on the user's own sessions. Factory and headless sessions are a filter. The facts line splits
   the week's cost by who ran the session.
 - **Memory, Notes:** search, one type at a time (semantic, procedural, episodic, working), and the inspector.
 - **Hooks, List:** the 3 hooks that hold come first, then the other 24 by event.
@@ -121,7 +121,7 @@ Detail of each list view:
 
 ## Choices
 
-Chris decided these on 2026-11-22, from the mock on the shelf.
+The user decided these on 2026-11-22, from the mock on the shelf.
 
 1. Sidebar groups: keep Factory and Claude.
 2. Analysis views: open with a figure band.

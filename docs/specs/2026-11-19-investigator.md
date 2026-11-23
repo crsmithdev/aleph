@@ -8,7 +8,7 @@ investigator agents elsewhere (Sentry Seer, GitLab Duo Root Cause Analysis, Fact
 
 An Investigate button on a page starts one read-only agent run, role `investigator`, on that page's subject. The run
 reads everything the factory recorded about the subject, and replies with typed findings and recommended issues. The
-subject page shows the result, and each recommended issue has a File button. Chris starts every run. Nothing starts one
+subject page shows the result, and each recommended issue has a File button. The user starts every run. Nothing starts one
 by itself.
 
 | Part | Choice |
@@ -28,9 +28,9 @@ by itself.
 - No role studies a failure in depth today. The rescue writes one line per case, the director decides one Ask, and the
   housekeeper keeps parked issues current. On 2026-11-19, issue.3350 needed a by-hand trace through 6 run folders, the
   event log, the models setting and `holds.ts` to find a bug (a3356) that no run reported.
-- Chris's click is the stated reason for each run (PRINCIPLES.md rule 6). An automatic trigger waits for evidence that
-  the runs Chris starts find real faults (rule 4).
-- Chris files, not the agent: a recommended issue is a proposal, and a filed issue starts factory work.
+- The user's click is the stated reason for each run (PRINCIPLES.md rule 6). An automatic trigger waits for evidence that
+  the runs the user starts find real faults (rule 4).
+- The user files, not the agent: a recommended issue is a proposal, and a filed issue starts factory work.
 - One record holds it (rule 5): the run in the ledger already has a folder, a cost, a state and a page.
 
 ## The subject
@@ -82,7 +82,7 @@ issue that already covers the change. The panel then offers Note in place of Fil
 - **News:** one line when a run ends, through `aleph jobs --news`: `job.N investigated issue.3350: 3 causes, 2 issues`.
   The news is plain text, so the line has no link.
 - **Runs:** the run is a job run like any other, so the Jobs page lists it and the Agents page has an Investigator row.
-- **Not a Needs-you item:** Chris started it, so its result does not ask for attention beyond the news line.
+- **Not a Needs-you item:** the user started it, so its result does not ask for attention beyond the news line.
 
 A filed, noted or dismissed row is a field on `result.json` (`issues[i].fate`: `filed <key>`, `noted <key>` or
 `dismissed`), written by the API that files it. A note is one line: the title, the spec, the evidence and the run.

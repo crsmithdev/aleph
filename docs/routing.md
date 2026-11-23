@@ -47,7 +47,7 @@ Every role runs with `--disable-slash-commands`, so it loads no skill. The worke
 
 ## Worker sizes
 
-`route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the issue's spec. A build routed to a size runs on that size's model from `aleph models`, the default below unless Chris set another:
+`route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the issue's spec. A build routed to a size runs on that size's model from `aleph models`, the default below unless the user set another:
 
 | Size | Default model | Fits |
 |---|---|---|

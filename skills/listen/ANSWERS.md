@@ -1,6 +1,6 @@
 # Answers
 
-An answer is a send whose second line is `answer: <kind>`. It is Chris's decision on one note
+An answer is a send whose second line is `answer: <kind>`. It is the user's decision on one note
 (`~/aleph-tools/docs/specs/2026-11-22-design-tool.md`). Its form:
 
 ```
@@ -23,7 +23,7 @@ The note lives in a scope file. In the commands below, `<scope>` is `<item-id>` 
    Each reply below goes through `shelf note reply <scope> <note-id> "<text>"`.
    - `ui`: change the page so it follows the language. The homes stay as they are.
    - `language`: reply `proposal: <the new or changed rule text>, in <home file and heading or bullet>`. Then go back
-     to `wait`. Chris answers it with approve or discard.
+     to `wait`. The user answers it with approve or discard.
    - `approve`: write the proposal of the newest `proposal:` reply into its home.
    - `discard`: reply `discarded`, resolve the note, and go back to `wait`.
    - `exception`: add `except: <place>: <reason>` to the rule. In `design/rules.md` it is a `- except:` line under

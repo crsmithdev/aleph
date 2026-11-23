@@ -14,7 +14,7 @@ reported as accepted, not as a finding.
 |---|---|---|
 | `scan [scope]` (default: all lenses) | Baseline, find, prove, write the findings, report, pick | Find what to improve, change nothing |
 | `fix [scope]` | The scan, then the Act loop on each auto finding before the report | Find what to improve and fix what needs no question |
-| `fix <run dir>` | The Act loop on the picked findings of a saved run | A later session, after Chris picks |
+| `fix <run dir>` | The Act loop on the picked findings of a saved run | A later session, after the user picks |
 
 The scope is a list of lens names, unless the skill names another scope. Checking new work is not a mode: each
 writer skill checks its own diff against its `RULES.md`, by [write/PROCESS.md](../write/PROCESS.md).
@@ -33,7 +33,7 @@ writer skill checks its own diff against its `RULES.md`, by [write/PROCESS.md](.
    every candidate.
 5. **Fix** (`fix` mode only). Run the Act loop on each auto finding, with no question first. Done when each auto
    finding has the status `fixed` or `reverted`.
-6. **Report and pick.** Draw the report of [REPORT.md](REPORT.md) from `findings.json`, then let Chris pick, by
+6. **Report and pick.** Draw the report of [REPORT.md](REPORT.md) from `findings.json`, then let the user pick, by
    PROVE.md's Pick. Done when the report is written and the picked findings are fixed, or none waits.
 
 ## Act loop
@@ -41,7 +41,7 @@ writer skill checks its own diff against its `RULES.md`, by [write/PROCESS.md](.
 For each finding, in the skill's Act order:
 
 1. Make the lens's fix. Delete or change the whole thing: the code, its tests, fixtures, exports, docs entry and
-   dependency line. Edit only the lines the finding names, its riders and what Chris named. Report the rest.
+   dependency line. Edit only the lines the finding names, its riders and what the user named. Report the rest.
 2. Add the finding's guard when its tool exists in the repo.
 3. Run the baseline commands, and the skill's own checks after each finding. Green: commit, naming the lens and
    the finding, and set the status `fixed` with the commit. Red: revert that finding, and set the status

@@ -45,7 +45,7 @@ export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: strin
 const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", mainRef(repo.path, repo.main)).out;
 /** Whether the housekeeper changed issue `id` of `repo` in the day before `now`. */
 const resting = (s: State, repo: Repo, id: number | string, now: number): boolean => now - Date.parse(s.changed[`${repo.key}-${id}`] ?? "") < DAY;
-/** The parked issues of `repo`, but those whose Ask waits for Chris, which the housekeeper must not close or drop, and those resting. */
+/** The parked issues of `repo`, but those whose Ask waits for the user, which the housekeeper must not close or drop, and those resting. */
 const parked = (s: State, repo: Repo, now: number): issues.Issue[] =>
   (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)) && !resting(s, repo, i.id, now));
 const textOf = (i: issues.Issue): string => [i.title, i.request, i.spec, ...i.notes].join("\n");

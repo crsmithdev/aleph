@@ -100,7 +100,7 @@ Every event has 6 fields: a log row, a job's end, a Status card line, a report l
 | `object` | a key, or `settings` | `issue.2072` |
 | `detail` | free text: the reason, a file, a count | `a check failed` |
 
-- The subject is the job key when an agent run acted. The page shows the role of that job and links it. `gate` and `rule` are code, `human` is Chris, and `claude` is an interactive session or the UI chat.
+- The subject is the job key when an agent run acted. The page shows the role of that job and links it. `gate` and `rule` are code, `human` is the user, and `claude` is an interactive session or the UI chat.
 - A run's state change is one event by `gate` on the job. A returned job that the reviewer sent back has the reviewer's job as subject, and the sentence reads "returned by review".
 - An Ask set logs `question` and an Ask cleared logs `answered`. Each new issue logs `filed`. Each close logs `done` or `dropped`.
 - A change of a setting (pause, resume, an Always rule, a model, the judge) logs `changed` on object `settings`.

@@ -137,7 +137,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   const [e] = await direct();
   expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
   expect(landed).toEqual([`issue.1`]);
-  // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so Chris sees no buttons on a landing run.
+  // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so the user sees no buttons on a landing run.
   expect(getRun(jobOfFolder(folder))!.state).toBe("waiting");
   expect(getRun(jobOfFolder(folder))!.ask?.situation ?? "").toBe("");
 });
@@ -163,7 +163,7 @@ test("a core-change Ask on a parked issue is escalated to Chris with case text, 
   expect(d).toMatchObject({ ref: `issue.1`, reason: "core-change", outcome: "escalated", why: "a change to a core note is Chris's", applied: [] });
   expect(issues.status(item(1))).toBe("parked");
   expect(asked(1)!.situation).toBe("The re-check says X is gone.");
-  expect(prompt()).toContain("Actions on Chris's card: approve, disapprove");
+  expect(prompt()).toContain("Actions on the user's card: approve, disapprove");
   expect(readRecord().map((r) => r.outcome)).toEqual(["escalated"]);
 });
 

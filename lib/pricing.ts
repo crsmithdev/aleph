@@ -3,7 +3,7 @@
  * (read 2026-09-03); the three 5.5 models from https://claude.com/pricing (read 2026-10-27).
  * A cache write costs twice the input rate: Claude Code uses the 1-hour cache, and
  * an exact fit over 465 result events showed that rate (read 2026-11-11).
- * These are API list prices. Chris's runs use the claude.ai subscription, so a
+ * These are API list prices. The user's runs use the claude.ai subscription, so a
  * cost from this table is an API-equivalent estimate. Where Claude Code reports
  * a cost (`total_cost_usd` in a `claude -p` result), that cost wins for a Claude
  * model; the table prices transcript turns, and the runs of the models in

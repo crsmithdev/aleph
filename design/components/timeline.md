@@ -19,7 +19,7 @@ The timeline shows the runs of an issue or a job over time, with their events.
 | Head | The name of the run |  | `--fs-sm`; 160px to 220px |
 | Lane | The bars, waits and marks of the run |  | `--bg`, 22px high, radius `--r-tag` |
 | Bar | One step of the run |  | `--fs-2xs` `--fw-mid`, `--on-fill` on its `--fill-*` token; lower than its lane |
-| Wait | A time with no work | yes | stripes of `--rule`; a wait for Chris: `--need` on `--need-bg` |
+| Wait | A time with no work | yes | stripes of `--rule`; a wait for the user: `--need` on `--need-bg` |
 | Mark | A point in time | yes | made `--muted`, done `--ink`; a thin bar |
 | Result, time, cost | The end of the run |  | badge; `--fs-sm` tabular |
 | Event | One event of the run | yes | `--fs-sm`; time `--fs-xs` tabular `--muted` |

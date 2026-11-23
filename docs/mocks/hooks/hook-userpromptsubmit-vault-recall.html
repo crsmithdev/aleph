@@ -1126,7 +1126,7 @@ export const home = (): string =&gt; process.env.HOME || homedir();
 export const expand = (p: string): string =&gt; (p === &quot;~&quot; || p.startsWith(&quot;~/&quot;) ? join(home(), p.slice(1)) : p);
 
 /**
- * Chris&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
+ * The user&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
  * `os.userInfo().homedir` follows HOME (Node&#39;s does not), so the file is read. Null when no entry is found.
  */
 function passwdHome(): string | null {

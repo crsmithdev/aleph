@@ -5,7 +5,7 @@ Two rounds of adversarial review of the factory's issue workflow, intake to land
 ## Outcome
 
 - Round 1 verdict: REVISE. It produced seven issues, a3324 to a3330.
-- Round 2 found fatal or high flaws in five of the seven. Chris dropped all seven.
+- Round 2 found fatal or high flaws in five of the seven. The user dropped all seven.
 - a3324 (delete the mechanical rebase) landed as `70d0e57d`: 123 logged tries, 123 conflicts, 0 successes.
 - a3325 (delete the no-answer timeout setting) was started and discarded. The `timeouts` setting is `{}` in `~/.aleph/aleph.db`.
 - The claims-and-measurement reviewer of round 2 was stopped before it reported.
@@ -103,7 +103,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
 
 7. [high] [design], evidence: read
    Where: `docs/workflow.md` §8 director; `director.ts`
-   Failure: Every Ask goes first to a Fable director, one run each. 506 runs cost $184.9, and 111 `escalated` events show the director often hands the Ask on anyway (for example "a protected file: hooks/lib/judge.ts" appears 7 times). For `held-path`, security-path and `core-change` Asks, code already refuses what the director may do, so the run adds latency and cost with no decision. Code could route those Asks to Chris directly.
+   Failure: Every Ask goes first to a Fable director, one run each. 506 runs cost $184.9, and 111 `escalated` events show the director often hands the Ask on anyway (for example "a protected file: hooks/lib/judge.ts" appears 7 times). For `held-path`, security-path and `core-change` Asks, code already refuses what the director may do, so the run adds latency and cost with no decision. Code could route those Asks to the user directly.
 
 8. [medium] [premise], evidence: read
    Where: `PRINCIPLES.md` 2 vs `docs/workflow.md` §5 held paths
@@ -127,11 +127,11 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
 
 13. [medium] [detail], evidence: read
     Where: `docs/workflow.md` §2 Loop guard
-    Failure: "3 starts in 60 minutes" and "last 3 runs made no commit" are count guards. They set `run-cap` and `no-commit` Asks. Chris sees them as Asks even though Principle 2 says the system decides what it can. A spend ceiling would let the system stop an issue on its own.
+    Failure: "3 starts in 60 minutes" and "last 3 runs made no commit" are count guards. They set `run-cap` and `no-commit` Asks. The user sees them as Asks even though Principle 2 says the system decides what it can. A spend ceiling would let the system stop an issue on its own.
 
 14. [medium] [design], evidence: inferred
     Where: `docs/workflow.md` §7 Rescue
-    Failure: Rescue is ten cases of "drop and rerun once" or Ask. Drop-and-rerun discards the worker's context each time (560 dropped builds, $76). The "once per issue" mark is global, so a second unrelated failure on the same issue goes straight to Chris. Keeping the branch and worktree across all cases (as `aleph recheck` does) is a smaller table. The cost is a branch that may carry a bad commit.
+    Failure: Rescue is ten cases of "drop and rerun once" or Ask. Drop-and-rerun discards the worker's context each time (560 dropped builds, $76). The "once per issue" mark is global, so a second unrelated failure on the same issue goes straight to the user. Keeping the branch and worktree across all cases (as `aleph recheck` does) is a smaller table. The cost is a branch that may carry a bad commit.
 
 15. [medium] [design], evidence: read
     Where: `docs/workflow.md` §2 Gates (Live cap, Busy file, Backend, Baseline)
@@ -191,7 +191,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   6. [medium] [design], evidence: read
      Where: docs/workflow.md:225, settings.always
-     Failure: 13 Ask reasons use only 3 button pairs. approve/disapprove has 6 reasons, resolve/dismiss 4, continue/discontinue 3. Chris set 3 Always rules in a month, all `resolve`: rescue, question, blocker-dropped. 13 reasons exist to vary the card text.
+     Failure: 13 Ask reasons use only 3 button pairs. approve/disapprove has 6 reasons, resolve/dismiss 4, continue/discontinue 3. The user set 3 Always rules in a month, all `resolve`: rescue, question, blocker-dropped. 13 reasons exist to vary the card text.
   
   7. [high] [design], evidence: read
      Where: lib/naming.ts:13, docs/workflow.md:225
@@ -309,7 +309,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   14. [medium] [design], evidence: read
       Where: dispatch, director waits
-      Failure: `director/done->land` waits median 18.5 min over 40 issues (42 h). Held-path Asks wait on Chris. 94 builds sit `waiting` ($43.2) with no worker running.
+      Failure: `director/done->land` waits median 18.5 min over 40 issues (42 h). Held-path Asks wait on the user. 94 builds sit `waiting` ($43.2) with no worker running.
   
   15. [medium] [detail], evidence: read
       Where: records/ledger, timeouts
@@ -337,7 +337,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   2. [high] [design], evidence: read
      Where: asks/timeout.ts; settings row `timeouts`
-     Failure: The `timeouts` setting is `{}`. No Ask ever times out, so every escalated Ask waits for Chris indefinitely. The explainer's "director answers, or timeout acts" path is inert. The Ask backlog is empty only because Chris is clearing it by hand: 111 escalated vs 31 director-answered.
+     Failure: The `timeouts` setting is `{}`. No Ask ever times out, so every escalated Ask waits for the user indefinitely. The explainer's "director answers, or timeout acts" path is inert. The Ask backlog is empty only because the user is clearing it by hand: 111 escalated vs 31 director-answered.
   
   3. [high] [design], evidence: read
      Where: lib/store.ts parked; roles/followups.ts; housekeeper.ts
@@ -349,7 +349,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   5. [high] [design], evidence: read
      Where: roles/intake.ts:458 (`byCode` flake); issue 1156
-     Failure: A `flake` issue is closed as done with "a flake, noted on" the tracker. The tracker (1156) has 129 notes and has been open 15 days. Nothing raises it to Chris and nothing fixes it. The `flaky` table has 135 rows and `tests` is null. Many flake notes say "passes alone", and the same pile holds real order-dependence bugs. Chris's "picks from these notes" has no trigger. These are swallowed, not resolved.
+     Failure: A `flake` issue is closed as done with "a flake, noted on" the tracker. The tracker (1156) has 129 notes and has been open 15 days. Nothing raises it to the user and nothing fixes it. The `flaky` table has 135 rows and `tests` is null. Many flake notes say "passes alone", and the same pile holds real order-dependence bugs. The user's "picks from these notes" has no trigger. These are swallowed, not resolved.
   
   6. [high] [design], evidence: read
      Where: transitions/baseline.ts:20,70; gates/issue-decision.ts:105
@@ -361,7 +361,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   8. [high] [design], evidence: read
      Where: land/rescue.ts:395-415
-     Failure: A worker's "already met" claim plus a green main closes the issue as done. Green means the whole suite is green. It does not mean the claim is true. The check is "unchecked baseline waits": a repo with no record or a failed fetch returns silently, logging `waiting` each tick (476 `waiting` events with no detail). Issue 2892 was closed "Met on main". The real cause was missing `sandbox: true` in config, a config change that Chris applied by hand.
+     Failure: A worker's "already met" claim plus a green main closes the issue as done. Green means the whole suite is green. It does not mean the claim is true. The check is "unchecked baseline waits": a repo with no record or a failed fetch returns silently, logging `waiting` each tick (476 `waiting` events with no detail). Issue 2892 was closed "Met on main". The real cause was missing `sandbox: true` in config, a config change that the user applied by hand.
   
   9. [high] [design], evidence: read
      Where: settings `always` (rescue, question, blocker-dropped = resolve); rescue.ts:329, intake.ts:395
@@ -381,7 +381,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   13. [medium] [design], evidence: read
       Where: roles/director.ts:56,203,692,706; gates/factory-status.ts:237
-      Failure: The director gets one run per Ask. A failure ("the director timed out", 8; "did not decide", 11) writes a fallback case with no recommendation and sends it to Chris. A credit outage or backend hold therefore escalates every new Ask. `no-commit` is not in ONCE_PER_ISSUE, so continue can repeat, bounded only by run-cap. After a run-cap continue, `capMarked` clears on the next `started`. The hour count still applies and a new run-cap Ask follows. Issue 3054 (parked) names this loop.
+      Failure: The director gets one run per Ask. A failure ("the director timed out", 8; "did not decide", 11) writes a fallback case with no recommendation and sends it to the user. A credit outage or backend hold therefore escalates every new Ask. `no-commit` is not in ONCE_PER_ISSUE, so continue can repeat, bounded only by run-cap. After a run-cap continue, `capMarked` clears on the next `started`. The hour count still applies and a new run-cap Ask follows. Issue 3054 (parked) names this loop.
   
   14. [medium] [detail], evidence: read
       Where: roles/intake.ts:543-548; gates/intake-decision.ts:24
@@ -393,7 +393,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   16. [medium] [detail], evidence: read
       Where: spec questions (rescue.ts:343); explainer
-      Failure: "Run asked, no commit" waits for a spec edit. The director is refused, the standing rule is skipped and timeouts are `{}`, so only Chris can clear it. Vocabulary is large: 12 Ask reasons, 12 causes, 9 rescue paths (7 cases plus killed and lost), 10 stages, and 3 of the 12 reasons are never timed. The card offers unlike verbs: continue/discontinue, approve/disapprove, resolve/dismiss, with `Rerun` hiding inside `resolve`. A human cannot tell what "resolve" does without opening the card.
+      Failure: "Run asked, no commit" waits for a spec edit. The director is refused, the standing rule is skipped and timeouts are `{}`, so only the user can clear it. Vocabulary is large: 12 Ask reasons, 12 causes, 9 rescue paths (7 cases plus killed and lost), 10 stages, and 3 of the 12 reasons are never timed. The card offers unlike verbs: continue/discontinue, approve/disapprove, resolve/dismiss, with `Rerun` hiding inside `resolve`. A human cannot tell what "resolve" does without opening the card.
   
   Not checked: whether the 2 ghost `running` rows count toward the live cap; spec edits during a run beyond reading `worker-verdict.ts:324` (the Oracle appears to read a per-run snapshot, unverified).
 
@@ -403,7 +403,7 @@ Data read from aleph.db (read-only): 1831 intake runs cost $506.1, 1708 passed b
   
   1. [high] [premise], evidence: read
      Where: events on issue.3203, 2026-11-18
-     Failure: The premise fails for an Ask answer. Chris answered at 19:34:51 and the next start came from a `missed` event at 19:36:23. Again: answered 21:20:30, missed 21:22:29, then started. Of 43 `missed` events, 35 are `ingest:`. The sweep is a main path for these steps, not a net. The issue sits 1.5 to 2 minutes each time.
+     Failure: The premise fails for an Ask answer. The user answered at 19:34:51 and the next start came from a `missed` event at 19:36:23. Again: answered 21:20:30, missed 21:22:29, then started. Of 43 `missed` events, 35 are `ingest:`. The sweep is a main path for these steps, not a net. The issue sits 1.5 to 2 minutes each time.
   
   2. [high] [premise], evidence: read
      Where: jobs/lib/transitions/stall.ts:21-22, tick.ts:177-179
@@ -520,17 +520,17 @@ ask -
 
 #### Request
 
-The timeouts setting is {} in ~/.aleph/aleph.db (read 2026-11-19), so jobs/lib/asks/timeout.ts, 'aleph always timeout', the Gates page control and their tests have no user. PRINCIPLES.md 7 also rules out waiting on a timer. Remove the setting and every path that reads or writes it; an escalated Ask waits for Chris as it does today. Parked a2997 and a3315 touch this code and become moot. Source: red-team of the issue workflow, 2026-11-19.
+The timeouts setting is {} in ~/.aleph/aleph.db (read 2026-11-19), so jobs/lib/asks/timeout.ts, 'aleph always timeout', the Gates page control and their tests have no user. PRINCIPLES.md 7 also rules out waiting on a timer. Remove the setting and every path that reads or writes it; an escalated Ask waits for the user as it does today. Parked a2997 and a3315 touch this code and become moot. Source: red-team of the issue workflow, 2026-11-19.
 
 
-### a3326. Send held-path Asks to Chris without a director run
+### a3326. Send held-path Asks to the user without a director run
 dropped   source agent   priority medium   updated 2026-11-19T09:53:35.292Z
 after -   refs -   areas speed, efficiency, asks, jobs, improve
 ask -
 
 #### Request
 
-Code decides a held-path Ask's outcome before the director reads it: a security path or bun.lock must wait for Chris (jobs/lib/roles/director.ts escalation, heldChange). 78 director runs ended 'escalated' for $37.4 (jobs table, role=director). Where code already fixes the outcome, skip the director run and give Chris the code-written case text at once, as a 'user' Always rule does today. The director still runs for a held glob it may land. Source: red-team of the issue workflow, 2026-11-19.
+Code decides a held-path Ask's outcome before the director reads it: a security path or bun.lock must wait for the user (jobs/lib/roles/director.ts escalation, heldChange). 78 director runs ended 'escalated' for $37.4 (jobs table, role=director). Where code already fixes the outcome, skip the director run and give the user the code-written case text at once, as a 'user' Always rule does today. The director still runs for a held glob it may land. Source: red-team of the issue workflow, 2026-11-19.
 
 
 ### a3327. Count an Always rerun toward the once-per-issue rescue
@@ -589,10 +589,10 @@ Three of the four second-round reviewers sent reports. The claims-and-measuremen
 - [m] C, O: the box must not count the time a land waits in the queue at `landTurn` (`Infinity`), and the issue does not say so. The 30-minute `askSlowLands` rule also overlaps the new box.
 - [h] Y: the real cause is one lock held across every check. a3328 and a3329 share that cause.
 
-### a3326: send held-path Asks to Chris by code
+### a3326: send held-path Asks to the user by code
 - [h] all three: the premise is wrong. `escalation()` already escalates every `heldChange` hit, held globs included (`jobs/lib/roles/director.ts:200`).
 - [h] all three: the 78 runs and $37.4 are the director's own escalations across every Ask reason. They do not measure held-path Asks.
-- [h] C, O: Chris loses the director's case text and gets only the code fallback text instead.
+- [h] C, O: the user loses the director's case text and gets only the code fallback text instead.
 - [h] C: a skip outside `direct()` bypasses the `director-<on>` lock, `record()` and the `ONCE_PER_ISSUE` bookkeeping.
 - [m] O: an Ask can be left with no text and no buttons on the Status page.
 - [m] C: the split for a branch that cannot be read is lost (`jobs/lib/roles/director.ts:203`).
@@ -611,7 +611,7 @@ Three of the four second-round reviewers sent reports. The claims-and-measuremen
 - [m] C: a second site exists. The stored `rescue: resolve` rule fires at `jobs/lib/roles/director.ts:679` too.
 - [h] Y: a smaller fix deletes the Always `resolve` branch at `jobs/lib/land/rescue.ts:345`, because the run cap and `ONCE_PER_ISSUE` already exist.
 - [m] C, O: the 7 and 6 reruns are not traced to the rule. Two issues are the only evidence.
-- [m] O: every issue that fails twice would then reach Chris as an Ask, which is the outcome his rule exists to stop.
+- [m] O: every issue that fails twice would then reach the user as an Ask, which is the outcome their rule exists to stop.
 - [m] O: the new mark key can double-count with the `lost` and `killed` keys.
 
 ### a3325: remove the Ask timeout
@@ -662,7 +662,7 @@ Failure: "Load never causes a failure: work waits in a queue." A fixed land limi
 
 5. [high] [design], evidence: read
 Where: a3328, jobs/lib/land/rescue.ts:196
-Failure: `rescueCase` excludes a land with cause `timeout` (`cause === "timeout" && r.role !== "land"`), so the result is no case. Rescue then sends an Ask to Chris on every time-boxed land. The issue says "like any other" and names no cause. `infra` reruns forever instead. `check` fails under a wrong label.
+Failure: `rescueCase` excludes a land with cause `timeout` (`cause === "timeout" && r.role !== "land"`), so the result is no case. Rescue then sends an Ask to the user on every time-boxed land. The issue says "like any other" and names no cause. `infra` reruns forever instead. `check` fails under a wrong label.
 
 6. [high] [design], evidence: inferred
 Where: a3328, landing.ts:322-343, :386
@@ -682,7 +682,7 @@ Failure: A run ends with the bare string "escalated" only when the model chose `
 
 10. [high] [design], evidence: read
 Where: a3326, director.ts:208 (`fallback` text), :677
-Failure: The director writes the case text Chris reads (situation, effects). The code fallback has no diff analysis. The `user` Always rule is a standing choice by Chris. This change takes that choice away for every held Ask, with no opt-in.
+Failure: The director writes the case text the user reads (situation, effects). The code fallback has no diff analysis. The `user` Always rule is a standing choice by the user. This change takes that choice away for every held Ask, with no opt-in.
 
 11. [high] [design], evidence: read
 Where: a3326, director.ts:667-679, :723
@@ -690,7 +690,7 @@ Failure: A held-path skip outside `direct()` bypasses the `director-<on>` lock (
 
 12. [medium] [detail], evidence: read
 Where: a3326, director.ts:203-206
-Failure: A branch that cannot be read (`unknown`) escalates only for `held-path`. Other reasons go to the director. A by-code route must keep that split or it sends Asks to Chris that now go to a run.
+Failure: A branch that cannot be read (`unknown`) escalates only for `held-path`. Other reasons go to the director. A by-code route must keep that split or it sends Asks to the user that now go to a run.
 
 13. [high] [premise], evidence: read
 Where: a3330, lib/store.ts:366-372 (`isSorted`); jobs/lib/gates/intake-decision.ts:23
@@ -730,7 +730,7 @@ Failure: `chris()` is called for the "again" cases (`earlier` true, lines 410, 4
 
 22. [medium] [design], evidence: read
 Where: a3327, jobs/lib/roles/director.ts:56, :200-201
-Failure: A second `rescue` Ask on an issue already goes to Chris when the director decided the first (`ONCE_PER_ISSUE`). With a stored `rescue: resolve` rule (db, set 2026-10-29), the director's first-verb path (director.ts:679) also takes `resolve` with no run. The rescue Ask can be resolved by rule at a second site, so fixing :345 alone leaves a second rerun path.
+Failure: A second `rescue` Ask on an issue already goes to the user when the director decided the first (`ONCE_PER_ISSUE`). With a stored `rescue: resolve` rule (db, set 2026-10-29), the director's first-verb path (director.ts:679) also takes `resolve` with no run. The rescue Ask can be resolved by rule at a second site, so fixing :345 alone leaves a second rerun path.
 
 23. [medium] [detail], evidence: read
 Where: a3327, rescue.ts:345-351 (`always("rescue", repo.key)`); a3327 request
@@ -754,7 +754,7 @@ Findings (read-only; I read the issues and the code under jobs/lib, ran nothing)
 
 2. [high] [design], evidence: read
    Where: issue a3326, director.ts:224-226, :703-705
-   Failure: The 'user' Always path calls `escalate(..., undefined, ...)`, which writes a code fallback text. The director's case text (situation, recommendation, diff reading) is what Chris decides from today. Chris loses it on every held land. The issue calls the fallback equal to a director case but names no check for that.
+   Failure: The 'user' Always path calls `escalate(..., undefined, ...)`, which writes a code fallback text. The director's case text (situation, recommendation, diff reading) is what the user decides from today. The user loses it on every held land. The issue calls the fallback equal to a director case but names no check for that.
 
 3. [medium] [detail], evidence: read
    Where: issue a3326, director.ts:660-666, `pendingCases`
@@ -766,7 +766,7 @@ Findings (read-only; I read the issues and the code under jobs/lib, ran nothing)
 
 5. [medium] [premise], evidence: inferred
    Where: issue a3327
-   Failure: Chris set the rule so as not to be asked. After the change, every issue that fails twice gets a rescue Ask. The cost (Asks Chris did not want) is not set against 7 reruns on 3203 and 6 on 2955, which the run-cap already stops. Two issues are the whole evidence.
+   Failure: the user set the rule so as not to be asked. After the change, every issue that fails twice gets a rescue Ask. The cost (Asks the user did not want) is not set against 7 reruns on 3203 and 6 on 2955, which the run-cap already stops. Two issues are the whole evidence.
 
 6. [medium] [detail], evidence: read
    Where: issue a3327, rescue.ts:381, :399, `rescued()`
@@ -786,7 +786,7 @@ Findings (read-only; I read the issues and the code under jobs/lib, ran nothing)
 
 10. [medium] [detail], evidence: read
     Where: issue a3328, landing.ts:171-205, rescue.ts:13
-    Failure: A land that fails by time box becomes a failed land, so rescue handles it as an "infra" or "other" land and reruns it "once". A hung check will hang again. The second time reaches Chris's Ask. The 30-minute `askSlowLands` rule in rescue.ts already exists and overlaps the new limit. Which of the two wins is unstated.
+    Failure: A land that fails by time box becomes a failed land, so rescue handles it as an "infra" or "other" land and reruns it "once". A hung check will hang again. The second time reaches the user's Ask. The 30-minute `askSlowLands` rule in rescue.ts already exists and overlaps the new limit. Which of the two wins is unstated.
 
 11. [medium] [design], evidence: read
     Where: issue a3329, landing.ts:340-343, :346-350
@@ -814,7 +814,7 @@ Findings (read-only; I read the issues and the code under jobs/lib, ran nothing)
 
 17. [medium] [premise], evidence: inferred
     Where: issue a3325
-    Failure: `timeouts` is `{}` today, but it means "no rule set", not "no use". Chris set Always rules because he does not want to wait on asks. Removing the only path that lets an Ask stop waiting leaves Chris as the only exit. With the 'user' Always rule kept, it only sends an Ask to Chris sooner, so it stays useful. The real loss is the lander path for approve, which is untested for use.
+    Failure: `timeouts` is `{}` today, but it means "no rule set", not "no use". The user set Always rules because they do not want to wait on asks. Removing the only path that lets an Ask stop waiting leaves the user as the only exit. With the 'user' Always rule kept, it only sends an Ask to the user sooner, so it stays useful. The real loss is the lander path for approve, which is untested for use.
 
 18. [low] [detail], evidence: inferred
     Where: issue a3325, a2997, a3315
@@ -844,7 +844,7 @@ Findings (read-only; I read the issues and the code under jobs/lib, ran nothing)
 
 1. [high] [premise], evidence: read
 Where: issues a3324 to a3330 vs the first review
-Failure: Most of the seven are the easiest changes, not the largest findings. Only a3330 touches a big cost (intake is 29% of spend). Nothing hits the parked pile (132), the flake pile (129 notes), ghost `running` rows, the sweep as main path (35 of 43 missed events), the triple test run, the red-main lock or the size router. The top risks stay open for Chris.
+Failure: Most of the seven are the easiest changes, not the largest findings. Only a3330 touches a big cost (intake is 29% of spend). Nothing hits the parked pile (132), the flake pile (129 notes), ghost `running` rows, the sweep as main path (35 of 43 missed events), the triple test run, the red-main lock or the size router. The top risks stay open for the user.
 
 2. [high] [premise], evidence: inferred
 Where: the plan as a whole
@@ -852,7 +852,7 @@ Failure: Value per line, best first: a3324 (pure deletion, 123 of 123 conflicts)
 
 3. [high] [premise], evidence: read
 Where: the "try again" finding (five mechanisms) vs a3327
-Failure: a3327 patches the rescue rerun with a counter. That keeps five retry paths and adds a rule to one. A smaller change deletes the Always `resolve` branch at `jobs/lib/land/rescue.ts:345` so the Ask goes to Chris. The run-cap and `ONCE_PER_ISSUE` (`jobs/lib/roles/director.ts:56`) already exist.
+Failure: a3327 patches the rescue rerun with a counter. That keeps five retry paths and adds a rule to one. A smaller change deletes the Always `resolve` branch at `jobs/lib/land/rescue.ts:345` so the Ask goes to the user. The run-cap and `ONCE_PER_ISSUE` (`jobs/lib/roles/director.ts:56`) already exist.
 
 4. [high] [design], evidence: read
 Where: a3328; PRINCIPLES.md 7

@@ -45,7 +45,7 @@ convention is right is **layout**. Report a candidate under one lens only.
 1. **Sweep.** In `fix`, follow [SWEEP.md](SWEEP.md): remove junk files, build output and orphaned fixtures, and
    move misplaced files, each where a yes-or-no check passes. In `scan`, run SWEEP.md's Find only and list its
    results in the Overview. Done when SWEEP.md's own bar is met.
-2. **Scope.** Take the scope Chris named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files fixed
+2. **Scope.** Take the scope the user named. Else run `bun <skill dir>/cochange.ts seed --since 90.days` (files fixed
    most, pairs that change together, jscpd's copies of code) and take its directories, the files changed most in
    the last 30 days, and `docs/`. Done when you have a list of directories and the seed output.
 3. **Hunt** by PROCESS.md, with one subagent per lens per two or three directories, each with the seed lines for
@@ -56,7 +56,7 @@ convention is right is **layout**. Report a candidate under one lens only.
 
 Lowest risk first: dead, slop, one-way, waste, seams, depth, then layout, so that files move once their contents
 are final. A finding that needs a new interface is **ask**: follow [DEEPEN.md](DEEPEN.md) before its fix. It
-designs the interface with Chris, then hands the design back to the Act loop.
+designs the interface with the user, then hands the design back to the Act loop.
 
 
 ## Guards

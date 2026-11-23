@@ -147,7 +147,7 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
-/** The first open job of the repo, not waiting for Chris, whose issue in `lists` `shares` something with the issue; `file` says what. */
+/** The first open job of the repo, not waiting for the user, whose issue in `lists` `shares` something with the issue; `file` says what. */
 function openWait(repo: Repo, jobs: Job[], lists: Reader, shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; job: string; file: string } | null {
   for (const j of jobs) {
     const last = record.counting(j).run;
@@ -167,7 +167,7 @@ const usesGptOss = (item: issues.Issue): boolean =>
 /**
  * Why an issue waits for an open job: both name the same busy file in their Edit surface, so one
  * of the two lands would conflict; or both use the gpt-oss server, which runs one build at a time.
- * A job waiting for Chris does not count, as it can wait for hours.
+ * A job waiting for the user does not count, as it can wait for hours.
  */
 function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now: number, lists: Reader) {
   const counts = new Map<string, number>();

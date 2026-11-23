@@ -3,9 +3,9 @@
  * The context gate. docs/hooks.md is the contract.
  *
  *   Stop  fill below the warn fraction     → pass silently
- *         above it                         → pass, warn Chris
+ *         above it                         → pass, warn the user
  *         session has compacted            → block once, ask for a handoff
- *   A headless session (a factory worker, `claude -p`) has no Chris to warn or hand off to: pass silently.
+ *   A headless session (a factory worker, `claude -p`) has no the user to warn or hand off to: pass silently.
  */
 import { once } from "./lib/handshake.ts";
 import { assess, read, threshold } from "../lib/session-context.ts";

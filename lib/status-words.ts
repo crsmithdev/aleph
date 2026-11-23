@@ -1,7 +1,7 @@
 // The status sentence: its words and the one verdict that says it. The server records the verdict in the Herald history (ui/state.ts) and the Now view draws it (ui/views/now.js); both call `verdict` here. The page gets this module as JS from the server (ui/server.ts, SHARED).
 import { shortText } from "./naming.ts";
 
-/** The sentence when nothing is wrong and nothing asks for Chris. */
+/** The sentence when nothing is wrong and nothing asks for the user. */
 const FINE = "Everything is fine";
 /** The start of the sentence when something is wrong. */
 const ALERT = "Alert: ";
@@ -88,7 +88,7 @@ function errorLines(s: Facts): ErrorLine[] {
 }
 
 /**
- * The status of a state: "Alert: " and what is wrong; otherwise what asks for Chris, which leads, or the fine
+ * The status of a state: "Alert: " and what is wrong; otherwise what asks for the user, which leads, or the fine
  * sentence; then a backend hold, a weekly usage of WEEKLY_WARN or more and the warning health lines. At most MAX_SAID parts. A
  * `stale` state says first that it is out of date.
  */
@@ -99,7 +99,7 @@ export function verdict(s: Facts, stale = false): Verdict {
   // Last, so it sorts after the factory's alerts.
   if (s.flow?.error) alerts.add(FLOW_FAILED);
   const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-error" : t === FLOW_FAILED ? "" : "#awaiting" }));
-  // An Ask still with the director does not need Chris yet.
+  // An Ask still with the director does not need the user yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#awaiting" });
   if (f.paused && alerts.size) said.push({ text: PAUSED, href: "" });

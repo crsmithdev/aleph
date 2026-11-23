@@ -25,7 +25,7 @@ interface Reason {
   on?: string[];
   /** `<n> / <m>`: the children done. */
   count?: string;
-  /** Who decides next: a reason that waits for Chris. */
+  /** Who decides next: a reason that waits for the user. */
   to?: "human" | "director";
 }
 export interface Stage extends Reason { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
@@ -104,7 +104,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (mine && isWaiting(mine.state)) return out("waiting", { action: "waiting", on: [mine.id], to: "human" });
   const waiting = parts.find((p) => p.stage === "waiting");
   if (waiting) return out("waiting", { action: "waiting", on: [waiting.id] });
-  // A failed job that the director or Chris has carries an Ask, so it is `waiting` above.
+  // A failed job that the director or the user has carries an Ask, so it is `waiting` above.
   if (mine && (mine.state === "returned" || mine.state === "failed")) return out("failed", { action: mine.state, on: [mine.id] });
   const failed = parts.find((p) => p.stage === "failed");
   if (failed) return out("failed", { action: "failed", on: [failed.id] });

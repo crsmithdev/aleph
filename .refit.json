@@ -50,7 +50,7 @@
         "skills/refit-agents/SKILL.md:41-54",
         "skills/refit-docs/SKILL.md:39-48"
       ],
-      "reason": "the refit skills share refit-code's skeleton on purpose (Chris, 2026-11-11); the lenses and modes differ, and their retro and act steps point at refit-code's."
+      "reason": "the refit skills share refit-code's skeleton on purpose (the user, 2026-11-11); the lenses and modes differ, and their retro and act steps point at refit-code's."
     },
     {
       "concept": "the COMMANDS table rows of the aleph CLI",
@@ -72,7 +72,7 @@
         "skills/refit-code/SKILL.md",
         "skills/refit-docs/SKILL.md"
       ],
-      "reason": "Each refit skill ends its lens table with the same 'Report a candidate under one lens only.' line and opens the same Modes table, so a reader moves between them without a new layout. The text is a template, not logic (Chris, 2026-11-11)."
+      "reason": "Each refit skill ends its lens table with the same 'Report a candidate under one lens only.' line and opens the same Modes table, so a reader moves between them without a new layout. The text is a template, not logic (the user, 2026-11-11)."
     },
     {
       "copies": [
@@ -183,7 +183,7 @@
         "docs/mocks/agent-roles/index.html:5-10",
         "docs/mocks/agents-retro/options.html:5-10"
       ],
-      "reason": "Each mock under docs/mocks/ is a standalone page that Chris opens on its own, so it keeps its own head, switcher bar and table rows. Mocks share no code with each other or with ui/ (CLAUDE.md, Mocks)."
+      "reason": "Each mock under docs/mocks/ is a standalone page that the user opens on its own, so it keeps its own head, switcher bar and table rows. Mocks share no code with each other or with ui/ (CLAUDE.md, Mocks)."
     },
     {
       "concept": "the view object of a page",

@@ -1,6 +1,6 @@
 # Needs-you strip
 
-The Needs-you strip lists what in the memory waits for Chris. An item shows only while its number is over its act-threshold.
+The Needs-you strip lists what in the memory waits for the user. An item shows only while its number is over its act-threshold.
 
 - Use: under the tabs of each Memory tab.
 - Not for: an Ask; use an ask card.
@@ -17,7 +17,7 @@ The Needs-you strip lists what in the memory waits for Chris. An item shows only
 |---|---|---|---|
 | Box | The items |  | `--surface`, shadow `--card-lift`, radius `--r-card`, `--fs-sm`; wraps |
 | Label | `Needs you` |  | `--fw-strong` |
-| Item | A badge, then the number and what it counts, linked to where Chris acts |  | `--ink`, no underline until hover; the rule in its `title` |
+| Item | A badge, then the number and what it counts, linked to where the user acts |  | `--ink`, no underline until hover; the rule in its `title` |
 
 ## Rules
 

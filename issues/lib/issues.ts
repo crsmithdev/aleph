@@ -122,7 +122,7 @@ function refusing<T>(f: () => T): T {
   }
 }
 
-/** Chris's answer to an issue with an Ask: not a worker's note (a job id) and not the factory's own. */
+/** The user's answer to an issue with an Ask: not a worker's note (a job id) and not the factory's own. */
 export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(intake|triage|job \S+ landed)\b/.test(text);
 
 export interface Added { repo: string; added: number; title: string; commit: string; maybeSame?: { id: number; title: string }[] }
@@ -168,7 +168,7 @@ function checkKeys(field: "after" | "refs", refs: string[]): string[] {
   return refs.map((r) => parseKey(r)?.kind === "issue" ? key("issue", parseKey(r)!.n) : refuse(`--${field} takes issue keys like issue.5: ${r}`));
 }
 
-/** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else Chris at a shell. */
+/** Who runs this command: a factory agent (`ALEPH_AGENT`), a Claude Code session (`CLAUDECODE`), else the user at a shell. */
 const actor = (): string => (isAgent() ? "worker" : process.env.CLAUDECODE ? "claude" : "human");
 
 /**
@@ -220,7 +220,7 @@ export function show(repo: store.Place, id: number | string): issues.Issue {
   return pick(repo, readIssues(repo), id);
 }
 
-/** Add a note; `answer` marks it as Chris's answer, which clears the item's Ask (`answered`). */
+/** Add a note; `answer` marks it as the user's answer, which clears the item's Ask (`answered`). */
 export function note(repo: store.Place, id: number | string, text: string, answer = false) {
   text = text.trim() || refuse("give the note some text");
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
@@ -234,7 +234,7 @@ export function note(repo: store.Place, id: number | string, text: string, answe
 }
 
 /**
- * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
+ * The user's answer to an issue that asks them something, in one write: the decision note, and the Ask cleared. The issue is
  * left to the intake that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
  * part-dropped Ask, the plan option sets `plan` and the close option closes the issue. A parked issue with the blocker-dropped Ask can be decided.
  * `by` is who answered: the director and the timeout decide through here too, with the `option` they took.

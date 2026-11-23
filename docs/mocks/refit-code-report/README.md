@@ -1,6 +1,6 @@
 # Refit code report
 
-Request (Chris, 2026-11-20): a design and readability pass on refit-* output, with the refit-code scan of
+Request (the user, 2026-11-20): a design and readability pass on refit-* output, with the refit-code scan of
 `64605811` (shelf `20261121-032529-qbt0`) as the example.
 
 `build.py` draws `findings.json` (the run's record) in the new shape. `figures.json` holds the run's own figures, cut
@@ -14,7 +14,7 @@ line at body size, 58 findings in one 23,955 px column.
 
 ## Decisions
 
-1. Split by tier. Ask (14) comes first and open; Auto (44) folds to one row each. Chris acts on the ask
+1. Split by tier. Ask (14) comes first and open; Auto (44) folds to one row each. The user acts on the ask
    findings, and an auto fix keeps behaviour (`design.md`, Principle 6).
 2. Group by lens, not by unit. In this run 40 of 47 units held one finding, so a unit head cost a row per
    finding. The unit moves onto the row as muted mono text.
@@ -31,7 +31,7 @@ line at body size, 58 findings in one 23,955 px column.
 
 ## Settled
 
-Chris accepted the mock on 2026-11-20 ("looks good"), and asked for it as the refit format:
+The user accepted the mock on 2026-11-20 ("looks good"), and asked for it as the refit format:
 
 - Auto rows fold.
 - The shape is now `skills/refit/REPORT.md` and `skills/refit/HTML.md`, with `skills/refit/report.css` and

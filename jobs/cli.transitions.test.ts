@@ -90,7 +90,7 @@ describe("every transition dispatches at once", () => {
   test("dropping an issue drops its open job, so its Ask stops waiting for Chris", async () => {
     const x = track(await seed("dropped with its job", open("drop-with"), { spec: true }));
     await when(() => started().includes(`issue.${x}`));
-    // The held run waits on an Ask, as a job that needs Chris does.
+    // The held run waits on an Ask, as a job that needs the user does.
     const [run] = runs(x);
     setState(`job.${run}`, "waiting", { ask: { reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a" }], recommended: "A", why: ["w"] } });
     expect(hookLines().join("\n")).toContain(`issue.${x}`);

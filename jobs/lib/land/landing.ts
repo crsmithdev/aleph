@@ -51,7 +51,7 @@ export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => 
 
 /**
  * The one rule for which runs may land, and on what terms. A passed agent run may land, and it opens a check
- * when it says one. A run that needs Chris only for a held path or the reviewer may land when he says so (`asked`).
+ * when it says one. A run that needs the user only for a held path or the reviewer may land when they say so (`asked`).
  * Every other run gives null.
  */
 export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: boolean } | null {
@@ -65,7 +65,7 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
 /**
  * Passed agent runs waiting to land by themselves, oldest first: the job's next step is a land (nextStep set `next`
  * for `--land` or an autoland repo). A land that lands again is the unit's own step, so it is not here. A job whose
- * issue is parked in the work store waits until Chris reopens it.
+ * issue is parked in the work store waits until the user reopens it.
  */
 export function waitingToLand(jobs = allJobs()): string[] {
   const lists = reader({ fetch: false });

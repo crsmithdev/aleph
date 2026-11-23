@@ -1,6 +1,6 @@
 /* The Status redesign mocks: the parts ui/app.css does not have yet, in its tokens only. README lists each as a new part. */
 
-/* Chris's font pick of 11/23: the big numbers in Merriweather. */
+/* the user's font pick of 11/23: the big numbers in Merriweather. */
 :root { --metric: 'Merriweather', Georgia, serif; }
 
 /* The mock's own bar: not part of the design. */
@@ -86,7 +86,7 @@
 .stack { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .sp > .split { gap: var(--gap); }
 .split.wide-left { grid-template-columns: minmax(0, 5fr) minmax(0, 2fr); }
-/* In one column the cards of both stacks are the grid's items, so what needs Chris still leads. */
+/* In one column the cards of both stacks are the grid's items, so what needs the user still leads. */
 @media (max-width: 1100px) { .split.wide-left { grid-template-columns: minmax(0, 1fr); } .split.wide-left > .stack { display: contents; } .split.wide-left .needs { order: -2; } .split.wide-left #problems { order: -1; } }
 
 /* The timeline's lanes inside a card: the card gives the padding, and the rows sit closer. */

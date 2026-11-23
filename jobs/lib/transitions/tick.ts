@@ -191,7 +191,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
 }
 
 /**
- * The timeout's action on an Ask, as Chris's card takes it: approve lands the run; resolve on a run drops it with the
+ * The timeout's action on an Ask, as the user's card takes it: approve lands the run; resolve on a run drops it with the
  * question as the reason, so it runs again; the reason's second verb drops the issue and its run; resolve or continue
  * on an issue is a decision with its intake. Any other action is refused. The refusal, or null.
  */

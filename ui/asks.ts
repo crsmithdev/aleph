@@ -1,6 +1,6 @@
 /**
  * What the Awaiting-you rows say and offer (the `asks` of /api/factory). The server decides from the Ask's reason and the item's data;
- * the page only renders. One entry per run, issue that waits for Chris.
+ * the page only renders. One entry per run, issue that waits for the user.
  */
 import { SENT_BACK } from "../jobs/lib/gates/worker-verdict.ts";
 import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";

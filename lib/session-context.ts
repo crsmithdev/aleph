@@ -71,7 +71,7 @@ export type Verdict =
   | { kind: "gate"; reason: string };
 
 /**
- * Quiet below the warn fraction. A warning to Chris above it. A block once the
+ * Quiet below the warn fraction. A warning to the user above it. A block once the
  * session has compacted: from there on the context is a summary of a summary,
  * and a handoff written now is better than one written later.
  */
@@ -80,7 +80,7 @@ export function assess(reading: Reading, limit: number, blocked: boolean, retry:
   if (reading.compacted && !blocked && !retry) {
     return {
       kind: "gate",
-      reason: `this session has compacted, so its context is now a summary. Write the handoff with the aleph:handoff skill; the save ends the turn and says whether Chris runs /clear or the session clears itself. Do not start new work in this session.`,
+      reason: `this session has compacted, so its context is now a summary. Write the handoff with the aleph:handoff skill; the save ends the turn and says whether the user runs /clear or the session clears itself. Do not start new work in this session.`,
     };
   }
   const fraction = Number(process.env.ALEPH_CONTEXT_WARN ?? DEFAULT_WARN);

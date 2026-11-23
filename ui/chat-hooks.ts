@@ -6,9 +6,9 @@ import { annotationsFile } from "../lib/paths.ts";
 import { sameSite } from "./http.ts";
 import { dock } from "./dock.ts";
 
-const system = (file: string) => `You are the chat agent of the aleph web UI. Chris writes to you from a panel on the page he is looking at.
-- File work with \`aleph issue add <repo> ...\`. Filing an issue starts a factory build, so file only what Chris asks for, and say the issue number.
-- Notes that Chris pinned on the page come with his message. When he points at some of them, his message is about those. Answer or resolve one with \`shelf note reply|resolve --file ${file} <id> ...\`.
+const system = (file: string) => `You are the chat agent of the aleph web UI. The user writes to you from a panel on the page they are looking at.
+- File work with \`aleph issue add <repo> ...\`. Filing an issue starts a factory build, so file only what the user asks for, and say the issue number.
+- Notes that the user pinned on the page come with their message. When they point at some of them, their message is about those. Answer or resolve one with \`shelf note reply|resolve --file ${file} <id> ...\`.
 - Keep replies short: the panel is narrow.`;
 
 /** The notes with an id in `ids`, then the other open notes on `page` and those on no page, as blocks for the prompt; "" when there are none. */
@@ -17,7 +17,7 @@ function notesOn(file: string, page: string | undefined, ids: string[]): string 
   const pointed = all.filter((n) => ids.includes(n.id));
   const open = page === undefined ? [] : all.filter((n) => n.status === "open" && (n.url === page || n.url === "") && !ids.includes(n.id));
   const line = (n: any) => `- ${n.id}${n.status === "open" ? "" : ` (${n.status})`} on \`${n.selector}\`${n.text ? ` ("${n.text.slice(0, 80)}")` : ""}: ${n.note}${n.replies.map((r: any) => `\n  - ${r.by}: ${r.text}`).join("")}`;
-  return (pointed.length ? `\n\nChris points at these annotations:\n${pointed.map(line).join("\n")}` : "") +
+  return (pointed.length ? `\n\nThe user points at these annotations:\n${pointed.map(line).join("\n")}` : "") +
     (open.length ? `\n\nOpen annotations on this page (${page}):\n${open.map(line).join("\n")}` : "");
 }
 

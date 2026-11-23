@@ -126,7 +126,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "")
   return { prompt, edits, commands, dirs, items, finalMessage, text };
 }
 
-/** Never inside an aleph job: a worker's prompt is not Chris speaking. */
+/** Never inside an aleph job: a worker's prompt is not the user speaking. */
 export function userGrantedSkip(prompt: string): boolean {
   if (jobId()) return false;
   return /\bskip\s+verif(y|ication)\b/i.test(prompt);

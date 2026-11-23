@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TB
-  Chris((Chris))
+  The user((the user))
   subgraph Host["WSL2 host"]
     CC[Claude Code session]
     Hooks[aleph hooks]
@@ -19,8 +19,8 @@ flowchart TB
   Jev[Jev on OpenRouter]
   Claude[Claude subscription]
 
-  Chris --> CC
-  Chris --> UI
+  The user --> CC
+  The user --> UI
   CC <--> Hooks
   Hooks --> LF
   Hooks --> Stores
@@ -38,14 +38,14 @@ flowchart TB
   UI --> LF
 ```
 
-Chris works in Claude Code sessions and on the UI. Both write through the `aleph` CLI. The factory reads and writes the stores, starts `claude -p` runs and pushes to GitHub. Nothing listens on a public interface.
+The user works in Claude Code sessions and on the UI. Both write through the `aleph` CLI. The factory reads and writes the stores, starts `claude -p` runs and pushes to GitHub. Nothing listens on a public interface.
 
 ## Processes
 
 | Process | Started by | Lives | Code |
 |---|---|---|---|
 | Hooks | Claude Code, per event | One event | `hooks/*.ts` |
-| `aleph` CLI | Chris, a session, the UI | One command | `cli/cli.ts` |
+| `aleph` CLI | The user, a session, the UI | One command | `cli/cli.ts` |
 | `aleph tick` | `aleph-tick.timer`, each minute | Seconds | `jobs/lib/transitions/tick.ts` |
 | `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/transitions/baseline.ts` `suiteStep` |
 | Dispatch, intake, director | A transition, as a transient systemd unit | Until done | `jobs/lib/transitions/launch.ts` |
@@ -114,18 +114,18 @@ The updater (`ui/updater.ts`) owns every derived answer: the routes in its `KEYE
 - **The record is on `origin/main`.** The items repo reads and writes `origin/main`. An issue is done when a commit on main names it in an `Issue:` trailer.
 - **Transitions start the next step.** No step waits for the tick. The tick's sweep reports a missed transition as a bug.
 - **A check with no verdict is not a failure.** A time-out or a kill is `infra`, and the rescue checks again.
-- **Agents cannot widen their own power.** Code checks each director action. Security paths and `bun.lock` wait for Chris, unless he sets a land timeout for the reason.
+- **Agents cannot widen their own power.** Code checks each director action. Security paths and `bun.lock` wait for the user, unless they set a land timeout for the reason.
 
 ### What a worker can change
 
-A worker runs as Chris's OS user with Bash. Aleph has one user (Principle 1), so the gates stop a careless worker, not a hostile one.
+A worker runs as the user's OS user with Bash. Aleph has one user (Principle 1), so the gates stop a careless worker, not a hostile one.
 
 | A worker can | Stopped | Seen |
 |---|---|---|
 | Edit a file an Oracle command names, on the base and outside the Edit surface | Yes: Verify fails | The check `oracle-pin` on the run |
 | Edit or weaken a test in the Edit surface | No | The reviewer reads the diff. The keep-gate lists each new test that passes on the base, and the reviewer holds it for a bug fix or a behaviour change |
 | Change its issue's spec with `aleph issue edit` | Yes, for the running job: the job reads the spec copied at dispatch | The store write records the actor `worker` |
-| Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for Chris | The Ask |
+| Change a held path or a security path | Yes: the run waits as a `held-path` Ask. A security path or `bun.lock` waits for the user | The Ask |
 | Write the job folder's `spec.md`, `aleph.db` or the items repo directly | No | No |
 | Push to `origin/main` itself | Yes: the worker's git rewrites a push to `git@github.com:` to a dead remote (`agent-run.ts`) | The run's log |
 

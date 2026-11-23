@@ -54,7 +54,7 @@ directory holds:
 | `dropped` | A candidate under the proof bar; `reason` says why | prove |
 | `accepted` | A candidate that `.refit.json` accepts | prove |
 | `survivor` | A dead-lens candidate that an escape hatch keeps; `reason` names the hatch | prove |
-| `picked` | A finding Chris picked | the pick |
+| `picked` | A finding the user picked | the pick |
 | `fixed` | Fixed and committed; `commit` holds the hash | the Act loop |
 | `reverted` | The fix turned the baseline red; `reason` holds the failed command | the Act loop |
 | `stale` | A picked finding that no longer holds at HEAD | `fix <run dir>` |

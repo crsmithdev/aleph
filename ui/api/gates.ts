@@ -1,10 +1,10 @@
 /**
- * `GET /api/automation`: what the Gates page shows. The gates now, the Asks that wait for Chris, one rule per
+ * `GET /api/automation`: what the Gates page shows. The gates now, the Asks that wait for the user, one rule per
  * Ask reason, the held paths, and the log of who decided what. Each part comes from the module that
  * owns it; this file only gathers them.
  * `POST /api/automation/rules/:reason/revoke`: `aleph always revoke <reason>`, the Ask-me side of a rule.
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
- * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n>, "then"?: "pick" | "drop" }`): `aleph always timeout`; 0 waits for Chris.
+ * `POST /api/automation/rules/:reason/timeout` (`{ "minutes": <n>, "then"?: "pick" | "drop" }`): `aleph always timeout`; 0 waits for the user.
  */
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
@@ -79,7 +79,7 @@ function tickEntries(since: number): LogEntry[] {
   return readEvents(since).filter((e) => e.subject !== "gate" && e.subject !== "reviewer" && e.object !== "settings");
 }
 
-/** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`User: …`, `User decided: …`, `User approved it`, and the old `Chris…` leads). The note is the whole text. */
+/** The user's answers in the issue notes of the factory repos: the notes the UI and CLI write for them (`User: …`, `User decided: …`, `User approved it`, and the old `Chris…` leads). The note is the whole text. */
 function noteEntries(): LogEntry[] {
   const lists = reader({ fetch: false });
   const out: LogEntry[] = [];
@@ -113,7 +113,7 @@ function collapse(entries: LogEntry[]): LogEntry[] {
   return out;
 }
 
-/** The log: the gate holds, the Always rules Chris set, the rule, director and firefighter events and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
+/** The log: the gate holds, the Always rules the user set, the rule, director and firefighter events and their answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, project?: string): LogEntry[] {
   const holds = collapse(allHolds().flatMap((h) => (h.event ? [h.event] : [])));
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ time: g.at, subject: "human", action: "changed", object: reason, detail: `set to ${g.action}` }));
@@ -163,7 +163,7 @@ function schedules(): { name: string; last: string | null; result: string | null
 }
 
 /**
- * The three metrics over the last LOG_DAYS days. `rate`: of the Asks raised in the window and answered, the share that Chris did not
+ * The three metrics over the last LOG_DAYS days. `rate`: of the Asks raised in the window and answered, the share that the user did not
  * answer (a `human` answered event; a rule, the director or a gate clearing it is automatic), null with none. `catches`: `fired`, the build runs started in the
  * window that a check or the reviewer sent back, against `fixed`, those of them that a later build run of the same job fixed:
  * it passed or landed. `held`: the issues held and the hours in a hold, from a hold record to the next `started` record, to the close of the issue, or to now.

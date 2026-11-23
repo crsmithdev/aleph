@@ -23,7 +23,7 @@ export interface Finding {
 
 /** Errors count from two sessions; work done by hand counts from three. */
 const MIN: Record<Kind, number> = { hook: 2, tool: 2, gate: 2, loop: 2, reload: 2, dupe: 2, command: 3, prompt: 3, lookup: 3, misled: 1 };
-const LOOP = 3; // gate denials in a row, with no prompt from Chris between them
+const LOOP = 3; // gate denials in a row, with no prompt from the user between them
 const HOME = homedir();
 const PATH = /\/(?:[\w.@+-]+\/)+[\w.@+-]+\.\w+/g;
 const READS = /^(sed -n|cat|head|tail|ls|grep|rg|find|wc|jq|echo|git (diff|log|status|show))\b/; // a lookup, not a command
@@ -49,7 +49,7 @@ const shape = (cmd: string) => norm(cmd.replace(/^cd\s+\S+\s*(&&|;)\s*/, ""));
 export const said = (c: unknown): string =>
   typeof c === "string" ? c : Array.isArray(c) ? c.map((b) => (b?.type === "text" ? b.text : "")).join("") : "";
 
-/** Text Chris typed, not a hook, a command wrapper or a relay. */
+/** Text the user typed, not a hook, a command wrapper or a relay. */
 const typed = (s: string) => s.trim() !== "" && !/^(<|\[|Stop hook feedback|Base directory for this skill|This session is being continued)/.test(s.trimStart());
 
 /** Signals from one transcript. */

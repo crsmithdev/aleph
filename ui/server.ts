@@ -182,7 +182,7 @@ if (import.meta.main) {
   }
   const server = await serve(port);
   // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it. The home name,
-  // because a POST needs the paired cookie and Chris pairs on that host.
+  // because a POST needs the paired cookie and the user pairs on that host.
   if (String(server.port) === uiPort()) await dock?.announce(shelfBase());
   console.log(`http://127.0.0.1:${server.port}/`);
 }

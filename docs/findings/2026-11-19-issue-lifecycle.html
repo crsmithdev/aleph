@@ -133,7 +133,7 @@ main { max-width: 2200px; }
   </header>
 
   <div class="pair">
-    <div class="side"><p class="tag">Today · page of 2026-11-19 02:26 UTC</p><h2>Every failure on the way to main has one fixed place to go</h2><p>A failed check or a reviewer hold goes back to the worker for at most 2 fix rounds. What is left goes to the rescue once, then to an Ask that the director tries before Chris.</p></div>
+    <div class="side"><p class="tag">Today · page of 2026-11-19 02:26 UTC</p><h2>Every failure on the way to main has one fixed place to go</h2><p>A failed check or a reviewer hold goes back to the worker for at most 2 fix rounds. What is left goes to the rescue once, then to an Ask that the director tries before the user.</p></div>
     <div class="side next"><p class="tag">Revised · rounds 1 to 4 and the memory cut · 2026-11-19</p><h2>Agents run on prompts alone, and fewer parts can fail</h2><p>Each section ends with what changes and what round 2, 3 or 4 removed, struck out with the reason. Rounds 1 and 2: <code>docs/findings/2026-11-19-issue-workflow-red-team.md</code>. Rounds 3 and 4 are on this page only.</p></div>
   </div>
 
@@ -147,7 +147,7 @@ main { max-width: 2200px; }
       <text x="10" y="122" class="t-title">Again</text><text x="10" y="142" class="t-muted">step or its worker</text>
       <text x="10" y="184" class="t-title">Skip</text><text x="10" y="204" class="t-muted">next dispatch asks</text>
       <text x="10" y="246" class="t-title">Rescue</text><text x="10" y="266" class="t-muted">one safe action</text>
-      <text x="10" y="308" class="t-title t-risk">Ask</text><text x="10" y="328" class="t-muted">director, then Chris</text>
+      <text x="10" y="308" class="t-title t-risk">Ask</text><text x="10" y="328" class="t-muted">director, then the user</text>
       <text x="10" y="370" class="t-title">Closed</text><text x="10" y="390" class="t-muted">dropped or done</text>
 
       <g class="guides">
@@ -198,7 +198,7 @@ main { max-width: 2200px; }
       <li><b>Skip</b> logs a <code>held</code> event and starts nothing. The next dispatch asks the gates again.</li>
       <li><b>Rescue</b> takes one safe action per issue: rerun, recheck, land again, or split. A second rescue on the same issue sets a <code>rescue</code> Ask.</li>
       <li><span class="key-mem">Violet dashed</span> marks a model step that memory steers: intake, the worker, the reviewer, and the director behind each Ask. Section 6 lists what memory sets.</li>
-      <li><b>Ask</b> goes to the director first. Chris sees it only when the director escalates it, or a rule sends it to him.</li>
+      <li><b>Ask</b> goes to the director first. The user sees it only when the director escalates it, or a rule sends it to them.</li>
     </ol>
   </figure>
 
@@ -292,7 +292,7 @@ main { max-width: 2200px; }
         <tr><td>Remove <code>Bash(aleph memory recall:*)</code> from the intake allowlist</td><td><span class="chip idea">proposal</span> <code>jobs/lib/roles/intake.ts:493</code></td></tr>
         <tr><td class="cut">Spec check at filing</td><td><span class="chip risk">removed, round 3</span> intake runs the same check, so a gap gets two exits</td></tr>
         <tr><td class="cut">Cheaper intake model, measured first</td><td><span class="chip risk">removed, round 3</span> a measurement, not a change</td></tr>
-        <tr><td class="cut">Tell Chris about test-only drops; no-intake signal</td><td><span class="chip risk">removed, round 3</span> they only notify; they decide nothing</td></tr>
+        <tr><td class="cut">Tell the user about test-only drops; no-intake signal</td><td><span class="chip risk">removed, round 3</span> they only notify; they decide nothing</td></tr>
       </tbody>
     </table>
   </section>
@@ -506,16 +506,16 @@ main { max-width: 2200px; }
 
   <div class="pair">
   <section id="ask">
-    <h2>5. Rescue and Asks: the director answers before Chris</h2>
+    <h2>5. Rescue and Asks: the director answers before the user</h2>
     <figure>
-      <figcaption>The rescue acts once per issue; an Ask goes to a standing rule, then the director, and reaches Chris only on escalation.</figcaption>
-      <svg viewBox="0 -40 1000 270" role="img" aria-label="Ask flow: always rule, director, code check, applied, or escalate to Chris">
+      <figcaption>The rescue acts once per issue; an Ask goes to a standing rule, then the director, and reaches the user only on escalation.</figcaption>
+      <svg viewBox="0 -40 1000 270" role="img" aria-label="Ask flow: always rule, director, code check, applied, or escalate to the user">
         <rect class="node risk" x="0" y="60" width="140" height="56" rx="6"/><text x="70" y="84" text-anchor="middle" class="t-title t-risk">Ask</text><text x="70" y="104" text-anchor="middle" class="t-muted">reason, options</text>
         <rect class="node" x="190" y="60" width="160" height="56" rx="6"/><rect class="mem" x="185" y="55" width="170" height="66" rx="9"/><text x="270" y="84" text-anchor="middle" class="t-title">Always rule?</text><text x="270" y="104" text-anchor="middle" class="t-mono">always</text>
         <rect class="node key" x="400" y="60" width="160" height="56" rx="6"/><rect class="mem" x="395" y="55" width="170" height="66" rx="9"/><text x="480" y="84" text-anchor="middle" class="t-title">Director</text><text x="480" y="104" text-anchor="middle" class="t-muted">Opus, read-only</text>
         <rect class="node" x="610" y="60" width="160" height="56" rx="6"/><text x="690" y="84" text-anchor="middle" class="t-title">Code check</text><text x="690" y="104" text-anchor="middle" class="t-muted">refuses 4 kinds</text>
         <rect class="node ok" x="820" y="60" width="170" height="56" rx="6"/><text x="905" y="84" text-anchor="middle" class="t-title">Applied</text><text x="905" y="104" text-anchor="middle" class="t-muted">land, drop, rerun</text>
-        <rect class="node risk" x="400" y="180" width="160" height="52" rx="6"/><text x="480" y="202" text-anchor="middle" class="t-title">Chris</text><text x="480" y="221" text-anchor="middle" class="t-muted">Status page</text>
+        <rect class="node risk" x="400" y="180" width="160" height="52" rx="6"/><text x="480" y="202" text-anchor="middle" class="t-title">the user</text><text x="480" y="221" text-anchor="middle" class="t-muted">Status page</text>
         <path class="edge" d="M 140 88 H 188"/>
         <path class="edge key" d="M 350 88 H 398"/><text x="374" y="79" text-anchor="middle">no</text>
         <path class="edge key" d="M 560 88 H 608"/><text x="584" y="79" text-anchor="middle">acts</text>
@@ -527,7 +527,7 @@ main { max-width: 2200px; }
         <path class="edge" d="M 560 206 H 905 V 118"/><text x="730" y="197" text-anchor="middle">answers, or timeout acts</text>
       </svg>
       <ol class="notes">
-        <li>Code refuses a director that closes an issue Chris filed, lands a security path or <code>bun.lock</code>, lands a held run before review, or answers a run that waits for a spec edit.</li>
+        <li>Code refuses a director that closes an issue the user filed, lands a security path or <code>bun.lock</code>, lands a held run before review, or answers a run that waits for a spec edit.</li>
         <li>A <code>held-path</code> Ask never times out, so a timeout never lands a held change.</li>
       </ol>
     </figure>
@@ -561,7 +561,7 @@ main { max-width: 2200px; }
         <rect class="node risk" x="760" y="84" width="220" height="40" rx="6"/><text x="776" y="109" class="t-title">rescue Ask</text>
         <rect class="node" x="0" y="144" width="300" height="40" rx="6"/><text x="16" y="169" class="t-title">Director rerun</text>
         <rect class="node" x="380" y="144" width="300" height="40" rx="6"/><text x="396" y="169" class="t-mono">ONCE_PER_ISSUE</text>
-        <rect class="node risk" x="760" y="144" width="220" height="40" rx="6"/><text x="776" y="169" class="t-title">second Ask: Chris</text>
+        <rect class="node risk" x="760" y="144" width="220" height="40" rx="6"/><text x="776" y="169" class="t-title">second Ask: the user</text>
         <rect class="node" x="0" y="204" width="300" height="40" rx="6"/><text x="16" y="229" class="t-title">Fix round, merge run</text>
         <rect class="node" x="380" y="204" width="300" height="40" rx="6"/><text x="396" y="229" class="t-mono">≤2 rounds each</text>
         <rect class="node risk" x="760" y="204" width="220" height="40" rx="6"/><text x="776" y="229" class="t-title">Ask</text>
@@ -572,14 +572,14 @@ main { max-width: 2200px; }
       <ol class="notes">
         <li>The counter counts a job by its first build run, at dispatch only (<code>jobs/lib/gates/factory-status.ts:250</code>). A lifetime count never falls, so each run past it needs an Ask, and only <code>ONCE_PER_ISSUE</code> (<code>jobs/lib/roles/director.ts:203</code>) stops repeat director reruns.</li>
         <li>Open: a slow loop passes the hourly cap. Issue 2955 reran six times, 30 min apart. Nobody counted how often this happens.</li>
-        <li>No Ask times out: the <code>timeouts</code> setting is <code>{}</code>, so all 111 escalations in 15 days waited for Chris.</li>
+        <li>No Ask times out: the <code>timeouts</code> setting is <code>{}</code>, so all 111 escalations in 15 days waited for the user.</li>
       </ol>
     </figure>
     <table>
       <thead><tr><th>Change</th><th>Status</th></tr></thead>
       <tbody>
         <tr><td>The director reads no <code>needs-you-log.md</code> and no vault decisions</td><td><span class="chip idea">proposal</span> section 6</td></tr>
-        <tr><td>Held-path Asks stay with Chris</td><td>no change: all held globs are security paths or <code>bun.lock</code>, and code sends those to Chris</td></tr>
+        <tr><td>Held-path Asks stay with the user</td><td>no change: all held globs are security paths or <code>bun.lock</code>, and code sends those to the user</td></tr>
         <tr><td class="cut">Run cap over the issue's life; cut both once-marks</td><td><span class="chip risk">removed, round 4</span> no stop point but dispatch, no value (1.86 agent runs per landed issue), and "land again" loses its bound</td></tr>
         <tr><td class="cut">Always <code>held-path</code> = <code>approve</code></td><td><span class="chip risk">removed, round 4</span> it approves nothing: 77 of 78 held-path stops named a security path</td></tr>
         <tr><td class="cut">Delete the Always Rerun branch</td><td><span class="chip risk">removed, round 3</span> <code>jobs/lib/land/rescue.ts:345</code> serves the <code>rescue</code> grant</td></tr>
@@ -599,20 +599,20 @@ main { max-width: 2200px; }
         <thead><tr><th>Rule</th><th>Kind</th><th>Comes from</th><th>Acts at</th></tr></thead>
         <tbody>
           <tr><td>Past-work recall: <code>aleph memory recall --episodes</code></td><td><span class="chip mem">memory</span></td><td>Episode pages of finished issues</td><td>Intake prompt, worker brief</td></tr>
-          <tr><td><code>identity/AGENT.md</code> and the vault's core lines</td><td><span class="chip mem">memory</span></td><td>Lessons the maintainer lands, Chris's edits</td><td>Start context of every factory agent: intake, worker, reviewer, director</td></tr>
+          <tr><td><code>identity/AGENT.md</code> and the vault's core lines</td><td><span class="chip mem">memory</span></td><td>Lessons the maintainer lands, the user's edits</td><td>Start context of every factory agent: intake, worker, reviewer, director</td></tr>
           <tr><td>Role skills: <code>write-code</code>, <code>code-review</code></td><td><span class="chip mem">memory</span></td><td>Skill files; lessons can change them</td><td>Worker brief, reviewer prompt, as text</td></tr>
-          <tr><td>Correction lessons</td><td><span class="chip mem">memory</span></td><td>Chris's pushback, verify-gate denials, reviewer drop reasons, last 14 days</td><td>A <code>proposal-*</code> Ask. Approve opens an issue that the factory builds like any other</td></tr>
-          <tr><td>Always rules</td><td><span class="chip mem">memory</span></td><td>Chris's Always clicks: now <code>rescue</code>, <code>question</code>, <code>blocker-dropped</code> = <code>resolve</code></td><td>Ask handling, rescue reruns, intake questions</td></tr>
+          <tr><td>Correction lessons</td><td><span class="chip mem">memory</span></td><td>the user's pushback, verify-gate denials, reviewer drop reasons, last 14 days</td><td>A <code>proposal-*</code> Ask. Approve opens an issue that the factory builds like any other</td></tr>
+          <tr><td>Always rules</td><td><span class="chip mem">memory</span></td><td>the user's Always clicks: now <code>rescue</code>, <code>question</code>, <code>blocker-dropped</code> = <code>resolve</code></td><td>Ask handling, rescue reruns, intake questions</td></tr>
           <tr><td>Busy file: 3 land conflicts on a file</td><td><span class="chip warn">history</span></td><td>Past land conflicts</td><td>Dispatch gate <code>file</code></td></tr>
           <tr><td>Loop guard: 3 runs with no commit, 3 starts in 1 h</td><td><span class="chip warn">history</span></td><td>The issue's past runs</td><td>Dispatch gate <code>ask</code></td></tr>
           <tr><td>Credit wait and backend hold</td><td><span class="chip warn">history</span></td><td>The last API credit error</td><td>Dispatch gates <code>credit</code>, <code>waiting</code></td></tr>
           <tr><td>Red baseline</td><td><span class="chip warn">history</span></td><td>The last hourly suite on main</td><td>Dispatch gate <code>red</code></td></tr>
-          <tr><td>Director decides once per issue for <code>run-cap</code> and <code>rescue</code></td><td><span class="chip warn">history</span></td><td>The director's past decisions</td><td>Escalation to Chris</td></tr>
+          <tr><td>Director decides once per issue for <code>run-cap</code> and <code>rescue</code></td><td><span class="chip warn">history</span></td><td>The director's past decisions</td><td>Escalation to the user</td></tr>
           <tr><td>Everything else on this page</td><td><span class="chip">code</span></td><td>Constants and branches in <code>jobs/lib</code></td><td>Each gate, check, retry, cap and rescue case</td></tr>
         </tbody>
       </table>
       <ol class="notes">
-        <li>A lesson never becomes a gate or a check on its own. A proposed check becomes code only after Chris or the director approves it and a worker builds it.</li>
+        <li>A lesson never becomes a gate or a check on its own. A proposed check becomes code only after the user or the director approves it and a worker builds it.</li>
         <li>Memory steers what a model decides: the spec intake writes, the code the worker writes, a reviewer hold, a director action. Code still checks each of those results.</li>
       </ol>
     </figure>
@@ -632,7 +632,7 @@ main { max-width: 2200px; }
           <tr><td>Approved correction lessons written into files agents load (CLAUDE.md, AGENT.md, role skills)</td><td><code>jobs/lib/learning/corrections.ts:37</code></td><td><span class="chip risk">cut</span> no lesson lands in those files <span class="inferred">inferred</span></td></tr>
           <tr><td><code>memory</code> in the start hook's command list</td><td><code>cli/commands.ts:393</code></td><td>stay: a command name, no vault text</td></tr>
           <tr><td>Role prompts; role skills <code>write-code</code>, <code>code-review</code></td><td><code>jobs/lib/roles/role-skill.ts:4</code></td><td>stay: fixed prompts</td></tr>
-          <tr><td>Always rules</td><td><code>settings.always</code></td><td>stay: Chris's settings, not learning</td></tr>
+          <tr><td>Always rules</td><td><code>settings.always</code></td><td>stay: the user's settings, not learning</td></tr>
           <tr><td>The maintainer: dedupe, alias, recheck</td><td><code>jobs/lib/roles/maintainer.ts:122</code></td><td>stay with recall: it keeps the vault current, and it is not a factory role</td></tr>
         </tbody>
       </table>
@@ -666,7 +666,7 @@ main { max-width: 2200px; }
       </svg>
       <ol class="notes">
         <li>Scale: 2 units per item. Ghost rows are verified; the other three counts are reported.</li>
-        <li>Flake follow-ups are paused on purpose (vault, "Flake Follow-Ups Are Paused"), and the housekeeper only writes notes by Chris's 11-12 decision.</li>
+        <li>Flake follow-ups are paused on purpose (vault, "Flake Follow-Ups Are Paused"), and the housekeeper only writes notes by the user's 11-12 decision.</li>
       </ol>
     </figure>
   </section>
@@ -740,8 +740,8 @@ main { max-width: 2200px; }
         <tr><td>Always branch serves six first-verb reasons; <code>rescue</code> has its own branch</td><td><code>jobs/lib/roles/director.ts:58</code>, <code>jobs/lib/roles/director.ts:679</code>, <code>jobs/lib/land/rescue.ts:345</code></td></tr>
         <tr><td>Run cap: 3 agent runs per issue in any 60 min, whatever the trigger</td><td><code>jobs/lib/infra/settings.ts:76</code>, <code>jobs/lib/gates/issue-decision.ts:20</code></td></tr>
         <tr><td>Once-marks: <code>markRescued</code>, <code>ONCE_PER_ISSUE</code>; killed runs carry no mark</td><td><code>jobs/lib/transitions/continuation.ts:286</code>, <code>jobs/lib/roles/director.ts:56</code>, <code>jobs/lib/land/rescue.ts:206</code></td></tr>
-        <tr><td>Run cap counts jobs by first build run, at dispatch only; the second run-cap Ask goes to Chris</td><td><code>jobs/lib/gates/factory-status.ts:250</code>, <code>jobs/lib/roles/director.ts:203</code></td></tr>
-        <tr><td>3203: the cap fired 3 times and Chris released it; 2955: six reruns 30 min apart never reach 3 in 60 min</td><td>Round 4, finding 13 (events of both issues)</td></tr>
+        <tr><td>Run cap counts jobs by first build run, at dispatch only; the second run-cap Ask goes to the user</td><td><code>jobs/lib/gates/factory-status.ts:250</code>, <code>jobs/lib/roles/director.ts:203</code></td></tr>
+        <tr><td>3203: the cap fired 3 times and the user released it; 2955: six reruns 30 min apart never reach 3 in 60 min</td><td>Round 4, finding 13 (events of both issues)</td></tr>
         <tr><td>Per landed issue: 1.19 job starts, 1.86 agent runs (864 issues); round 3's "about 5" counted every job kind</td><td>Round 4, finding 4</td></tr>
         <tr><td>No Ask times out: <code>timeouts</code> is <code>{}</code></td><td><code>settings</code> in <code>~/.aleph/aleph.db</code>; <code>jobs/lib/asks/timeout.ts:104</code></td></tr>
         <tr><td>Held globs are security paths or <code>bun.lock</code></td><td><code>~/.aleph/items/projects/3/project.md</code>, <code>jobs/lib/gates/gate.ts:154</code></td></tr>

@@ -5,8 +5,8 @@
  * vault, no output. Path: $ALEPH_VAULT or ~/.aleph/vault.
  *
  * A factory agent (`ALEPH_AGENT`) gets identity/AGENT.md and identity/VOICE.md
- * and nothing from the vault: factory agents run on their prompts alone (Chris,
- * 2026-11-19). It loads no CLAUDE.md, whose import gives Chris's sessions VOICE.md.
+ * and nothing from the vault: factory agents run on their prompts alone (the user,
+ * 2026-11-19). It loads no CLAUDE.md, whose import gives the user's sessions VOICE.md.
  *
  * The context is cut at whole core lines to START_BUDGET bytes and then ends
  * with a pointer to the rest (vault/lib/vault.ts startContext).

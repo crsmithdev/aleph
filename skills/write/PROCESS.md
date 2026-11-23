@@ -51,7 +51,7 @@ write: its `RULES.md`. The auditor, `refit-<domain>`, owns how to find a break i
    (no case reaches it), **fix** (name the rule), or **second way** (on purpose: add it to `.refit.json`
    `accepted` with the reason).
 4. **Apply** each verdict other than keep inside the diff, then run the checks of step 1 again. When a fix reaches
-   past the diff, or hits a trigger of [refit/PROVE.md](../refit/PROVE.md) step 2, ask Chris, or record it in the
+   past the diff, or hits a trigger of [refit/PROVE.md](../refit/PROVE.md) step 2, ask the user, or record it in the
    `defaults` field when your brief defines one. A problem that was there before the diff is a follow-up.
 5. **Guards.** When the change makes one copy the owner of a concept, or one module the owner of a seam, add its
    guard in the same diff.

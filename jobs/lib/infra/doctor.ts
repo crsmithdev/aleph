@@ -186,7 +186,7 @@ export async function doctor(): Promise<Check[]> {
   return [...clock, ...gitChecks(), ...unitChecks(), home, lostCheck(), linkCheck()];
 }
 
-/** The safe repair: the tick starts and a leftover gc.log goes, so git's automatic cleanup runs again. An empty object stays: `aleph doctor` names it, and Chris decides. */
+/** The safe repair: the tick starts and a leftover gc.log goes, so git's automatic cleanup runs again. An empty object stays: `aleph doctor` names it, and the user decides. */
 export function fix(): string[] {
   const said: string[] = [];
   const t = systemctl("start", "--no-block", "aleph-tick.service");

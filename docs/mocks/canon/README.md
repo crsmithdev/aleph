@@ -1,6 +1,6 @@
 # Canon mock
 
-Request (Chris, 2026-11-20): select a UI component, have an agent pick out its salient features and generalize them,
+Request (the user, 2026-11-20): select a UI component, have an agent pick out its salient features and generalize them,
 approve or deny each, apply the result to similar controls on other pages, and browse the design guide.
 Second round: do it all in the annotation flow, not on extra pages, and name features by the site's tokens.
 

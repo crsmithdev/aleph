@@ -1,8 +1,8 @@
 # Ask card
 
-An ask card asks Chris a question. It shows the question, the choices and the buttons that answer it.
+An ask card asks the user a question. It shows the question, the choices and the buttons that answer it.
 
-- Use: for each Ask that waits for Chris.
+- Use: for each Ask that waits for the user.
 - Not for: a note with no answer; use a feed row.
 
 ## Helper

@@ -1,11 +1,11 @@
-/** Files `aleph memory init` lays down. VAULT.md is the contract; Chris owns it after init. */
+/** Files `aleph memory init` lays down. VAULT.md is the contract; the user owns it after init. */
 
 export const VAULT_MD = `# VAULT.md — the contract
 
 This file is **human-owned**. The agent never edits it; wanting a change it
 writes a note in \`wiki/decisions/\` and asks. The git-guard hook denies edits.
 
-This vault is **AI-first**: most reads and writes are the agent's, and Chris
+This vault is **AI-first**: most reads and writes are the agent's, and the user
 reads and corrects it in Obsidian. The layout optimises for deterministic
 write paths: if the agent has to infer where something belongs, the
 structure is wrong, not the agent.
@@ -42,7 +42,7 @@ hook extracts facts. \`aleph memory compile\` is the safety net, run on demand.
 
 | Path | Holds | Write rule |
 |---|---|---|
-| \`MEMORY.md\` | standing context about Chris and the environment | agent, ≤150 lines, rewrite sections |
+| \`MEMORY.md\` | standing context about the user and the environment | agent, ≤150 lines, rewrite sections |
 | \`wiki/decisions/\` | what was decided and why | one note per decision |
 | \`wiki/concepts/\` | how something works | |
 | \`wiki/entities/\` | a tool, service, repo, person | |

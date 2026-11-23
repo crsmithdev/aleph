@@ -1,9 +1,9 @@
 # Memory v3 mocks
 
-Chris asked on 2026-11-20 for new memory page mocks after the changes of 2026-11-19:
+The user asked on 2026-11-20 for new memory page mocks after the changes of 2026-11-19:
 
 - `c3d6e604` removes the factory memory writers: episodes, lessons, proposals.
-- `f4df41a5` runs factory agents with no vault context, so recall serves Chris's sessions only.
+- `f4df41a5` runs factory agents with no vault context, so recall serves the user's sessions only.
 - `1697e58c` refuses a vault commit that grows a scope's start context past 6,000 bytes.
 
 `build.ts` draws each board with the UI's own helpers (`ui/views/lib/html.js`) and `app.css`, on `data.json`: the live
@@ -19,7 +19,7 @@ Not built.
 ## Decisions in every board
 
 - **Budget in Needs you.** "aleph 50 B left" replaces "core lines cut". Since `1697e58c` a growing write is refused, so no line is cut.
-  The item shows under 200 B left (design.md, Principle 5: show what needs Chris).
+  The item shows under 200 B left (design.md, Principle 5: show what needs the user).
 - **Trim list.** Every kept core line, fewest offers in 8 days first, is the list to cut from when a write is refused.
 - **Kind filter by note kind.** decision, gotcha, project, entity, concept replace the five memory types. Episodic held
   episode pages, which `c3d6e604` removes.

@@ -110,7 +110,7 @@ The Status page shows the wrong weekly usage.
 | `title` | | An imperative of at most 60 characters |
 | `kind` | `task`, `bug`, `check`, `flake` | `flake` becomes a tracker note at intake |
 | `priority` | `low`, `medium`, `high`, `critical` | Dispatch order; none ranks as `medium` |
-| `source` | `chris`, `worker`, `memory`, `agent`, `deps` | Who filed it; the director cannot close Chris's |
+| `source` | `chris`, `worker`, `memory`, `agent`, `deps` | Who filed it; the director cannot close the user's |
 | `areas` | list | Labels |
 | `from` | `issue.<n>` | The parent: intake split this issue from it |
 | `after` | list of keys | The issues that must be done first, as `issue.<n>` |
@@ -236,7 +236,7 @@ An Obsidian vault in its own git repo, pushed on each commit. `vault/lib/` owns 
 | `daily/<date>.md` | One line per write |
 | `archive/` | Notes out of the index |
 | `MEMORY.md` | Standing context, at most 150 lines |
-| `VAULT.md` | Chris's contract; the agent never edits it. Its presence makes a directory a vault |
+| `VAULT.md` | The user's contract; the agent never edits it. Its presence makes a directory a vault |
 | `.index/vault.sqlite` | FTS5 search index, git-ignored |
 | `.index/seen/<session>.json` | Notes recall already showed, kept 7 days |
 | `.index/runs/<name>.json` | The newest run of one vault process (`seen prune`, `recall trim`, `vault push`) as `{at, result, detail?}`; `result` is `ok` or `failed` |

@@ -1,9 +1,9 @@
 # Issues page refit mock
 
-Request (Chris, 2026-11-16): refit the Issues page (`#/issues`). Rework the metric cards so the store's total does not
+Request (the user, 2026-11-16): refit the Issues page (`#/issues`). Rework the metric cards so the store's total does not
 dominate, and drop Open Age and Jobs. Rethink the charts and drop Tests. Find a way to file an issue that takes little
 space, other than a draft issue page. Show one ID form, `a1234`. Put the sub-issue fold button at the far left with
-the columns still aligned. Priority chip colour is out of scope (Chris: "skip for now").
+the columns still aligned. Priority chip colour is out of scope (the user: "skip for now").
 
 `index.html` is built by `build.ts` with the real kit helpers of `ui/views/lib/html.js` and `format.js`, from a
 snapshot of `/api/issues` taken on 2026-11-16. The snapshot is not committed. To rebuild:

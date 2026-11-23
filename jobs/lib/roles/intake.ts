@@ -3,7 +3,7 @@
  * on main names in an `Issue:` trailer is done, and an issue of kind `flake` goes to the flake tracker; neither
  * costs a run. Else one read-only `claude -p` run gives one route: `build` (with a spec, or with parts when one
  * run cannot do the work), `close`, `done` or `ask`. Code then checks the spec (`problems`): a failed check sends
- * the run back once with the problems, in the same session, and a second failure asks Chris (`intake-failed`).
+ * the run back once with the problems, in the same session, and a second failure asks the user (`intake-failed`).
  * Each run is a job in the ledger, kind `intake`, with its cost in its state.
  */
 import { join } from "node:path";
@@ -142,7 +142,7 @@ export function parseRoute(reply: any): Route | string {
   if (!reason) return `${raw.route} without a reason`;
   switch (raw.route) {
     case "build": {
-      // A build that names the commit that removed what the issue asks back writes no spec: Chris decides whether to undo it.
+      // A build that names the commit that removed what the issue asks back writes no spec: the user decides whether to undo it.
       const removal = removalOf(raw.removal);
       if (removal) return { route: "ask", reason, ask: plainAsk("question", `This issue asks back something commit ${removal.sha} removed: ${removal.subject}. The commit's reason: ${removal.reason}. Undo that removal?`) };
       const after = (Array.isArray(raw.after) ? raw.after : []).map((x: unknown) => String(x).trim()).filter((x: string) => ISSUE_KEY.test(x));
@@ -275,7 +275,7 @@ function commitOnMain(repo: Repo, commit: string): string | null {
 /** The rules for the parts' titles and `after` lists. */
 const PART_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each part's Goal says only what that part does: the checks of each part are written from its own Goal. A part's "after" lists the earlier parts (the first is 1) that must land first, only when it changes a file that part changes or uses what that part adds: parts with an empty "after" run side by side, so do not chain parts in a line by habit.`;
 
-/** The media Chris attached, for the planner: each file to read before it decides. */
+/** The media the user attached, for the planner: each file to read before it decides. */
 function mediaSection(item: issues.Issue): string {
   const files = mediaFiles(item);
   return files.length ? `\n# Media\n\nThe issue has these files attached: screenshots, mockups or documents. Read each one with Read before you decide. They show what the issue means, and the steps you give must cover what they show.\n\n${files.map((f) => `- ${f}`).join("\n")}\n` : "";
@@ -311,13 +311,13 @@ One "verdict", with a "reason": one sentence that says why.
 - "build": factory runs do the work. Give one "spec" when one run of under an hour can do it all; a small change in several folders is still one spec. Else give 2 to 6 "parts" and no spec: each part is work one run can do alone, and together they do the whole issue. The "spec" or the "parts" together cover the whole request: when they leave anything out, name it in "left_out", one sentence, and code records it as a note on the issue. Give "left_out" only when something is left out. "after" names the issues (an issue key like \`issue.5\`) that must be done first, only when the work needs that issue's change, not just because the two issues touch the same file or table.
 - "close": it is already fixed, a duplicate of an open issue above (name it: "duplicate of <repo>-<n>"), stale, or not worth doing.
 - "done": a commit on main already makes the change: give its sha as "commit". Before a "build", read the commits above, and grep main for the names the issue gives. When unsure, "build".
-- "ask": a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first; or a check against a live system that he runs. The "question" is one plain sentence. Give 2 to 4 "options", each with a short "label", a "line" that says what it does, and an "after" (an issue key like \`issue.5\`) only when it means waiting for that issue; 2 to 4 short "why" lines; and "recommended", one option's label exactly. Use plain words: no file paths, function names or code. Each option must be something a factory run can do.
+- "ask": a choice only the user can make: what the product does for them, what they see, what it costs, or what to work on first; or a check against a live system that they run. The "question" is one plain sentence. Give 2 to 4 "options", each with a short "label", a "line" that says what it does, and an "after" (an issue key like \`issue.5\`) only when it means waiting for that issue; 2 to 4 short "why" lines; and "recommended", one option's label exactly. Use plain words: no file paths, function names or code. Each option must be something a factory run can do.
 
-Never ask Chris how to build it: code structure, which module, naming, test shape, whether to wait for another issue, or whether a refactor is worth it. Decide those, and "build" or "close".
+Never ask the user how to build it: code structure, which module, naming, test shape, whether to wait for another issue, or whether a refactor is worth it. Decide those, and "build" or "close".
 
-Before you write a spec that adds back, re-enables or widens something (a check, a gate, a slot, a path in a list, a test), search the history for the commit that removed or narrowed it: \`git log -S<text>\` (or \`git log -G<regex>\`) over the paths it names, and read the message it prints. When that message gives a reason, write no spec: give the commit as "removal" in the build verdict, with its short "sha", its "subject" and its "reason" from the message, and code asks Chris whether to undo that removal. When history holds no such commit, or its message gives no reason, build as before.
+Before you write a spec that adds back, re-enables or widens something (a check, a gate, a slot, a path in a list, a test), search the history for the commit that removed or narrowed it: \`git log -S<text>\` (or \`git log -G<regex>\`) over the paths it names, and read the message it prints. When that message gives a reason, write no spec: give the commit as "removal" in the build verdict, with its short "sha", its "subject" and its "reason" from the message, and code asks the user whether to undo that removal. When history holds no such commit, or its message gives no reason, build as before.
 
-A fresh request from Chris that goes against the current design or its tests is not stale: "build" it, or "ask" Chris, and do not "close" it.
+A fresh request from the user that goes against the current design or its tests is not stale: "build" it, or "ask" the user, and do not "close" it.
 
 # The spec
 
@@ -354,7 +354,7 @@ export function addParts(file: File, issue: issues.Issue, parts: Part[], after: 
   return refs;
 }
 
-/** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
+/** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is the user's to decide. */
 function stillRed(repo: Repo, item: issues.Issue): string | null {
   if (!isRedMain(item)) return null;
   return mainRed()(repo) ?? (redCi().some((c) => c.repo === repo.key) ? "GitHub CI on main is red" : null);
@@ -366,7 +366,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
   let standing = ""; // the option an Always rule took
   const ok = sort(repo, id, `intake ${ref}: ${v.route}`, (item, doc, file) => {
     if (v.route === "build") {
-      // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
+      // An open item with an Ask (a proposal too) waits for the user: an after-link to it would stall this issue on their answer.
       const waits = v.after.filter((r) => {
         const o = issues.find(doc, r);
         return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(o));
@@ -493,7 +493,7 @@ async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, s
       });
       if ("failed" in got) {
         noAnswer(`failed: ${got.failed}`);
-        // A reply that failed the check twice asks Chris now; a run with no reply counts toward INTAKE_TRIES.
+        // A reply that failed the check twice asks the user now; a run with no reply counts toward INTAKE_TRIES.
         const line = got.failed === `the reply is malformed: ${NO_OUTPUT}` ? giveUp(repo, id, got.failed) : askFailed(repo, id, got.failed);
         skipped.push(line ?? `${name}: intake failed: ${got.failed}`);
         return;

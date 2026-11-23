@@ -1,12 +1,12 @@
 /**
  * The director: every new Ask goes to it first. An Ask is new while it has no case text (`situation`): on an open store
- * item that awaits Chris, or on a waiting run's `ask` in the ledger. Each one gets one read-only
+ * item that awaits the user, or on a waiting run's `ask` in the ledger. Each one gets one read-only
  * `claude -p` run, kind `director`, in the repo's checkout. Every reply carries the case text (situation, effects,
- * recommendation) that Chris reads on the Ask's card. With typed actions the run decides: code checks and applies them
+ * recommendation) that the user reads on the Ask's card. With typed actions the run decides: code checks and applies them
  * for that Ask only. With no actions it escalates. The card shows no buttons until the case text is there (ui/asks.ts).
  *
  * Code, not the model, holds the escalation list: those Asks get the director's case text and recommendation, and no
- * action. An Ask the director did not decide goes to Chris when its run ends: a failed run, a bad reply, or actions that
+ * action. An Ask the director did not decide goes to the user when its run ends: a failed run, a bad reply, or actions that
  * leave the Ask open all write case text. Actions that leave the Ask open write the director's case text and one line on
  * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director` event in the job record of its item,
  * the record that later runs read, and log events (the Gates page log): one `escalated`, or one per applied action.
@@ -48,7 +48,7 @@ const DIRECTOR_MODEL = () => readModels().director.model;
 const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
-/** The reasons whose Ask the director decides once per issue: a second one on the same issue goes to Chris. */
+/** The reasons whose Ask the director decides once per issue: a second one on the same issue goes to the user. */
 const ONCE_PER_ISSUE = ["run-cap", "rescue"];
 /** The reasons whose first verb a grant takes in `direct`: the other reasons have a rule site of their own. */
 const FIRST_VERB = ["held-path", "review-held", "core-change", "no-commit", "run-cap", "part-dropped"];
@@ -73,7 +73,7 @@ type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recomm
 const idOf = (i: issues.Issue): number => i.id;
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
 
-/** Every Ask that has no case text: open items that await Chris, then waiting runs, oldest run first. */
+/** Every Ask that has no case text: open items that await the user, then waiting runs, oldest run first. */
 export function pendingCases(repos: Repo[] = sandboxRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
   const out: Case[] = [];
   for (const repo of repos) {
@@ -104,7 +104,7 @@ const reasonName = (c: Case): string => c.ask.reason;
 /** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job. */
 const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.target ?? c.entry.run.name : c.on);
 
-/** The actions Chris's card offers, each owed an effect: the reason's actions, with `resolve` on an issue as one `resolve:<label>` per option. */
+/** The actions the user's card offers, each owed an effect: the reason's actions, with `resolve` on an issue as one `resolve:<label>` per option. */
 function actionsOf(c: Case): string[] {
   return actionsOn(reasonOf(c.ask.reason)).flatMap((a) => (a === "resolve" && c.at !== "run" && c.ask.options.length ? c.ask.options.map((o) => `resolve:${o.label}`) : [a]));
 }
@@ -113,7 +113,7 @@ function actionsOf(c: Case): string[] {
 export interface Decision {
   at: string; ref: string; on: string; reason: string; question: string;
   outcome: "decided" | "escalated";
-  /** Why it went to Chris: the escalation-list rule, or what left it undecided. */
+  /** Why it went to the user: the escalation-list rule, or what left it undecided. */
   why?: string;
   applied: string[]; refused: string[]; run?: string;
 }
@@ -195,7 +195,7 @@ function landRefusal(c: Case, held: string[]): string | null {
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
  * judgement: a change to a core note, an after link to a dropped issue, a land of a run that changes a security path, a path the repo holds or bun.lock (or a held run whose branch
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
- * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
+ * decided once. Closing or dropping an issue the user filed is refused per action (`chrisOwns`).
  */
 function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
   const why = ASK_REASONS[reasonName(c)]?.chrisOnly;
@@ -211,7 +211,7 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
   return null;
 }
 
-/** Whether closing or dropping this issue is Chris's: he filed it. */
+/** Whether closing or dropping this issue is the user's: they filed it. */
 const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "user";
 
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
@@ -244,7 +244,7 @@ function caseText(c: Case): string {
 
 Reason: ${reason}${r.needs ? ` (a ${r.needs} wait)` : ""}
 On: ${c.at === "run" ? `a run of the job ${run!.run.name}` : "an issue"}${c.ask.options.length ? ", a decision with options" : ""}
-Actions on Chris's card: ${actionsOf(c).join(", ")}
+Actions on the user's card: ${actionsOf(c).join(", ")}
 Question: ${c.ask.question || "(none)"}
 ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${o.line}${o.after ? ` (waits for ${o.after})` : ""}`).join("\n")}\n` : ""}${c.ask.recommended ? `Recommended option: ${c.ask.recommended}\n` : ""}${c.ask.why.length ? `Why:\n${c.ask.why.map((w) => `- ${w}`).join("\n")}\n` : ""}${item ? `
 # Item ${c.at === "item" ? c.on : run!.run.target}: ${item.title} (filed by ${issues.sourceOf(item)})
@@ -253,7 +253,7 @@ ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tailOf(run, "prompt.md", TAIL))}${section("Tail of result.md", tailOf(run, "result.md", TAIL))}${section("The review of the run", reviewOf(run))}${section("Tail of the checks log", tailOf(run, "checks", TAIL))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
-const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
+const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only the user can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if the user takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
 
 /** The past decisions the prompt shows: the last RECORD_LINES, each with its outcome. */
 const pastLines = (rec: Decision[]): string =>
@@ -261,15 +261,15 @@ const pastLines = (rec: Decision[]): string =>
 
 function prompt(c: Case, escalated: string | null, rec: Decision[] = readRecord()): string {
   const acts = actionsOf(c);
-  const head = `You are the factory's director. Every Ask, a stop where the factory would wait for Chris, comes to you first. You decide it as Chris would, on your own judgement, or you escalate it to Chris with your recommendation. You have read-only tools: Read, Grep, Glob, and Bash for \`git status|log|show|diff|ls-files\`, \`ls\`, \`aleph jobs\` and \`aleph issue show|list\`. Change nothing yourself: you propose actions, and the code checks and applies them. Your working directory is the repo${c.repo ? ` ${c.repo.key}` : ""}.
+  const head = `You are the factory's director. Every Ask, a stop where the factory would wait for the user, comes to you first. You decide it as the user would, on your own judgement, or you escalate it to the user with your recommendation. You have read-only tools: Read, Grep, Glob, and Bash for \`git status|log|show|diff|ls-files\`, \`ls\`, \`aleph jobs\` and \`aleph issue show|list\`. Change nothing yourself: you propose actions, and the code checks and applies them. Your working directory is the repo${c.repo ? ` ${c.repo.key}` : ""}.
 
 What informs your judgement: your past decisions with their outcomes below. A case with no precedent is still yours to decide. Read the files the case names before you write about them.`;
   const reply = `# Your reply
 
-Text over a limit moves to "details" by sentence: "headline" is at most ${LIMITS.headline} words, "situation" at most ${LIMITS.situation.words} words, and each effect "text" at most ${LIMITS.choice.words} words. Write for Chris in short plain sentences, with no file paths in "headline", "situation" or the effects: paths go in "details". "details" holds only risks, gaps and the technical facts (paths, commits, rules), not a second summary. Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. State only what you read; where you did not read something, say "I did not check X". "recommend" is null when you cannot tell.`;
+Text over a limit moves to "details" by sentence: "headline" is at most ${LIMITS.headline} words, "situation" at most ${LIMITS.situation.words} words, and each effect "text" at most ${LIMITS.choice.words} words. Write for the user in short plain sentences, with no file paths in "headline", "situation" or the effects: paths go in "details". "details" holds only risks, gaps and the technical facts (paths, commits, rules), not a second summary. Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. State only what you read; where you did not read something, say "I did not check X". "recommend" is null when you cannot tell.`;
   if (escalated) {
     return `${head}
-This Ask is on the escalation list: ${escalated}. Chris decides it. Take no action. Write the case text he reads on its card, with your recommendation.
+This Ask is on the escalation list: ${escalated}. The user decides it. Take no action. Write the case text they read on its card, with your recommendation.
 
 ${caseText(c)}
 
@@ -286,12 +286,12 @@ Reply with the case text only. ${CASE_TEXT(acts)}
   return `${head}
 # The rules
 
-- Decide when you can: answer the question, rerun the issue, drop the run, edit the spec or the issue, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
-- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
+- Decide when you can: answer the question, rerun the issue, drop the run, edit the spec or the issue, or file a fix job. Escalate only when you cannot tell what the user would want, or when the choice costs the user something they have not decided before.
+- Code refuses, whatever you reply: closing or dropping an issue the user filed; landing a run that changes a security path, a path the repo holds or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
 - When a run cannot pass until another open issue lands, drop it or edit the issue with \`after\` set to that issue. A note alone does not stop a rerun. An \`after\` must name open issues: an \`after\` on a parked issue is refused.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this issue with edit-issue when it must wait for the fix.
-- Every reply has the case text. Add actions to decide; with no actions the Ask goes to Chris. An Ask that your actions leave open goes to Chris with your case text.
+- Every reply has the case text. Add actions to decide; with no actions the Ask goes to the user. An Ask that your actions leave open goes to the user with your case text.
 
 ${caseText(c)}
 
@@ -301,7 +301,7 @@ ${pastLines(rec)}
 
 ${reply}
 
-Reply with "case" and "actions" to decide, or with "case" alone to send it to Chris. ${CASE_TEXT(acts)}
+Reply with "case" and "actions" to decide, or with "case" alone to send it to the user. ${CASE_TEXT(acts)}
 
 Each action applies to this Ask's ${onRun ? "run and its item" : "item"}. Its "do" is one of these; an "after" lists issues as \`issue.<n>\`:
 ${onRun ? `- land: land the run's branch
@@ -470,7 +470,7 @@ function writeCaseText(c: Case, t: Text): boolean {
   return true;
 }
 
-/** The case text when the director gave none that does: one sentence on why it reached Chris. */
+/** The case text when the director gave none that does: one sentence on why it reached the user. */
 const fallback = (why: string): Text => ({ situation: `The director did not decide this Ask: ${why.replace(/\.$/, "")}.` });
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace them. */
@@ -634,7 +634,7 @@ const lockName = (on: string) => `director-${on}`;
 export const subjectOfCase = (c: Case): string => (c.at === "run" ? c.entry.run.target ?? c.on : c.on);
 const lockOf = (run: Run): string | null => (run.target ? lockName(run.target) : null);
 
-/** Send the Ask to Chris: the case text (the director's, else the fallback) on it, and the record. `ev` sets the event's sub and file. */
+/** Send the Ask to the user: the case text (the director's, else the fallback) on it, and the record. `ev` sets the event's sub and file. */
 function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string | undefined, why: string, ev: Pick<Ev, "sub" | "file"> = {}): Decision {
   const t = text && typeof text !== "string" ? text : fallback(typeof text === "string" ? `${why}; its case text had ${text}` : why);
   if (!writeCaseText(c, t) && stillOpen(c)) logEvent({ subject: "director", action: "failed", object: base.ref, detail: "the case text was not written" });
@@ -650,14 +650,14 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
   try {
     const rec = readRecord();
     const base = { at: new Date().toISOString(), ref: refOf(c), on: c.on, reason: reasonName(c), question: questionOf(c), applied: [] as string[], refused: [] as string[] };
-    // An Always rule granted `user` for the reason sends the Ask to Chris with no run.
+    // An Always rule granted `user` for the reason sends the Ask to the user with no run.
     const granted = always(base.reason, c.repo?.key)?.action;
     if (granted === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
     // An Always rule granted the reason's first verb takes it with no run, and logs it as a rule event. `resolve` needs the Ask's recommended option; an Ask with none goes on to the director.
     if (FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
       const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
       let why: string | null;
-      // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays Chris's. A review-held run lands through the land action, which refuses the repo's held paths too.
+      // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays the user's. A review-held run lands through the land action, which refuses the repo's held paths too.
       const held = granted === "approve" && base.reason === "held-path" ? landRefusal(c, []) : null;
       const detail = granted === "approve" && base.reason === "held-path" ? heldLand(c, "Always") : undefined;
       if (held) why = held;
@@ -669,7 +669,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
       else if (granted === "approve" && c.at === "run") logAlways(base.reason, base.ref, "landed", detail ? { detail } : {});
       return { ...base, outcome: "decided", applied: [granted] };
     }
-    // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to Chris with no second run.
+    // One run per Ask: an Ask the director escalated before, whose case text was not written, goes to the user with no second run.
     if (escalatedBefore(c, rec)) return escalate(c, base, undefined, "the director escalated this Ask before");
     const listed = escalation(c, rec);
     const cwd = c.repo && existsSync(c.repo.path) ? c.repo.path : undefined;
@@ -705,7 +705,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
       return escalate(c, { ...at, applied: r.applied, refused: r.refused }, text, r.refused.length ? `its actions left the Ask open (refused: ${r.refused.join("; ")})` : "its actions left the Ask open");
     }
     const d: Decision = { ...at, outcome: "decided", applied: r.applied, refused: r.refused };
-    // A decision whose effect has not cleared the Ask yet (a land still running, say) still ends this Ask's one run: Chris sees it with the text.
+    // A decision whose effect has not cleared the Ask yet (a land still running, say) still ends this Ask's one run: the user sees it with the text.
     // A land runs in its own unit and settles the Ask when it ends, so a started land leaves no text: a failed land raises its own Ask.
     if (!r.applied.includes("land") && stillOpen(c)) writeCaseText(c, { situation: `The director decided: ${r.applied.join("; ")}. The Ask is still open, so it is with you.` });
     record(d, r.events);
@@ -717,7 +717,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
 
 /**
  * The director's sweep: one run for each Ask with no case text, at most `ALEPH_DIRECTOR_CAP` a tick, all at once.
- * An error is logged, never thrown. With the director off it runs none, and each Ask waits with Chris.
+ * An error is logged, never thrown. With the director off it runs none, and each Ask waits with the user.
  */
 export async function directAll(repos: Repo[] = sandboxRepos(), ports: Ports = defaultPorts): Promise<Decision[]> {
   if (!readModels().director.enabled) return [];

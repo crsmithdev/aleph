@@ -5,19 +5,19 @@ the group 2 decisions of 2026-11-14 made consistent).
 
 ## Context
 
-Chris asked for a design pass on the Herald (`ui/views/now.js`) and chose layout B2 (mocks on `docs/herald-mock`,
+The user asked for a design pass on the Herald (`ui/views/now.js`) and chose layout B2 (mocks on `docs/herald-mock`,
 vault note "The Herald Is A One-Line Ledger With Guide-Line Folds"). Making its IDs consistent led down to the data
 model: IDs were conflated with names, jobs were keyed by issues, machine state was spread over about 40 JSON files,
 two git repos and a hand-edited registry, run folders had 12 name formats, and issue files used HTML comment markers.
-Chris, 2026-11-13 to 2026-11-14: one unique key per stored thing, the storage owns the details, reduce sprawl, and fix
+The user, 2026-11-13 to 2026-11-14: one unique key per stored thing, the storage owns the details, reduce sprawl, and fix
 the problems the migration touches ("must go" plus "fits"). Research and benchmarks: vault notes "SQLite Holds
 Aleph's Machine State Load With Short Reads", "A Cosmetic Problem Followed Down Ends At The Data Model", "Aleph Links
 Are Key Columns Not A Generic Refs Table" and "The Aleph UI Learns Of SQLite Changes From data_version And The Events
-Feed". Four red-team reports (2026-11-14) were worked through with Chris; their fixes are below.
+Feed". Four red-team reports (2026-11-14) were worked through with the user; their fixes are below.
 
 Two branches, in order:
 1. `feature/storage-ids`: storage, IDs, layout, the migration, and the problems it touches. One branch, with a
-   rehearsal on a copy before the real run (Chris, 2026-11-14), not a JSON-first split.
+   rehearsal on a copy before the real run (the user, 2026-11-14), not a JSON-first split.
 2. `feature/herald-b2`: the Herald redesign on the new keys.
 
 **What moves:** every stored key, the storage of machine state (into `aleph.db`), the layout of issues, ideas,
@@ -51,7 +51,7 @@ work mode, the CLI verbs, the issue numbers of `aleph`, git as the history of do
    `target` (its issue, project or idea), `prev` (the step before it), `retry_of` (the job it redoes). The `runs`
    concept goes.
 5. **A chat conversation is a Claude Code session, not a job.** It is keyed by its session ID, like a terminal
-   session of Chris. The UI server keeps one `claude -p --input-format stream-json` process per open conversation
+   session of the user. The UI server keeps one `claude -p --input-format stream-json` process per open conversation
    and writes each turn to its stdin; after an idle timeout or a restart it starts a new process with
    `--resume <session>`. The transcript is Claude Code's own, cost comes from Langfuse as for terminal sessions, and
    its events have subject `claude`. Pasted images go to `~/.aleph/sessions/<session>/`. The `chat` kind, `openRun`
@@ -69,7 +69,7 @@ work mode, the CLI verbs, the issue numbers of `aleph`, git as the history of do
 9. **An event is a sentence of 6 fields:** `seq`, `time`, `subject` (who acted), `action` (the verb), `object` (the
    thing acted on), `detail` (free text: the reason, a file, a count).
    - `subject`: the job key when an agent run acted (`job.6802`; the UI shows its `role` and links the
-     job), `gate` or `rule` for code, `human` for Chris, `claude` for an interactive session or the UI chat.
+     job), `gate` or `rule` for code, `human` for the user, `claude` for an interactive session or the UI chat.
      Migrated events keep their role words (`worker`, `director`, `intake`, `firefighter`).
    - `object`: always a key, except `settings` for settings events (tentative). Examples: `gate returned job.6802`
      (the issue is the job's `target`), `rule started issue.2072`, `job.6802 escalated issue.2072`,
@@ -118,7 +118,7 @@ work mode, the CLI verbs, the issue numbers of `aleph`, git as the history of do
     an issue (task, bug, …). Record-event and wait kinds go with the record (decision 11).
 14. **Data loss allowed:** old `route` (256) and `routed` (268) events, fixture events and records (`tools-N`,
     `fac-N`, `oth-N`, `fac-dup`, `demo-N`), machine note lines and the `*.bak` files.
-15. **Shown IDs are zero-padded, display only** (Chris, 2026-11-14). One function in `lib/naming.ts`, used by the
+15. **Shown IDs are zero-padded, display only** (the user, 2026-11-14). One function in `lib/naming.ts`, used by the
     UI (`idLink`, `ui/views/lib/html.js`) and the terminal printers, shows a key with its number padded to 5 digits:
     `a-01234`, `b-00002`, `j-06802`. 5 is fixed, not taken from the counter, so widths never shift; jobs (6,826)
     reach it first, at 99,999. Stored keys stay unpadded (`issue.2`). The parser accepts leading zeros, so a copied
@@ -252,7 +252,7 @@ the change is all in `aleph.db`; a change with a git half commits git first, the
    `target`.
 8. **Migration:** `aleph migrate storage` (`jobs/lib/migrate.ts`).
    - Back up: one tar, `~/.aleph/backups/storage-<date>.tgz`, of all of `~/.aleph` except `vault/`, `prior-art/`
-     and `backups/` (3.8 GB; 443 GB free). Then convert in place. Keep the tar until Chris deletes it.
+     and `backups/` (3.8 GB; 443 GB free). Then convert in place. Keep the tar until the user deletes it.
    - Undo: stop the services of step 0, delete `items/`, `aleph.db*` and the converted paths, untar, revert the code
      on main.
    - Restructure `aleph-items` into `items/`, subtree-merge `aleph-ideas`, write `projects/` from `repos.json`.
@@ -269,7 +269,7 @@ the change is all in `aleph.db`; a change with a git half commits git first, the
 9. **Cleanup:** delete `factory/*.bak`, `repos.json.bak-*`, `tick.converted`, `words-migrated`, old logs.
 10. **Rehearse:** migrate a copy of `~/.aleph`, point a session at it through the `lib/layout.ts` overrides, and run
     one live job from start to land on the copy. First check that the overrides cover every path the job touches.
-11. **Run it:** dry run, show Chris the counts, real run, `aleph resume`.
+11. **Run it:** dry run, show the user the counts, real run, `aleph resume`.
 
 Not read yet, placed during step 3: `factory/episodes/`, `episodes-seen`, `seen`, `monitor/`, and the subjects
 `came-due`, `detached`, `factory`, `jobdiff`. Sidetone's `/tell` parse of job IDs is read before landing.
@@ -308,5 +308,5 @@ run.
 
 - The job row's `by` column (who started the job) keeps its name for now; rename with the event words if wanted.
 - `settings` as the object of settings events is tentative.
-- Claude's calls, not yet seen by Chris: `kind` to `role` on jobs (decision 13), `issue_state` and the merge of
+- Claude's calls, not yet seen by the user: `kind` to `role` on jobs (decision 13), `issue_state` and the merge of
   record events (decision 11), `makeJob` and `setState` (decision 12), the `event_rows` view and `jobs.project`.

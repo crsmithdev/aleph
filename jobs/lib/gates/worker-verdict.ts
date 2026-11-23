@@ -2,7 +2,7 @@
  * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks,
  * the keep-gate and the Oracle. An Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
  * no verdict runs once more), which gets the keep-gate's finding: the new tests that pass on the base, or that it did not run. A reviewer's pass on a diff that changes a security path or a held path waits
- * for Chris with a held-path Ask. A failure of a check, the Oracle or the reviewer goes back to
+ * for the user with a held-path Ask. A failure of a check, the Oracle or the reviewer goes back to
  * the worker as a fix round while rounds are left. The ports run each step: `branchPorts` gives the git and worktree
  * ones. `workerVerdict` does no IO.
  */
@@ -64,7 +64,7 @@ export interface Branch {
   checked: Pick<Outcome, "checkedBase" | "checkedTip">;
 }
 
-/** A verdict that waits for Chris: the state `waiting` and the Ask. */
+/** A verdict that waits for the user: the state `waiting` and the Ask. */
 export const waiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "state" | "ask"> =>
   ({ state: "waiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
@@ -99,7 +99,7 @@ export const SENT_BACK = /^the reviewer sent it back (once|twice|\d+ times):\s*(
 
 /**
  * What follows a reviewer hold: a fix round (`round`) while fewer than `cap` rounds are done; else the run
- * waits for Chris with `reason`, which says how often the reviewer sent it back when it did.
+ * waits for the user with `reason`, which says how often the reviewer sent it back when it did.
  */
 function reviewHold(done: number | undefined, earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string } {
   if (done !== undefined && done < cap) return { round: done };
@@ -142,13 +142,13 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
     return rv;
   };
   let rv = await call();
-  // A second miss is the reviewer's, not the worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
+  // A second miss is the reviewer's, not the worker's: it goes to the user whatever fix rounds are left, since a fix round cannot cure it.
   if (rv.none && !rv.credit) rv = await call();
   // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
   if (rv.credit) return { outcome: { state: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
   const review = (call: "passed" | "returned" | "waiting" | "failed") => ({ call, ...(rv.reason && { reason: rv.reason }), ...(rv.model && { model: rv.model }), ...(spent !== undefined && { cost: spent }), ...(sessions.length && { sessions }), seconds: Math.round(ms / 1000) });
   if (!rv.reason) {
-    // A reviewed diff that changes a security path or a held path waits for Chris.
+    // A reviewed diff that changes a security path or a held path waits for the user.
     const security = p.security();
     const rule = security ? `held path ${security}` : p.heldRule();
     if (rule) return { outcome: { ...waiting("held-path", rule, [stat]), reason: rule, stat, review: review("passed"), ...facts }, code: 0 };
@@ -367,7 +367,7 @@ export const quoteFailures = (failures: FailedTest[]): string =>
 /**
  * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
  * names, of the tests that fail on the branch alone. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
- * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
+ * and the user tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
  * failed test, or there is no run before.
  */
 export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {

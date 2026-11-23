@@ -35,7 +35,7 @@ const FIXED = (run: Run) => `You are a worker on job \`${run.name}\` in \`${run.
 only there. Commit every change on the branch; the run fails if anything is
 left uncommitted or untracked. Never merge, never push, never touch another
 branch. \`aleph issue\` is not your push: it writes the list of issues on main by
-itself, so use it for every change to the list. If you need a decision from Chris, stop
+itself, so use it for every change to the list. If you need a decision from the user, stop
 and print a line \`QUESTION: <one question>\`. ${TAG_FORMAT} ${FOREGROUND} End with a
 summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.
 ${ENDING}`;
@@ -101,7 +101,7 @@ export function brief(id: string, run: Run, repo: Repo): string {
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks) : FIXED(run)), `## Spec\n\n${spec}`];
   const n = onOf(run);
   const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
-  if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);
+  if (media.length) parts.push(`## Media\n\nThe user attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);
   const runs = jobOfRun(run.job);
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];

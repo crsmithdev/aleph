@@ -1,6 +1,6 @@
 /**
  * The factory's gate: what a worker's transcript says, and whether a diff
- * needs Chris. See docs/workflow.md.
+ * needs the user. See docs/workflow.md.
  */
 import { git } from "../../../lib/git.ts";
 import { inTestDir, isJsTestFile } from "../../../lib/test-files.ts";
@@ -159,7 +159,7 @@ const diffRows = (cwd: string, base: string, tip: string): string[][] =>
 export const changedPaths = (cwd: string, base: string, tip: string): string[] => diffRows(cwd, base, tip).flatMap(([, ...paths]) => paths);
 
 /**
- * The review and safety checks. A diff that changes one waits for Chris
+ * The review and safety checks. A diff that changes one waits for the user
  * after the reviewer passes it, as a held path does; any other run that passes the reviewer lands by itself.
  */
 export const SECURITY_PATHS = ["hooks/", "jobs/lib/gates/gate.ts", "package.json", "tsconfig.json", "bunfig.toml", "identity/CLAUDE.md"];

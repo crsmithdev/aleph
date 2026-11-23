@@ -51,7 +51,7 @@ none, the run covers each route of the router. The report's unit is a component 
 
 ## Notes
 
-Each finding also becomes a note on the page it audited, so Chris answers it in the dock as he answers his own.
+Each finding also becomes a note on the page it audited, so the user answers it in the dock as they answer their own.
 Each finding in `findings.json` carries three more fields:
 
 - `rule`: the rule id of `design/` that the finding breaks.

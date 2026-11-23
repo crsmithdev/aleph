@@ -56,7 +56,7 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toEqual([]);
   expect(f.specs).toEqual([]);
-  // Chris edits the spec.
+  // The user edits the spec.
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toContain(`drop issue.${id}`);

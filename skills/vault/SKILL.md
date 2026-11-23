@@ -75,7 +75,7 @@ ranked oldest first; remove the `core:` field of one (the note stays and
 `recall` finds it), or leave `core:` off the new note. Most notes have no
 core line.
 
-MEMORY.md holds standing context about Chris and the environment. Rewrite
+MEMORY.md holds standing context about the user and the environment. Rewrite
 the section, keep it under 150 lines, commit the same way.
 
 ## recall

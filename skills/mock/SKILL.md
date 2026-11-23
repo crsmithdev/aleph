@@ -1,11 +1,11 @@
 ---
 name: mock
-description: "Mock: build a design draft (HTML pages, images, a canvas) for Chris, put it on the shelf and wait for his notes. Use when Chris asks for a mock, or when design options need to be shown."
+description: "Mock: build a design draft (HTML pages, images, a canvas) for the user, put it on the shelf and wait for their notes. Use when the user asks for a mock, or when design options need to be shown."
 ---
 
 # Mock
 
-A mock is a design draft for Chris: HTML pages, images, a canvas.
+A mock is a design draft for the user: HTML pages, images, a canvas.
 
 - Keep it in the repo at `docs/mocks/<name>/`, never in `/tmp` or the scratchpad, and commit it.
 - Its `README.md` names the request and each decision, and cites the design rule behind each one.
@@ -21,7 +21,7 @@ A mock is a design draft for Chris: HTML pages, images, a canvas.
    cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"
    ```
 
-2. Run `shelf wait <id>` with `run_in_background`. Exit 0 prints Chris's notes.
+2. Run `shelf wait <id>` with `run_in_background`. Exit 0 prints the user's notes.
 3. Put a changed mock on the shelf again.
 
 If `put` fails, serve the directory with `python3 -m http.server <port> -d docs/mocks/<name>` on a free port at or

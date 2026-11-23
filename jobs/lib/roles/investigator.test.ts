@@ -1,5 +1,5 @@
 // The investigator: one read-only run on an issue or a job, its reply checked by code and kept in result.json, and the
-// fate Chris gives each recommended issue.
+// fate the user gives each recommended issue.
 import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

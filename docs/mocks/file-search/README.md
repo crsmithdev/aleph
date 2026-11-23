@@ -1,6 +1,6 @@
 # File from the search: placement
 
-Request (Chris, 2026-11-17): show the “File …” offer of the Issues search without a table row and without moving the table. Mock the search box, beside it, or in it.
+Request (the user, 2026-11-17): show the “File …” offer of the Issues search without a table row and without moving the table. Mock the search box, beside it, or in it.
 
 | Option | Where | Shift | Rule |
 |---|---|---|---|

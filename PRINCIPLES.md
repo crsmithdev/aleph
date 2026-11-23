@@ -12,16 +12,16 @@ rule that decides no case in a month is removed.
    Test: a change fails this rule when its main reason is a threat or a scale
    that one person on one machine does not have.
 
-2. **The system decides what it can.** Chris decides only what the system
+2. **The system decides what it can.** the user decides only what the system
    cannot know. Each routine Ask is a defect to remove. The target is zero
    routine Asks. The hold on new work while escalated Asks wait stays until
    then.
-   Test: a change fails this rule when it adds a question to Chris that the
+   Test: a change fails this rule when it adds a question to the user that the
    repo, the history or a rule can answer.
 
 3. **Everything about a change is visible.** Each fact about a change is in
    its record and on the UI: each test that ran, passed or failed, each cost,
-   each wait and its reason. Anything wrong or waiting for Chris shows at the
+   each wait and its reason. Anything wrong or waiting for the user shows at the
    top, with no scroll.
    Test: a change fails this rule when a person must read a raw log to learn
    why a run failed or waits.

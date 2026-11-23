@@ -15,7 +15,7 @@ disable-model-invocation: true
 # Automate
 
 Search what happened at run time for work an agent or a tool could take over: what keeps going wrong, what
-keeps being done by hand, and where a session lost turns. Then fix the findings Chris picks. refit-agents reads
+keeps being done by hand, and where a session lost turns. Then fix the findings the user picks. refit-agents reads
 one repo's agent files; automate reads what happened, in every repo on the machine.
 
 The argument sets the scope:
@@ -25,13 +25,13 @@ The argument sets the scope:
   longer window sees less than it says.
 - `session [<id>]`, or none at the end of a session: the [Session](#session) steps, for this session or a past
   one.
-- `act`, with the findings Chris picks from a report: the [Act](#act) steps.
+- `act`, with the findings the user picks from a report: the [Act](#act) steps.
 
 ## Steps
 
 1. **Scan.** Run `bun <skill dir>/scan.ts --days <n>`, and save its JSON in the scratchpad. It reads every
    transcript under `~/.claude/projects` (about 15 s for 14 days). Each finding has a `kind`, a `key`, its
-   `count`, `sessions`, `days`, `cli` (sessions that are Chris's; the rest are headless workers), `first`,
+   `count`, `sessions`, `days`, `cli` (sessions that are the user's; the rest are headless workers), `first`,
    `last`, the raw `sample` and `cwd` of the latest hit, and `ids` (the latest sessions it was seen in). `cut`
    counts the findings past `--top`. Commands that only read are `lookup` findings, not `command` ones. The scan leaves out errors with no word in
    them. Drop hits from your own session: its id is in the path of the transcript it writes now. Done when
@@ -42,13 +42,13 @@ The argument sets the scope:
    | `hook` | A hook that failed: a non-blocking error, or a PreToolUse hook error |
    | `tool` | A tool result with `is_error` |
    | `gate` | A Stop-hook denial, keyed by the gate's name |
-   | `loop` | Three or more denials in a row with no prompt from Chris between them |
+   | `loop` | Three or more denials in a row with no prompt from the user between them |
    | `dupe` | One skill name listed more than once in a session's skill listing |
    | `reload` | One skill loaded twice in a session |
    | `command` | One Bash command shape in three or more sessions |
-   | `prompt` | One prompt from Chris in three or more sessions |
+   | `prompt` | One prompt from the user in three or more sessions |
    | `lookup` | One read-only lookup (a Read, Grep or Glob call, or a Bash command that only reads) in three or more sessions, keyed by the path or the command shape. A path the same session edits or writes is left out |
-   | `misled` | The first prompt Chris typed after the assistant read a vault note (a Read of `~/.aleph/vault/wiki/**.md`, or an `aleph memory recall` result), keyed by the note's title. One session is enough |
+   | `misled` | The first prompt the user typed after the assistant read a vault note (a Read of `~/.aleph/vault/wiki/**.md`, or an `aleph memory recall` result), keyed by the note's title. One session is enough |
 
 2. **Read the other sources** for the same window. Done when each one has a count or a reason it has none.
    - Git, for each project in `~/.aleph/items/projects/*/project.md` (the `path:` line of its frontmatter): reverts, and fixes to code
@@ -64,7 +64,7 @@ The argument sets the scope:
 3. **Judge each error finding** (`hook`, `tool`, `gate`, `loop`, `dupe`, `reload`, and errors from step 2).
    Read the raw evidence in the `ids` sessions (`~/.claude/projects/*/<id>.jsonl`) until you can name the
    cause. Then decide:
-   - **Noise**: a key with no cause in it (`Bash: N`), or a correct refusal (Chris rejected a tool call, a
+   - **Noise**: a key with no cause in it (`Bash: N`), or a correct refusal (the user rejected a tool call, a
      test failed while work was in progress). Drop it, and say how many you dropped.
    - **Fixed**: `open` is false when a commit touched a path in the sample after the last hit. Confirm the fix
      in the current code, then drop it. `open` is true by default, so true proves nothing.
@@ -79,7 +79,7 @@ The argument sets the scope:
    verified or was not a claim (the gate was too strict).
 
 4. **Judge each repeated-work finding** (`command`, `prompt`). A command or prompt is a finding when the same steps produce the same
-   kind of result each time, or when Chris has to type the same thing to keep the agent moving
+   kind of result each time, or when the user has to type the same thing to keep the agent moving
    (`continue`, `go`). For a prompt, read the turn before it, and name why the agent stopped.
 
 4b. **Judge each memory finding** (`lookup`, `misled`). The scan only counts them; you decide.
@@ -91,19 +91,19 @@ The argument sets the scope:
      (a correction, a "no", a different fact) and the code or the transcript shows the note was the cause. A
      prompt that moves on, or pushes back on something else, drops the finding.
 
-5. **Report** in the terminal, in two lists: findings in Chris's sessions (`cli` above 0), then findings
+5. **Report** in the terminal, in two lists: findings in the user's sessions (`cli` above 0), then findings
    only in headless workers. Rank each list by sessions ×
-   the cost of one occurrence (a lost turn, a retry, a nudge from Chris). For each
+   the cost of one occurrence (a lost turn, a retry, a nudge from the user). For each
    finding, give the kind, the key, the count and the sessions, one cited occurrence (a session id and its
    timestamp), and the cause. After that, list the covered findings with
    their issues. Then list the dropped findings as counts per reason, counted with `jq`, not by eye. End with what was not read.
 
-File nothing and change nothing until Chris picks findings for `act`.
+File nothing and change nothing until the user picks findings for `act`.
 
 ## Session
 
 1. **Reflect.** List each place the session lost a turn: a lookup, a guess that failed, a correction from
-   Chris, a command found by trial, a gotcha. For a past session, read its transcript
+   The user, a command found by trial, a gotcha. For a past session, read its transcript
    (`~/.claude/projects/*/<id>.jsonl`), its Langfuse traces, or `vault compile`. Done when each item names the
    turn it cost.
 2. **Report** each item in the terminal with the turn it cost and its cause, as in step 5. File and change
@@ -114,7 +114,7 @@ File nothing and change nothing until Chris picks findings for `act`.
 1. **Route.** Each finding goes to one place. Pick the cheapest that removes it:
    - **Code**, when it can carry it (an **interface** finding): a script or CLI subcommand for a fixed
      sequence of commands, a hook for a step that must happen every time, a usage line or an error message.
-   - **Permission rule**: a command that Chris approves each time.
+   - **Permission rule**: a command that the user approves each time.
    - **Vault** (`aleph:vault`): a fact about the user, or one that holds across repos. A `lookup` memory gap
      goes to `write` (a missing note). A `misled` wrong note goes to a rewrite of it or a new note that
      `supersedes` it; a note about an out-of-date subject goes to `archive`.

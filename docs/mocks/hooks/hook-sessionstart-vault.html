@@ -23,8 +23,8 @@
  * vault, no output. Path: $ALEPH_VAULT or ~/.aleph/vault.
  *
  * A factory agent (`ALEPH_AGENT`) gets identity/AGENT.md and identity/VOICE.md
- * and nothing from the vault: factory agents run on their prompts alone (Chris,
- * 2026-11-19). It loads no CLAUDE.md, whose import gives Chris&#39;s sessions VOICE.md.
+ * and nothing from the vault: factory agents run on their prompts alone (the user,
+ * 2026-11-19). It loads no CLAUDE.md, whose import gives the user&#39;s sessions VOICE.md.
  *
  * The context is cut at whole core lines to START_BUDGET bytes and then ends
  * with a pointer to the rest (vault/lib/vault.ts startContext).
@@ -642,7 +642,7 @@ export const home = (): string =&gt; process.env.HOME || homedir();
 export const expand = (p: string): string =&gt; (p === &quot;~&quot; || p.startsWith(&quot;~/&quot;) ? join(home(), p.slice(1)) : p);
 
 /**
- * Chris&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
+ * The user&#39;s live store, from the passwd entry of this uid, so a test that sets HOME cannot move it. Bun 1.4.2&#39;s
  * `os.userInfo().homedir` follows HOME (Node&#39;s does not), so the file is read. Null when no entry is found.
  */
 function passwdHome(): string | null {

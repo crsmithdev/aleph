@@ -30,23 +30,23 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 
 ## User Stories
 
-1. As Chris, I want a page to show new data within about 2 s of a change, so that the UI tracks the factory without a reload.
-2. As Chris, I want the server to stay responsive while it rebuilds, so that other pages and the stream never stall.
-3. As Chris, I want a tab I return to after an hour to show current data at once, so that I never act on old numbers. The exception is Sessions and Skills, whose Langfuse rebuild can take minutes: a return tab, or one after a restart, shows their last data at once with a note of its age, and the page updates in place when the rebuild ends.
-4. As Chris, I want a page to refetch only when data it shows has changed, so that a Langfuse update does not reload Status.
-5. As Chris, I want Sessions, Agents and Memory to update live like Status, so that every page behaves the same.
-6. As Chris, I want a chart or table whose data failed to rebuild to say how old it is and why, so that a stale number is never silent.
-7. As Chris, I want the server's memory to stay bounded however long it runs, so that it does not reach 1.5 GB.
-8. As Chris, I want the pages I used before a restart to be warm after it, so that a land does not cause visible waits.
-9. As Chris, I want the work store fetched in the background with its errors shown, so that issue data is never silently old.
-10. As Chris, I want every route named in current terms, the same as its page, so that the API reads like the UI.
-11. As Chris, I want to list all jobs and see the jobs of one issue, so that routine jobs and issue jobs are both reachable.
-12. As Chris, I want a job action to act on the exact job the page showed, so that a rerun in between cannot redirect my click.
-13. As Chris, I want every failed action to show its reason, so that I never see a bare "Conflict" or "Bad Gateway".
-14. As Chris, I want one project filter rule on every route, so that a filtered page counts the same things everywhere.
-15. As Chris, I want each answer to carry only its own data, so that big pages load quickly.
-16. As Chris, I want every answer's shape checked against a schema, so that a route cannot drift from what the page expects.
-17. As Chris, I want every time in every answer in one format, so that charts and tables need no conversion.
+1. As the user, I want a page to show new data within about 2 s of a change, so that the UI tracks the factory without a reload.
+2. As the user, I want the server to stay responsive while it rebuilds, so that other pages and the stream never stall.
+3. As the user, I want a tab I return to after an hour to show current data at once, so that I never act on old numbers. The exception is Sessions and Skills, whose Langfuse rebuild can take minutes: a return tab, or one after a restart, shows their last data at once with a note of its age, and the page updates in place when the rebuild ends.
+4. As the user, I want a page to refetch only when data it shows has changed, so that a Langfuse update does not reload Status.
+5. As the user, I want Sessions, Agents and Memory to update live like Status, so that every page behaves the same.
+6. As the user, I want a chart or table whose data failed to rebuild to say how old it is and why, so that a stale number is never silent.
+7. As the user, I want the server's memory to stay bounded however long it runs, so that it does not reach 1.5 GB.
+8. As the user, I want the pages I used before a restart to be warm after it, so that a land does not cause visible waits.
+9. As the user, I want the work store fetched in the background with its errors shown, so that issue data is never silently old.
+10. As the user, I want every route named in current terms, the same as its page, so that the API reads like the UI.
+11. As the user, I want to list all jobs and see the jobs of one issue, so that routine jobs and issue jobs are both reachable.
+12. As the user, I want a job action to act on the exact job the page showed, so that a rerun in between cannot redirect my click.
+13. As the user, I want every failed action to show its reason, so that I never see a bare "Conflict" or "Bad Gateway".
+14. As the user, I want one project filter rule on every route, so that a filtered page counts the same things everywhere.
+15. As the user, I want each answer to carry only its own data, so that big pages load quickly.
+16. As the user, I want every answer's shape checked against a schema, so that a route cannot drift from what the page expects.
+17. As the user, I want every time in every answer in one format, so that charts and tables need no conversion.
 18. As the maintainer, I want one place that decides what to rebuild and when, so that freshness bugs have one home.
 19. As the maintainer, I want the build to run behind one seam, so that moving a build to its own Worker is a change in one place.
 20. As the maintainer, I want the sources a build reads to be recorded automatically, so that a key cannot go stale because a list was wrong.
@@ -87,7 +87,7 @@ The routes are renamed to the terms in `docs/naming.md`, with one name for the d
 - **Key:** a kind plus its parameters, for example `flow:week:aleph` or `sessions:7`. A route asks the updater for a key and returns its value and mark.
 - **Contract of `change`: rebuild, then signal.** When a source changes, the updater rebuilds the kept keys that read it, stores the new values (the old ones are served until then), and then sends `change` with `{ keys: [...] }`. Rejected: clear-then-signal (today, which stalls) and mark-stale-and-wait (every view waits).
 - **Kept keys:** keys asked for in the last 10 min are rebuilt on change. Keys not asked for in 1 h are dropped. This is the only size limit, and it applies to Langfuse answers too. Rejected: all 40+ keys (15-30 s of build per change) and fixed defaults (filtered views would always wait).
-- **Sessions and Skills keys are served old while due:** a Langfuse cold read can take up to 2 min, so a request for one of these keys that has an answer but is due for a rebuild gets that answer at once with the `{ error, since }` mark, and the page updates in place on `change` when the rebuild ends. Their last good answer is saved to `~/.aleph/ui/answers/` (one file per key) on each build, so a restart or the 1 h drop does not lose it. Every other key still waits for a build. Chris chose this over keeping the keys warm longer or only speeding the rebuild.
+- **Sessions and Skills keys are served old while due:** a Langfuse cold read can take up to 2 min, so a request for one of these keys that has an answer but is due for a rebuild gets that answer at once with the `{ error, since }` mark, and the page updates in place on `change` when the rebuild ends. Their last good answer is saved to `~/.aleph/ui/answers/` (one file per key) on each build, so a restart or the 1 h drop does not lose it. Every other key still waits for a build. The user chose this over keeping the keys warm longer or only speeding the rebuild.
 - **First request for a cold key:** it waits for one build, shared by concurrent requests. That build runs in the Worker, so the server does not stall.
 - **Restart:** the kept-key set is saved to `~/.aleph/ui/keys.json` when it changes. On start, the updater rebuilds those keys.
 - **Builds run in the existing state Worker,** behind one seam. Today the seam has one implementation. Moving flow to its own Worker must be a change to that seam only. Nothing builds on the main thread. Rejected: a second Worker now (rule 5), and a faster main-thread build.

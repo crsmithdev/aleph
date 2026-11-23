@@ -51,7 +51,7 @@ export function needs(m, now = Date.now()) {
   return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";
 }
 
-/** The share of its budget at which a start context needs Chris, as `ui/api/attention.ts` has it. */
+/** The share of its budget at which a start context needs the user, as `ui/api/attention.ts` has it. */
 const FULL = 0.95;
 const B = (n) => `${count(n)} B`;
 

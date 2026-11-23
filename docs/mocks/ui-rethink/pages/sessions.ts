@@ -1,4 +1,4 @@
-// The Sessions page: List (Chris's own sessions first, the factory's behind a filter) and Tools & Skills (the tiles
+// The Sessions page: List (the user's own sessions first, the factory's behind a filter) and Tools & Skills (the tiles
 // and ranked lists that left the list, as a figure band and two lists). README, Pages and "Sessions, List".
 import { barList, barRow, card, cell, chip, chipRow, costHtml, dataTable, esc, fold, heads, idLink, legendHtml, meter, row, subHead, tag } from "../../../../ui/views/lib/html.js";
 import { cardPct, count, dur, markLine, money, shortModel, when } from "../../../../ui/views/lib/format.js";

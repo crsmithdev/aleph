@@ -1,7 +1,7 @@
 // A note written as prose (no fields on the issue): its paragraphs and the recommendation
 // sentence. Plain JS, shared by the page and the server.
 
-/** A note's text without its "intake: for User:" (or "triage: for User:") lead; the old "for Chris:" lead reads too. */
+/** A note's text without its "intake: for User:" (or "triage: for User:") lead; the old "for the user:" lead reads too. */
 const body = (note) => String(note ?? "").replace(/^(?:intake|triage):\s*(?:for (?:Chris|User):\s*)?/i, "").trim();
 
 const RECOMMENDATION = /(^|[.!?]["')\]`]*\s+)(My recommendation\b[^]*?(?:[.!?](?=\s|$)|$))/i;

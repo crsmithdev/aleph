@@ -15,7 +15,7 @@ export type AskAction = (typeof ASK_ACTIONS)[number];
 export const ACTIONS: readonly string[] = [...STATES, ...HOLDS, ...ASKS, "reran", "started", "missed", "skipped", "filed", "escalated", "changed", "answered", "routed", "stalled", "reopened", "status"];
 /** Why a run stopped: the closed set of causes (outcome.ts `Cause`). */
 export const CAUSES = ["no-commit", "timeout", "stalled", "infra", "locked", "credit", "check", "conflict", "moved", "review", "unanswered", "other"] as const;
-/** The subjects that are not a job: code (`gate`, `rule`), Chris and an interactive session. */
+/** The subjects that are not a job: code (`gate`, `rule`), the user and an interactive session. */
 const SUBJECTS = ["gate", "rule", "human", "claude"] as const;
 /** Role words of events written before jobs had keys; read for old data only. */
 const OLD_ROLES = ["worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"] as const;

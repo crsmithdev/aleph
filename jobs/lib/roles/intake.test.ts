@@ -358,7 +358,7 @@ test("the schema keeps the union under a property and limits a part's title to 6
 
 test("the prompt keeps the spec close to the request and how-to-build questions away from Chris", () => {
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
-  expect(p).toContain("Never ask Chris how to build it");
+  expect(p).toContain("Never ask the user how to build it");
   expect(p).toContain("no file paths, function names or code");
   expect(p).toContain("The request is the ground truth");
   expect(p).toContain('("perhaps", "maybe", "could") leaves that choice to the worker');
@@ -368,7 +368,7 @@ test("the prompt keeps the spec close to the request and how-to-build questions 
   expect(p).toContain("(an issue key like `issue.5`)");
   expect(p).not.toContain("<repo>-<n>`)");
   expect(p).toContain("no two clauses that cannot both be true");
-  expect(p).toContain("A fresh request from Chris that goes against the current design or its tests is not stale");
+  expect(p).toContain("A fresh request from the user that goes against the current design or its tests is not stale");
 });
 
 test("parseRoute keeps an issue key in an ask option's after", () => {

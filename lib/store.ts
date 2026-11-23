@@ -337,7 +337,7 @@ export function runMedia(key: string, id: number | string, lists: Reader = reade
   return [...(parent ? mediaFiles(parent) : []), ...mediaFiles(item)];
 }
 
-/** An item with an Ask in its issue state: it waits for Chris, so it is never dispatched and never triaged. */
+/** An item with an Ask in its issue state: it waits for the user, so it is never dispatched and never triaged. */
 const asks = (_doc: Doc, item: Issue, _repo: Place): boolean => record.issueAsk(record.read(issueKey(item.id))) !== null;
 
 /** The parent of a child, read from `lists`; undefined for an issue with none. */
@@ -563,7 +563,7 @@ export function flakeTracker(doc: Doc): Issue | undefined {
 
 /**
  * A note on the flake tracker, adding the tracker first when there is none, as
- * one commit. Chris picks from the tracker's notes which flakes get a spec, so
+ * one commit. The user picks from the tracker's notes which flakes get a spec, so
  * a run that meets an unrelated flake notes it here and files no issue.
  * Returns the tracker's id, or why the write did not happen.
  */
@@ -574,7 +574,7 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
         kind: "flake",
         priority: "low",
         tracker: true,
-        request: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes to fix.",
+        request: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. The user picks from these notes which flakes to fix.",
       });
       issues.note(tracker, text);
       return { id: tracker.id };

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * SessionStart on startup and /clear: show Chris the summary line, else the
+ * SessionStart on startup and /clear: show the user the summary line, else the
  * Intent line, of each handoff that waits for this session, and tell Claude to pick it up on the
  * first prompt. A handoff waits for the session when it is the project's
  * handoff at <handoffs>/projects/<scope>.md, or a named handoff at
@@ -61,7 +61,7 @@ const when = (path: string) => {
   return at.toDateString() === new Date().toDateString() ? clock(at) : `${at.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${clock(at)}`;
 };
 
-const short = waiting.map((h) => h.orphan ? `An orphaned handoff waits at ${h.path}: ${intent(h.text)}. Its ${pane ? "Herdr pane" : "terminal"} is gone. Ask Chris whether to pick it up. Do not run the aleph:pickup skill on your own; if Chris says yes, run it with the argument ${h.path}.` : `A handoff ${h.name ? `named ${h.name}` : "for this project"} waits at ${h.path}: ${intent(h.text)}. On the user's first prompt, run the aleph:pickup skill ${h.name || (me && h.path === own?.path) ? `with the argument ${h.name || h.path}` : "with no argument"} before anything else, unless that prompt is plainly about other work; then do that work and say in one line that the handoff still waits.`).join("\n");
+const short = waiting.map((h) => h.orphan ? `An orphaned handoff waits at ${h.path}: ${intent(h.text)}. Its ${pane ? "Herdr pane" : "terminal"} is gone. Ask the user whether to pick it up. Do not run the aleph:pickup skill on your own; if the user says yes, run it with the argument ${h.path}.` : `A handoff ${h.name ? `named ${h.name}` : "for this project"} waits at ${h.path}: ${intent(h.text)}. On the user's first prompt, run the aleph:pickup skill ${h.name || (me && h.path === own?.path) ? `with the argument ${h.name || h.path}` : "with no argument"} before anything else, unless that prompt is plainly about other work; then do that work and say in one line that the handoff still waits.`).join("\n");
 const status = probe(cwd, "status");
 const gitPart = status.ok ? `\n\ngit status:\n${status.out}\n\ngit log -5:\n${probe(cwd, "log", "-5").out}` : "";
 const texts = waiting.map((h) => `${h.path}:\n\n${h.text.trim()}`).join("\n\n");

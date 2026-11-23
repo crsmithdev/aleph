@@ -26,14 +26,14 @@ Step 3 of [PROCESS.md](PROCESS.md), and the pick of its step 6. The skill suppli
 
 ## Pick
 
-Give Chris the report's absolute path, then the pick. The pick covers the findings that are still `open`:
+Give the user the report's absolute path, then the pick. The pick covers the findings that are still `open`:
 after `fix`, the ask findings, and after `scan`, every finding.
 
 - In an interactive run with `ALEPH_AGENT` unset, put the report on the shelf:
   `shelf put <run dir> --kind report`, as in [SHELF](../SHELF.md). It prints the item id and URL. Open the URL in
-  Chris's browser with `cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"`. Then run
+  The user's browser with `cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /c start "" "<url>"`. Then run
   `shelf wait <id>` with `run_in_background` and end the turn. When `wait` exits 0, its output
-  is Chris's notes: they pick and steer the findings.
+  is the user's notes: they pick and steer the findings.
 - If `put` fails, or `wait` exits 2, ask which findings to fix in an `AskUserQuestion`.
 - In a headless run, `AskUserQuestion` is not available: end the reply with the open findings as a numbered
   list and the run directory.

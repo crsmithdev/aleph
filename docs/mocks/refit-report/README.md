@@ -1,7 +1,7 @@
 # Refit report sample
 
-Request (Chris, 2026-11-16): one report shape across the refit skills, shown on the refit-design retro of
-`#/factory/agents`. This round acts on his six shelf notes on the sample `20261116-220823-nedh`.
+Request (the user, 2026-11-16): one report shape across the refit skills, shown on the refit-design retro of
+`#/factory/agents`. This round acts on their six shelf notes on the sample `20261116-220823-nedh`.
 
 `index.html` is the sample. `app.css` links to `ui/app.css`, as in `agents-retro`. A real report copies the
 CSS of the scanned commit, as `skills/refit/REPORT.md` (Directory) asks. A copy in the repo would repeat
@@ -29,7 +29,7 @@ The shape rules changed with the sample: `skills/refit/REPORT.md`, `skills/refit
 
 ## Round 3
 
-Chris's notes on round 2 (shelf `20261116-224328-gyi9`):
+The user's notes on round 2 (shelf `20261116-224328-gyi9`):
 
 1. The row fold button goes in the first column. `design.md`, Table, now puts it first in the column order.
    Finding 7's fix says so.
@@ -38,11 +38,11 @@ Chris's notes on round 2 (shelf `20261116-224328-gyi9`):
    11 repeats, 6 of them of the Roles table.
 
 4. Hold is now Guard in every refit skill: the card line, the `## Guard` lens sections and the `## Guards` tables
-   (Chris, 2026-11-16). The factory's own holds keep their name.
+   (The user, 2026-11-16). The factory's own holds keep their name.
 
 ## Round 5
 
-Chris's notes on round 4 (shelf `20261116-230251-csrn`):
+The user's notes on round 4 (shelf `20261116-230251-csrn`):
 
 1. The Findings table starts closed, in a `<details>` whose summary gives the counts.
 2. Finding 10 showed only the Success tile. It now shows the Roles card head with the aside, then the tile it
@@ -55,7 +55,7 @@ Chris's notes on round 4 (shelf `20261116-230251-csrn`):
 
 ## Round 6
 
-Chris's notes on round 5 (shelf `20261116-231935-o3my`):
+The user's notes on round 5 (shelf `20261116-231935-o3my`):
 
 1. No part outranks its parent. The page title is `--fs-metric`, a card head `--fs-xl`, a kind head `--fs-2xl`, a
    finding title `--fs-lg` and the fix `--fs-md`.
@@ -65,11 +65,11 @@ Chris's notes on round 5 (shelf `20261116-231935-o3my`):
 
 ## Round 7
 
-Chris's notes on round 6 (shelf `20261116-232446-lquk`), and his answers in chat:
+The user's notes on round 6 (shelf `20261116-232446-lquk`), and their answers in chat:
 
 1. The Actions list is gone. It repeated the Fix titles that Themes already groups. The Themes list now carries
    the order to act, with the rank that Actions used.
-2. Component entries do not fold (Chris undid the round 7 fold). The entry's first line, such as "Success value and
+2. Component entries do not fold (the user undid the round 7 fold). The entry's first line, such as "Success value and
    trend", is the parent of its findings. So it now sits at `--fs-lg` in `--ink`, above the finding title at
    `--fs-md`. The fix moves to `--fs-sm`, and the rule, locations and guard to `--fs-xs`. This follows round 6:
    no part outranks its parent.
@@ -78,7 +78,7 @@ Chris's notes on round 6 (shelf `20261116-232446-lquk`), and his answers in chat
 
 ## Round 8 variant: finding first
 
-Chris asked to see the finding first, with the component line under it.
+The user asked to see the finding first, with the component line under it.
 
 1. Each kind head lists its findings in page order. The finding title is the top line, at `--fs-lg`.
 2. Under the title, one muted line at `--fs-sm` per component the finding breaks, with the Kit link. The
@@ -87,5 +87,5 @@ Chris asked to see the finding first, with the component line under it.
 4. Field and form has no finding of its own. Its checkbox shows under 16, in Table.
 5. The fix is at `--fs-md` and the Details text at `--fs-sm`, as in round 6.
 
-Chris picked the finding-first variant (2026-11-17). It is now `index.html`, and the component-first draft is gone.
+The user picked the finding-first variant (2026-11-17). It is now `index.html`, and the component-first draft is gone.
 `skills/refit-design/REPORT.md` (Finding) gives the new order.

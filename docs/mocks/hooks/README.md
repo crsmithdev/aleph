@@ -1,6 +1,6 @@
 # Hooks page mock
 
-Request (Chris, 2026-11-19): "mock up a hooks page for aleph, in the 'claude' section of the sidebar", after a
+Request (the user, 2026-11-19): "mock up a hooks page for aleph, in the 'claude' section of the sidebar", after a
 review of the past week's Stop-hook holds and hook errors.
 
 `index.html` is drawn by `gen.ts` with the real UI helpers (`ui/views/lib/html.js`, `ui/views/lib/timeline.js`) and
@@ -30,7 +30,7 @@ review of the past week's Stop-hook holds and hook errors.
   Hook, Kind and Outcome (`select`). The mock holds every row and hides the ones the filters drop; the app would page
   them. A hook name in Holds by Hook, or Show holds in a hook's row, sets the filters. Session ids link to
   `#/sessions/<id>`.
-- **Hook detail page.** Chris chose a detail page over an inline row (2026-11-19). A hook's name in the Hooks table
+- **Hook detail page.** the user chose a detail page over an inline row (2026-11-19). A hook's name in the Hooks table
   opens `#/hooks/<event>/<name>` (in the mock, `hook-<event>-<name>.html`). It has a crumb, the hook's facts
   (`facts`), KPIs of its outcomes, Holds by Kind (a kind's name filters the log), Holds by Day, the holds log with Who,
   Kind and Outcome filters, the errors of causes that hit it, and its source: the entry file and the local files it

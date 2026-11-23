@@ -83,7 +83,7 @@ function derive(st: State, key: "busy" | "quiet") {
   const needs = busy ? NEEDS.asks : [];
   const usage = busy ? st.usage : d.usage.seven_day;
   const gone = Math.min(100, Math.max(0, 100 - ((Date.parse(d.usage.resets) - T) / (7 * 86_400_000)) * 100));
-  // The oldest of the alert and the Asks: how long Chris has kept the factory waiting.
+  // The oldest of the alert and the Asks: how long the user has kept the factory waiting.
   const since = busy ? Math.min(...[NEEDS.ci.at, ...needs.map((i) => i.at)].map((at) => Date.parse(at))) : null;
   return { key, T, busy, st, active, waiting, lands, badLands, repeat, landed, needs, since, usage, gone, workers: live.filter((j: any) => j.role === "build").length };
 }
@@ -104,7 +104,7 @@ function scorecard(v: View, { meters = true, needs = true } = {}) {
   const eff = (lost: number) => 1 - lost, waits = v.needs.length + (v.busy ? 1 : 0);
   const mem = d.memory.start.aleph, memPct = (mem.bytes / mem.budget) * 100;
   return tiles("Scorecard", [
-    needs && statCard({ k: "Needs You", v: count(waits), ...(v.since ? { v2: cardDur((v.T - v.since) / 1000), q: ["waiting", "oldest"] } : { note: "waiting" }), href: "#needs", title: "Asks and alerts that wait for Chris, and how long the oldest has waited" }),
+    needs && statCard({ k: "Needs You", v: count(waits), ...(v.since ? { v2: cardDur((v.T - v.since) / 1000), q: ["waiting", "oldest"] } : { note: "waiting" }), href: "#needs", title: "Asks and alerts that wait for the user, and how long the oldest has waited" }),
     statCard({ k: "Working", v: count(v.active.length), v2: [count(v.waiting.length), count(0)], q: ["running", "waiting", "error"], href: "#now" }),
     statCard({ k: "Efficiency", v: cardPct(eff(f.lost)), v2: hours(f.hours), q: ["efficient", "lost"], href: "#efficiency", trend: cardTrend(eff(f.lost), eff(base.lost), eff(prev.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) }),
     statCard({ k: "Lead Time", v: cardDur(f.leadP50), v2: cardDur(f.leadP90), q: ["p50", "p90"], href: "#flow", trend: cardTrend(f.leadP50, base.leadP50, prev.leadP50, { basis, kind: "relative", lowerIsGood: true, format: cardDur }) }),
@@ -164,7 +164,7 @@ function problemRows(v: View) {
   return rows;
 }
 
-/** Each thing that needs Chris as a compact Ask card: the alert, each Ask, a backend that is down and a start context at 95% of its budget. Each shows the card's head (dot, kind, title, tag) with its time or value, then its actions in one row. */
+/** Each thing that needs the user as a compact Ask card: the alert, each Ask, a backend that is down and a start context at 95% of its budget. Each shows the card's head (dot, kind, title, tag) with its time or value, then its actions in one row. */
 function alertCards(v: View) {
   const waited = (iso: string) => dur((v.T - Date.parse(iso)) / 1000);
   const act = (label: string, primary = false) => actButton(label, { act: "mock" }, { kind: "small", primary });
@@ -180,7 +180,7 @@ function alertCards(v: View) {
   ];
 }
 
-/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` draws only what needs Chris, as compact Ask cards. */
+/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` draws only what needs the user, as compact Ask cards. */
 function problems(v: View, { compact = false, alerts = false } = {}) {
   if (alerts) { const cards = alertCards(v); return card("Problems", cards.length ? `<div class="alerts" id="needs">${cards.join("")}</div>` : empty(), { count: count(cards.length), id: "problems" }); }
   const rows = problemRows(v);
@@ -252,7 +252,7 @@ function flowCard(v: View) {
   const phases = barList(["intake", "queue", "implement", "land"].map((k) => { const p = F.phases[k]; return barRow(`${esc(cap(k))} <span class="count">${count(now[k])}</span>`, (p.p90 / slow) * 100, dur(p.p90), { top: p.p90 === slow }); }).join(""));
   const stats = sideStats([
     { k: "Filed", v: count(f.filed) }, { k: "Landed", v: count(f.landed), state: "landed" }, { k: "Dropped", v: count(f.dropped) },
-    { k: "First Pass", v: cardPct(F.firstPass), title: "Landed issues whose first run landed" }, { k: "Open", v: count(F.open.open), note: `+${count(F.open.parked)}`, title: `${plural(F.open.open, "open issue")}, ${plural(F.open.parked, "parked issue")}` }, { k: "Asks", v: count(F.asks.count), note: `${count(F.asks.manual)} yours`, title: `${count(F.asks.count)} Asks this week, ${count(F.asks.manual)} answered by Chris` },
+    { k: "First Pass", v: cardPct(F.firstPass), title: "Landed issues whose first run landed" }, { k: "Open", v: count(F.open.open), note: `+${count(F.open.parked)}`, title: `${plural(F.open.open, "open issue")}, ${plural(F.open.parked, "parked issue")}` }, { k: "Asks", v: count(F.asks.count), note: `${count(F.asks.manual)} yours`, title: `${count(F.asks.count)} Asks this week, ${count(F.asks.manual)} answered by the user` },
   ]);
   return card("Flow", `${stats}${subHead("Time by Phase, p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { id: "flow", cls: "flow" });
 }
@@ -320,7 +320,7 @@ function eventsLog(v: View, { lean = false } = {}) {
 
 // ---- A: Briefing ----
 
-/** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
+/** The user's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
 const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false, needs: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { lean: true })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
 
 // ---- B: Board ----

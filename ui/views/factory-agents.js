@@ -27,7 +27,7 @@ const GROUPS = [
   ["Oversight", [["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["investigator", "investigator"]]],
 ];
 
-/** What waits while a role is off, for its Off title: no run starts, and no work fails. The review stays on: a build with no verdict holds for Chris. */
+/** What waits while a role is off, for its Off title: no run starts, and no work fails. The review stays on: a build with no verdict holds for the user. */
 const WAITS = {
   intake: "Issues wait unsorted", director: "Asks wait for you", monitor: "No daily reading", housekeeper: "Parked issues wait",
   maintainer: "Memory passes wait", judge: "Stop gate passes unjudged", investigator: "No investigations",

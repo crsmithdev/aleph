@@ -123,7 +123,7 @@ A scratch `bun -e` run confirmed both:
 - **Missing subjects.** The grammar does not cover note titles (`vault/lib/ops.ts:234`) or Ask reasons (`jobs/lib/asks/ask.ts:237`). The proposal says `event()` will throw on them (plan:21).
 - **Record keys.** The proposal changes `keyOf` (plan:64). Only plain jobs key by `run.job`, and that is a folder name, not a subject.
 
-## 4. Questions for Chris
+## 4. Questions for the user
 
 1. **What is a Job's identity?**
    - (a) A job is the group of runs (`run.job`), and `#n` numbers jobs, so a fix round keeps `a1430#2`.

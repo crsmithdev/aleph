@@ -60,7 +60,7 @@ export const spans = (runs, now = Date.now()) => runs.map((r) => spanOf(r, now))
 
 /**
  * The waits of a lane: each gap over a minute between `from`, the runs and `to`. A wait after a run that
- * awaits Chris is his; any other is the factory's. `runs` are spans in start order.
+ * awaits the user is theirs; any other is the factory's. `runs` are spans in start order.
  */
 export function gaps(runs, from, to) {
   const out = [];

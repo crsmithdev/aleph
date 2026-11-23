@@ -115,7 +115,7 @@ async function memoryOf(q) {
   } catch (e) { return { error: e.message }; }
 }
 
-/** The Memory card: the memory items that wait for Chris, as the Memory page's Needs-you strip lists them. `m` is null while it loads, or `{ error }`. */
+/** The Memory card: the memory items that wait for the user, as the Memory page's Needs-you strip lists them. `m` is null while it loads, or `{ error }`. */
 function renderMemory(m) {
   const box = (body) => card("Memory", body, { id: "memory" });
   if (!m) return box(loadingLine("the memory"));

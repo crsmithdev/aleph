@@ -43,7 +43,7 @@ export interface Rescue {
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   /** Start a recheck of the job. */
   recheck: (name: string) => Promise<string | null>;
-  /** Where the rescue's lines for Chris go; Sidetone when absent. */
+  /** Where the rescue's lines for the user go; Sidetone when absent. */
   tell?: Tell;
 }
 

@@ -1,6 +1,6 @@
 # Status card mocks
 
-Design mocks for the Status page, from Chris's annotations on 2026-11-11. The live canvas is the Design artifact
+Design mocks for the Status page, from the user's annotations on 2026-11-11. The live canvas is the Design artifact
 https://claude.ai/artifact/Hf9FwxntRG5DPjoaRbkvGT. These files are its source: `canvas.json` and one `.dc.html` per
 board. They need the canvas runtime (`support.js`) to render, so open the artifact to see them.
 
@@ -15,7 +15,7 @@ board. They need the canvas runtime (`support.js`) to render, so open the artifa
 Every card is 116 px tall in every row, with a vis or without one. The first row of the board has no vis, for
 comparison.
 
-Chris kept these forms:
+The user kept these forms:
 
 - current meter with a pace mark
 - 1 · bullet bar
@@ -25,9 +25,9 @@ Chris kept these forms:
 - New B · day columns, right of the figure
 - New C · week segments
 
-He dropped New A (the spark right of the figure) and New D (the background area).
+They dropped New A (the spark right of the figure) and New D (the background area).
 
-The proposed mapping waits for Chris:
+The proposed mapping waits for the user:
 
 1. Usage: split meter with the pace mark.
 2. Lost time: bullet bar against the baseline.

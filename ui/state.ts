@@ -109,9 +109,9 @@ export interface Job {
   agent?: boolean;
   /** Running, errored: the part this job works on, "n/m" of its parent. */
   part?: Part;
-  /** Awaiting: what the run asks of Chris, and why. */
+  /** Awaiting: what the run asks of the user, and why. */
   ask?: Ask;
-  /** Awaiting: when the Ask timeout acts on the run with no answer from Chris, and what it does then (jobs/lib/asks/timeout.ts). */
+  /** Awaiting: when the Ask timeout acts on the run with no answer from the user, and what it does then (jobs/lib/asks/timeout.ts). */
   due?: string; dueAction?: string;
   /** Awaiting: the reviewer's call on the held run. */
   reviewCall?: { call: string; reason?: string };
@@ -134,7 +134,7 @@ export interface Job {
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
 export interface NewIssue { id: string; title: string; priority?: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string;
-  /** An issue that awaits you: what Chris is asked. */
+  /** An issue that awaits you: what the user is asked. */
   question?: string;
   /** Its Ask with options: the fields. */
   decision?: Ask;
@@ -172,7 +172,7 @@ export interface State {
     monitor: ReturnType<typeof monitorPanel>;
   };
   errored: Job[]; running: Job[];
-  /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its card and reason. */
+  /** Everything that waits for the user: one entry per awaiting run, issue and proposal, with its card and reason. */
   asks: AskItem[];
   /** Queued and blocked issues (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
@@ -413,7 +413,7 @@ function pickups(jobs: Runs[]) {
 }
 type Pickups = ReturnType<typeof pickups>;
 
-/** The issues that wait on Chris. */
+/** The issues that wait on the user. */
 const awaitingOf = (slots: Slot[], { pickedUp }: Pickups): NewIssue[] =>
   slots.flatMap(({ repo, item, id, st, part }) => {
     const waiting = awaiting(repo.key, item, st);

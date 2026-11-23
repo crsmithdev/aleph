@@ -3,7 +3,7 @@ name: dig
 description: >
   Dig: follow one small symptom down, one "why is it like this?" at a time,
   until it reaches the model under it (identity, keys, storage, ownership,
-  formats), then propose one consolidated fix. Use only when Chris types
+  formats), then propose one consolidated fix. Use only when the user types
   /aleph:dig with a starting problem. NOT for: an audit against a fixed
   checklist (use /aleph:refit-code); a known bug (use /aleph:diagnosing-bugs).
 argument-hint: <starting problem>
@@ -19,8 +19,8 @@ at that level removes the symptom and the sprawl around it.
 
 The refit skills audit against a fixed checklist. Dig follows one thread wherever it leads and learns as it
 goes. Work alone, end to end. Decide each open question yourself, with a stated reason (vault note "A
-High-Level Goal Is Pursued End To End Without Check-Ins"). Ask Chris only when a choice is irreversible or is
-Chris's taste.
+High-Level Goal Is Pursued End To End Without Check-Ins"). Ask the user only when a choice is irreversible or is
+The user's taste.
 
 ## Steps
 

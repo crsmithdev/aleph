@@ -49,7 +49,7 @@ const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: s
 
 /**
  * An open parent whose parts are all done or dropped, with at least one done and no Ask, is closed as done, with a note naming the
- * parts' commits. The write that drops the last open part sets the Ask, so Chris decides first. Returns the lines for the dispatch's skipped list.
+ * parts' commits. The write that drops the last open part sets the Ask, so the user decides first. Returns the lines for the dispatch's skipped list.
  */
 async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<string[]> {
   const lines: string[] = [];

@@ -217,10 +217,10 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
 }
 
 /**
- * `aleph land`: start a land run. The latest agent run must have passed, or need Chris for a
- * held path: his land is the review, and the commit says so. A manual check does
+ * `aleph land`: start a land run. The latest agent run must have passed, or need the user for a
+ * held path: their land is the review, and the commit says so. A manual check does
  * not gate the land: the land run keeps it open, as an issue, until
- * `aleph checked`. With `checked`, Chris has done the check already.
+ * `aleph checked`. With `checked`, the user has done the check already.
  * The land unit takes the job lock.
  */
 export async function land(name: string, a: { checked?: boolean; lander?: "user" | "director" | "timeout" | "rule" } = {}, o: StartOpts = {}): Promise<Start> {
@@ -328,7 +328,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
   const last = counting(runs);
-  // Chris's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.
+  // The user's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.
   const answer = a.answer ?? (a.quiet ? undefined : { subject: "human", answer: actionsOn(reasonOf(last.run.ask?.reason))[a.answered ? 0 : 1] });
   const release = await jobLock(last.run.repo, name);
   if (!release) refuse(`job ${name} is busy`);
@@ -343,7 +343,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
       refuse(`cannot stop ${e.id}: its process still runs`);
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
-    // Chris asked for the drop, so it is not news.
+    // The user asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.

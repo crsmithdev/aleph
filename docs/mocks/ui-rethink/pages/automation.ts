@@ -26,9 +26,9 @@ const STYLE = `<style>
 </style>`;
 
 /** Who decided a rule's Asks, each with its count, no zeros. */
-const who = (x: any) => [[x.rule, "rule"], [x.director, "director"], [x.chris, "Chris"]].filter(([n]) => n).map(([n, k]) => `${count(n)} ${k}`);
+const who = (x: any) => [[x.rule, "rule"], [x.director, "director"], [x.chris, "user"]].filter(([n]) => n).map(([n, k]) => `${count(n)} ${k}`);
 
-/** Who decided a rule's Asks, as one bar: rule, director, Chris. "" when none did. */
+/** Who decided a rule's Asks, as one bar: rule, director, the user. "" when none did. */
 function decided(x: any) {
   const all = x.rule + x.director + x.chris;
   if (!all) return "";
@@ -47,7 +47,7 @@ function ruleInspect(r: any, d: Data) {
     ["Granted", r.granted ? esc(day(r.granted.at, at)) : ""],
     ["Projects", esc(r.projects.join(", "))],
   ];
-  const decide = selectBox(`Who decides ${r.name}`, "decide", [{ value: "", label: "Director" }, { value: r.mode, label: MODES[r.mode] ?? r.mode }, { value: "user", label: "Chris" }], r.granted?.action ?? "", { id: `decide-${r.reason}` });
+  const decide = selectBox(`Who decides ${r.name}`, "decide", [{ value: "", label: "Director" }, { value: r.mode, label: MODES[r.mode] ?? r.mode }, { value: "user", label: "User" }], r.granted?.action ?? "", { id: `decide-${r.reason}` });
   const wait = selectBox(`If ${r.name} gets no answer`, "wait", NO_ANSWER.map(([value, label]) => ({ value, label })), r.timeout ? r.noAnswer : "wait", { id: `wait-${r.reason}` });
   const edit = settingRows(`Edit ${r.name}`, [
     { label: "Decides", id: `decide-${r.reason}`, control: decide },
@@ -100,7 +100,7 @@ function limitsView(d: Data) {
   const paths = (ps: string[]) => `<span class="rt-automation-paths">${ps.map((p) => `<code>${esc(p)}</code>`).join("")}</span>`;
   const held = settingRows("Held paths", [{ label: "Every repo", id: "held-all", control: paths(A.held) }, ...A.repoHeld.map((r: any) => ({ label: r.repo, id: `held-${r.repo}`, control: paths(r.held) }))]);
   return `<div class="pair">${card("Caps", caps, { id: "gates-caps" })}${card("Schedules", schedules, { id: "gates-schedules" })}</div>` +
-    card("Held Paths", held, { aside: "await Chris" });
+    card("Held Paths", held, { aside: "await the user" });
 }
 
 /** A log object as a link to its live page: `a<n>` is an aleph issue, `j<n>` a job; other text stays text. */

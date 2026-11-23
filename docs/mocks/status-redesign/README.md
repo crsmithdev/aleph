@@ -1,6 +1,6 @@
 # Status redesign mocks
 
-Chris asked on 2026-11-21 for a clean re-think of the Status page (`ui/views/now.js`): keep cards like the scorecard,
+The user asked on 2026-11-21 for a clean re-think of the Status page (`ui/views/now.js`): keep cards like the scorecard,
 add an event viewer, and show at a glance memory, the factory's efficiency, flow and problems, the work in progress,
 and the alerts, Asks and problems. The pages stay in the design language of `design.md`.
 
@@ -12,7 +12,7 @@ and copies `ui/app.css`. `mock.css` holds the parts the design language does not
 
 ## Reader and decisions
 
-- **Reader:** Chris, many glances a day and once each morning.
+- **Reader:** the user, many glances a day and once each morning.
 - **Decisions:** "Does anything need me now?" and "Is the factory doing useful work, and what is wrong with it?"
 - **Kind:** Status (`aleph:datavis`, step 1). The page holds few numbers, each beside its usual value, with problems
   first. A breakdown that answers "why" goes one click down.
@@ -22,7 +22,7 @@ pages order the blocks by the two decisions.
 
 ## Suggestions
 
-1. Order the page by the two decisions: what needs Chris, then how the factory does and what is wrong with it.
+1. Order the page by the two decisions: what needs the user, then how the factory does and what is wrong with it.
 2. Make each scorecard card the headline of one block below it, and link the card to the block.
 3. Add a Problems block. Today's page has no place for a thing outside its usual range.
 4. Draw the idle state too. The factory is idle for most of a day, and a page that needs a full factory fails then.
@@ -35,7 +35,7 @@ pages order the blocks by the two decisions.
 |---|---|---|
 | Head | The time and the status sentence. A problem with no Ask reads "Warning: OpenRouter has no credit." Today a warning follows "Everything is fine; ". | `design.md`, Page head |
 | Scorecard | Six metric cards. Each is the headline of one block and links to it. | `aleph:datavis`: at most 7 headline metrics |
-| Needs You | The alert and each Ask, with its actions and its Always button. Nothing when nothing waits. | `PRINCIPLES.md`: what waits for Chris shows at the top, with no scroll |
+| Needs You | The alert and each Ask, with its actions and its Always button. Nothing when nothing waits. | `PRINCIPLES.md`: what waits for the user shows at the top, with no scroll |
 | Problems | New. What the factory sees outside its usual range: a word in its tone, the value, the usual value. | Principle 3; `aleph:datavis`, step 4: each number has a comparison |
 | Active work | The issues that run, and the issues that wait with what they wait on. One form per page. | `aleph:datavis`: an item beside the typical item of its kind |
 | Events | A filter by kind (Problems, Landed, Asks, Holds) and a search by ID or title. One form per page. | `design.md`, Table: an event log puts the time first |
@@ -45,7 +45,7 @@ pages order the blocks by the two decisions.
 
 The scorecard:
 
-| Card | Numbers | Compared to | Chris acts when |
+| Card | Numbers | Compared to | The user acts when |
 |---|---|---|---|
 | Needs You | items that wait / the oldest wait | 0 | it is not 0 |
 | Working | issues that run / issues that wait / jobs in error | the 5 workers | issues wait while a worker is free |
@@ -97,7 +97,7 @@ Where each block sits at 1600 × 1000 px, in px from the top of the page:
 C's lanes show an issue that loops: a3418 passed, failed at land and started again, all in 14 minutes. A table row
 hides that. A way to keep it is a second form of the Now card.
 
-## Round 2: Chris's notes on A, 2026-11-23
+## Round 2: the user's notes on A, 2026-11-23
 
 1. The alert and the Asks are the first rows of Problems, tinted in their tone, with their actions. Needs You is gone. The
    status lights move to the Problems head.
@@ -118,15 +118,15 @@ Round 6: Memory returns to the end of the main column as the split card of round
 
 Round 7: A drops the Usage and Memory meters of the scorecard, the lanes' aside (Workers and the span control) and Cost column, the Value and Usual labels of Problems, the Live light of Events and the "7 days" of Flow.
 
-Round 8: the alert and the Asks are compact Ask cards (the card's head on one line, the actions under it, 76 px each) over the Problems table. The event log drops Model and Cost; in a column of 560 px or less it also drops Job and By. The lanes and the log fit their card from 1600 px down to 390 px with no horizontal scroll. The big numbers (`--metric`) are in Merriweather on all three pages, Chris's font pick.
+Round 8: the alert and the Asks are compact Ask cards (the card's head on one line, the actions under it, 76 px each) over the Problems table. The event log drops Model and Cost; in a column of 560 px or less it also drops Job and By. The lanes and the log fit their card from 1600 px down to 390 px with no horizontal scroll. The big numbers (`--metric`) are in Merriweather on all three pages, the user's font pick.
 
-Round 9: A's Problems holds only cards, each a thing that needs Chris: the alert, the Asks, a backend that is down (Credits) and a start context at 95% (Memory). The rerun, hold, stage and monitor rows leave A; Efficiency and Flow hold that analysis.
+Round 9: A's Problems holds only cards, each a thing that needs the user: the alert, the Asks, a backend that is down (Credits) and a start context at 95% (Memory). The rerun, hold, stage and monitor rows leave A; Efficiency and Flow hold that analysis.
 
 Round 10: a clock icon heads each Took and Waited column (its name in the title). The lanes drop the State label. Flow's Time by Phase shows the p90 only. A's Memory card drops the two "7 days" notes and the Maintain light.
 
 Round 11: a duration column (Took, Waited) is headed by a stopwatch, and the event log's Time by a clock.
 
-Round 12: A drops the Needs You card from the scorecard; Problems shows what needs Chris. The scorecard has 5 cards.
+Round 12: A drops the Needs You card from the scorecard; Problems shows what needs the user. The scorecard has 5 cards.
 
 The Recommended section is of round 1.
 
@@ -149,7 +149,7 @@ Each needs a place in `design.md` before a build.
   back from the events: 7 live jobs on 6 issues, 5 issues that wait, 961 events in 2 hours, 32 issues landed that day.
 - The week's figures (the scorecard, Efficiency, Flow, Memory, the usual values) are those of 11/21 in both states.
 - The three waiting items of the busy state are real items of 11/20, shown together. CI on main failed 2 runs in a row
-  from 17:45 UTC. The director escalated a3397 at 18:10:11 UTC and Chris answered at 18:11:55. It escalated a3359 at
+  from 17:45 UTC. The director escalated a3397 at 18:10:11 UTC and the user answered at 18:11:55. It escalated a3359 at
   06:00:23 UTC. Not all three waited at 11:05.
 - The busy lights are set by hand, except CI. The busy tick time is the minute before the state.
 - The busy feed groups the events by issue with a rule simpler than `heraldRows()` of `ui/herald.ts`. The quiet feed is
@@ -169,7 +169,7 @@ Each needs a place in `design.md` before a build.
 - The page drops the stage table, the Active Issues chart and the Herald's Active and Inspector tabs. They need a
   place one click down, or they go.
 - The build's lanes must use the card's width: at 1600 px the 1h axis of A gets 293 of the card's 809 px, and all 17 bars
-  start at 75.7% of the axis or later (Chris, 11/23; not a fix for the mock).
+  start at 75.7% of the axis or later (the user, 11/23; not a fix for the mock).
 - The mocks use one project. A second project needs a column or a group in Problems, Now and Events.
 
 ## Checked
@@ -199,8 +199,8 @@ The action buttons do nothing.
 
 ## Next
 
-Chris picks one: A as drawn, A with C's lanes as a second form of the Now card, or B or C. The build is then filed as
+The user picks one: A as drawn, A with C's lanes as a second form of the Now card, or B or C. The build is then filed as
 an issue. http://aleph.home/#/issues/aleph/3452 covers the backend hold that the Status sentence does not say.
 
-His notes arrive on the shelf item `20261121-194453-v4ql`, and `shelf wait 20261121-194453-v4ql` receives them. The
+Their notes arrive on the shelf item `20261121-194453-v4ql`, and `shelf wait 20261121-194453-v4ql` receives them. The
 pages of that item are the pages of `e0cb9b2a`.

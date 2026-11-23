@@ -119,7 +119,7 @@ export interface Run {
   checkedBase?: string;
   /** The branch tip those checks saw. The skip needs both. */
   checkedTip?: string;
-  /** A run that needs Chris for a held path or a test edit: the diff stat. */
+  /** A run that needs the user for a held path or a test edit: the diff stat. */
   stat?: string;
   /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
@@ -141,7 +141,7 @@ export interface Repo {
   autoland: boolean;
   /** Its agent runs are factory runs: the worker verdict, the checks and the reviewer decide the run. */
   sandbox: boolean;
-  /** Globs a factory run may not change without Chris. */
+  /** Globs a factory run may not change without the user. */
   held: string[];
   /** Intake also takes in an issue filed with a spec, before its first worker run. */
   author?: boolean;
@@ -222,7 +222,7 @@ export function isOpen(runs: Entry[]): boolean {
   return OPEN.includes(last.run.state);
 }
 
-/** A run waits for Chris. */
+/** A run waits for the user. */
 export const isWaiting = (state: State): boolean => state === "waiting";
 
 /** A build run. */
@@ -271,7 +271,7 @@ export function newsLine(e: Entry, note?: string): string {
   return said ? `${line}\n  ${said}` : line;
 }
 
-/** Where a line for Chris goes: `send` gives true when it arrived. Tests give a recorder. */
+/** Where a line for the user goes: `send` gives true when it arrived. Tests give a recorder. */
 export interface Tell { send: (line: string) => Promise<boolean> }
 
 /** POST one line to Sidetone's /tell. True on a 2xx reply. */

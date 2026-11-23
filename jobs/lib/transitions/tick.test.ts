@@ -77,7 +77,7 @@ beforeEach(() => {
 /** The `vault` fixture at this test's ALEPH_VAULT, as `aleph memory init` lays it out. */
 const vaultHere = (): string => { vault(process.env.ALEPH_VAULT!); return process.env.ALEPH_VAULT!; };
 
-/** Issues with a request and no spec: each is for intake, or waits for Chris with `ask`. */
+/** Issues with a request and no spec: each is for intake, or waits for the user with `ask`. */
 function seed(items: { body: string; ask?: boolean }[]): void {
   writeList({ key }, "seed", (doc) => {
     for (const i of items) {

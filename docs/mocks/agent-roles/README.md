@@ -1,6 +1,6 @@
 # Agents roles table mocks
 
-Request (Chris, 2026-11-15): redesign the Roles table on the Agents page. Show one standard set of data for every
+Request (the user, 2026-11-15): redesign the Roles table on the Agents page. Show one standard set of data for every
 agent type, instead of worker and reviewer columns that apply to half the rows. Handle several models per size or
 role, now and in the past (maybe rows that expand). Let every size be turned off. Mock a few alternatives.
 

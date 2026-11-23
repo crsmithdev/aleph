@@ -140,7 +140,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const refs = refsOf(item).flatMap((k) => link(parseKey(k)?.n));
   const referencedBy = referrersOf(fetched.map((w) => w.item), item).flatMap((i) => link(i.id));
 
-  // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
+  // The Ask row of an issue that waits for the user: the item `attend` builds, from the NewIssue as the state builds it.
   const waiting = awaiting(repo.key, item, mine?.stage ?? "waiting");
   const ask = waiting && attend({ runs: [], issues: [waiting] }).items[0];
 
@@ -217,13 +217,13 @@ const create = post(async (b, _p, url) => {
 const drop = post((b, params) => {
   const { repo, n } = target(params);
   const given = typeof b.reason === "string" ? b.reason.trim() : "";
-  // The note starts with the user, so the Gates log shows the drop as theirs: a Deny reason already does (old "Chris…" too), any other gets "User dropped: ".
+  // The note starts with the user, so the Gates log shows the drop as theirs: a Deny reason already does (old "the user…" too), any other gets "User dropped: ".
   const reason = !given ? `${NOTE.dropped} it` : /^(?:Chris|User) (?:denied|dropped|declined)\b/.test(given) ? given : `${NOTE.dropped}: ${given}`;
   return aleph(["issue", "drop", "--", repo.key, String(n), reason]);
 });
 
 /**
- * `aleph issue decide <repo> <id> <note>`: Chris's answer to an issue that asks. The body names an option's
+ * `aleph issue decide <repo> <id> <note>`: the user's answer to an issue that asks. The body names an option's
  * `label`, or `recommendation: true` for an issue whose question is prose; the note is built here from the issue's own text.
  * The chosen option's `after` becomes the issue's `after`.
  */
@@ -279,7 +279,7 @@ const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 
-/** Chris's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. A `reason` is a note on the issue. */
+/** The user's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. A `reason` is a note on the issue. */
 const core = (approved: boolean) => post(async (b, params) => {
   const { repo, item } = target(params);
   const why = await answerHeld(`${repo.key}-${item.id}`, approved, "human");

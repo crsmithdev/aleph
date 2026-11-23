@@ -1,6 +1,6 @@
 # Memory view mocks
 
-Design mocks for three new memory views, from Chris's request on 2026-11-12. The live canvas is the Design artifact
+Design mocks for three new memory views, from the user's request on 2026-11-12. The live canvas is the Design artifact
 https://claude.ai/artifact/YP21B6MiU1jH62zP1m9yWv. These files are its source: `canvas.json` and one `.dc.html` per
 board. They need the canvas runtime (`support.js`) to render, so open the artifact to see them.
 

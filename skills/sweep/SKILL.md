@@ -7,8 +7,8 @@ argument-hint: "[--since <ISO time>]"
 
 # Sweep
 
-Go through this repo's handoffs and Chris's recent session transcripts, find the items nobody handled, explain
-them, and ask Chris about the ones that need him. A pickup archives a handoff when a session reads it, not when its
+Go through this repo's handoffs and the user's recent session transcripts, find the items nobody handled, explain
+them, and ask the user about the ones that need them. A pickup archives a handoff when a session reads it, not when its
 items are done, and a session can end with a follow-up nobody filed. So judge each item from the current state,
 never from the handoff or transcript text alone.
 
@@ -28,13 +28,13 @@ never from the handoff or transcript text alone.
    bun <this skill's dir>/turns.ts --since <since> --repo "$(dirname "$d")" > <scratchpad>/turns.md
    ```
 
-   It prints one `## <session id> <start> to <end>` block per session that Chris drove, with what he typed or
-   answered (`Chris:`), each question put to him (`Asks:`) and the reply that ended each turn (`Reply:`). A long
+   It prints one `## <session id> <start> to <end>` block per session that the user drove, with what they typed or
+   answered (`Chris:`), each question put to them (`Asks:`) and the reply that ended each turn (`Reply:`). A long
    reply keeps its start and its end. A transcript item is one of these:
    - A follow-up, risk, `Left out:` or `Not verified:` line that a reply names and no issue, commit or later
      session holds.
-   - A question to Chris that he did not answer in that session or a later one.
-   - A request from Chris that the session did not finish: it ended mid-work, or its branch or worktree did not
+   - A question to the user that they did not answer in that session or a later one.
+   - A request from the user that the session did not finish: it ended mid-work, or its branch or worktree did not
      land.
    - The next action at the end of a session that no later session took.
 
@@ -53,7 +53,7 @@ item names. Give each item one verdict:
 | `done` | A commit, an issue or a file shows it is done or filed. Name that evidence. |
 | `superseded` | A newer handoff, session, decision or commit replaces it. Name what replaces it. |
 | `open-work` | It needs no decision, but the work is not done and no issue holds it. |
-| `open-decision` | Chris must choose. |
+| `open-decision` | The user must choose. |
 
 If more than 5 handoffs have items, or `turns.md` is over 100 KB, split the work and give it to Explore agents,
 all in one message: about 5 handoffs, or about 100 KB of `turns.md` cut at `## ` lines, each. Give each agent the

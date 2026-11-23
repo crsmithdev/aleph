@@ -3,7 +3,7 @@
 Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 
 1. **It shapes each Claude Code session.** Hooks start the session with memory, trace each turn to Langfuse, deny the edits and commits that are hard to undo, and block a claim of completion that no run supports. Skills give the session methods for planning, testing, review and writing.
-2. **It runs a factory.** For each repo that opts in, the factory takes in the open issues, writes a spec for each one, builds it in a worktree, checks and reviews the branch, and lands it on `main`. It asks Chris only what a rule says it cannot decide.
+2. **It runs a factory.** For each repo that opts in, the factory takes in the open issues, writes a spec for each one, builds it in a worktree, checks and reviews the branch, and lands it on `main`. It asks the user only what a rule says it cannot decide.
 
 [PRINCIPLES.md](../PRINCIPLES.md) holds the rules that decide design: solo use, the system decides what it can, every fact about a change is visible, and a gate stays only while its record shows faults it caught.
 
@@ -34,14 +34,14 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 
 | Word | Means |
 |---|---|
-| Issue | What someone asks for: Chris, a worker or a session |
+| Issue | What someone asks for: the user, a worker or a session |
 | Sub-issue | An issue that intake split from a large issue, with a `from` link to the parent |
 | Spec | Goal, Edit surface and Oracle: what to change, where, and the check that proves it |
 | Job | One execution: an intake, a build, a review, a land or another role. [Naming](naming.md#terms) has every term. |
 | Fix round | A send-back of a failed check or a review hold to the same worker branch |
 | Land | The squash push of a passed branch onto `origin/main` |
 | Ask | A decision the factory cannot make by itself |
-| Director | The agent that decides an Ask or escalates it to Chris |
+| Director | The agent that decides an Ask or escalates it to the user |
 | Always rule | A standing answer for one Ask reason |
 | Baseline | The last full-suite result on `origin/main` |
 

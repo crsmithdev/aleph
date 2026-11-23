@@ -151,7 +151,7 @@ describe("inside Herdr", () => {
     const out = JSON.parse(run(join(root, "proj"), herdr()));
     expect(out.systemMessage).toMatch(/orphaned.*s2/);
     expect(out.hookSpecificOutput.additionalContext).toContain(join(root, "handoffs", "projects", "proj", "p9.md"));
-    expect(out.hookSpecificOutput.additionalContext).toContain("Ask Chris");
+    expect(out.hookSpecificOutput.additionalContext).toContain("Ask the user");
   });
 
   test("the flat file asks for a pickup by its path, since no argument reads this pane's file", () => {
@@ -177,7 +177,7 @@ describe("inside the desktop app", () => {
     const lines = out.systemMessage.split("\n");
     expect(lines.find((l: string) => l.includes("s12"))).toMatch(/^handoff waiting/);
     expect(lines.find((l: string) => l.includes("s9"))).toMatch(/^handoff orphaned/);
-    expect(out.hookSpecificOutput.additionalContext).toContain("Ask Chris");
+    expect(out.hookSpecificOutput.additionalContext).toContain("Ask the user");
     expect(out.hookSpecificOutput.additionalContext).toContain(join(root, "handoffs", "projects", "proj", "hc-t9.md"));
     expect(out.hookSpecificOutput.additionalContext).not.toContain("p8.md");
   });

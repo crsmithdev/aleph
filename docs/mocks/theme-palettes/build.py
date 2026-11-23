@@ -88,7 +88,7 @@ T = [
 T[7] = T[7] + (("#16161E","#1A1B26","#13131A","#24283B","#C0CAF5","#A9B1D6","#7F86AA","#292E42","#1F2335","#7AA2F7"),)
 
 
-# Variations (Chris, 2026-11-20: "look up some nord and palenight variations"). Values read from each theme's source:
+# Variations (the user, 2026-11-20: "look up some nord and palenight variations"). Values read from each theme's source:
 # Nord Light (github.com/nord-light/vscode README), Nordic (AlexvZyl/nordic.nvim colors/nordic.lua), Nordfox
 # (EdenEast/nightfox.nvim palette/nordfox.lua), Palenight Mild Contrast (whizkydee/vscode-palenight-theme
 # palenight-mild-contrast.json), Palenightfall (JoosepAlviste/palenightfall.nvim init.lua). Muted text is lifted where

@@ -35,7 +35,7 @@ has never seen, because it was drafted in place and never went through
 
 `aleph memory adopt <path-inside-the-vault> --why "<one line>"` commits a note
 that is already in `wiki/` but that git has never seen. Use it for a draft
-written in place, or a note Chris typed in Obsidian.
+written in place, or a note the user typed in Obsidian.
 
 It applies every schema, folder, duplicate and dangling refusal, and demotes
 the template to a warning, because a note on disk cannot be un-written. It

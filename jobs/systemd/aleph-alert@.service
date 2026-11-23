@@ -1,4 +1,4 @@
-# Tells Chris that a unit failed: aleph-tick.service and aleph-suite.service name it in OnFailure=. See docs/factory.md.
+# Tells the user that a unit failed: aleph-tick.service and aleph-suite.service name it in OnFailure=. See docs/factory.md.
 #   systemctl --user link ~/aleph/jobs/systemd/aleph-alert@.service
 [Unit]
 Description=aleph alert that %i failed

@@ -6,13 +6,13 @@ const ref = (r: string) => `<code>${esc(r)}</code>`;
 const btn = (label: string, o = {}) => actButton(label, {}, { kind: "small", ...o });
 
 const run = { at: "Nov 19 22:41", model: "opus", cost: "$1.84", took: "11m 20s" };
-const summary = "The build passed, then the land hit a merge conflict with a3349 in vault/lib/vault.ts. The merge round ran on the small model, then deepseek on OpenRouter, and got a 402. Chris moved small to haiku 30 s later, but the retry was a recheck, which cannot resolve a conflict, and the credit hold kept the rerun waiting for OpenRouter.";
+const summary = "The build passed, then the land hit a merge conflict with a3349 in vault/lib/vault.ts. The merge round ran on the small model, then deepseek on OpenRouter, and got a 402. The user moved small to haiku 30 s later, but the retry was a recheck, which cannot resolve a conflict, and the credit hold kept the rerun waiting for OpenRouter.";
 const timeline = [
   ["21:21", "Build job.10466 commits 1cd3a9c7; 104 tests pass", "job.10466/result.md"],
   ["21:23", "Land job.10474 fails: merge conflict in vault/lib/vault.ts", "job.10474/log.txt:8"],
   ["21:23", "Merge round job.10475 on small (deepseek) gets 402", "job.10475/transcript.jsonl:17"],
   ["21:23", "Credit hold on OpenRouter holds issue.3350", "event 05:23:49Z"],
-  ["21:24", "Chris sets small to haiku", "event 05:24:19Z"],
+  ["21:24", "the user sets small to haiku", "event 05:24:19Z"],
   ["21:24", "Recheck job.10476 hits the same conflict; job dropped for a rerun", "job.10476/log.txt"],
 ];
 const causes = [

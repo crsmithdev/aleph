@@ -1,6 +1,6 @@
 # Job lifecycle control mocks
 
-Request (Chris, 2026-11-14): give the Job page controls for the job's lifecycle. Cancel at least, maybe
+Request (the user, 2026-11-14): give the Job page controls for the job's lifecycle. Cancel at least, maybe
 pause and resume in place of the `parked` status, and maybe a force run that starts a job ahead of its priority or
 queue place unless a dependency blocks it.
 

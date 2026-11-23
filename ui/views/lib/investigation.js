@@ -13,7 +13,7 @@ const ref = (r) => `<code>${esc(r)}</code>`;
 const key = (k, repo) => idLink(shownKey(k), issueHref(k, repo));
 const meta = (x) => [when(x.started), shortModel(x.model), x.cost != null && money(x.cost), x.ended && dur((Date.parse(x.ended) - Date.parse(x.started)) / 1000)].filter(Boolean).join(" · ");
 
-/** A recommended issue's actions: File and Dismiss, Note in place of File when an open issue covers it, or what Chris did. */
+/** A recommended issue's actions: File and Dismiss, Note in place of File when an open issue covers it, or what the user did. */
 function actions(f, id, i, repo) {
   if (f.fate) {
     const [did, k] = f.fate.split(" ");

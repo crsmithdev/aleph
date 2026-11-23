@@ -22,7 +22,7 @@ Each layer:
 
 ## Why
 
-- Chris wants audit and enforcement while writing for the least work beyond the skills.
+- The user wants audit and enforcement while writing for the least work beyond the skills.
 - The tool holds of the agents, docs and tests domains already run at commit or push, and they fail closed for solo and factory runs.
 - No catch record shows that an earlier tier would have stopped a defect. PRINCIPLES.md rule 4 asks for that record before a new gate.
 - The `write-<domain>` names pair each writer with its `refit-<domain>` auditor. The write-tests description keeps "TDD, test-first" as its first words, so the trigger stays.

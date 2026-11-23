@@ -1,6 +1,6 @@
 # idiomorph redraws, compared with the lit spike
 
-Spike on the Ideas view. No view is in the morph set by default, so no page Chris uses changes.
+Spike on the Ideas view. No view is in the morph set by default, so no page the user uses changes.
 
 ## What was built
 

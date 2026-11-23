@@ -1,13 +1,13 @@
 /**
- * The Ask timeout: when Chris does not answer an escalated Ask in the minutes the `timeouts` setting gives for its reason, the
+ * The Ask timeout: when the user does not answer an escalated Ask in the minutes the `timeouts` setting gives for its reason, the
  * tick takes the reason's no-answer action once, on a waiting run's Ask or an issue's: `pick` takes the action the
  * director's case text recommends (it keeps waiting when there is none), `drop` takes the reason's second verb, the one that drops it.
- * A land acts on the escalation list too: Chris sets the minutes, so the land is his. A held-path Ask has no timeout,
+ * A land acts on the escalation list too: the user sets the minutes, so the land is theirs. A held-path Ask has no timeout,
  * so a timeout never lands a held change, and a core-change Ask has none, so a timeout never applies or declines a
  * core note change.
  *
  * The `timeouts` setting maps a reason to `{ minutes, then }`; a bare number is minutes with `pick`. A
- * reason with no entry waits for Chris.
+ * reason with no entry waits for the user.
  */
 import { eventsOf } from "../../../lib/layout.ts";
 import { setTimeoutsRow, timeoutsRow } from "../infra/settings.ts";

@@ -5,7 +5,7 @@ import { badge, barList, barRow, card, cell, chip, dataTable, esc, facts, filter
 import { count, day, dur, localMs, when } from "../../../../ui/views/lib/format.js";
 import { band, charts, columns, factsLine, inspector, legend, list, LIVE, now, rows, type Data, type Group, type Page, type Row, type Series } from "../kit.ts";
 
-/** The share of its budget at which a start context needs Chris, as the memory row of docs/mocks/status-redesign has it. */
+/** The share of its budget at which a start context needs the user, as the memory row of docs/mocks/status-redesign has it. */
 const FULL = 0.95;
 const DAY = 86_400_000;
 /** How to clear each lint rule, as the live Lint card says it (ui/views/lib/memory-health.js, FIX). */

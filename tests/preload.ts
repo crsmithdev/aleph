@@ -1,6 +1,6 @@
 /**
  * Loaded before every test file (bunfig.toml). It points each setting whose default is under ~/.aleph or
- * ~/.claude at a folder of its own for this test process, so no test reads or writes Chris's live data.
+ * ~/.claude at a folder of its own for this test process, so no test reads or writes the user's live data.
  * A test that sets one of them itself still wins; the processes a test starts inherit them.
  */
 import { afterEach } from "bun:test";
@@ -19,7 +19,7 @@ for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith(PREFIX))) {
     rmSync(join(tmpdir(), name), { recursive: true, force: true });
   }
 }
-// A factory agent's shell has ALEPH_AGENT set (jobs/lib/routing/models.ts); the hooks a test runs must act as in Chris's session.
+// A factory agent's shell has ALEPH_AGENT set (jobs/lib/routing/models.ts); the hooks a test runs must act as in the user's session.
 delete process.env.ALEPH_AGENT;
 const dir = mkdtempSync(join(tmpdir(), `${PREFIX}${procId(process.pid)}-`));
 const vars: Record<string, string> = {
@@ -28,7 +28,7 @@ const vars: Record<string, string> = {
   ALEPH_SKILLS_STORE: join(dir, "skills-store.json"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
   ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_ANNOTATIONS: join(dir, "annotations.json"), ALEPH_UI_TOKENS: join(dir, "ui-tokens"), ALEPH_DB: join(dir, "aleph.db"),
-  // The shelf (ui/server.ts passes /shelf/ to aleph-tools): a test that reaches it must not write Chris's store.
+  // The shelf (ui/server.ts passes /shelf/ to aleph-tools): a test that reaches it must not write the user's store.
   SHELF_DIR: join(dir, "shelf"),
   // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.
   ALEPH_MONITOR_CMD: "false",

@@ -1,6 +1,6 @@
 # Design-language mock
 
-Request (Chris, 2026-11-21): build the mock of the confirmed design-language concept from the grill. Each project owns a
+Request (the user, 2026-11-21): build the mock of the confirmed design-language concept from the grill. Each project owns a
 design language of tokens, components and patterns. An agent works as a librarian: it surveys the rendered UI and raises
 each difference between the UI and the language.
 

@@ -6,7 +6,7 @@ Status: proposed 2026-11-10, not approved. Source: the Beads and Dolt survey of 
 
 1. **The issue store stays markdown in git.** Dolt gives one large gain, history as SQL, and that gain does not need a new store. Beads moved to Dolt because it had two systems of record (a SQLite database and a JSONL export in git) and many agents that overwrote each other's writes. Aleph has one system of record, and `writeList` (`issues/lib/store.ts`) applies each change again on a fresh `main` when a push is refused. Beads users reported lost tasks and hung Dolt servers after the move (beads #2573), and Beads still shipped data-loss fixes in v1.3.3 on 2026-11-03.
 2. **History is a derived SQLite table, not a second store.** It is built from the store's git log and can be rebuilt from it at any time. Nothing writes to it except the build.
-3. **The actor goes in each store commit first.** All 7,263 store commits have the author Chris Smith, and the actor is only implied by the message text. History written before the actor trailer exists has no actor, so this step comes first.
+3. **The actor goes in each store commit first.** All 7,263 store commits have the author the user Smith, and the actor is only implied by the message text. History written before the actor trailer exists has no actor, so this step comes first.
 
 ## Fixed
 
@@ -42,6 +42,6 @@ Step 4 waits until `aleph issue lint` is clean, because a check on each write is
 ## Uses of the table
 
 - **Flow:** time in each state, Ask wait time, the delay before an issue with an `after` starts once its blocker lands, and the backlog on any past date.
-- **Quality:** dropped against landed issues by source, triage closes that Chris reopened, priority changes after triage, spec edits and spec-check holds before a failed build, and title edits after filing.
+- **Quality:** dropped against landed issues by source, triage closes that the user reopened, priority changes after triage, spec edits and spec-check holds before a failed build, and title edits after filing.
 - **Decisions:** lead time and failure rate before and after a factory change, the state of all issues on a given date, and lead-time forecasts by kind.
 - **Safety:** a commit that changes many issues, or a field that disappears.

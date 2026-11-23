@@ -176,7 +176,7 @@ function reconcile(ctx: Ctx, all: Entry[][]): Map<string, string> {
   const registry = loadRegistry();
   const fetched = new Set<string>();
   const fates = new Map<string, string>();
-  // Only Chris's git pull moves a checkout: the ledger fetches and reads refs.
+  // Only the user's git pull moves a checkout: the ledger fetches and reads refs.
   for (const runs of all.filter(isOpen)) {
     const last = counting(runs);
     const repo = last.run.repo ? registry[last.run.repo] : undefined;
@@ -281,7 +281,7 @@ async function tickCmd(ctx: Ctx): Promise<void> {
  * checkout is behind origin, and the health lines: the factory's alarms, then the
  * monitor's flake counts and its newest report. With --hook it prints the
  * SessionStart hook's JSON from hookLines, read-only, and nothing when there is nothing to act on. With --peek the
- * runs stay unshown, for a check or a test that is not Chris reading.
+ * runs stay unshown, for a check or a test that is not the user reading.
  */
 function reportCmd(ctx: Ctx): void {
   if (ctx.rest.includes("--hook")) {

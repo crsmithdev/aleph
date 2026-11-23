@@ -137,7 +137,7 @@ export function housekeeperDetached(): void {
   detached(["housekeep"], join(factoryDir(), "housekeeper.log"));
 }
 
-/** Start `aleph investigate <subject>` detached, for Chris's click: no dispatch gate, because he started it. */
+/** Start `aleph investigate <subject>` detached, for the user's click: no dispatch gate, because they started it. */
 export function investigatorDetached(subject: string): void {
   detached(["investigate", subject], join(factoryDir(), "investigator.log"));
 }

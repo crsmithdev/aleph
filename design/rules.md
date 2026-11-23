@@ -206,7 +206,7 @@ A `position: sticky` `top` is `--sp-8` or `--sp-16`.
 - except: ui/views/session.js, ui/views/lib/timeline.js, ui/views/lib/bars.js, ui/views/memory.js: percent widths for CSS.
 - except: ui/api/skills.ts: a server log line.
 - except: ui/views/design.js: a contrast ratio, `toFixed(2)`.
-- except: ui/views/issues.js, ui/views/memory.js: a date with no time shows as `Oct 28`, not `10/28`. Chris decides.
+- except: ui/views/issues.js, ui/views/memory.js: a date with no time shows as `Oct 28`, not `10/28`. The user decides.
 
 Every displayed value goes through its helper in `ui/views/lib/format.js` or `ui/views/lib/html.js`. The Missing column gives what the helper shows for no value. Show that, and do not replace it.
 

@@ -1,6 +1,6 @@
 # Workflow
 
-This page follows one change from an issue to a commit on `main`. It names each point where the factory can hold the change, send it back, retry it, rescue it, split it or ask Chris. The code is in `jobs/lib/`. [Factory](factory.md) has the commands and settings. [Routing](routing.md) has the model for each step. [Find why an issue stopped](find-why-stopped.md) has the records to read and the controls to use when a change stops.
+This page follows one change from an issue to a commit on `main`. It names each point where the factory can hold the change, send it back, retry it, rescue it, split it or ask the user. The code is in `jobs/lib/`. [Factory](factory.md) has the commands and settings. [Routing](routing.md) has the model for each step. [Find why an issue stopped](find-why-stopped.md) has the records to read and the controls to use when a change stops.
 
 ## The path
 
@@ -102,7 +102,7 @@ Then it asks each queued issue its gates, in order (`issue-decision.ts`, `factor
 | Gate | Binds when | Result |
 |---|---|---|
 | Pause | The `paused` setting holds a time | Nothing starts. Intake, director, suite, firefighter, and maintainer stop too. A unit's next step is kept in `paused-next` |
-| Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`): its newest build run, or with no run yet, any size's model | Skip. Jobs on that backend do not start; jobs on other backends do. Once Chris moves every size off that backend, an issue with no run starts before the probe lifts the hold |
+| Backend | The factory holds a backend after a call on it ended with the API credit error (`holdBackend`), until a probe of that backend succeeds (`probeHold`), and the run this issue would start is on it (`viaOfRun`): its newest build run, or with no run yet, any size's model | Skip. Jobs on that backend do not start; jobs on other backends do. Once the user moves every size off that backend, an issue with no run starts before the probe lifts the hold |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
 | Not ready | The issue is done, waits on `after`, or has an open job | Skip |
 | Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a size with room |
@@ -152,7 +152,7 @@ A failing check or Oracle command runs once more on the same tree. A pass on the
 
 **Send-back: the fix round.** A failure sends the job back to its worker on the same branch and worktree. The note names the check and quotes the JUnit failures, or the last 80 lines of the log. A job gets at most `ALEPH_FIX_ROUNDS` (2) rounds. A run that goes back is `returned`. After the last round the run fails as `<check> failed after <n> fix rounds`.
 
-When the same tests fail on two rounds in a row, no further round starts. The run sets a `question` Ask and quotes the failure, so Chris can tell a wrong test from a wrong branch.
+When the same tests fail on two rounds in a row, no further round starts. The run sets a `question` Ask and quotes the failure, so the user can tell a wrong test from a wrong branch.
 
 **No verdict.** A check that a clock (`ALEPH_CHECK_TIMEOUT`, 1200 s) or a signal ended, or whose setup failed, is neither a pass nor a failure. The run fails with the cause `infra`. This does not use a fix round. The rescue checks the branch again once.
 
@@ -175,7 +175,7 @@ It holds only when the issue does not call for the change.
 
 A diff over `ALEPH_REVIEW_DIFF_MAX` (200,000 characters) goes in as the `--stat` plus the cut diff. A merge run gets a review of its merge commit only.
 
-**Gate: held paths** (`gate.ts` `heldRule`, `securityChange`). After a pass, a change to a path in the repo's `held` globs or in `SECURITY_PATHS` (tests excepted) waits as a `held-path` Ask. The director can land a held path. Only a security path or `bun.lock` must wait for Chris.
+**Gate: held paths** (`gate.ts` `heldRule`, `securityChange`). After a pass, a change to a path in the repo's `held` globs or in `SECURITY_PATHS` (tests excepted) waits as a `held-path` Ask. The director can land a held path. Only a security path or `bun.lock` must wait for the user.
 
 ## 6. Land
 
@@ -222,7 +222,7 @@ The rescue (`rescue.ts`, `rescueCase`) takes one safe action per case, once per 
 
 ## 8. Asks, the director and Always rules
 
-Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and options.
+Whatever waits for the user is an Ask (`ask.ts`), with a reason, a question and options.
 
 | Reason | Actions | Always action |
 |---|---|---|
@@ -241,14 +241,14 @@ The first verb of a pair goes ahead and the second drops the issue; the second t
 
 **The director.** Every new Ask goes to the director first. It is one read-only run of the `director` role model per Ask (`director.ts`), under the lock `director-<on>`, at most `ALEPH_DIRECTOR_CAP` (3) per call. It returns actions: `land`, `drop`, `answer`, `rerun`, `close`, `drop-issue`, `edit-issue`, `add` or `note`, at most 10. Code checks and applies each one. Code refuses:
 
-- closing or dropping an issue Chris filed;
+- closing or dropping an issue the user filed;
 - landing a branch that changes a security path or `bun.lock`;
 - landing a held run before the reviewer gave a verdict;
 - answering an Ask whose run waits for a spec edit.
 
 **Escalation** (`director.ts` `escalation`). The director writes case text (situation, effects, recommendation) and takes no action when:
 
-- a rule grants `user` for its reason: no director run starts, and the Ask goes to Chris at once with the fallback case text;
+- a rule grants `user` for its reason: no director run starts, and the Ask goes to the user at once with the fallback case text;
 - it is a `core-change` Ask: the memory re-check holds a correct or archive verdict on a core note, on a parked issue. Approve applies the verdict through the vault op and closes the issue as done, or notes the op's refusal on the issue. Disapprove keeps the claim, sets the note's `updated` to today and drops the issue;
 - it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
 - the land changes a security path or `bun.lock`;
@@ -256,9 +256,9 @@ The first verb of a pair goes ahead and the second drops the issue; the second t
 
 An Ask that the actions leave open, a failed director run or a malformed reply also escalates. The Status page shows an Ask's buttons only after the director escalates it.
 
-**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the reasons table of [Asks](#8-asks-the-director-and-always-rules), `discontinue` for `intake-failed`, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without Chris. Any reason takes `user`, through `aleph always grant <reason> user` or the Automation page. The sweep starts no director run for such an Ask: it sends the Ask to Chris at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
+**Always rules.** The Always button and `aleph always grant` write a rule to the `always` setting that maps a reason to an action. A reason's Always action is its first verb. `grant` takes only the grants code reads: the Always actions in the reasons table of [Asks](#8-asks-the-director-and-always-rules), `discontinue` for `intake-failed`, and `user`; it refuses every other verb, and a stored grant of one is ignored. A stored `recommended` reads as `resolve` and `retry` as `continue`. Each of them but `user` takes its action on the next Ask with that reason, without the user. Any reason takes `user`, through `aleph always grant <reason> user` or the Automation page. The sweep starts no director run for such an Ask: it sends the Ask to the user at once, with the fallback case text, so its buttons show and the no-answer timeouts apply as they do for any escalated Ask.
 
-**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Automation page set, for any reason in that reasons table but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When Chris does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
+**No-answer timeouts.** `aleph always timeout <reason> <minutes> [pick|drop]` and the Automation page set, for any reason in that reasons table but `held-path` and `core-change`, minutes and a no-answer action in the `timeouts` setting; 0 removes them. When the user does not answer an escalated Ask of that reason in time, on a waiting run or on an issue, the tick takes the action once. `pick` takes the action the director's case text recommends, and keeps waiting when it recommends none or a word that is not one of the reason's verbs (a stored old word, such as `land` or `deny`, reads as the verb that replaced it); `drop` takes the reason's second verb (`dismiss`, `discontinue` or `disapprove`). An `approve` lands the run with `Held-by: timeout`, and the escalation list applies to it. A reason with no timeout keeps waiting: a `held-path` Ask never times out, so a timeout never lands a held change, and a `core-change` Ask never times out, so a timeout never applies or declines a core note change. The Ask card names the action the timeout takes, and the time.
 
 ## Background tasks
 

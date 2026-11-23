@@ -43,7 +43,7 @@ export interface Speed {
   kinds: Record<(typeof KINDS)[number], Pct>;
   /** Intake: issue created to its first intake (or triage) end. Queue: that end, or the filing with none, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
   phases: Record<Phase, PhaseStat>;
-  /** Asks set in the window: `count` all of them, `manual` those that came to Chris (a director event "escalated" from the set time until the Ask cleared). */
+  /** Asks set in the window: `count` all of them, `manual` those that came to the user (a director event "escalated" from the set time until the Ask cleared). */
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the runs of every role that started in it, per model, and `tokens` their saved tokens (0 for a run with none). */

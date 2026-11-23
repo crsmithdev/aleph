@@ -25,7 +25,7 @@ export type Hold = Pick<Event, "action"> & Partial<Pick<Event, "detail">>;
 /** The `held` event of a hold word and its facts. */
 export const heldEvent = (word: string, facts?: string): Hold => ({ action: "held", detail: detailOf("held", word, facts) });
 
-/** A gate that binds: `why` is the line in the dispatch's skipped list; `text` is the line Chris reads; `ev` is the log event. */
+/** A gate that binds: `why` is the line in the dispatch's skipped list; `text` is the line the user reads; `ev` is the log event. */
 export interface Bound { why: string; text: string; ev?: Hold }
 
 /** A fact left out is not read yet and stops nothing, so a caller can decide from the cheap facts first. */
@@ -59,7 +59,7 @@ export interface IssueFacts {
   creditWait?: { job: string; ago: number } | null;
 }
 
-/** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
+/** `why` is the line in the dispatch's skipped list; `text` is the line the user reads on the Queued lane. */
 export type IssueDecision = Bound & (
   | { kind: "ready" | "paused" | "waiting" | "red" | "done" | "job" | "full" | "credit" }
   /** `on`: the id of the issue whose open job holds the busy file. */

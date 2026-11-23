@@ -24,7 +24,7 @@ export const viaOf = (model: string | undefined): Via =>
 /** Whether a model's calls take the GPU slot. */
 export const onGpu = (model: string | undefined): boolean => viaOf(model) === "local";
 
-/** The name of a backend in a line Chris reads. */
+/** The name of a backend in a line the user reads. */
 export const BACKENDS: Record<Via, string> = { claude: "Claude", local: "the local server", openrouter: "OpenRouter" };
 
 /** Who serves a run's calls: its own model's backend or, when its model is a size word or a size's Claude model, its size's model's backend. */
@@ -52,16 +52,16 @@ export function modelEnv(model: string | undefined): Record<string, string | und
 }
 
 /**
- * The settings of every agent role: Chris's own CLAUDE.md is left out, and `ALEPH_AGENT` tells the aleph hooks that
- * a factory agent runs, so they give it identity/AGENT.md in place of that file and skip what is for Chris. The effort
- * is high whatever Chris sets for his own sessions: nobody watches an agent run to raise it.
+ * The settings of every agent role: the user's own CLAUDE.md is left out, and `ALEPH_AGENT` tells the aleph hooks that
+ * a factory agent runs, so they give it identity/AGENT.md in place of that file and skip what is for the user. The effort
+ * is high whatever the user sets for their own sessions: nobody watches an agent run to raise it.
  */
 const userMd = join(homedir(), ".claude", "CLAUDE.md");
 export const AGENT_SETTINGS = JSON.stringify({ claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], effortLevel: "high", env: { ALEPH_AGENT: "1" } });
 
 /**
  * The argv of a `claude -p` call on `model` (no `--model` when it is undefined), then the caller's flags. With
- * `terminal` the call has neither the agent settings nor `NO_SKILLS`: it runs like Chris's own terminal session.
+ * `terminal` the call has neither the agent settings nor `NO_SKILLS`: it runs like the user's own terminal session.
  */
 export const modelArgv = (cmd: string, model: string | undefined, flags: string[], terminal = false): string[] =>
   [cmd, "-p", "--strict-mcp-config", ...(terminal ? [] : [NO_SKILLS, "--settings", AGENT_SETTINGS]), ...(model ? ["--model", MODELS[model]?.id ?? model] : []), ...flags];
@@ -140,7 +140,7 @@ export type Name = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
 /** The sizes: one stays on, so a run always has a size to route to. */
 const SIZES = ["small", "medium", "large"] as const;
-/** The entry that cannot be disabled: a build needs the reviewer's verdict to land, and a build with no verdict does not wait, it holds for Chris's review. */
+/** The entry that cannot be disabled: a build needs the reviewer's verdict to land, and a build with no verdict does not wait, it holds for the user's review. */
 const ALWAYS_ON = "review";
 /** The size of a run's model: a size word, which unit.ts replaces with the size's model, or the Claude model of a merge run. */
 export const SIZE_OF: Record<string, Name | undefined> = { small: "small", medium: "medium", large: "large", haiku: "small", sonnet: "medium", opus: "large" };

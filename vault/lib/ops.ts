@@ -238,7 +238,7 @@ async function accept(root: string, w: string[], draft: Note, dest: string, src:
   }
   // A draft that already sits at its destination and that no write has ever
   // accepted is invisible to git but not to lint or to [[links]]. Name it; do
-  // not delete it. It may be Chris's own note, typed in Obsidian, and b089def
+  // not delete it. It may be the user's own note, typed in Obsidian, and b089def
   // is what undoing another writer's work costs.
   if (findings.length) refuse(findings, existsSync(dest) && !tracked(root, dest)
     ? `${relative(root, dest)} is in the vault but no write has accepted it. Fix it and rerun, or remove it.`

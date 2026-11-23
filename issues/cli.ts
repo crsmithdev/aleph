@@ -91,7 +91,7 @@ export async function todoCmd(ctx: Ctx, use: string): Promise<void> {
       return;
     }
     case "note": {
-      // Chris's answer to an issue that waits for them: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
+      // The user's answer to an issue that waits for them: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
       const n = verbs.note(repo, id, text, verbs.isAnswer(text, jobId()));
       warn(n.follow);
       ctx.out(n.result);
@@ -109,7 +109,7 @@ export async function todoCmd(ctx: Ctx, use: string): Promise<void> {
       const d = verbs.decide(repo, id, text, fields);
       warn(d.follow);
       ctx.out(d.result);
-      // The note is Chris's answer: the intake that follows a note takes the issue from here.
+      // The note is the user's answer: the intake that follows a note takes the issue from here.
       intakeDetached(repo, d.item.id);
       return;
     }

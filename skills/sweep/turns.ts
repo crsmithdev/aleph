@@ -1,5 +1,5 @@
 /**
- * The turns of Chris's sessions in one repo: what he typed or answered, and the reply that ended each turn.
+ * The turns of the user's sessions in one repo: what they typed or answered, and the reply that ended each turn.
  * Headless (`claude -p`) and factory sessions are left out. Prints one block per session, oldest first.
  *
  *   bun turns.ts [--since <ISO time>] [--repo <path>] [--root ~/.claude/projects]
@@ -20,7 +20,7 @@ export interface Turn { at: string; who: "chris" | "reply" | "asks"; text: strin
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)} …` : s);
 const clip = (s: string) => (s.length > HEAD + TAIL ? `${s.slice(0, HEAD)}\n…\n${s.slice(-TAIL)}` : s);
 
-/** What Chris typed, with hook and harness text removed; "" for a message he did not type. */
+/** What the user typed, with hook and harness text removed; "" for a message they did not type. */
 export const typed = (raw: string): string => {
   const cmd = raw.match(/<command-name>([^<]*)<\/command-name>/);
   if (cmd) return `${cmd[1]} ${raw.match(/<command-args>([^<]*)<\/command-args>/)?.[1] ?? ""}`.trim();
@@ -28,7 +28,7 @@ export const typed = (raw: string): string => {
   return /^(<|\[Request interrupted|Stop hook feedback|Base directory for this skill|This session is being continued|Caveat:)/.test(s) ? "" : s;
 };
 
-/** The turns after `since` of one transcript, or null when Chris did not drive it. */
+/** The turns after `since` of one transcript, or null when the user did not drive it. */
 export const turns = (jsonl: string, since: string): Turn[] | null => {
   const out: Turn[] = [];
   const asks = new Set<string>();

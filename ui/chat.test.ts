@@ -62,7 +62,7 @@ dockTest("the notes a message points at come first, once, from any page and in a
   seed("h1", "fix this title", "http://x/#/now");
   const one = seed("p1", "this one", "http://x/#/jobs", "resolved"), two = seed("p2", "here and open", "http://x/#/now");
   const text = said(await turn({ text: "look", page: "http://x/#/now", annotations: [one, two] }));
-  expect(text).toStartWith("look\n\nChris points at these annotations:\n- ");
+  expect(text).toStartWith("look\n\nThe user points at these annotations:\n- ");
   const [pointed, rest] = text.split("Open annotations on this page");
   expect(pointed).toContain("(resolved) on `p1`");
   expect(pointed).toContain("here and open");

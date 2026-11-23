@@ -3,8 +3,8 @@
  * the code and the repos' git history, and replies one verdict per note. Code applies each through the vault ops
  * in-process, so each change is a pushed, revertible vault commit and each refusal is the op's own. The model never
  * writes a file. On a note with a `core:` line only `refresh` is applied: `correct` and `archive` are held in the factory
- * dir and put to Chris as a core-change Ask on a parked issue, and the note is not re-checked while its held verdict
- * waits. His Approve applies the verdict through the same ops; his Decline keeps the claim and bumps `updated`.
+ * dir and put to the user as a core-change Ask on a parked issue, and the note is not re-checked while its held verdict
+ * waits. Their Approve applies the verdict through the same ops; their Decline keeps the claim and bumps `updated`.
  */
 import { resolve } from "node:path";
 import { getJson, putJson } from "../../../lib/db.ts";
@@ -23,14 +23,14 @@ import { body, pass, reason, related, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
-/** The leads of the issue notes written for Chris: the writers build a note from one and the Gates log (ui/api/gates.ts) reads his answers by them. */
+/** The leads of the issue notes written for the user: the writers build a note from one and the Gates log (ui/api/gates.ts) reads their answers by them. */
 export const NOTE = { said: "User:", rerun: "User: run it again", retriage: "User: run intake again", checked: "User: checked", decided: "User decided:", approved: "User approved", declined: "User declined", dropped: "User dropped", denied: "User denied" };
 
 /** Notes re-checked per run, most recalled first. */
 export const BUDGET = 5;
 /** Read-only: the files, git history and the vault's recall. */
 const ALLOWED = ["Read", "Grep", "Glob", "Bash(git log:*)", "Bash(aleph memory recall:*)"];
-/** The verdicts held for Chris, by note title: outside the vault, so no vault op or commit touches them. */
+/** The verdicts held for the user, by note title: outside the vault, so no vault op or commit touches them. */
 
 const RECHECK_SCHEMA = {
   type: "object",
@@ -79,7 +79,7 @@ function draft(n: Note, v: Verdict, day: string): Draft | null {
 
 type Held = Verdict & { day: string; issue: string };
 
-/** Hold the verdict of core note `n` for Chris: a parked aleph issue, with the core-change Ask on it. */
+/** Hold the verdict of core note `n` for the user: a parked aleph issue, with the core-change Ask on it. */
 function hold(n: Note, v: Verdict, day: string): void {
   const repo = loadRegistry().aleph;
   if (!repo) throw new Error("no aleph repo in the registry to file the held change in");
@@ -138,7 +138,7 @@ export async function recheck(root: string, dry: boolean): Promise<RecheckReport
 }
 
 /**
- * Chris's answer to the held verdict of the issue `ref`. Approve applies it through the vault op; decline keeps the claim and
+ * The user's answer to the held verdict of the issue `ref`. Approve applies it through the vault op; decline keeps the claim and
  * sets the note's `updated` to today. Either clears the held verdict and the Ask. A done issue (approve) or a dropped one
  * (decline) is the result; a refusal of the op is a note on the issue, which stays parked. `by` answered: `human` or `rule`.
  * Why it could not answer, or null.

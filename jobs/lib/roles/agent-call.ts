@@ -173,7 +173,7 @@ export async function callAgent(role: AgentRole, prompt: string, o: Ask): Promis
 
 /**
  * The argv and environment of `claude -p --input-format stream-json` for the chat panel, and the only place that builds
- * them. The agent runs like a terminal session of Chris (his settings and skills), and keeps running: the chat handler
+ * them. The agent runs like a terminal session of the user (their settings and skills), and keeps running: the chat handler
  * of aleph-tools writes one user line to stdin per turn and reads stream-json from stdout up to each `result`. It names
  * the session: `--session-id` for a new one, `--resume` for one that exists. The command is `ALEPH_CHAT_CMD`, else `claude`.
  */

@@ -1,9 +1,9 @@
 /**
- * The Ask module: what a run, an issue or a part needs from Chris, and its whole lifecycle. It holds the reasons and
- * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
- * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it, or at once when an Always rule grants the reason `user`. Callers do not read the Ask fields or test reason names for these rules.
+ * The Ask module: what a run, an issue or a part needs from the user, and its whole lifecycle. It holds the reasons and
+ * what each one offers, sets an Ask on an issue, says which actor (the user or the director) may take which action on it,
+ * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches the user when the director escalates it, or at once when an Always rule grants the reason `user`. Callers do not read the Ask fields or test reason names for these rules.
  *
- * The Ask of an issue and of its runs is one: `ask` of the issue's row in `issue_state` (record.ts). While a run awaits Chris
+ * The Ask of an issue and of its runs is one: `ask` of the issue's row in `issue_state` (record.ts). While a run awaits the user
  * the row names that run in `ask_job`, and the run reads it as its own `ask`; else the Ask is on the issue.
  * The issue store keeps no Ask. A run that set an Ask on its issue has `asked` set, with the
  * spec's version when it asked about the spec.
@@ -31,7 +31,7 @@ export interface Ask {
   facts?: string;
   /** A short noun phrase for the card's title, after the kind: "the TypeScript 5.9 to 7.0 upgrade". */
   headline?: string;
-  /** Plain sentences on what this item is about and why it waits for Chris. */
+  /** Plain sentences on what this item is about and why it waits for the user. */
   situation?: string;
   /** What the case text left out, or what the director put apart: shown under Details. */
   details?: string;
@@ -41,7 +41,7 @@ export interface Ask {
   recommend?: { action: string; why: string };
 }
 
-/** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. */
+/** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only the user can make. Unstick: work that stopped and needs a direction. */
 export type Card = "approve" | "decide" | "unstick";
 
 export interface Reason {
@@ -56,13 +56,13 @@ export interface Reason {
   problem: string;
   /** What the `continue` action is called and does for this reason. */
   continue?: { label: string; hint: string };
-  /** Only Chris decides this reason: it goes on the director's escalation list, with this as the why. */
+  /** Only the user decides this reason: it goes on the director's escalation list, with this as the why. */
   chrisOnly?: string;
 }
 interface Granted { action: string; at: string }
 
 /**
- * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
+ * Every reason the factory asks the user, in the order the page lists the runs that wait. The first group is the spec's Ask
  * reasons. The second group is kept as it was, because the spec names no new home for it: run-cap.
  */
 const REASONS = {
@@ -135,11 +135,11 @@ export const askDetail = (ask: Pick<Ask, "reason" | "facts">): string => detailO
 /** The detail of an Ask's `answered` event: its reason, then the answer taken; the bare reason when it went with none. */
 export const answerDetail = (reason: string, answer?: string): string => detailOf("answered", reason, answer, Object.keys(ASK_REASONS));
 
-/** The answer Chris's text `said` gives `ask`: the label of the option it is or starts with as `label:`, else the reason's first verb. */
+/** The answer the user's text `said` gives `ask`: the label of the option it is or starts with as `label:`, else the reason's first verb. */
 export const answerOf = (ask: Ask, said: string): string =>
   ask.options.find((o) => said === o.label || said.startsWith(`${o.label}:`))?.label ?? actionsOn(ask.reason)[0];
 
-/** An issue whose Ask waits for Chris: open, or parked with a core-change or blocker-dropped Ask. */
+/** An issue whose Ask waits for the user: open, or parked with a core-change or blocker-dropped Ask. */
 export const asking = (item: issues.Issue, ask: Ask | null): ask is Ask =>
   !!ask && (issues.status(item) === "open" || (issues.status(item) === "parked" && (ask.reason === "core-change" || ask.reason === "blocker-dropped")));
 
@@ -152,7 +152,7 @@ export const waitOf = (ask: Ask | undefined): Pick<Ask, "reason"> => ({ reason: 
 /** The actions a card offers: its reason's pair of verbs, the same on a run and on an issue. */
 export const actionsOn = (reason: string): string[] => ASK_REASONS[reason].actions;
 
-/** An Ask with no options: the factory's own stop, with the sentence Chris reads. */
+/** An Ask with no options: the factory's own stop, with the sentence the user reads. */
 export const plainAsk = (reason: AskReason, question: string, why: string[] = []): Ask => ({ reason, question, options: [], why });
 
 const SEP = " :: ";
@@ -189,7 +189,7 @@ export const askOf = (ref: string): Ask | null => record.issueAsk(record.read(re
 /** The Ask on `item`, or null. */
 export const askOfItem = (item: issues.Issue): Ask | null => askOf(refIn(item));
 
-/** The issue `ref` waits for Chris: it has an Ask. */
+/** The issue `ref` waits for the user: it has an Ask. */
 export const awaitsChris = (ref: string): boolean => askOf(ref) !== null;
 
 /** Put `ask` on the issue `ref`. */
@@ -199,7 +199,7 @@ export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, a
 export const clearAsk = (ref: string, by?: record.Answer): void => record.setIssueAsk(ref, null, by);
 
 const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.replace(/:[^:]*$/, "")];
-/** `user` sends the Ask to Chris with no director run; every reason takes it. */
+/** `user` sends the Ask to the user with no director run; every reason takes it. */
 const USER = "user";
 /** The grants some code acts on: the reason's first verb, `user`, `discontinue` for intake-failed. */
 const allows = (reason: string, r: Reason, action: string): boolean =>
@@ -268,7 +268,7 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
 }
 
 /**
- * A run asks Chris: the run is marked `asked`, so it no longer holds the factory, and its issue gets `ask`.
+ * A run asks the user: the run is marked `asked`, so it no longer holds the factory, and its issue gets `ask`.
  * With `spec`, the run asked about that issue's spec: it waits for a spec edit (`waitsForSpecEdit`).
  * Returns why the issue got no Ask, or null.
  */
@@ -304,7 +304,7 @@ export const keepsOpen = (said: string): boolean => said.includes(PLAN_REST) || 
 
 /**
  * Called in the write that sets part `part` to dropped: when its parent is open, has no Ask and no other open part,
- * the parent gets the part-dropped Ask, so the same commit that drops the part asks Chris what now.
+ * the parent gets the part-dropped Ask, so the same commit that drops the part asks the user what now.
  */
 export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: string): void {
   if (issues.status(part) !== "dropped") return;
@@ -324,11 +324,11 @@ export function askPartDropped(issue: issues.Issue, question: string): void {
   });
 }
 
-/** Who decides an Ask: the director first, and Chris when it escalates. */
+/** Who decides an Ask: the director first, and the user when it escalates. */
 export type Actor = "chris" | "director";
 
 /**
- * Why `actor` may not take `action` on `ask`, or null when it may. Chris may take the actions the card offers. The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
+ * Why `actor` may not take `action` on `ask`, or null when it may. The user may take the actions the card offers. The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
  * clearing it would leave the job open with no Ask and no run. What the director may not decide at all is the
  * escalation list in director.ts.
  */
