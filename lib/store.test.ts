@@ -11,7 +11,7 @@ import * as record from "../jobs/lib/records/record.ts";
 import { seed as seedJob } from "../jobs/job.testkit.ts";
 import { storeRepos } from "../tests/git.testkit.ts";
 import { readEvents } from "./layout.ts";
-import { lockRetry } from "./git.ts";
+import { lockRetry, treeWithFiles } from "./git.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -132,6 +132,50 @@ describe("the parse cache", () => {
     } finally { parse.mockRestore(); }
     store.writeList(r, "retitle", (doc) => { issues.find(doc, r.ids[0])!.title = "newer"; return true; });
     expect(store.readFetched(r)!.items[0].title).toBe("newer");
+  });
+
+  test("a load after an add, an edit, a delete or a rebuilt history equals a full load, and reads only the changed files", () => {
+    const r = repo([{ title: "one" }, { title: "two" }]);
+    const dir = join(base, "items"), bare = join(base, "items.git"), full = join(base, "full");
+    const heads = () => store.readFetched(r)!.items;
+    const fullLoad = () => {
+      rmSync(full, { recursive: true, force: true });
+      sh(base, "git", "clone", "-q", bare, full);
+      process.env.ALEPH_ITEMS = full;
+      try { return heads(); } finally { process.env.ALEPH_ITEMS = dir; }
+    };
+    const move = (c: string) => {
+      sh(dir, "git", "push", "-q", "--force", bare, `${c}:refs/heads/main`);
+      sh(dir, "git", "fetch", "-q", "--force", bare, "+refs/heads/main:refs/remotes/origin/main");
+    };
+    /** A commit on main with `path` removed; `parents` lets it skip the old history. */
+    const dropPath = (path: string, parents: string[]) => {
+      const tree = treeWithFiles(dir, "origin/main^{tree}", { [path]: null });
+      const c = sh(dir, "git", "commit-tree", tree, "-m", "drop", ...parents.flatMap((x) => ["-p", x]));
+      move(c);
+    };
+    heads();
+    const tip = sh(dir, "git", "rev-parse", "origin/main");
+    const parse = spyOn(issues, "parseItem");
+    try {
+      store.writeList(r, "retitle", (doc) => { issues.find(doc, r.ids[0])!.title = "edited"; return true; });
+      parse.mockClear();
+      const inc = heads();
+      expect(parse).toHaveBeenCalledTimes(1);
+      expect(inc).toEqual(fullLoad());
+      store.writeList(r, "add", (doc) => { issues.add(doc, "three"); return true; });
+      parse.mockClear();
+      const added = heads();
+      expect(parse).toHaveBeenCalledTimes(1);
+      expect(added).toEqual(fullLoad());
+      expect(added.map((i) => i.title)).toContain("three");
+      dropPath(`issues/${r.ids[1]}/issue.md`, [sh(dir, "git", "rev-parse", "origin/main")]);
+      expect(heads()).toEqual(fullLoad());
+      expect(heads().some((i) => i.id === r.ids[1])).toBe(false);
+      dropPath(`issues/${r.ids[0]}/issue.md`, []);
+      expect(heads()).toEqual(fullLoad());
+      expect(heads().some((i) => i.id === r.ids[0])).toBe(false);
+    } finally { parse.mockRestore(); move(tip); sh(dir, "git", "reset", "-q", "--hard", "origin/main"); }
   });
 
 });

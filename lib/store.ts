@@ -77,20 +77,24 @@ function fetchNow(dir: string): void {
 /** The store's fetch failed: the lists on disk may be stale, not missing. */
 class FetchFailed extends Error {}
 
-/** Every issue of the items repo at the commit last loaded, by directory: a commit never changes, so a later load of the same commit reads no blob. Only the latest commit is kept. */
-const texts = new Map<string, { sha: string; items: Issue[] }>();
-const ISSUE = /^issues\/(\d+)\/issue\.md$/;
+/** The issues of the items repo at the commit last loaded, with each one's blob: a commit never changes, so a later load of it reads no blob, and a load of another commit reads only the blobs that differ. Only the latest commit is kept. */
+const texts = new Map<string, { sha: string; byId: Map<number, { blob: string; item: Issue }>; items: Issue[] }>();
+const ISSUE = /^\d+ blob ([0-9a-f]{40})\tissues\/(\d+)\/issue\.md$/;
 
-/** Every issue at `rev`, in number order, parsed once for each commit. */
+/** Every issue at `rev`, in number order, parsed once for each blob. */
 function loadAll(dir: string, rev: string): Issue[] {
   const sha = /^[0-9a-f]{40}$/.test(rev) ? rev : git(dir, "rev-parse", "--verify", "-q", `${rev}^{commit}`).out;
   const known = /^[0-9a-f]{40}$/.test(sha), at = known ? sha : rev;
   let hit = texts.get(dir);
   if (!hit || hit.sha !== sha || !known) {
-    const ls = git(dir, "ls-tree", "-r", "-z", "--name-only", at, "--", "issues/");
-    const names = (ls.ok ? ls.out.split("\0") : []).filter((p) => ISSUE.test(p));
-    const files = readFiles(dir, names.map((p) => `${at}:${p}`));
-    hit = { sha, items: names.map((p, n) => parseItem(Number(ISSUE.exec(p)![1]), files[n])).sort((a, b) => a.id - b.id) };
+    const ls = git(dir, "ls-tree", "-r", "-z", at, "--", "issues/");
+    const found = (ls.ok ? ls.out.split("\0") : []).flatMap((e) => { const m = ISSUE.exec(e); return m ? [{ blob: m[1], id: Number(m[2]) }] : []; });
+    const old = hit?.byId;
+    const stale = found.filter((f) => old?.get(f.id)?.blob !== f.blob);
+    const files = readFiles(dir, stale.map((f) => f.blob));
+    const fresh = new Map(stale.map((f, n) => [f.id, { blob: f.blob, item: parseItem(f.id, files[n]) }]));
+    const byId = new Map(found.map((f) => [f.id, fresh.get(f.id) ?? old!.get(f.id)!]));
+    hit = { sha, byId, items: [...byId.values()].map((e) => e.item).sort((a, b) => a.id - b.id) };
     if (known) texts.set(dir, hit);
   }
   return hit.items;
