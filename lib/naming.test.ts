@@ -38,6 +38,12 @@ describe("ids", () => {
     expect(n.refs("waits for aleph-1372 and btcx-tools-3; sha a143077 and a1372")).toEqual(["aleph-1372", "btcx-tools-3"]);
     expect(n.shortText("after aleph-1372, see 4240d76")).toBe("after a1372, see 4240d76");
   });
+  test("free text shows an issue key as its project's code and number, else as its shown key", () => {
+    expect(n.shortText("issue.9 was dropped; aleph-1372 too", "aleph")).toBe("a9 was dropped; a1372 too");
+    expect(n.shortText("issue.9 was dropped")).toBe("i9 was dropped");
+    expect(n.shortText("issue.9", "koans")).toBe("i9");
+    expect(n.shortText("job.5 and xissue.9 and issue.9x", "aleph")).toBe("job.5 and xissue.9 and issue.9x");
+  });
 });
 
 describe("words", () => {

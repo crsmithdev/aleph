@@ -8,7 +8,7 @@ import { scope } from "./address.js";
 // @ts-ignore the module is plain JS, shared with the page
 import { clock, plural } from "./format.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { clamp, freshness, markDirty, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, pageOf, pageRows, sortRows } from "./html.js";
+import { blockersHtml, clamp, freshness, markDirty, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, pageOf, pageRows, sortRows } from "./html.js";
 // @ts-ignore the module is plain JS, shared with the page
 import * as lib from "./html.js";
 
@@ -150,6 +150,13 @@ test("repoIdLink shows the short id", () => {
   setCodes({ aleph: "a" });
   expect(repoIdLink("aleph-5", "#/x")).toBe('<a class="idl" href="#/x">a5</a>');
   expect(repoIdLink("wt", "#/x")).toBe('<a class="idl" href="#/x">wt</a>');
+  setCodes({});
+});
+
+test("blockersHtml shows an issue key as its short id and keeps the stored href", () => {
+  setCodes({ aleph: "a" });
+  expect(blockersHtml([{ id: "issue.9", href: "#/issues/aleph/9" }, { id: "issue.3", href: "" }], "aleph", 1))
+    .toBe('<div class="blocker"><a href="#/issues/aleph/9">a9</a></div><div class="blocker">a3</div>');
   setCodes({});
 });
 

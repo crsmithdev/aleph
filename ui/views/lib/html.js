@@ -240,10 +240,10 @@ export function freshness(title, keys, live, now = Date.now()) {
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
 export function blockersHtml(waits, repo, id) {
-  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(shortText(b.id))}</a>` : esc(shortText(b.id))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "error")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
+  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(shortText(b.id, repo))}</a>` : esc(shortText(b.id, repo))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "error")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
-  const label = `Stop waiting on ${dead.map((b) => shortText(b.id)).join(", ")}`;
+  const label = `Stop waiting on ${dead.map((b) => shortText(b.id, repo)).join(", ")}`;
   return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", path: `${issueApi(repo, id)}/unblock`, label })}</div>`;
 }
 /** @design link */

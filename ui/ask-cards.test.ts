@@ -11,7 +11,7 @@ import { askCard } from "./views/lib/ask-cards.js";
 import { drawAt, keepReason, record } from "./views/lib/decisions.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { when } from "./views/lib/format.js";
-import { shortId } from "../lib/naming.ts";
+import { setCodes, shortId } from "../lib/naming.ts";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { asksOf, withAttn, withFactory } from "./now.testkit.ts";
 import { job } from "./fixtures/status-state.ts";
@@ -161,6 +161,16 @@ test("a decide card marks the recommendation once, on the action when one carrie
   const held = askCard(plain({ escalated: false, details: { ask } }), "2026-10-27T17:00:00Z");
   expect(held.match(/Recommended/g)).toHaveLength(1);
   expect(held).toContain('<li class="rec"><b>Split it</b>');
+});
+
+test("an Ask card shows an issue key in its text as the short id, in the headline, situation, question, options and why", () => {
+  setCodes({ aleph: "a" });
+  const ask = { question: "issue.9 was dropped, so this issue is parked. What now?", options: [{ label: "Wait for issue.9", line: "Keeps issue.9 as the wait." }], recommended: "", why: ["issue.9 is dropped."] };
+  const row = askCard(plain({ repo: "aleph", headline: "Parked on issue.9", situation: "It waits on issue.9.", details: { ask } }), "2026-10-27T17:00:00Z");
+  setCodes({});
+  expect(row).toContain("a9 was dropped, so this issue is parked. What now?");
+  expect(row).not.toContain("issue.9");
+  expect(askCard(plain({ details: { ask } }), "2026-10-27T17:00:00Z")).toContain("i9 was dropped");
 });
 
 test("the reason box is an inputBox() with its attributes and the reason kept by keepReason", () => {

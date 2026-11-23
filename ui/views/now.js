@@ -411,7 +411,7 @@ const errorSentence = (j) => {
 };
 const errorRow = (s) => (j) => {
   const b = j.blocker;
-  const blocker = b && shortText(b.id);
+  const blocker = b && shortText(b.id, j.repo);
   const hold = b ? holdLine({ action: "after", detail: b.id }) : errorSentence(j);
   const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });

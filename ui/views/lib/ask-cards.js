@@ -52,10 +52,11 @@ export const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =
   `<div class="ask-box">${meta}${fold(`<span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}`, desc, { cls: "ask-fold", keep: `ask:${key}`, head: "ask-head" })}${rest}</div></article>`;
 
 /** The options, recommended mark and context of a decision with fields; `mark` is false when a choice already carries the mark. */
-function decisionBody(d, mark) {
-  return `<p class="dq">${codeText(d.question)}</p>` +
-    `<ul class="opts">${d.options.map((o) => `<li${mark && o.label === d.recommended ? ' class="rec"' : ""}><b>${codeText(o.label)}</b>${mark && o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${codeText(o.line)}</span></li>`).join("")}</ul>` +
-    (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${codeText(w)}</li>`).join("")}</ul>` : "");
+function decisionBody(d, mark, repo) {
+  const say = (t) => codeText(shortText(t, repo));
+  return `<p class="dq">${say(d.question)}</p>` +
+    `<ul class="opts">${d.options.map((o) => `<li${mark && o.label === d.recommended ? ' class="rec"' : ""}><b>${say(o.label)}</b>${mark && o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${say(o.line)}</span></li>`).join("")}</ul>` +
+    (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${say(w)}</li>`).join("")}</ul>` : "");
 }
 
 const isUrl = (u) => /^https?:\/\//.test(u);
@@ -70,9 +71,9 @@ function askDetails(i) {
   const d = i.details ?? {};
   const isRun = i.key?.startsWith("run:");
   const sig = (d.signals ?? []).map((g) => `<li>${esc(when(g.at))} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
-  const body = (i.more ?? []).map((t) => note(shortText(t))).join("") +
-    (d.note ? note(d.note) : "") +
-    (d.ask ? decisionBody(d.ask, !(i.actions ?? []).some((a) => a.recommended)) : "") +
+  const body = (i.more ?? []).map((t) => note(shortText(t, i.repo))).join("") +
+    (d.note ? note(shortText(d.note, i.repo)) : "") +
+    (d.ask ? decisionBody(d.ask, !(i.actions ?? []).some((a) => a.recommended), i.repo) : "") +
     (sig ? `<ul>${sig}</ul>` : "") +
     (d.review ? note(`Reviewer: ${d.review.call}${d.review.reason ? `: ${d.review.reason}` : ""}`) : "") +
     (d.stat ? `<div class="ev one"><div>${subHead("Diff")}<pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
@@ -114,7 +115,7 @@ export function askCard(i, now = new Date().toISOString()) {
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
-  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">${esc(DUE_VERB[i.dueAction?.split(":")[0]] ?? "Acts")} at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
-  return askShell(esc(i.reason), `data-ask="${esc(i.id)}" data-annotate="${esc(shortId(i.id))}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title), i.tag, desc,
+  const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">${esc(DUE_VERB[i.dueAction?.split(":")[0]] ?? "Acts")} at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
+  return askShell(esc(i.reason), `data-ask="${esc(i.id)}" data-annotate="${esc(shortId(i.id))}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title, i.repo), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }

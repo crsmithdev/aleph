@@ -134,8 +134,10 @@ export const sessionHref = (id: string): string => `#/sessions/${encodeURICompon
 
 /** Every full issue ID in free text, in order. Short IDs are never read from free text. */
 export const refs = (text: unknown): string[] => [...String(text ?? "").matchAll(FREE)].map((m) => m[0]);
-/** Free text with each full issue ID of a project with a code in its short form. */
-export const shortText = (text: unknown): string => String(text ?? "").replace(FREE, shortId);
+const ISSUE_IN_TEXT = /(?<![\w.-])issue\.\d+(?![\w-])/g;
+/** Free text with each full issue ID of a project with a code in its short form, and each issue key in its shown form: the code of `repo` (`a9`), else `i9`. */
+export const shortText = (text: unknown, repo?: string | null): string =>
+  String(text ?? "").replace(FREE, shortId).replace(ISSUE_IN_TEXT, (k) => shownKey(k, codes[repo ?? ""]));
 
 /** An event: a sentence of 6 fields, and the size of a build's start. `object` is a key (an old issue ID until issues have keys), or `settings`. */
 export interface Event { seq?: number; time: string; subject: string; action: string; object: string; detail?: string | null; size?: string | null }

@@ -295,7 +295,7 @@ function reportCmd(ctx: Ctx): void {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  lines.push(...health().map((h) => shortText(h.text)), ...flakeLines().map(shortText));
+  lines.push(...health().map((h) => shortText(h.text)), ...flakeLines().map((t) => shortText(t)));
   const m = reportLine();
   if (m) lines.push(shortText(m));
   const text = lines.filter(Boolean).join("\n\n");
