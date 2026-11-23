@@ -42,7 +42,7 @@ tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
 /* A meter that takes the card's width, over its legend. */
 .wide-meter { display: flex; }
 .wide-meter .meter { flex: 1; }
-.flow .sstats, .memstack .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.flow .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* A small column chart drawn as SVG in the chart's colours. */
 .cols { display: block; overflow: visible; }

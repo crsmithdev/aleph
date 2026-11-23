@@ -180,7 +180,7 @@ function problems(v: View, { compact = false, alerts = false } = {}) {
   const top = asks.map((r, i) => `<tr class="palert t-${r.tone}"${i ? "" : ' id="needs"'}><td>${tag(r.word, r.tone)}</td><td class="wide"><span class="pwhat">${r.what}</span> <span class="pdetail">${r.detail}</span><div class="pacts">${r.acts}</div></td>${cell(r.waited, { num: true, title: "Waited" })}${cell("–", { num: true })}</tr>`);
   const body = rows.map((r) => row([`<td>${tag(r.word, r.tone)}</td>`, `<td class="wide"><span class="pwhat">${r.what}</span>${compact ? "" : ` <span class="pdetail">${r.detail}</span>`}</td>`, cell(r.value, { num: true }), cell(r.usual, { num: true })]));
   const head = heads(["", "Problem", "Value", "Usual"], ["Value", "Usual"]), n = top.length + rows.length;
-  return card("Problems", n ? dataTable(head, [...top, ...body].join("")) : empty(), { count: count(n), aside: alerts ? lights(v) : "", id: "problems" });
+  return card("Problems", n ? dataTable(head, [...top, ...body].join("")) : empty(), { count: count(n), id: "problems" });
 }
 
 /** The fill of a run's elapsed time on the scale of its stage's slow end, with a mark at the median. Only a run past the slow end takes the need tone: half of all runs pass the median. */
@@ -251,8 +251,8 @@ function flowCard(v: View) {
   return card("Flow", `${stats}${subHead("Time by Phase, p50 / p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { aside: "7 days", id: "flow", cls: "flow" });
 }
 
-/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context; `stacked` adds the offers under them. */
-function memoryCard({ compact = false, stacked = false } = {}) {
+/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context. */
+function memoryCard({ compact = false } = {}) {
   const m = d.memory;
   const start = barList(Object.entries<any>(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= 0.95 })).join(""));
   const days = m.offers, labels = days.map((_: number, i: number) => String(new Date(Date.parse(d.taken) - (9 - i) * 86_400_000).getDate()));
@@ -262,9 +262,8 @@ function memoryCard({ compact = false, stacked = false } = {}) {
     { k: "Refused", v: count(m.refused), state: m.refused ? "failed" : "", title: "Notes that lint refuses" }, { k: "Stale", v: count(m.stale), note: `${count(m.late)} late`, title: `${count(m.stale)} notes past their re-check date, ${count(m.late)} by more than 30 days` },
   ]);
   const aside = statusLight("fine", `Maintain: ${clock(m.maintained)}`);
-  const offers = `${subHead("Offers per Day")}${columns(days, labels)}`;
-  if (compact || stacked) return card("Memory", `${stats}${subHead("Start Context")}${start}${stacked ? offers : ""}`, { aside, id: "memory", cls: stacked ? "memstack" : "" });
-  return splitCard("Memory", `${subHead("Start Context")}${start}${offers}`, stats, { aside, id: "memory" });
+  if (compact) return card("Memory", `${stats}${subHead("Start Context")}${start}`, { aside, id: "memory" });
+  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${columns(days, labels)}`, stats, { aside, id: "memory" });
 }
 
 // ---- The event viewer ----
@@ -316,7 +315,7 @@ function eventsLog(v: View) {
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true })}${eventsLog(v)}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true })}${eventsLog(v)}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
 
 // ---- B: Board ----
 
