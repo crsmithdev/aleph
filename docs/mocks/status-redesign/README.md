@@ -116,6 +116,8 @@ Round 5: the lanes show only the issues that run now. Idle, the card shows "No d
 
 Round 6: Memory returns to the end of the main column as the split card of round 1. The status lights leave the page.
 
+Round 7: A drops the Usage and Memory meters of the scorecard, the lanes' aside (Workers and the span control) and Cost column, the Value and Usual labels of Problems, the Live light of Events and the "7 days" of Flow.
+
 The Recommended section is of round 1.
 
 ## New parts

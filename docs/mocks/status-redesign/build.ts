@@ -97,8 +97,8 @@ function head(v: View) {
   return `<header class="ph shead"><span class="asof">${esc(when(v.st.now, new Date(v.T)))}</span>${say}<div class="aside"><div class="fbar"><div class="fg"><select aria-label="Project"><option>All Projects (1)</option></select></div><div class="fg">${win}</div><div class="fg">${actButton("Pause", { act: "pause" }, { cls: "warn" })}</div></div></div></header>`;
 }
 
-/** The scorecard: one card per block of the page, in the page's order. Each card is the headline of its block and links to it. */
-function scorecard(v: View) {
+/** The scorecard: one card per block of the page, in the page's order. Each card is the headline of its block and links to it. `meters` draws the Usage and Memory meters. */
+function scorecard(v: View, { meters = true } = {}) {
   const eff = (lost: number) => 1 - lost, waits = v.needs.length + (v.busy ? 1 : 0);
   const mem = d.memory.start.aleph, memPct = (mem.bytes / mem.budget) * 100;
   return tiles("Scorecard", [
@@ -106,8 +106,8 @@ function scorecard(v: View) {
     statCard({ k: "Working", v: count(v.active.length), v2: [count(v.waiting.length), count(0)], q: ["running", "waiting", "error"], href: "#now" }),
     statCard({ k: "Efficiency", v: cardPct(eff(f.lost)), v2: hours(f.hours), q: ["efficient", "lost"], href: "#efficiency", trend: cardTrend(eff(f.lost), eff(base.lost), eff(prev.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) }),
     statCard({ k: "Lead Time", v: cardDur(f.leadP50), v2: cardDur(f.leadP90), q: ["p50", "p90"], href: "#flow", trend: cardTrend(f.leadP50, base.leadP50, prev.leadP50, { basis, kind: "relative", lowerIsGood: true, format: cardDur }) }),
-    statCard({ k: "Usage", v: pct(v.usage), v2: pct(v.gone), q: ["used", "pace"], href: `${LIVE}#/factory/agents`, extra: meter(v.usage, `${pct(v.usage)} of the week's quota used, ${pct(v.gone)} of the week gone`, { mark: Math.round(v.gone) }) }),
-    statCard({ k: "Memory", v: pct(memPct), note: "start context", href: "#memory", extra: meter([{ pct: memPct, cls: memPct >= 95 ? "m-need" : "" }], `${count(mem.bytes)} of ${count(mem.budget)} bytes of the aleph start context`) }),
+    statCard({ k: "Usage", v: pct(v.usage), v2: pct(v.gone), q: ["used", "pace"], href: `${LIVE}#/factory/agents`, extra: meters ? meter(v.usage, `${pct(v.usage)} of the week's quota used, ${pct(v.gone)} of the week gone`, { mark: Math.round(v.gone) }) : "" }),
+    statCard({ k: "Memory", v: pct(memPct), note: "start context", href: "#memory", extra: meters ? meter([{ pct: memPct, cls: memPct >= 95 ? "m-need" : "" }], `${count(mem.bytes)} of ${count(mem.budget)} bytes of the aleph start context`) : "" }),
   ].join(""), "scorecard");
 }
 
@@ -179,7 +179,7 @@ function problems(v: View, { compact = false, alerts = false } = {}) {
   // The first alert row takes the #needs anchor, which the head's sentence and the Needs You card link to.
   const top = asks.map((r, i) => `<tr class="palert t-${r.tone}"${i ? "" : ' id="needs"'}><td>${tag(r.word, r.tone)}</td><td class="wide"><span class="pwhat">${r.what}</span> <span class="pdetail">${r.detail}</span><div class="pacts">${r.acts}</div></td>${cell(r.waited, { num: true, title: "Waited" })}${cell("–", { num: true })}</tr>`);
   const body = rows.map((r) => row([`<td>${tag(r.word, r.tone)}</td>`, `<td class="wide"><span class="pwhat">${r.what}</span>${compact ? "" : ` <span class="pdetail">${r.detail}</span>`}</td>`, cell(r.value, { num: true }), cell(r.usual, { num: true })]));
-  const head = heads(["", "Problem", "Value", "Usual"], ["Value", "Usual"]), n = top.length + rows.length;
+  const head = heads(["", "Problem", ...(alerts ? ["", ""] : ["Value", "Usual"])], ["Value", "Usual"]), n = top.length + rows.length;
   return card("Problems", n ? dataTable(head, [...top, ...body].join("")) : empty(), { count: count(n), id: "problems" });
 }
 
@@ -248,7 +248,7 @@ function flowCard(v: View) {
     { k: "Filed", v: count(f.filed) }, { k: "Landed", v: count(f.landed), state: "landed" }, { k: "Dropped", v: count(f.dropped) },
     { k: "First Pass", v: cardPct(F.firstPass), title: "Landed issues whose first run landed" }, { k: "Open", v: count(F.open.open), note: `+${count(F.open.parked)}`, title: `${plural(F.open.open, "open issue")}, ${plural(F.open.parked, "parked issue")}` }, { k: "Asks", v: count(F.asks.count), note: `${count(F.asks.manual)} yours`, title: `${count(F.asks.count)} Asks this week, ${count(F.asks.manual)} answered by Chris` },
   ]);
-  return card("Flow", `${stats}${subHead("Time by Phase, p50 / p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { aside: "7 days", id: "flow", cls: "flow" });
+  return card("Flow", `${stats}${subHead("Time by Phase, p50 / p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { id: "flow", cls: "flow" });
 }
 
 /** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context. */
@@ -298,7 +298,7 @@ function feed(v: View, n: number) {
 const eventsCard = (v: View) => card("Events", `${eventFilter(`ev-${v.key}`)}<div class="herald-feed">${feed(v, 16)}</div>`, { aside: statusLight("fine", "Live"), id: "events", cls: "events" });
 
 /** The event viewer as a log table: one event a row, the time first, then what happened, to what, who did it and what it cost. */
-function eventsLog(v: View) {
+function eventsLog(v: View, { live = true } = {}) {
   // A run's start is its `running` event, shown as started; the rule's `started` on the issue repeats it, and a hold on the issue's own job says nothing.
   const es = v.st.events.filter((e: any) => !(e.action === "held" && String(e.detail).startsWith("job:")) && !(e.action === "started" && e.by === "rule") && !(String(e.target ?? e.object).startsWith("issue.") && !e.title)).slice(-18).reverse().map((e: any) => (e.action === "running" ? { ...e, action: "started", ended: null } : e));
   const rows = es.map((e: any) => {
@@ -309,13 +309,13 @@ function eventsLog(v: View) {
       `${cell(text, { wide: true })}<td>${job ? link(job) : ""}</td><td>${esc(STAGE[e.role] ?? e.role ?? e.by)}</td><td>${e.model ? esc(shortModel(e.model)) : ""}</td>${cell(e.cost != null && e.action !== "started" ? money(e.cost) : "", { num: true })}${cell(took, { num: true })}</tr>`;
   }).join("");
   const table = dataTable(heads(["Time", "Event", "Issue", "Title", "Job", "By", "Model", "Cost", "Took"], ["Cost", "Took"]), rows);
-  return card("Events", `${eventFilter(`log-${v.key}`)}${table}<div class="pager">${actButton(`Next ${Math.min(50, v.st.total - es.length)}`, { act: "more" })}<span class="of">1–${es.length} of ${count(v.st.total)}</span></div>`, { aside: statusLight("fine", "Live"), id: "events", cls: "events" });
+  return card("Events", `${eventFilter(`log-${v.key}`)}${table}<div class="pager">${actButton(`Next ${Math.min(50, v.st.total - es.length)}`, { act: "more" })}<span class="of">1–${es.length} of ${count(v.st.total)}</span></div>`, { aside: live ? statusLight("fine", "Live") : "", id: "events", cls: "events" });
 }
 
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true })}${eventsLog(v)}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { live: false })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
 
 // ---- B: Board ----
 
@@ -356,8 +356,8 @@ const pageB = (v: View) => `${head(v)}${scorecard(v)}${triage(v)}${board(v)}<div
 
 // ---- C: Timeline ----
 
-/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. `running` keeps only the issues that run now; `waiting` adds the waiting issues under the lanes. */
-function motion(v: View, { running = false, waiting = false } = {}) {
+/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. `running` keeps only the issues that run now; `waiting` adds the waiting issues under the lanes; `lean` drops the head's aside and the Cost column. */
+function motion(v: View, { running = false, waiting = false, lean = false } = {}) {
   const n = 12; // lanes above the fold
   const span = v.busy ? 3_600_000 : v.st.span, from = v.T - span, x = (t: number) => Math.min(100, Math.max(0, ((t - from) / span) * 100));
   const ticks = Array.from({ length: 5 }, (_, i) => from + (i * span) / 4);
@@ -376,14 +376,14 @@ function motion(v: View, { running = false, waiting = false } = {}) {
     return `<div class="dp-row"><div class="dp-tl"><div class="dp-head"><span class="t" title="${esc(l.title ?? "")}">${link(l.issue)} ${esc(l.title ?? "")}</span></div><div class="dp-lane">` +
       waits.map((w: any) => `<span class="dp-wait" style="${at(w.s, w.e)}" title="Waiting · ${esc(dur((w.e - w.s) / 1000))}"></span>`).join("") +
       l.runs.map((r: any) => `<a class="dp-bar t-${toneOf(r)}${r.live ? " live" : ""}" href="${to(r.id)}" style="${at(r.s, r.e)}" title="${esc(`${STAGE[r.role] ?? r.role} ${shown(r.id)} · ${r.live ? "running" : r.last} · ${dur((r.e - r.s) / 1000)}`)}">${esc(label(r))}</a>`).join("") +
-      `</div><span class="dp-res">${tag(state(l), tone(state(l)))}</span><span class="num">${esc(dur((l.end - l.runs[0].s) / 1000))}</span><span class="num">${esc(money(l.cost))}</span></div></div>`;
+      `</div><span class="dp-res">${tag(state(l), tone(state(l)))}</span><span class="num">${esc(dur((l.end - l.runs[0].s) / 1000))}</span>${lean ? "" : `<span class="num">${esc(money(l.cost))}</span>`}</div></div>`;
   };
-  const axis = `<div class="dp-tl dp-axis"><span>${plural(lanes.length, "issue")}</span><div class="dp-ticks">${ticks.map((t, i) => `<span${i === 4 ? ' class="end"' : ""} style="left:${i * 25}%">${esc(i === 4 ? "now" : clock(new Date(t).toISOString()))}</span>`).join("")}</div><span>State</span><span class="num">Took</span><span class="num">Cost</span></div>`;
+  const axis = `<div class="dp-tl dp-axis"><span>${plural(lanes.length, "issue")}</span><div class="dp-ticks">${ticks.map((t, i) => `<span${i === 4 ? ' class="end"' : ""} style="left:${i * 25}%">${esc(i === 4 ? "now" : clock(new Date(t).toISOString()))}</span>`).join("")}</div><span>State</span><span class="num">Took</span>${lean ? "" : '<span class="num">Cost</span>'}</div>`;
   const legend = legendHtml([["implement", "t-build"], ["failed or returned", "t-bad"], ["land", "t-land"], ["intake, review", "t-aux"], ["waiting", "t-wait"]]);
   const spans = seg("Span", ["1h", "2h", "12h"].map((l) => ({ label: l, on: l === (v.busy ? "1h" : "12h"), attrs: "" })));
   const rest = lanes.length > n ? `<details class="more-lanes"><summary>${count(lanes.length - n)} more</summary>${lanes.slice(n, n + 30).map(lane).join("")}</details>` : "";
   const body = lanes.length ? `<div class="dp-scroll">${axis}${lanes.slice(0, n).map(lane).join("")}${rest}</div>` : empty();
-  return card("Issues in Motion", `${legend}${body}${waiting ? waitingPart(v) : ""}`, { count: count(v.active.length), aside: `${statusLight(v.workers ? "fine" : "unknown", `Workers: ${v.workers} / ${F.agents.cap}`)}${spans}`, id: "now", cls: "motion" });
+  return card("Issues in Motion", `${legend}${body}${waiting ? waitingPart(v) : ""}`, { count: count(v.active.length), aside: lean ? "" : `${statusLight(v.workers ? "fine" : "unknown", `Workers: ${v.workers} / ${F.agents.cap}`)}${spans}`, id: "now", cls: lean ? "motion lean" : "motion" });
 }
 
 /** The week's efficiency and flow as six figures and the outcome bar, for a narrow column. */

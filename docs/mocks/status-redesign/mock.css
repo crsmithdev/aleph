@@ -86,6 +86,7 @@ tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
 .motion .dp-scroll { padding: 0; }
 .motion .dp-row { padding: var(--sp-4) 0; }
 .motion .dp-tl { grid-template-columns: minmax(180px, 300px) minmax(300px, 1fr) 76px 64px 56px; }
+.motion.lean .dp-tl { grid-template-columns: minmax(180px, 300px) minmax(300px, 1fr) 76px 64px; }
 .motion .dp-head .t a { margin-right: var(--sp-4); }
 .motion .dp-bar.live { border-radius: var(--r-hair) 0 0 var(--r-hair); }
 .motion .more-lanes > summary { padding: var(--sp-6) 0; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }
