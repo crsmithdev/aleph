@@ -1,5 +1,8 @@
 /* The Status redesign mocks: the parts ui/app.css does not have yet, in its tokens only. README lists each as a new part. */
 
+/* Chris's font pick of 11/23: the big numbers in Merriweather. */
+:root { --metric: 'Merriweather', Georgia, serif; }
+
 /* The mock's own bar: not part of the design. */
 .mockbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-8); padding: var(--sp-6) var(--sp-24); border-bottom: 1px dashed var(--rule); background: var(--bg); color: var(--muted); font-size: var(--fs-xs); }
 .mockbar b { color: var(--ink); font-weight: var(--fw-strong); margin-right: var(--sp-8); }
@@ -31,12 +34,15 @@
 /* A problem row: what it is in ink, the detail after it muted. */
 .pwhat { color: var(--ink); font-weight: var(--fw-mid); }
 .pdetail { color: var(--muted); }
-/* An alert or an Ask in Problems: a tint and an edge in its tone, its actions under its text. */
-tr.palert td { background: var(--need-bg); }
-tr.palert.t-error td { background: var(--error-bg); }
-tr.palert td:first-child { box-shadow: inset 3px 0 var(--need); }
-tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
-.pacts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
+/* An alert or an Ask in Problems: the head of an Ask card on one line, its actions under it. */
+.alerts { display: flex; flex-direction: column; gap: var(--sp-8); margin-bottom: var(--sp-12); }
+.alert[data-card="approve"] { --k: var(--approve); --k-bg: var(--approve-bg); --k-ring: var(--approve-ring); }
+.alert[data-card="unstick"] { --k: var(--unstick); --k-bg: var(--unstick-bg); --k-ring: var(--unstick-ring); }
+.alert .ask-box { box-shadow: none; }
+.alert .ask-head { cursor: default; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12); font-size: var(--fs-sm); }
+.alert .ask-head .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alert .ask-head .num { flex: none; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pacts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-12); }
 .triage td.acts { white-space: nowrap; }
 
 /* A meter that takes the card's width, over its legend. */
@@ -86,7 +92,11 @@ tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
 .motion .dp-scroll { padding: 0; }
 .motion .dp-row { padding: var(--sp-4) 0; }
 .motion .dp-tl { grid-template-columns: minmax(180px, 300px) minmax(300px, 1fr) 76px 64px 56px; }
-.motion.lean .dp-tl { grid-template-columns: minmax(180px, 300px) minmax(300px, 1fr) 76px 64px; }
+/* A's lanes fit the card: no column holds a width that makes the card scroll. */
+.motion.lean .dp-tl { grid-template-columns: minmax(0, 300px) minmax(80px, 1fr) 76px 64px; min-width: 0; }
+/* A's event log fits its column: the title gives up width first, and a narrow column drops Job and By (5th and 6th). */
+.rail-main #events td.wide { min-width: 8ch; }
+@container rail-main (max-width: 560px) { .rail-main #events :is(th, td):is(:nth-child(5), :nth-child(6)) { display: none; } }
 .motion .dp-head .t a { margin-right: var(--sp-4); }
 .motion .dp-bar.live { border-radius: var(--r-hair) 0 0 var(--r-hair); }
 .motion .more-lanes > summary { padding: var(--sp-6) 0; font-size: var(--fs-sm); color: var(--ink-2); cursor: pointer; }

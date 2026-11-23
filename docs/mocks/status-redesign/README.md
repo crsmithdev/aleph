@@ -118,6 +118,8 @@ Round 6: Memory returns to the end of the main column as the split card of round
 
 Round 7: A drops the Usage and Memory meters of the scorecard, the lanes' aside (Workers and the span control) and Cost column, the Value and Usual labels of Problems, the Live light of Events and the "7 days" of Flow.
 
+Round 8: the alert and the Asks are compact Ask cards (the card's head on one line, the actions under it, 76 px each) over the Problems table. The event log drops Model and Cost; in a column of 560 px or less it also drops Job and By. The lanes and the log fit their card from 1600 px down to 390 px with no horizontal scroll. The big numbers (`--metric`) are in Merriweather on all three pages, Chris's font pick.
+
 The Recommended section is of round 1.
 
 ## New parts
@@ -126,7 +128,7 @@ Each needs a place in `docs/design.md` before a build.
 
 - A meter fill in the need tone (`.m-need`): a run past its p90, a budget at 95%.
 - The Problems table: a hand cell of what the problem is and a muted detail (`.pwhat`, `.pdetail`).
-- An alert or an Ask as a Problems row: a tint and an edge in its tone, its actions under its text (`.palert`, `.pacts`).
+- An alert or an Ask as a compact Ask card in Problems: the card's head on one line, its actions under it (`.alert`, `.pacts`).
 - The "Warning: " head of the sentence.
 - A row of status lights (`.lights`), and the filter row of the event viewer (`.evbar`).
 - The column charts are hand SVG (`.cols`). A build draws them as `<aleph-chart>` panels.

@@ -162,25 +162,24 @@ function problemRows(v: View) {
   return rows;
 }
 
-/** The alert and each Ask as Problems rows: the word in its tone, what it is with its actions, and how long it has waited. */
-function alertRows(v: View) {
-  if (!v.busy) return [];
+/** The alert and each Ask as a compact Ask card: the card's head (dot, kind, title, tag) with the waited time, then its actions in one row. */
+function alertCards(v: View) {
+  if (!v.busy) return "";
   const waited = (iso: string) => dur((v.T - Date.parse(iso)) / 1000);
   const act = (label: string, primary = false) => actButton(label, { act: "mock" }, { kind: "small", primary });
-  return [
-    { tone: "error", word: "alert", what: `<span class="idp">main</span> ${esc(NEEDS.ci.title)}`, detail: esc(NEEDS.ci.line), acts: `<a class="act small" href="${CI}">CI run</a> <a class="act small" href="${LIVE}#/issues/aleph/3403">a3403</a>`, waited: waited(NEEDS.ci.at) },
-    ...v.needs.map((i: any) => ({ tone: "need", word: i.label.toLowerCase(), what: `${idLink(`a${i.id.split("-")[1]}`, i.href)} ${esc(i.title)}`, detail: esc(i.situation.replace(/`/g, "")), acts: `${act(i.actions[0].label, true)} ${actButton(i.always.label, { act: "always" }, { kind: "small always" })} ${act(i.actions[1].label)}`, waited: waited(i.at) })),
-  ];
+  const box = (card: string, kind: string, what: string, detail: string, tagText: string, at: string, acts: string) =>
+    `<article class="alert" data-card="${card}"><div class="ask-box"><div class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t" title="${esc(detail)}"><b class="ask-kind">${esc(kind)}:</b> <span class="ask-title">${what}</span> <span class="pdetail">${esc(detail)}</span></span><span class="ask-tag">${esc(tagText)}</span><span class="num">${esc(waited(at))}</span></div><div class="pacts">${acts}</div></div></article>`;
+  const ci = box("unstick", "Alert", `<span class="idp">main</span> ${esc(NEEDS.ci.title)}`, NEEDS.ci.line, "red", NEEDS.ci.at, `<a class="act small" href="${CI}">CI run</a><a class="act small" href="${LIVE}#/issues/aleph/3403">a3403</a>`);
+  const asks = v.needs.map((i: any) => box(i.card, i.label, `${idLink(`a${i.id.split("-")[1]}`, i.href)} ${esc(i.title)}`, i.situation.replace(/`/g, ""), i.tag, i.at, `${act(i.actions[0].label, true)}${actButton(i.always.label, { act: "always" }, { kind: "small always" })}${act(i.actions[1].label)}`));
+  return `<div class="alerts" id="needs">${[ci, ...asks].join("")}</div>`;
 }
 
-/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` puts the alert and the Asks first, as tinted rows. */
+/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` puts the alert and the Asks first, as compact Ask cards. */
 function problems(v: View, { compact = false, alerts = false } = {}) {
-  const rows = problemRows(v), asks = alerts ? alertRows(v) : [];
-  // The first alert row takes the #needs anchor, which the head's sentence and the Needs You card link to.
-  const top = asks.map((r, i) => `<tr class="palert t-${r.tone}"${i ? "" : ' id="needs"'}><td>${tag(r.word, r.tone)}</td><td class="wide"><span class="pwhat">${r.what}</span> <span class="pdetail">${r.detail}</span><div class="pacts">${r.acts}</div></td>${cell(r.waited, { num: true, title: "Waited" })}${cell("–", { num: true })}</tr>`);
+  const rows = problemRows(v), top = alerts ? alertCards(v) : "", waits = alerts && v.busy ? v.needs.length + 1 : 0;
   const body = rows.map((r) => row([`<td>${tag(r.word, r.tone)}</td>`, `<td class="wide"><span class="pwhat">${r.what}</span>${compact ? "" : ` <span class="pdetail">${r.detail}</span>`}</td>`, cell(r.value, { num: true }), cell(r.usual, { num: true })]));
-  const head = heads(["", "Problem", ...(alerts ? ["", ""] : ["Value", "Usual"])], ["Value", "Usual"]), n = top.length + rows.length;
-  return card("Problems", n ? dataTable(head, [...top, ...body].join("")) : empty(), { count: count(n), id: "problems" });
+  const head = heads(["", "Problem", ...(alerts ? ["", ""] : ["Value", "Usual"])], ["Value", "Usual"]);
+  return card("Problems", top + (rows.length ? dataTable(head, body.join("")) : waits ? "" : empty()), { count: count(waits + rows.length), id: "problems" });
 }
 
 /** The fill of a run's elapsed time on the scale of its stage's slow end, with a mark at the median. Only a run past the slow end takes the need tone: half of all runs pass the median. */
@@ -298,7 +297,8 @@ function feed(v: View, n: number) {
 const eventsCard = (v: View) => card("Events", `${eventFilter(`ev-${v.key}`)}<div class="herald-feed">${feed(v, 16)}</div>`, { aside: statusLight("fine", "Live"), id: "events", cls: "events" });
 
 /** The event viewer as a log table: one event a row, the time first, then what happened, to what, who did it and what it cost. */
-function eventsLog(v: View, { live = true } = {}) {
+/** `lean` drops the Live light and the Model and Cost columns. */
+function eventsLog(v: View, { lean = false } = {}) {
   // A run's start is its `running` event, shown as started; the rule's `started` on the issue repeats it, and a hold on the issue's own job says nothing.
   const es = v.st.events.filter((e: any) => !(e.action === "held" && String(e.detail).startsWith("job:")) && !(e.action === "started" && e.by === "rule") && !(String(e.target ?? e.object).startsWith("issue.") && !e.title)).slice(-18).reverse().map((e: any) => (e.action === "running" ? { ...e, action: "started", ended: null } : e));
   const rows = es.map((e: any) => {
@@ -306,16 +306,16 @@ function eventsLog(v: View, { live = true } = {}) {
     const took = e.started && e.ended ? dur((Date.parse(e.ended) - Date.parse(e.started)) / 1000) : "";
     const text = e.title ?? (e.role ? `${e.role} run` : e.detail ?? "");
     return `<tr data-kind="${kindOf(e.action)}" data-text="${esc(`${issue ? shown(issue) : ""} ${job ? shown(job) : ""} ${text}`.toLowerCase())}"><td class="time lead">${esc(clock(e.at))}</td><td>${tag(e.action, e.action === "started" ? "run" : tone(e.action))}</td><td>${issue ? link(issue) : ""}</td>` +
-      `${cell(text, { wide: true })}<td>${job ? link(job) : ""}</td><td>${esc(STAGE[e.role] ?? e.role ?? e.by)}</td><td>${e.model ? esc(shortModel(e.model)) : ""}</td>${cell(e.cost != null && e.action !== "started" ? money(e.cost) : "", { num: true })}${cell(took, { num: true })}</tr>`;
+      `${cell(text, { wide: true })}<td>${job ? link(job) : ""}</td><td>${esc(STAGE[e.role] ?? e.role ?? e.by)}</td>${lean ? "" : `<td>${e.model ? esc(shortModel(e.model)) : ""}</td>${cell(e.cost != null && e.action !== "started" ? money(e.cost) : "", { num: true })}`}${cell(took, { num: true })}</tr>`;
   }).join("");
-  const table = dataTable(heads(["Time", "Event", "Issue", "Title", "Job", "By", "Model", "Cost", "Took"], ["Cost", "Took"]), rows);
-  return card("Events", `${eventFilter(`log-${v.key}`)}${table}<div class="pager">${actButton(`Next ${Math.min(50, v.st.total - es.length)}`, { act: "more" })}<span class="of">1–${es.length} of ${count(v.st.total)}</span></div>`, { aside: live ? statusLight("fine", "Live") : "", id: "events", cls: "events" });
+  const table = dataTable(heads(["Time", "Event", "Issue", "Title", "Job", "By", ...(lean ? [] : ["Model", "Cost"]), "Took"], ["Cost", "Took"]), rows);
+  return card("Events", `${eventFilter(`log-${v.key}`)}${table}<div class="pager">${actButton(`Next ${Math.min(50, v.st.total - es.length)}`, { act: "more" })}<span class="of">1–${es.length} of ${count(v.st.total)}</span></div>`, { aside: lean ? "" : statusLight("fine", "Live"), id: "events", cls: "events" });
 }
 
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { live: false })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { lean: true })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
 
 // ---- B: Board ----
 
