@@ -29,17 +29,9 @@ export const taskTypes = (ts: Trace[]): string[] => {
 export const byTime = (a: Trace, b: Trace) => ms(a.timestamp) - ms(b.timestamp);
 const isType = (o: Observation, type: string) => String(o.type ?? "").toLowerCase() === type;
 
-/** Job id → name and ledger cost (the sum over the job's runs), read once per request. */
+/** Run id (a session's id, `job.N`) → the run's work name, its own ledger cost and its model. A run's cost is its own, not the chain's: its siblings are listed as sessions too. */
 export function jobs(): Map<string, { name: string; cost: number; model?: string }> {
-  const out = new Map<string, { name: string; cost: number; model?: string }>();
-  for (const { run } of allRuns()) {
-    if (!run.job) continue;
-    const j = out.get(run.job) ?? { name: run.name, cost: 0 };
-    j.cost += run.cost ?? 0;
-    if (run.model) j.model = run.model;
-    out.set(run.job, j);
-  }
-  return out;
+  return new Map(allRuns().map(({ id, run }) => [id, { name: run.name, cost: run.cost ?? 0, ...(run.model ? { model: run.model } : {}) }]));
 }
 
 /** `{ wk }` for a cost on a model, or nothing. */
@@ -169,10 +161,10 @@ function textBlocks(obs: Observation[], output: string) {
     .filter((t) => t.text.trim() !== output.trim());
 }
 
-/** The fields of turn `i` that the session and chat views share. A factory worker's session is one turn Langfuse prices at 0: it has the ledger's cost, as on the list. */
+/** The fields of turn `i` that the session and chat views share. A factory worker's session that Langfuse prices at 0 has the ledger's cost, shared evenly over its turns, so the turns sum to the list's cost. */
 function turnOf(id: string, ts: Trace[], i: number, obs: Observation[], fit: Parameters<typeof share>[0]) {
-  const t = ts[i], job = ts.length === 1 && !t.totalCost ? jobs().get(id) : undefined;
-  const model = modelOf(obs), cost = t.totalCost || job?.cost || 0;
+  const t = ts[i], job = ts.some((x) => x.totalCost) ? undefined : jobs().get(id);
+  const model = modelOf(obs), cost = t.totalCost || (job?.cost ?? 0) / ts.length;
   return { n: i + 1, ...wkOf(fit, cost, job?.cost ? job.model : model), traceId: t.id, start: t.timestamp, model, seconds: secondsOf(t), cost };
 }
 

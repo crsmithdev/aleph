@@ -9,16 +9,17 @@ import { byTime, jobs, ms, projectOf, taskTypes, text } from "./sessions.ts";
 // @ts-ignore plain JS, shared with the page
 import { systemParts } from "../system-parts.js";
 
-/** The first prompt the user typed, read trace by trace in time order until one has it: system text (a `<task-notification>`, a `<system-reminder>`) skipped. */
+/** The first prompt a person typed, read trace by trace in time order: system text (a `<task-notification>`, a `<system-reminder>`) and a script's prompt (`SCRIPT`) are skipped. A session whose prompts are all scripted gives its first scripted one, so `whoRan` sees every turn. */
 async function firstTyped(lf: Langfuse, ts: Trace[]) {
-  let first: unknown;
+  let first: unknown, scripted = "";
   for (const [i, t] of ts.entries()) {
     const input = (await lf.trace(t.id))?.input;
     if (i === 0) first = input;
     const typed = systemParts(text(input)).text;
-    if (typed) return typed;
+    if (typed && !SCRIPT.test(typed)) return typed;
+    scripted ||= typed;
   }
-  return text(first);
+  return scripted || text(first);
 }
 
 /** A trace that has a session. */
@@ -42,7 +43,7 @@ const SCRIPT = /^(Below (are|is) |This is one month|Each item is |These are mont
 const whoRan = (label: string | undefined, prompt: string) => (label?.startsWith("issue.") || FACTORY.test(prompt) ? "factory" : SCRIPT.test(prompt) || !prompt ? "headless" : "you");
 
 /**
- * The first `limit` sessions of `traces` that ended before `before`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0.
+ * The first `limit` sessions of `traces` that ended before `before`, newest last turn first: a factory worker's session has its run's name, and its own ledger cost when Langfuse prices it at 0.
  * The window's traces hold no input, so only these sessions have their `firstPrompt` read.
  */
 export async function sessionRows(traces: Session[], limit: number, before: string | null = null) {

@@ -28,6 +28,8 @@ const observations = [
   ob({ id: "4", traceId: "t1", name: "Bash", type: "TOOL", metadata: { tool: "Bash" }, startTime: daysAgo(0, "09:00:03") }),
   ob({ id: "5", traceId: "t1", name: "Bash", type: "TOOL", metadata: { tool: "Bash" }, startTime: daysAgo(0, "09:00:04") }),
   ob({ id: "6", traceId: "t1", name: "Edit", type: "TOOL", level: "ERROR", output: "no match", metadata: { tool: "Edit" }, startTime: daysAgo(0, "09:00:05") }),
+  // the skill started an agent that failed: the use fails, the Edit above does not make it fail
+  ob({ id: "6a", traceId: "t1", name: "Agent", type: "TOOL", level: "ERROR", output: "agent died", metadata: { tool: "Agent" }, startTime: daysAgo(0, "09:00:06") }),
   // t2: other project, slash command two days ago
   ob({ id: "7", traceId: "t2", name: "turn", input: "<command-message>pickup</command-message>\n<command-name>/aleph:pickup</command-name>\n<command-args>aleph-9</command-args>", startTime: daysAgo(2) }),
   ob({ id: "8", traceId: "t2", name: "Grep", type: "TOOL", metadata: { tool: "Grep" }, startTime: daysAgo(2, "10:00:01") }),
@@ -42,6 +44,12 @@ const observations = [
   // t7 and t8: traces the way the real store has them, a project tag and no cwd; one tag is a registry key, one is not
   ob({ id: "13", traceId: "t7", name: "turn", input: "/aleph:tagged", startTime: daysAgo(1) }),
   ob({ id: "14", traceId: "t8", name: "turn", input: "/aleph:untagged", startTime: daysAgo(1) }),
+  // t9: the Skill call itself failed; t10: another tool failed in the turn, the Skill call did not
+  ob({ id: "15", traceId: "t9", name: "turn", input: "run it", startTime: daysAgo(1, "08:00:00") }),
+  ob({ id: "16", traceId: "t9", name: "skill:aleph:broken", type: "TOOL", level: "ERROR", output: "no such skill", input: JSON.stringify({ skill: "aleph:broken" }), metadata: { tool: "Skill" }, startTime: daysAgo(1, "08:00:01") }),
+  ob({ id: "17", traceId: "t10", name: "turn", input: "run it", startTime: daysAgo(1, "09:00:00") }),
+  ob({ id: "18", traceId: "t10", name: "skill:aleph:fine", type: "TOOL", input: JSON.stringify({ skill: "aleph:fine" }), metadata: { tool: "Skill" }, startTime: daysAgo(1, "09:00:01") }),
+  ob({ id: "19", traceId: "t10", name: "Bash", type: "TOOL", level: "ERROR", output: "exit 1", metadata: { tool: "Bash" }, startTime: daysAgo(1, "09:00:02") }),
 ];
 const traces: any[] = [
   { id: "t1", sessionId: "s1", metadata: { cwd: "/work/aleph" } },
@@ -52,6 +60,8 @@ const traces: any[] = [
   { id: "t6", sessionId: "s4", metadata: { cwd: "/tmp/agent-ae1db4a1e2c301339" } },
   { id: "t7", sessionId: "s5", metadata: {}, tags: ["project:aleph"] },
   { id: "t8", sessionId: "s6", metadata: {}, tags: ["project:agent-ae1db4a1e2c301339"] },
+  { id: "t9", sessionId: "s7", metadata: { cwd: "/work/aleph" } },
+  { id: "t10", sessionId: "s8", metadata: { cwd: "/work/aleph" } },
 ];
 
 // A trace's time is its turn's, as in Langfuse.
@@ -94,6 +104,12 @@ const get = async (p: string) => {
   const url = new URL(p, "http://localhost"), name = url.pathname.match(/^\/api\/skills\/(.+)$/)?.[1];
   const r = await (name ? routes["GET /api/skills/:name"](new Request(url), { name: decodeURIComponent(name) }, url) : listSkills(scopeOf(url, "month", SESSIONS) as Scope).then((d) => Response.json(d), (e: Error) => Response.json({ error: e.message }, { status: 502 })));
   return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
+
+test("a use fails on its Skill call or its agent, not on another tool in the turn", async () => {
+  const { body } = await get("/api/skills");
+  const errors = (n: string) => body.skills.find((s: any) => s.name === n).errors;
+  expect([errors("aleph:pickup"), errors("aleph:broken"), errors("aleph:fine")]).toEqual([1, 1, 0]);
+});
 
 test("?project= that is no registry key matches nothing", async () => {
   expect((await get("/api/skills")).body.skills.length).toBeGreaterThan(0);

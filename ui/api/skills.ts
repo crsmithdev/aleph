@@ -198,12 +198,15 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
       if (name) here.push({ use: { skill: String(name), via: "tool", trace, session, project: proj, time: o.startTime!, prompt: firstLine(prompt), start: o.startTime! }, from: o.startTime!, self: o });
     }
     if (!here.length) continue;
-    const failed = list.filter((o) => String(o.level ?? "").toUpperCase() === "ERROR" || o.statusMessage);
+    const bad = (o: Observation) => String(o.level ?? "").toUpperCase() === "ERROR" || !!o.statusMessage;
+    // A use fails on its own Skill call, or on an agent it started: an `Agent` call or a subagent span from its start on. Another tool's failure in the turn is not the skill's.
+    const startedAgent = (o: Observation, from: string) => o.startTime! >= from && (o.name === "Agent" && isTool(o) || String(o.type).toUpperCase() === "AGENT" && o !== turn);
     for (const { use, from, self } of here) {
       uses.push(use);
       const counts = tools.get(use.skill) ?? tools.set(use.skill, new Map()).get(use.skill)!;
       for (const o of list) if (o !== self && isTool(o) && o.startTime! >= from && !(o.metadata?.tool === "Skill" || o.name?.startsWith("skill:"))) counts.set(toolName(o), (counts.get(toolName(o)) ?? 0) + 1);
-      if (failed.length) errors.set(`${use.skill}\0${trace}`, { trace, message: String(text(failed[0].output) || failed[0].name || "error").slice(0, 200) });
+      const failed = list.find((o) => bad(o) && (o === self || startedAgent(o, from)));
+      if (failed) errors.set(`${use.skill}\0${trace}`, { trace, message: String(text(failed.output) || failed.name || "error").slice(0, 200) });
     }
   }
   return { uses, tools, errors, since, days, asOf: new Date(s.through).toISOString(), ...(failed ? { failed } : {}) };

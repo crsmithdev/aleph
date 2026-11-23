@@ -113,6 +113,20 @@ test("a session row says who ran it: the person, a factory worker or a script", 
   } finally { TRACES.length -= 2; }
 });
 
+test("a session with a typed prompt after scripted ones is yours; one with only scripted prompts is headless", async () => {
+  TRACES.push(
+    trace("t9", "s9", "aleph", iso(9), { input: "<agent-message from=\"x\">hi</agent-message>" }),
+    trace("t10", "s9", "aleph", iso(8), { input: "fix the page" }),
+    trace("t11", "s10", "aleph", iso(9), { input: "<task-notification>done</task-notification>" }),
+    trace("t12", "s10", "aleph", iso(8), { input: "Reply with ok" }),
+  );
+  try {
+    const d: any = await listSessions(WEEK);
+    const row = (id: string) => d.sessions.find((s: any) => s.id === id);
+    expect([row("s9").who, row("s9").firstPrompt, row("s10").who]).toEqual(["you", "fix the page", "headless"]);
+  } finally { TRACES.length -= 4; }
+});
+
 test("the sessions list pages newest first by ?limit= and ?before=, and says whether Langfuse held more pages", async () => {
   const page = async (p: { limit?: number; before?: string }) => listSessions(WEEK, p) as Promise<any>;
   const all = await page({});
@@ -287,6 +301,33 @@ test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on
     expect((await chat(id)).turns[0].cost).toBe(2);
   } finally {
     TRACES.pop();
+    conn().run("DELETE FROM jobs WHERE id = ?", [id]);
+  }
+});
+
+test("a job session costs its own run, not the chain's runs, which are sessions too", async () => {
+  const root = seed({ role: "build", state: "done", started: iso(6), name: "chain-1", repo: "aleph", cost: 2 });
+  const next = seed({ role: "review", state: "done", started: iso(5), name: "chain-1", repo: "aleph", cost: 3, prev: root.id });
+  TRACES.push(trace("c1", root.id, "aleph", iso(6), { totalCost: 0 }), trace("c2", next.id, "aleph", iso(5), { totalCost: 0 }));
+  try {
+    const list: any = await listSessions(WEEK);
+    expect([root.id, next.id].map((id) => list.sessions.find((x: any) => x.id === id).cost)).toEqual([2, 3]);
+  } finally {
+    TRACES.length -= 2;
+    for (const { id } of [root, next]) conn().run("DELETE FROM jobs WHERE id = ?", [id]);
+  }
+});
+
+test("a multi-turn worker session that Langfuse prices at 0 has its ledger cost shared over its turns, as the list totals it", async () => {
+  const { id } = seed({ role: "build", state: "done", started: iso(5), name: "worker-2", repo: "aleph", cost: 3 });
+  TRACES.push(trace("m1", id, "aleph", iso(5), { totalCost: 0 }), trace("m2", id, "aleph", iso(4), { totalCost: 0 }));
+  try {
+    const list: any = await listSessions(WEEK);
+    const one: any = await (await call("GET /api/sessions/:id", `/api/sessions/${id}`, { id })).json();
+    expect(one.turns.map((t: any) => t.cost)).toEqual([1.5, 1.5]);
+    expect(list.sessions.find((x: any) => x.id === id).cost).toBe(3);
+  } finally {
+    TRACES.length -= 2;
     conn().run("DELETE FROM jobs WHERE id = ?", [id]);
   }
 });
