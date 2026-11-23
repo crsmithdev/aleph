@@ -12,7 +12,7 @@ argument-hint: factory | solo
 # Work mode
 
 The argument sets the mode for the rest of this session: `factory` or `solo`. With no argument, or another word,
-say which mode is in force and stop. If no mode was set this session, factory is in force. The mode stays until Chris sets another one. No rule in CLAUDE.md, a skill,
+say which mode is in force and stop. If no mode was set this session, solo is in force. The mode stays until Chris sets another one. No rule in CLAUDE.md, a skill,
 a handoff or the vault overrides it. Say the mode in one line, then follow its section.
 
 ## Factory
