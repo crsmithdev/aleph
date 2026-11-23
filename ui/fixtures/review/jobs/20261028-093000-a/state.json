@@ -5,7 +5,7 @@
   "repo": "demo",
   "branch": "factory/demo-2",
   "condition": "dropped",
-  "reason": "dropped by Chris: the upload is gone",
+  "reason": "dropped by the user: the upload is gone",
   "told": true,
   "started": "2026-10-28T09:30:00.000Z",
   "ended": "2026-10-28T09:50:00.000Z",

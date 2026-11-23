@@ -20,7 +20,7 @@ test("the report hook prints one line for each thing to act on, and nothing when
   }
   sh(other, "git", "push", "-q", "origin", "main");
   await cli(["pause"]);
-  const id = seedItem("fac", "Needs Chris");
+  const id = seedItem("fac", "Needs the user");
   setAsk(`issue.${id}`, { reason: "question", question: "Which?", options: [], why: [] });
   // The hook fetches nothing: the checkout is behind only once the tick (here, this fetch) has fetched.
   expect((await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext).not.toContain("behind");
@@ -54,7 +54,7 @@ test("guard: the report hook prints nothing to a factory agent, and its lines to
   const agent = await cli(["report", "--hook"], { ALEPH_AGENT: "1" });
   expect(agent.stdout.trim()).toBe("");
   expect(agent.code).toBe(0);
-  const chris = await cli(["report", "--hook"]);
-  expect(chris.json.hookSpecificOutput.additionalContext).toContain("factory paused");
+  const report = await cli(["report", "--hook"]);
+  expect(report.json.hookSpecificOutput.additionalContext).toContain("factory paused");
   await cli(["resume"]);
 }, 60_000);

@@ -48,7 +48,7 @@ const VERDICTS: Record<string, object> = {
   waits: { ...GOOD, after: ["issue.1", "issue.2"] },
   close: { route: "close", reason: "duplicate of issue.1" },
   structured: { route: "ask", reason: "a product choice", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["one", "two"] },
-  chris: { route: "ask", reason: "a product choice", question: "Which plan, A or B?" },
+  user: { route: "ask", reason: "a product choice", question: "Which plan, A or B?" },
   missing: { route: "build", reason: "one run", spec: spec({ edit_surface: [{ path: "nope.ts", new: false }] }) },
   leftout: { route: "build", reason: "one run", left_out: "the page head and the audit", spec: spec() },
   removal: { route: "build", reason: "it undoes a removal", removal: { sha: "abc1234", subject: "drop the old gate", reason: "it was too slow to keep" } },
@@ -141,7 +141,7 @@ const runOf = (id: number) => runs().find((r) => r.name === `intake-${repo.key}-
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 
 test("an intake run records its route, the issue it is on and its cost", async () => {
-  reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:chris" }, { title: "c", body: "VERDICT:close" }, { title: "d", body: "VERDICT:done" }]);
+  reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:user" }, { title: "c", body: "VERDICT:close" }, { title: "d", body: "VERDICT:done" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1, ask: 1, close: 1, done: 1 });
   expect(runOf(1)).toMatchObject({ role: "intake", route: "build", target: "issue.1", reason: "one run", cost: 0.25 });
@@ -168,7 +168,7 @@ test("a reply that fails the code check goes back once in the same session; a fi
   expect(sent).toContain("the Edit surface names nope.ts, which is not on main");
 });
 
-test("a reply that fails the code check twice asks Chris with the reason intake-failed", async () => {
+test("a reply that fails the code check twice asks the user with the reason intake-failed", async () => {
   reset([{ title: "a", body: "VERDICT:missing" }]);
   const t = await run();
   expect(t.counts).toEqual({});
@@ -178,7 +178,7 @@ test("a reply that fails the code check twice asks Chris with the reason intake-
   expect(runOf(1)!.cause).toBe("unanswered");
 });
 
-test("a malformed verdict is sent back once, then asks Chris", async () => {
+test("a malformed verdict is sent back once, then asks the user", async () => {
   reset([{ title: "a", body: "VERDICT:bad" }]);
   await run();
   expect(calls()).toHaveLength(2);
@@ -250,7 +250,7 @@ test("a split gives the parts task when the parent's stored kind is one the stor
   expect(bugs.map((p) => p.fm.kind)).toEqual(["bug"]);
 });
 
-test("a build drops an after-link to an item that waits for Chris and keeps one to an ordinary open issue", async () => {
+test("a build drops an after-link to an item that waits for the user and keeps one to an ordinary open issue", async () => {
   reset([{ title: "asks", ask: true }, { title: "plain", spec: "## Goal\nx" }, { title: "a", body: "VERDICT:waits" }]);
   await run();
   expect(item(3).fm.after).toEqual([`issue.2`]);
@@ -273,7 +273,7 @@ test("parseRoute keeps the left-out text of a build verdict, and the schema take
   expect(build.required).not.toContain("left_out");
 });
 
-test("a build that reports the commit that removed what the issue asks back writes no spec and asks Chris; one that reports none is unchanged", async () => {
+test("a build that reports the commit that removed what the issue asks back writes no spec and asks the user; one that reports none is unchanged", async () => {
   reset([{ title: "a", body: "VERDICT:build" }, { title: "b", body: "VERDICT:removal" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1, ask: 1 });
@@ -356,7 +356,7 @@ test("the schema keeps the union under a property and limits a part's title to 6
   expect(build.spec.required).toEqual(["goal", "edit_surface", "oracle"]);
 });
 
-test("the prompt keeps the spec close to the request and how-to-build questions away from Chris", () => {
+test("the prompt keeps the spec close to the request and how-to-build questions away from the user", () => {
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Never ask the user how to build it");
   expect(p).toContain("no file paths, function names or code");
@@ -399,7 +399,7 @@ describe("a run with no reply", () => {
   beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); process.env.ALEPH_DB = join(base, `aleph-${lists}.db`); });
   afterAll(() => { process.env.ALEPH_FACTORY_DIR = factoryHome; process.env.ALEPH_DB = dbHome; });
 
-  test("an exit that is not zero counts toward the limit, and the second asks Chris", async () => {
+  test("an exit that is not zero counts toward the limit, and the second asks the user", async () => {
     reset([{ title: "a", body: "VERDICT:fail" }]);
     await run();
     expect(askOf("issue.1")).toBeNull();
@@ -427,7 +427,7 @@ describe("a run with no reply", () => {
     expect(readEvents()).toContainEqual(expect.objectContaining({ subject: "rule", object: `${repo.key}-1`, action: "reran", detail: "intake" }));
   });
 
-  test("continue scoped to another project asks Chris; scoped to the repo's project it continues", async () => {
+  test("continue scoped to another project asks the user; scoped to the repo's project it continues", async () => {
     reset([{ title: "a", body: "nothing" }]);
     grant("intake-failed:elsewhere", "continue");
     await run();
@@ -499,7 +499,7 @@ test("guard: a close route parks the open issue waiting on the dropped one, with
   expect(askOf("issue.1")?.reason).toBe("blocker-dropped");
 });
 
-test("intake does not close a red-main issue while its main is still red: it asks Chris; once main is green it closes", async () => {
+test("intake does not close a red-main issue while its main is still red: it asks the user; once main is green it closes", async () => {
   reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
   putJson("state", "baseline", { [repo.key]: { repo: repo.key, commit: "abc1234", ok: false, failed: "setup" } });
   const red = await run();
@@ -514,7 +514,7 @@ test("intake does not close a red-main issue while its main is still red: it ask
   expect(issues.status(item(1))).toBe("dropped");
 });
 
-test("intake does not close an issue with no request: it asks Chris with the close reason", async () => {
+test("intake does not close an issue with no request: it asks the user with the close reason", async () => {
   // The fake reads its verdict from the prompt, so the title names it.
   reset([{ title: "VERDICT:close" }]);
   expect((await run()).counts).toEqual({ ask: 1 });

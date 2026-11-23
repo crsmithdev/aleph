@@ -4,7 +4,7 @@
       "title": "Show the build time on the status page",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "priority": "high",
       "body": "The status page lists builds without how long each took.\n\n## Goal\nAdd a duration column.",
       "status": "done"
@@ -13,7 +13,7 @@
       "title": "Retry flaky uploads",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "status": "dropped",
       "notes": [
         "Dropped: the upload is gone."
@@ -23,7 +23,7 @@
       "title": "Rename the config keys",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "priority": "low",
       "body": "Held: touches a protected path."
     },
@@ -31,7 +31,7 @@
       "title": "Cache the index page",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "due": "2026-11-15",
       "after": [
         "demo-3"
@@ -43,15 +43,15 @@
       "ask": "input",
       "reason": "question",
       "question": "MIT or Apache-2.0.",
-      "source": "chris",
+      "source": "user",
       "notes": [
-        "Triage: only Chris can decide."
+        "Triage: only the user can decide."
       ]
     },
     {
       "title": "Crash on an empty config",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "areas": [
         "bug"
       ],
@@ -61,7 +61,7 @@
     {
       "title": "Check the dark theme on the phone",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "ask": "input",
       "reason": "question",
       "question": "Check this on the host."
@@ -69,7 +69,7 @@
     {
       "title": "Add a dry-run flag",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "ask": "input",
       "reason": "question",
       "question": "Add a dry-run flag"
@@ -77,13 +77,13 @@
     {
       "title": "Typo in the README",
       "kind": "issue",
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Speed up the import",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "status": "dropped",
       "notes": [
         "Dropped: not worth it."
@@ -93,24 +93,24 @@
       "title": "Resize the avatar upload",
       "kind": "task",
       "spec": true,
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Land the CSV export",
       "kind": "task",
       "spec": true,
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Show the build log tail",
       "kind": "task",
       "spec": true,
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Plan the settings page",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "areas": [
         "bug"
       ]
@@ -119,7 +119,7 @@
       "title": "Drop the legacy exporter",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "status": "dropped",
       "notes": [
         "Dropped: the exporter is gone."
@@ -129,13 +129,13 @@
       "title": "Add a --json flag to the report",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "status": "done"
     },
     {
       "title": "Which cache backend should the index use?",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "ask": "input",
       "reason": "question",
       "question": "Redis or in-process?"
@@ -170,7 +170,7 @@
       "title": "Warm the cache on deploy",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "after": [
         "demo-10"
       ]
@@ -179,7 +179,7 @@
       "title": "Prune stale thumbnails",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "areas": [
         "images"
       ]
@@ -187,7 +187,7 @@
     {
       "title": "Rework the thumbnail pipeline",
       "kind": "issue",
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Plan the metrics page",
@@ -197,23 +197,23 @@
     {
       "title": "Show a spinner on slow pages",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "route": "triaged"
     },
     {
       "title": "Footer link is dead",
       "kind": "issue",
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Approve the schema change",
       "kind": "task",
       "spec": true,
-      "source": "chris"
+      "source": "user"
     },
     {
       "title": "Split the export into stages",
-      "source": "chris",
+      "source": "user",
       "body": "The export runs as one step, so a failure loses all of it.",
       "parts": [
         {
@@ -233,20 +233,20 @@
       "title": "Parse dates in the import command",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "body": "Dates in the CSV come through as text."
     },
     {
       "title": "Flaky test in the parser suite",
       "kind": "task",
       "spec": true,
-      "source": "chris",
+      "source": "user",
       "priority": "high"
     },
     {
       "title": "Old export format",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "areas": [
         "bug"
       ],
@@ -255,7 +255,7 @@
     {
       "title": "Support a second input file",
       "kind": "issue",
-      "source": "chris",
+      "source": "user",
       "ask": "input",
       "reason": "question",
       "question": "Support a second input file",

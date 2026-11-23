@@ -79,7 +79,7 @@ beforeAll(async () => {
   note("decisions", "Use Bun", "decision", "aleph", "**Claim.** We use Bun.\n\n## Related\n[[Other trap]]");
   note("gotchas", "Other trap", "gotcha", "other", "**Claim.** A trap; see [[Use Bun]].");
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
-  writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nChris prefers short answers.\n");
+  writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nThe user prefers short answers.\n");
   const hand = join(base, "handoffs");
   mkdirSync(hand);
   writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");

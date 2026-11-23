@@ -64,7 +64,7 @@ describe("checks", () => {
     expect(await plain({ cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out", timedOut: true }, "tests")).toEqual({ state: "failed", cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out" });
   });
 
-  test("a check that failed the same way on the run before asks Chris instead of a round", async () => {
+  test("a check that failed the same way on the run before asks the user instead of a round", async () => {
     const { p, calls } = ports({ stop: tests, failed: "tests", same: "Is the test wrong?" });
     const v = await workerVerdict(branch({ earlier: [run({ failed: "tests" })] }), p);
     expect(v.code).toBe(0);
@@ -96,7 +96,7 @@ describe("after the checks", () => {
     expect(twice.outcome.review).toMatchObject({ cost: 3, sessions: ["r1", "r2"] });
   });
 
-  test("a security path runs Verify and the reviewer, then waits for Chris with a held-path Ask", async () => {
+  test("a security path runs Verify and the reviewer, then waits for the user with a held-path Ask", async () => {
     const { p, calls } = ports({ security: "jobs/lib/gates/gate.ts" });
     const v = await workerVerdict(branch(), p);
     expect(v).toMatchObject({ code: 0, outcome: { state: "waiting", reason: "held path jobs/lib/gates/gate.ts", stat: " a.ts | 1 +", ask: { reason: "held-path" }, ...checked } });
@@ -121,7 +121,7 @@ describe("after the checks", () => {
     expect(oracle.calls).not.toContain("review");
   });
 
-  test("a held rule waits for Chris after the reviewer passes, with one held-path Ask and no next step", async () => {
+  test("a held rule waits for the user after the reviewer passes, with one held-path Ask and no next step", async () => {
     const v = await workerVerdict(branch(), ports({ rule: "held path held/x.txt" }).p);
     expect(v).toEqual({ code: 0, outcome: { state: "waiting", reason: "held path held/x.txt", stat: " a.ts | 1 +", review: { call: "passed", seconds: 0 }, ...checked, ask: expect.objectContaining({ reason: "held-path", why: [" a.ts | 1 +"] }) } });
   });
@@ -154,7 +154,7 @@ describe("the keep-gate", () => {
 });
 
 describe("the reviewer", () => {
-  test("a reviewer with no verdict runs once more; a second miss waits for Chris whatever rounds are left", async () => {
+  test("a reviewer with no verdict runs once more; a second miss waits for the user whatever rounds are left", async () => {
     const miss = { reason: "reviewer: no verdict (time box)", none: true, cost: 1 };
     const { p, calls } = ports({ reviews: [miss, miss] });
     const v = await workerVerdict(branch(), p);
@@ -189,7 +189,7 @@ describe("the reviewer", () => {
     expect(v).toEqual({ outcome: { state: "returned", cause: "review", reason: "reviewer: no test", stat: " a.ts | 1 +", review: { call: "returned", reason: "reviewer: no test", seconds: 0 }, ...checked, failed: "review", round: 0 }, code: 1 });
   });
 
-  test("a hold after the last round waits for Chris, and says how often it went back", async () => {
+  test("a hold after the last round waits for the user, and says how often it went back", async () => {
     const reason = async (earlier: Run[] | undefined) => (await workerVerdict(branch({ earlier }), ports({ reviews: [{ reason: "reviewer: still no test" }] }).p)).outcome;
     expect(await reason([run({ failed: "review" }), run({ failed: "tests" })])).toMatchObject({ state: "waiting", reason: "the reviewer sent it back once: still no test", ask: { reason: "review-held" } });
     expect((await reason(two)).review).toEqual({ call: "waiting", reason: "reviewer: still no test", seconds: 0 });

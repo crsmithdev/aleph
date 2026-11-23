@@ -216,7 +216,7 @@ describe("write", () => {
     expect((await cli("write", note("No API Judge", { kind: "decision" }), "--why", "x")).code).toBe(0);
     const memory = join(vault, "MEMORY.md");
     const text = readFileSync(memory, "utf8");
-    writeFileSync(memory, text + "\n- Chris, Pacific, WSL2. See [[No API Judge]].\n");
+    writeFileSync(memory, text + "\n- The user, Pacific, WSL2. See [[No API Judge]].\n");
     expect((await cli("write", memory, "--why", "profile")).code).toBe(0);
     writeFileSync(memory, text + "\n[[Ghost]]\n");
     const r = (await cli("write", memory, "--why", "bad"));
@@ -278,7 +278,7 @@ describe("lint --fix", () => {
   test("repairs frontmatter, leaves the body, and reports what it cannot judge", async () => {
     const p = join(vault, "wiki/gotchas/Needs Repair.md");
     const body = "**Claim.** repairs happen in frontmatter only, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- run\n\n## Related\n";
-    writeFileSync(p, "---\naliases: one name\nkind: gotcha\nscope: aleph\nconfidence: sure\nupdated: 2026-09-04\nsources: [chris]\n---\n" + body);
+    writeFileSync(p, "---\naliases: one name\nkind: gotcha\nscope: aleph\nconfidence: sure\nupdated: 2026-09-04\nsources: [user]\n---\n" + body);
     const r = (await cli("lint", "--fix"));
     expect(r.json.fixed).toContainEqual({ note: "Needs Repair", path: "wiki/gotchas/Needs Repair.md", repairs: ["aliases wrapped in a list", "added supersedes: []"] });
     const after = readFileSync(p, "utf8");

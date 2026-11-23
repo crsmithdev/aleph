@@ -22,7 +22,7 @@ beforeEach(setup);
 afterEach(teardown);
 
 for (const red of [false, true]) {
-  test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks Chris" : "green: the item is done"}`, async () => {
+  test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks the user" : "green: the item is done"}`, async () => {
     const id = newIssue();
     const first = mk(`fac-${id}`, "build", "dropped", { cause: "no-commit", reason: "no commit", alreadyMet: "main has it" });
     markRescued({ id: first.job, folder: first.folder, run: record.getRun(first.job)! }, "claimed");
@@ -74,7 +74,7 @@ test("no commit, the item open, first time: dropped with no fate and the issue r
 
 const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted issue", (doc) => String(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." }).id), true)!.value;
 
-test("a dotted issue's rescue note reaches the issue, and a second no-commit run asks Chris on it", async () => {
+test("a dotted issue's rescue note reaches the issue, and a second no-commit run asks the user on it", async () => {
   const ref = dottedPart();
   mk(`fac-${ref}`, "build", "failed", { cause: "no-commit", reason: "no commit" });
   const f = fakes();
@@ -98,7 +98,7 @@ test("a pass that began before a pause starts nothing after it", async () => {
   expect(out.skipped.at(-1)).toEndWith(": paused");
 });
 
-test("the second no-commit run with no claim asks Chris: no drop and the issue stays open", async () => {
+test("the second no-commit run with no claim asks the user: no drop and the issue stays open", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { cause: "no-commit", reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();

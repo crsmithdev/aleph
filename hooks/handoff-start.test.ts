@@ -146,7 +146,7 @@ describe("inside Herdr", () => {
     expect(run(join(root, "proj"), herdr())).toBe("");
   });
 
-  test("a file of a pane Herdr lacks is orphaned and needs Chris's word", () => {
+  test("a file of a pane Herdr lacks is orphaned and needs the user's word", () => {
     pane("p9", "summary: s2\n");
     const out = JSON.parse(run(join(root, "proj"), herdr()));
     expect(out.systemMessage).toMatch(/orphaned.*s2/);

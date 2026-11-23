@@ -8,7 +8,7 @@ const ROOT = join(import.meta.dir, "..");
 const vault = mkdtempSync(join(tmpdir(), "aleph-agent-"));
 mkdirSync(join(vault, "wiki", "decisions"), { recursive: true });
 writeFileSync(join(vault, "VAULT.md"), "# VAULT.md\n");
-writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\nChris's profile.\n");
+writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\nThe user's profile.\n");
 writeFileSync(join(vault, "wiki", "decisions", "Names Are Short.md"), "---\nkind: decision\nscope: global\ncore: Names are short.\n---\nBody.\n");
 afterAll(() => rmSync(vault, { recursive: true, force: true }));
 
@@ -24,17 +24,17 @@ async function hook(argv: string[], payload: object, agent: boolean): Promise<st
 
 test("an agent's start context is AGENT.md and VOICE.md, with no MEMORY.md and no core lines", async () => {
   const start = { hook_event_name: "SessionStart", cwd: vault };
-  const chris = await hook([join(ROOT, "hooks", "vault-context.ts")], start, false);
-  expect(chris).toContain("Chris's profile.");
+  const user = await hook([join(ROOT, "hooks", "vault-context.ts")], start, false);
+  expect(user).toContain("The user's profile.");
   const agent = JSON.parse(await hook([join(ROOT, "hooks", "vault-context.ts")], start, true)).hookSpecificOutput.additionalContext;
   expect(agent).toContain("# Aleph factory agent");
-  expect(chris).toContain("Names are short.");
+  expect(user).toContain("Names are short.");
   expect(agent).not.toContain("Names are short.");
   expect(agent).not.toContain("<vault");
   expect(agent).not.toContain("aleph memory recall");
   expect(agent).toContain("# Voice");
-  expect(chris).not.toContain("# Voice");
-  expect(agent).not.toContain("Chris's profile.");
+  expect(user).not.toContain("# Voice");
+  expect(agent).not.toContain("The user's profile.");
 });
 
 test("an agent's code style rule points at write-code/RULES.md, not SKILL.md", async () => {

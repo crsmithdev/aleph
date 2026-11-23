@@ -136,7 +136,7 @@ test("refresh on a core note bumps updated and keeps the core line", async () =>
   expect(read("Core")).toContain("\ncore: always on\n");
 });
 
-test("correct and archive on core notes are held for Chris, change no file, and keep the note out of later passes", async () => {
+test("correct and archive on core notes are held for the user, change no file, and keep the note out of later passes", async () => {
   await seed("CoreA", 2, { core: "line a" }); await seed("CoreB", 1, { core: "line b" });
   const was = { a: read("CoreA"), b: read("CoreB") };
   reply([

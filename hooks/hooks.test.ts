@@ -520,7 +520,7 @@ describe("vault-context hook", () => {
     note(vault, "Everyone", "global", "Times are Pacific", "2026-11-01");
     note(vault, "No Core", "aleph");
     writeFileSync(join(vault, "VAULT.md"), "# VAULT.md\n");
-    writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
+    writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- The user, Pacific\n");
     repo = join(base, "aleph");
     const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { stdout: "ignore", stderr: "ignore" });
     git("init", "-q", repo);
@@ -542,7 +542,7 @@ describe("vault-context hook", () => {
     const out = JSON.parse(await start(vault));
     const ctx: string = out.hookSpecificOutput.additionalContext;
     expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
-    expect(ctx).toContain("- Chris, Pacific");
+    expect(ctx).toContain("- The user, Pacific");
     expect(ctx.indexOf("# Memory")).toBeLessThan(ctx.indexOf("- We ship from main [[Ours]]"));
     expect(ctx.indexOf("- We ship from main [[Ours]]")).toBeLessThan(ctx.indexOf("- Times are Pacific [[Everyone]]"));
     expect(ctx).not.toContain("Theirs");
@@ -557,10 +557,10 @@ describe("vault-context hook", () => {
     const big = join(base, "big");
     for (let i = 0; i < 200; i++) note(big, `Note ${String(i).padStart(3, "0")}`, "aleph", "x".repeat(80), `2026-10-${String(1 + (i % 28)).padStart(2, "0")}`);
     writeFileSync(join(big, "VAULT.md"), "# VAULT.md\n");
-    writeFileSync(join(big, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
+    writeFileSync(join(big, "MEMORY.md"), "# Memory\n\n- The user, Pacific\n");
     const ctx = await context(big);
     expect(Buffer.byteLength(ctx)).toBeLessThanOrEqual(6000);
-    expect(ctx).toContain("- Chris, Pacific");
+    expect(ctx).toContain("- The user, Pacific");
     const kept = ctx.split("\n").filter((l) => /^- x+ \[\[Note \d+\]\]$/.test(l));
     expect(kept.length).toBeGreaterThan(10);
     expect(ctx).toContain(`${200 - kept.length} more core lines: aleph memory recall --scope aleph`);
