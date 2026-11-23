@@ -138,6 +138,13 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
   return out.slice(0, height);
 }
 
+/** The panel's lines for the last data `d`, the failure `failed` and the pane `size`: a failure keeps the last data under a stale note. */
+export function frame(d: [State, Flow] | null, failed: string, size: { width: number; height: number }): string[] {
+  if (!d) return failed ? [clip(failed, size.width)] : [];
+  if (!failed) return render(d[0], d[1], size);
+  return [...render(d[0], d[1], { ...size, height: size.height - 1 }), `\x1b[2m${clip("stale", size.width)}\x1b[22m`];
+}
+
 /** The window of `--window`, week when it is not given. */
 const flag = process.argv.indexOf("--window"), win = (flag < 0 ? "week" : process.argv[flag + 1]) as Window;
 if (flag >= 0 && !FACTORY.includes(win)) throw new Error(`--window takes ${FACTORY.join(", ")}`);
@@ -172,8 +179,7 @@ if (import.meta.main) {
   let data: [State, Flow] | null = null, failed = "";
   const draw = () => {
     const size = { width: stdout.columns || 40, height: stdout.rows || 30 };
-    const lines = failed ? [clip(failed, size.width)] : data ? render(data[0], data[1], size) : [];
-    stdout.write(`\x1b[H\x1b[2J${lines.join("\n")}`);
+    stdout.write(`\x1b[H\x1b[2J${frame(data, failed, size).join("\n")}`);
   };
   const refresh = async () => { try { data = await load(); failed = ""; } catch (e) { failed = errText(e); } draw(); };
   const quit = () => { stdout.write("\x1b[?25h\x1b[?1049l"); stdin.setRawMode?.(false); process.exit(0); };

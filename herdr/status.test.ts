@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { data, render } from "./status.ts";
+import { data, frame, render } from "./status.ts";
 import { verdict } from "../lib/status-words.ts";
 // @ts-ignore plain JS, shared with the page
 import { cardList } from "../ui/views/lib/flow-parts.js";
@@ -110,6 +110,22 @@ test("the height fills the pane, and the cut drops the oldest events", () => {
   expect(shown(short).length).toBeGreaterThan(0);
   expect(shown(short)).toEqual(shown(tall).slice(0, shown(short).length));
   expect(shown(short)[0]).toStartWith("18:10 landed a149");
+});
+
+test("a failed refresh keeps the last data drawn, with a stale note in place of the error", () => {
+  const size = { width: 80, height: 80 }, lines = plain(frame([state, flow], "store is down", size));
+  expect(lines.length).toBe(size.height);
+  expect(lines.slice(0, -1)).toEqual(plain(render(state, flow, { ...size, height: size.height - 1 })));
+  expect(lines.at(-1)).toBe("stale");
+});
+
+test("a failed refresh with no data yet shows the clipped error line only", () => {
+  expect(plain(frame(null, "store is down", { width: 8, height: 80 }))).toEqual(["store…"]);
+});
+
+test("a refresh that succeeds draws the status page as render does", () => {
+  const size = { width: 80, height: 80 };
+  expect(frame([state, flow], "", size)).toEqual(render(state, flow, size));
 });
 
 test("the badge takes the worst alert", () => {
