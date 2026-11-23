@@ -3,6 +3,7 @@ import { aleph, env, repo, seedPart, seedItem, seedRun, setup, sh, teardown } fr
 import * as issues from "../../../lib/issue-file.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { loadRegistry } from "./ledger.ts";
+import { setModel } from "../routing/models.ts";
 import { subjectOf } from "./stage.ts";
 import { repoStages } from "./status.ts";
 
@@ -86,6 +87,13 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["parts, new sha
     }
   });
 }
+
+test("an issue that intake would split says it waits while intake is off", async () => {
+  const row = PARTS_NEW.find((r) => r.name === "new issue: working while intake splits it")!;
+  setModel("intake", { enabled: false });
+  try { expect(await statusOf(row)).toMatchObject({ stage: "working", action: "off", why: `${ref(await idOf(row))} waits: intake is off` }); }
+  finally { setModel("intake", { enabled: true }); }
+});
 
 test("aleph status prints the same stage as JSON and as one line, with the short id of each ref", async () => {
   const id = await idOf(PARTS_NEW[1]);

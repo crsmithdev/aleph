@@ -12,6 +12,7 @@ import { allRuns } from "./record.ts";
 import { issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 import { errText } from "../../../lib/errtext.ts";
+import { readModels } from "../routing/models.ts";
 
 /** What the store and the ledger say about a repo's items: what stage() needs of each. */
 export interface Facts {
@@ -161,6 +162,7 @@ export function stages(f: Facts, refs: (number | string)[]): Stage[] {
   const num = (ref: string) => { const p = parseId(ref); return p?.repo === f.repo ? tail(p) : undefined; };
   const ctx: Ctx = {
     sandbox: f.sandbox,
+    intakeOff: !readModels().intake.enabled,
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };

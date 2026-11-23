@@ -40,13 +40,14 @@ function rows(list, st, sel) {
   const on = Boolean(st.q.trim() || Object.values(st.f).some(Boolean)), parts = plan(list, st);
   const row = (r) => `<li class="lrow" tabindex="0" data-key="${esc(r.key)}" aria-current="${r.key === sel}"><span class="lead">${r.lead}</span><span class="main">${r.main}</span>${r.cells.map((c) => `<span class="c">${c}</span>`).join("")}</li>`;
   const group = ({ g, hits, drawn }) => {
-    if (g.rows.length && !drawn.length) return "";
+    // A group with no rows says so, unless a search or a filter is on: then only the groups with matches draw.
+    if ((g.rows.length || on) && !drawn.length) return "";
     const line = g.cap && hits.length > drawn.length ? [`${count(drawn.length)} of ${count(hits.length)}`, g.more].filter(Boolean).join(" · ") : g.cap || on ? "" : g.more;
     return `<li class="lhead"><span class="gt"><h3 class="sub-head">${esc(g.title)}</h3><span class="count">${esc(g.count)}</span></span>${g.heads.map((h) => `<span class="h">${esc(h)}</span>`).join("")}</li>` +
       (g.rows.length ? drawn.map(row).join("") : `<li class="lnone">${empty()}</li>`) + (line ? `<li class="lmore">${line}</li>` : "");
   };
   const hits = parts.reduce((n, p) => n + p.hits.length, 0), shown = parts.reduce((n, p) => n + p.drawn.length, 0);
-  if (!list.groups.length) return `<li class="lnone">${empty()}</li>`;
+  if (!list.groups.some((g) => g.rows.length)) return `<li class="lnone">${empty()}</li>`;
   if (!hits && list.groups.some((g) => g.rows.length)) return `<li class="lnone" data-nomatch>${empty("No match")}</li>`;
   return parts.map(group).join("") + (list.cap && hits > shown ? `<li class="lmore">${count(shown)} of ${count(hits)}</li>` : "");
 }

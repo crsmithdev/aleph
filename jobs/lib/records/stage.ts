@@ -51,6 +51,8 @@ export interface RunView { id: string; kind: Run["role"]; state: State; open: bo
 export interface Ctx {
   /** The repo is a factory repo (`sandbox: true`): intake reads it, so an issue with no spec gets sorted. */
   sandbox: boolean;
+  /** Intake's switch is off (routing/models.ts): an issue that waits on intake says so. */
+  intakeOff: boolean;
   /** The repo's other items, by ref (`<repo>-<n>`). */
   item(ref: string): Subject | undefined;
   /** The jobs of an item, oldest first. */
@@ -83,6 +85,8 @@ function doneWhy(item: Subject): Reason | null {
 
 export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new Set()): Stage {
   const id = item.id;
+  /** Intake's reason: it starts the item, or the item waits while intake is off. */
+  const toIntake = (r: Reason): Reason => (ctx.intakeOff ? { action: "off", sub: "intake" } : r);
   /** The stage with its reason: `why` is the reason's sentence, as the Herald says it; a reason with no action is its fields as text. */
   const out = (s: StageName, r: Reason = {}, of?: Stage["of"]): Stage =>
     ({ id, stage: s, ...r, why: r.action ? r.action === "held" ? item.held! : sayText({ subject: "rule", action: r.action, object: r.on?.find((x) => parseKey(x)?.kind === "job") ?? id }) : [r.sub, r.count].filter(Boolean).join(" "), ...(of ? { of } : {}) });
@@ -105,7 +109,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const failed = parts.find((p) => p.stage === "failed");
   if (failed) return out("failed", { action: "failed", on: [failed.id] });
   if (item.parts.length) {
-    if (item.plan) return out("working", { action: "starting", sub: "intake" });
+    if (item.plan) return out("working", toIntake({ action: "starting", sub: "intake" }));
     const n = parts.filter((p) => p.stage === "done").length;
     return out("working", { count: `${n} / ${item.parts.length}` }, { n, m: item.parts.length });
   }
@@ -113,10 +117,10 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (last?.kind === "land") return out("landing", { action: last.state, on: [last.id] });
   if (last) return out("working", { action: last.state, on: [last.id] });
   if (item.held) return out("held", { action: "held" });
-  if (item.plan) return out("working", { action: "starting", sub: "intake" });
+  if (item.plan) return out("working", toIntake({ action: "starting", sub: "intake" }));
   if (item.tracker) return out("new");
   if (item.spec) return out("queued", { action: "starting" });
   const intake = live.findLast((r) => r.kind === "intake");
   if (intake) return out("new", { action: "running", on: [intake.id] });
-  return out("new", ctx.sandbox ? { sub: "intake" } : {});
+  return out("new", ctx.sandbox ? toIntake({ sub: "intake" }) : {});
 }

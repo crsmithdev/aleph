@@ -362,7 +362,7 @@ test("the Notes view is a facts line, a Type filter on semantic and one list of 
   expect(find(h, ".lcard select[name=type] option").map((o) => [o.attrs.value, "selected" in o.attrs])).toEqual([["", false], ["semantic", true], ["procedural", false], ["episodic", false], ["working", false]]);
   // The list draws the rows of the filter's type; the others wait in the list for a search or a filter.
   expect(find(h, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["note:N", "note:Never"]);
-  expect(words(find(h, ".lhead .h"))).toEqual(["Offers", "Offered", "Written", "Updated"]);
+  expect(words(find(h, ".lhead .h"))).toEqual(["Offers", "Offered", "Written"]);
   const every = withStore({ "browse.memory": { f: { type: "" } } }, () => draw({ results: rs }));
   expect(words(find(every, ".lhead h3"))).toEqual(["Semantic", "Procedural", "Episodic", "Working"]);
   expect(find(every, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["note:N", "note:Never", "handoff:current.md"]);

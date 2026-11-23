@@ -369,7 +369,7 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   expect(h).toContain("Next 1");
   expect(h.match(/<tr><td><a class="idl"/g)).toHaveLength(50);
   const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
-  expect(page.split('<div class="empty"><p>No data</p></div>').length - 1).toBeGreaterThanOrEqual(2);
+  expect(page.split('<div class="empty"><p>No data</p></div>').length - 1).toBe(1);
 });
 
 test("the Turns table and the Observations table head their duration column Took", async () => {

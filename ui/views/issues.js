@@ -479,7 +479,7 @@ function issueKpis(d, segments, now = Date.now()) {
   const commits = d.commits ?? [];
   return renderKpis([
     parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${g.stage}`).join(", ")) }
-      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: "" },
+      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: open ? esc(d.derived?.why ?? "") : "" },
     { k: open ? "Open for" : "Elapsed", v: times.length ? esc(dur((hi - lo) / 1000)) : miss("No job or note gave a time"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: times.length ? esc(dur(waited / 1000)) : miss("No job or note gave a time"), sub: chris ? esc(`${dur(chris / 1000)} for the user's answer`) : "" },
     { k: "Cost", v: esc(money(cost)), sub: esc(plural(runs, "job")) },

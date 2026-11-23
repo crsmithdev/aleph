@@ -1,7 +1,7 @@
 // Shared HTML parts for the factory UI's views: escaping, the empty and error states, cards, tables, forms, folds and buttons.
 // View issues may add to this file but not change what is here (the 2026-11-04 format issue did: a unit follows a number with no space).
 
-import { hashQuery, issueApi, keep, kept, setQuery } from "./address.js";
+import { issueApi, keep, kept } from "./address.js";
 import { count, money, pct, wkText } from "./format.js";
 import { noteHref, PRIORITIES, priorityRank, shortId, shortText } from "../../../lib/naming.ts";
 
@@ -503,15 +503,11 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
 /** The HTML legend: one `<li>` per `[label, cls, attrs]`; a `cls` gives the item a swatch that CSS colours; `attrs` (HTML attributes) makes the item a button. */
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls, attrs]) => { const in_ = `${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}`; return `<li>${attrs ? `<button type="button" class="lgo" ${attrs}>${in_}</button>` : in_}</li>`; }).join("")}</ul>`;
-/** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
-export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
 const param = (q, k) => (typeof q.get === "function" ? q.get(k) : q[k]);
 /** The page number in the query `q` (URLSearchParams or object): 1 unless `page` is a larger whole number. */
 export function pageOf(q) {
   return Math.max(1, Number.parseInt(param(q, "page"), 10) || 1);
 }
-/** The sort of the query `q` (URLSearchParams or object): `sort` and `dir` when `by` has the key, else `fallback`. */
-export const sortOf = (q, by, fallback) => (Object.hasOwn(by, param(q, "sort")) ? { key: param(q, "sort"), dir: param(q, "dir") === "asc" ? 1 : -1 } : fallback);
 /** `page` held to the pages that `total` rows fill, `step` to a page: a page past the end is the last page. */
 const pageIn = (page, total, step) => Math.min(Math.max(1, page), Math.max(1, Math.ceil(total / step)));
 /** The rows of page `page` of `rows`, `step` to a page. */
@@ -522,21 +518,6 @@ export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
   const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
   return c * sort.dir || (tie ? tie(a, b) : 0);
 });
-let searchTimer;
-/** Wire one table: a sort head (`data-sort`), the pager (`data-page`) and the search input (`[data-ui=opts.search]`) write the hash, then call `opts.redraw`. A sort or a search goes back to page 1. `opts` also has `sortOf(query)` and `downFirst`. */
-export function wireTable(root, opts) {
-  const go = (changes) => { setQuery(changes); opts.redraw(); };
-  root.onclick = (e) => {
-    const s = e.target.closest?.("button[data-sort]"), m = e.target.closest?.("button[data-page]");
-    if (s) { const n = nextSort(opts.sortOf(Object.fromEntries(hashQuery())), s.dataset.sort, opts.downFirst); go({ sort: n.key, dir: n.dir > 0 ? "asc" : "desc", page: "" }); }
-    else if (m) go({ page: m.dataset.page });
-  };
-  root.oninput = (e) => {
-    if (!e.target.matches?.(`[data-ui="${opts.search}"]`)) return;
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => go({ q: e.target.value, page: "" }), 120);
-  };
-}
 /** Under a long table: "Previous 50" and "Next 50" (`data-page` holds the page each goes to) and "51–100 of 345". */
 export function pager(page, total, step = 50, { cls = "" } = {}) {
   const p = pageIn(page, total, step), from = (p - 1) * step, to = Math.min(total, from + step);

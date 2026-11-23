@@ -87,6 +87,7 @@ function projectOptions(cur, more = []) {
  * - `bar(o)`: the head's Project select, then the window control, then `o.after` (html for a control of the page). `o.more`
  *   adds project names the page knows, `o.project` and `o.value` replace the two
  *   values shown, and `o.name` and `o.options` replace the window control (a window other than `window` is not kept).
+ *   `o.window: false` leaves the window control out, for a page whose data takes no window.
  * - `wire(root)`: keep the project and the window in storage and in the address (replaced in place, with no reload; week
  *   stays out of it), and send each change of the bar to the address, which loads the route again.
  */
@@ -99,7 +100,7 @@ export function scope(q = typeof location === "undefined" ? new URLSearchParams(
     url: (path) => (project ? `${path}${path.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}` : path),
     bar: (o = {}) => filterBar([
       { html: `<select name="project" aria-label="Project"${o.more?.length ? ` data-more="${esc(o.more.join(" "))}"` : ""}>${projectOptions(o.project ?? project, o.more)}</select>` },
-      { label: "Window", bare: true, name: o.name ?? "window", value: o.value ?? window, options: o.options ?? OPTIONS },
+      ...(o.window === false ? [] : [{ label: "Window", bare: true, name: o.name ?? "window", value: o.value ?? window, options: o.options ?? OPTIONS }]),
       ...(o.after ? [{ html: o.after }] : []),
     ]),
     wire: (root) => {

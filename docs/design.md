@@ -719,7 +719,7 @@ The list surface is one card that holds a search, the filters and the rows of a 
 - The inspector stays in view as the page scrolls. Under 1100px it goes below the list. Under 720px a row wraps: the main cell first, the cells after it at the right.
 - Start a filter on an option with `value` (`{ name: "who", options: ["yours", "factory"], value: "yours" }`). The reader's own pick wins after it.
 - The search, the filters and the selected row stay through a redraw: `browse()` holds them. The filters and the selected row stay through a reload, kept under `browse.<id>`.
-- When a search or a filter leaves no row, the list shows `empty("No match")`. A group with no rows shows `empty()`.
+- When a search or a filter leaves no row, the list shows `empty("No match")`. A group with no rows shows `empty()` while no search or filter is on. A list with no rows shows one `empty()`.
 - Show a row's defaults as nothing: no `medium`, no `aleph`, no zero.
 - Group the rows by what the reader scans for (state, kind, day). Put the groups the reader needs first.
 
@@ -824,7 +824,7 @@ A table shows items that have the same columns.
 
 | Helper | Reference |
 |---|---|
-| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`, `wireTable()`; `pagedTable()`; `badCount(n)` | `ui/views/jobs.js` |
+| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`; `pagedTable()`; `badCount(n)` | `ui/views/jobs.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
@@ -848,7 +848,7 @@ A table shows items that have the same columns.
 - Put the time in `td.time`. It aligns to the right. For `heads()`, list its label in `num`. For `sortHead()`, pass
   `{ num: true }`. A time that comes first goes in `td.time.lead`, which aligns to the left.
 - When a row goes to a page, make it `tr.rowlink` and put the link in `td.wide`.
-- To sort, use `sortHead()` and `wireTable()`. Keep the sort in the address as `sort` and `dir`.
+- To sort, use `sortHead()` and `sortRows()`. Keep the sort in the address as `sort` and `dir`.
 - When there are more than 50 rows, use `pagedTable()`, or `pager()` with `pageOf()` and `pageRows()`.
 - For a short table of names and numbers, set `fit: true`.
 - Make a row with `row(cells)` and a cell of text with `cell(v, { num, wide, title })` (Row and cell).
@@ -1472,8 +1472,8 @@ A filter bar is a row of filters over a table.
 
 - For options from the data, set `data: true` to get a select.
 - Make the first option `{ value: "", label: "All" }`. An empty value keeps the filter out of the address.
-- When a filter changes the data, use `goQuery()`. When it changes only what shows, use `setQuery()` and draw the table again, or let `wireTable()` do both.
-- Put `searchBox()` above the filter bar, outside the part that redraws, so it keeps the focus. Give its `ui` key to `wireTable({ search })`.
+- When a filter changes the data, use `goQuery()`. When it changes only what shows, use `setQuery()` and draw the table again.
+- Put `searchBox()` above the filter bar, outside the part that redraws, so it keeps the focus.
 
 | Do | Don't |
 |---|---|
@@ -1495,7 +1495,7 @@ A search box is one text field over a table. It filters the rows by the text.
 | 2 | Action | A `button.hint` that acts on the text, such as filing it | yes | inside the field's right end, `--fs-xs`, `--muted`; shows only while the field has text |
 
 - Name what it searches in the placeholder: `Search ids and titles`. The placeholder is the accessible name too.
-- Put it above the filter bar, outside the part that redraws, so it keeps the focus. Give its `ui` key to `wireTable({ search })`.
+- Put it above the filter bar, outside the part that redraws, so it keeps the focus.
 - Send the text to the address with `setQuery({ q })` and draw the table again. Wait about 200 ms after a key. Do not fetch on each key.
 - Use one size on every page. The wide field of the Memory page is a deviation.
 - Give the action a key with a modifier, such as Ctrl+Enter, and name the key in its label. Plain Enter stays with the search.
@@ -1627,7 +1627,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 - The Save button shows only after the control changes (`markDirty()` in `ui/views/lib/html.js`). The router runs it after each draw. A setting that is saved shows no button.
 - Pass the same `id` to `setting()` and to the control, so the label names the control.
 - Write a hint in at most four words, counting a number as a word. Put the rest in a `title` on the row, through `attrs`.
-- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is the Model column of the Roles table on the Agents page: its `selectBox()` applies on `change`, with the on/off box of Small, Medium and Large beside it.
+- Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is a role row of the Roles list on the Agents page: its on/off box and its model `selectBox()` apply on `change`, with no Save.
 - Show a setting that is read-only as text in the control place. Do not show a disabled control.
 - Under 720px the label goes over the control, and the hint under it.
 - Show a failure in the row with `say()`, from the Save button.
@@ -1680,7 +1680,7 @@ stays one screen of rows and does not grow.
 | 2 | Next button | `Next 50` | yes, not on the last page | the button |
 | 3 | Range | `51–100 of 345` | | `--num` `--fs-xs` `--fw-mid` tabular, `--muted` |
 
-- For a table that `wireTable()` sorts, filters or searches, use `pager()` with `pageOf()` and `pageRows()`. The page
+- For a table that the address sorts, filters or searches, use `pager()` with `pageOf()` and `pageRows()`. The page
   number stays in the address as `page`. A change to the sort, a filter or the search goes back to page 1.
 - For a table that does not change, use `pagedTable()`. It turns the page in place.
 - Do not use both under one root.
@@ -1826,12 +1826,8 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Herald card keeps a visible `--rule` border and a pulse ring; the pulse draws on that border | `.herald-card` in `ui/app.css` | follow-up |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/design.js` | allowed |
-| The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `view.render` in `ui/views/memory.js` | follow-up |
-| A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
-| The Roles table's rows are hand `<tr>`s, its group rows hand `tr.grp`s and its sub-rows hand `tr.sub-row`s | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
 | The Checks, Build Time by Model and Jobs cards of the Jobs page show no count | `renderFactoryJobs()` in `ui/views/factory-jobs.js` | follow-up |
-| A table row's fold chevron is a hand `<button class="fold">`: no helper for a row toggle | `renderRow()` in `ui/views/issues.js`, `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/views/lib/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/views/lib/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |

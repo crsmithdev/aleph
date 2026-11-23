@@ -198,7 +198,7 @@ const SAY: Record<string, string> = {
   held: "{object} held:| {detail}", paused: "{object} waits:| the factory is paused", red: "{object} waits:| main is red", after: "{object} waits for| {detail}",
   full: "{object} waits:| run slots are full", gpu: "{object} waits for| the GPU", busy: "{object} waits:| {detail}",
   looping: "{object} stopped:| it restarts in a loop", starting: "{object} is| starting", parent: "{object} waits for| its parts",
-  parked: "{object} parked|", credit: "{object} waits:| out of credit",
+  parked: "{object} parked|", off: "{object} waits:| intake is off", credit: "{object} waits:| out of credit",
   protected: "{object} asks| to change a protected file", question: "{object} asks| a question", incomplete: "{object} has| a dropped part",
   capped: "{object} hit| its run cap", proposal: "{object} proposes| a change",
   reran: "{object} reran|", started: "{object} picked up|", missed: "{object} missed|", skipped: "{object} skipped|", filed: "{object} filed by| {by}",

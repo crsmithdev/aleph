@@ -26,9 +26,9 @@ export const view = {
   combine: (answers) => Object.assign({}, ...answers),
   live: true,
   render: (m, _params, q = new URLSearchParams()) => pageViews({ title: "Memory", path: "/memory", query: q, views: [
-    { id: "notes", label: "Notes", scope: { more: m.scopes }, draw: () => notesView(m, q) },
-    { id: "health", label: "Health", scope: true, draw: () => renderHealth(m) },
-    { id: "log", label: "Log", scope: true, draw: () => logView(m) },
+    { id: "notes", label: "Notes", scope: { more: m.scopes, window: false }, draw: () => notesView(m, q) },
+    { id: "health", label: "Health", scope: { window: false }, draw: () => renderHealth(m) },
+    { id: "log", label: "Log", scope: { window: false }, draw: () => logView(m) },
   ] }),
   mount: (root, m, q = new URLSearchParams()) => {
     scope().wire(root);
