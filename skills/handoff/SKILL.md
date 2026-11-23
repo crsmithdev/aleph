@@ -4,14 +4,26 @@ description: >
   Save a session handoff so a fresh context can resume the work. Use when the
   user asks for a handoff, or when context is about to be cleared mid-task.
 effort: low
+allowed-tools: Bash(printenv:*), Bash(git rev-parse:*), Bash(pwd)
 ---
 
 Write a handoff for the next session. The next session reads it with no other context.
 
-Path, where `<handoffs dir>` is `!`echo "${ALEPH_HANDOFFS_DIR:-$HOME/.aleph/handoffs}"``:
+This session's values. An empty value means the variable is not set.
+
+- `ALEPH_HANDOFFS_DIR`: !`printenv ALEPH_HANDOFFS_DIR || true`
+- Git common dir: !`git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true`
+- `HERDR_ENV`: !`printenv HERDR_ENV || true`
+- `HERDR_PANE_ID`: !`printenv HERDR_PANE_ID || true`
+- `HC_TERMINAL_ID`: !`printenv HC_TERMINAL_ID || true`
+- `<cwd>`: !`pwd`
+
+`<handoffs dir>` is `ALEPH_HANDOFFS_DIR`, else `~/.aleph/handoffs`. `<repo>` is the name of the folder that holds the git common dir: the main repo's folder. Outside git, `<repo>` is the name of the current folder.
+
+Path:
 
 - With an argument `<name>` (the Sidetone bridge passes `sidetone`): `<handoffs dir>/<name>.md`.
-- With no argument: `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), the file is `<handoffs dir>/projects/<repo>/<HERDR_PANE_ID>.md` instead, where `<repo>` is that same name: `!`echo "HERDR_ENV=${HERDR_ENV:-} HERDR_PANE_ID=${HERDR_PANE_ID:-}"``. Inside the Herdr desktop app (`HC_TERMINAL_ID` set, and no Herdr pane), the file is `<handoffs dir>/projects/<repo>/hc-<HC_TERMINAL_ID>.md`: `!`echo "HC_TERMINAL_ID=${HC_TERMINAL_ID:-}"``.
+- With no argument: `<handoffs dir>/projects/<repo>.md`. Inside Herdr (`HERDR_ENV=1` and `HERDR_PANE_ID` set), the file is `<handoffs dir>/projects/<repo>/<HERDR_PANE_ID>.md` instead. Inside the Herdr desktop app (`HC_TERMINAL_ID` set, and no Herdr pane), the file is `<handoffs dir>/projects/<repo>/hc-<HC_TERMINAL_ID>.md`.
 
 Speed matters: the user waits for this file.
 
@@ -21,7 +33,7 @@ Speed matters: the user waits for this file.
 
 The first line of the file is `summary: <what the next session does, in one line of at most 100 characters>`. The session start shows this line to the user.
 
-With an argument, the second line is `cwd: !`pwd``. The session start picks up a named handoff in a session that starts in that directory or below it.
+With an argument, the second line is `cwd: <cwd>`. The session start picks up a named handoff in a session that starts in that directory or below it.
 
 Then these sections, in this order:
 
