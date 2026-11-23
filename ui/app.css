@@ -1105,13 +1105,6 @@ pre.stat b { color: var(--need); }
 #nav a[data-tone="warning"], #nav a[data-tone="ask"] { color: var(--need); }
 #collapse { margin-top: auto; align-self: flex-start; padding: var(--sp-6) var(--sp-8); border: 0; border-radius: var(--r-ctl); background: none; color: var(--muted); font: var(--fw-text) var(--fs-sm)/1.2 var(--mono); cursor: pointer; }
 #collapse:hover { background: var(--sunk); color: var(--ink); }
-/* The dock widgets (aleph-tools) mount here, at the sidebar's foot. Their panels are fixed, so the sidebar's overflow does not clip them: they open beside the sidebar, at the foot of the viewport. */
-.dock {
-  display: flex; flex-wrap: wrap; gap: var(--sp-8);
-  --dock-pop-position: fixed; --dock-pop-left: calc(208px + var(--sp-8)); --dock-pop-right: auto; --dock-pop-bottom: var(--sp-16);
-}
-/* The annotations' Move hint sits beside the sidebar's foot too. Its layer hangs off <body>, not .dock, so its variables go on :root. */
-:root { --dock-hint-left: calc(208px + var(--sp-8)); --dock-hint-right: auto; --dock-hint-bottom: var(--sp-16); }
 /* A collapsed sidebar shows the mark, each link's icon and the expand button. */
 @media (min-width: 721px) {
   .shell.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
@@ -1121,8 +1114,6 @@ pre.stat b { color: var(--need); }
   .shell.collapsed #nav a { justify-content: center; padding: var(--sp-8) 0; width: 36px; }
   .shell.collapsed #nav .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .shell.collapsed #collapse { align-self: center; }
-  .shell.collapsed .dock { flex-direction: column; align-items: center; --dock-pop-left: calc(48px + var(--sp-8)); }
-  :root:has(.shell.collapsed) { --dock-hint-left: calc(48px + var(--sp-8)); }
 }
 /* .card p sets --ink-2 at the same specificity, so the card form is named too. */
 .error p, .card .error p { margin: 0; color: var(--error); }
@@ -1144,9 +1135,6 @@ pre.stat b { color: var(--need); }
   /* One row: the links scroll sideways, and the router scrolls the current one into view. */
   #nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   #collapse { display: none; }
-  /* The top bar has no room for the buttons: they are a fixed row at the bottom right, and a panel opens above the row. */
-  .dock { position: fixed; right: var(--sp-8); bottom: var(--sp-8); flex-wrap: nowrap; flex-direction: row-reverse; z-index: var(--dock-z); --dock-pop-left: var(--sp-8); --dock-pop-bottom: calc(var(--sp-8) + 40px + var(--sp-8)); }
-  :root { --dock-hint-left: auto; --dock-hint-right: var(--sp-8); --dock-hint-bottom: calc(var(--sp-8) + 40px + var(--sp-8)); }
   #nav li.head { display: none; }
   #nav ul { display: flex; flex-wrap: nowrap; gap: var(--sp-2); }
   #nav a { white-space: nowrap; padding: var(--sp-4) var(--sp-8); }

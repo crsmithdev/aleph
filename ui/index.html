@@ -25,7 +25,6 @@
       </svg>aleph</a>
     <div id="nav"></div>
     <button id="collapse" type="button" aria-label="Collapse the sidebar" title="Collapse the sidebar" aria-expanded="true">&lt;&lt;</button>
-    <div id="dock-host" class="dock"></div>
   </nav>
   <main>
     <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
@@ -60,7 +59,10 @@
 <script type="module">import { start } from "/views/lib/router.js"; start();</script>
 <!-- The font picker, the theme picker, the annotations, the chat and the shelf dock button: the aleph-tools widgets, served at /vendor/dock/. One script each, so a missing file loses that widget only. The picker stays; only Chris decides when it goes. -->
 <script type="module">
+  import { dock } from "/vendor/dock/dock.js";
   import { fontPicker, SANS, SERIF, MONO } from "/vendor/dock/font-picker.js";
+  // The dock is made by the first widget: set its phone row layout before that.
+  dock({ rowBelow: 720 });
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
   fontPicker({
     key: "aleph-fonts",

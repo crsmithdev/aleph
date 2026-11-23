@@ -218,7 +218,7 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 
 ### The dock bridge
 
-The dock widgets in `aleph-tools` read these. The dock lives in `#dock-host` in the sidebar (Layout, Dock), so the widgets mount there and the panel anchors move with `--dock-pop-*`. Each points at a base token, so one block serves both themes.
+The dock widgets in `aleph-tools` read these. The dock floats at the bottom right (Layout, Dock). Each points at a base token, so one block serves both themes.
 
 | Token | Value | Role |
 |---|---|---|
@@ -233,7 +233,6 @@ The dock widgets in `aleph-tools` read these. The dock lives in `#dock-host` in 
 | `--dock-font` | `--sans` | a dock widget's text font |
 | `--dock-code` | `--mono` | a dock widget's code font |
 | `--dock-z` | `--z-overlay` | a dock widget's stacking order |
-| `--dock-pop-position`, `--dock-pop-left`, `--dock-pop-right`, `--dock-pop-bottom` | set on `.dock` in `ui/app.css`: `fixed`, the sidebar's width plus `--sp-8`, `auto`, `--sp-16` | where a dock panel opens |
 
 ### Palettes
 
@@ -1746,7 +1745,7 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Part | Rule |
 |---|---|
 | Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
-| Dock | `#dock-host.dock` at the foot of the sidebar, below the collapse button: the aleph-tools buttons in a wrapping row when open, one column when collapsed. At 720px and narrower, a fixed row at the bottom right. A panel is `fixed`: it opens beside the sidebar at the foot of the viewport (above the row at 720px and narrower). See the dock bridge |
+| Dock | `#dock-host`, made by aleph-tools `dock({ rowBelow: 720 })`: a fixed column of buttons at the bottom right, 16px from the edges; at 720px and narrower, a row in the corner. A panel opens at the left of its button. See the dock bridge |
 | Attention dot | An entry gets a tone dot at the right of its link while its page has an attention row (Page, Attention rows). `/api/attention` gives the rows; the dot reads the same rows as the page and changes with them. A collapsed sidebar puts the dot on the icon |
 | Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--error`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
