@@ -92,6 +92,7 @@ const askChoice = (a, input, name) =>
  * An Ask card from a server `asks` entry. Compact: the meta row, the title (the kind, then the headline, and the tag
  * that names the stop) and the buttons. A click on the title opens it: the description, what each button does with
  * the recommended one marked, and Technical details, closed until opened. Choices in order: positive, positive [auto-yes], negative.
+ * @design ask-card
  */
 export function askCard(i, now = new Date().toISOString()) {
   const acts = i.actions ?? [];

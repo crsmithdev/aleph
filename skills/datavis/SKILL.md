@@ -83,7 +83,7 @@ Done when each metric has a place, and each headline links to its rows.
 
 ## 6. Hand off the look
 
-The repo's design language owns how each metric looks: `docs/design.md` in aleph, through each component's Use and Not for lines. If the repo has none, use the `dataviz` skill. If a metric needs a form or a rule the design language does not have, add it to the design language, not to the view.
+The repo's design language owns how each metric looks: `design/components/` in aleph, through each component's Use and Not for lines (`design rules --for <component>`). If the repo has none, use the `dataviz` skill. If a metric needs a form or a rule the design language does not have, add it to the design language, not to the view.
 
 Done when each metric names the design-language component that shows it.
 

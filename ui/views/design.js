@@ -1,7 +1,7 @@
-// #/design: the design language's specimens. Each component of docs/design.md, drawn by its real helper from fixture
+// #/design: the design language's specimens. Each component of design/components, drawn by its real helper from fixture
 // data, in each of its states, so a review sees the code's own output. Each specimen has a `data-annotate` id, so a
-// note pinned on it stays across a redraw. Beside each specimen are its rules, read from docs/design.md through
-// /api/design, so the doc stays the one place they are written. The sidebar leaves the page out.
+// note pinned on it stays across a redraw. Beside each specimen are its entry, its file and its rules, read from the
+// index at /api/design, so the component files stay the one place they are written. The sidebar leaves the page out.
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
@@ -21,21 +21,23 @@ const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();
 const NEEDS = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 2 } }, misses: { unoffered_reads: 35 },
   processes: { decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
 
-/** The doc's section under the heading `name` (any level), to the next heading of the same level or higher; "" for none. */
-export function section(doc, name) {
-  const lines = String(doc ?? "").split("\n"), i = lines.findIndex((l) => /^#{2,4} /.test(l) && l.replace(/^#+ /, "") === name);
-  if (i < 0) return "";
-  const level = lines[i].indexOf(" "), end = lines.findIndex((l, j) => j > i && /^#{1,4} /.test(l) && l.indexOf(" ") <= level);
-  return lines.slice(i + 1, end < 0 ? undefined : end).join("\n").trim();
+let index = [], items = [];
+/** The markdown of an entry's exceptions, one nested bullet each. */
+const excepts = (e, pad = "") => e.except.map((x) => `\n${pad}  - except: ${x.place}: ${x.reason}`).join("");
+/** The rules beside a specimen, from the index. A name is a component id (its text, its file and its rules), a rule id, or a rule id prefix ending in `*`. */
+function rulesOf(names) {
+  return names.map((n) => {
+    const own = index.find((e) => e.kind === "component" && e.id === n);
+    if (own) return `${own.text}\n\n\`${own.home.replace(/:\d+$/, "")}\`\n\n` + index.filter((e) => e.kind === "rule" && e.scope === n).map((e) => `- ${e.text}${excepts(e)}`).join("\n");
+    return index.filter((e) => e.kind === "rule" && e.scope === "global" && (n.endsWith("*") ? e.id.startsWith(n.slice(0, -1)) : e.id === n))
+      .map((e) => { const [head, ...body] = e.text.split("\n\n"); return `#### ${head}\n\n${body.join("\n\n")}${e.except.length ? `\n\n${e.except.map((x) => `- except: ${x.place}: ${x.reason}`).join("\n")}` : ""}`; }).join("\n\n");
+  }).filter(Boolean).join("\n\n");
 }
-
-let doc = "", items = [];
-/** One specimen: its name, a line on what it shows, its HTML, and the rules under the doc's heading `rules` (none for ""). Not a card, so a card in it is not nested. */
-const spec = (id, title, body, note = "", rules = title) => {
-  const names = [rules].flat().filter(Boolean);
+/** One specimen: its name, a line on what it shows, its HTML, and the rules from the index for the component ids or rule ids in `rules` (the title in kebab case by default, none for ""). Not a card, so a card in it is not nested. */
+const spec = (id, title, body, note = "", rules = title.toLowerCase().replace(/\W+/g, "-")) => {
+  const names = [rules].flat().filter(Boolean), text = rulesOf(names), component = names.find((n) => index.some((e) => e.kind === "component" && e.id === n));
   items.push([`design-${id}`, title, true]);
-  const text = names.length > 1 ? names.map((n) => `#### ${n}\n\n${section(doc, n)}`).join("\n\n") : names.length ? section(doc, names[0]) : "";
-  return `<section class="design-spec" id="design-${id}" data-annotate="design/${id}"><h3>${title}</h3>` +
+  return `<section class="design-spec" id="design-${id}" data-annotate="design/${id}"${component ? ` data-component="${component}"` : ""}><h3>${title}</h3>` +
     `<div class="design-specimen">${note ? `<p class="hint">${note}</p>` : ""}${body}</div>${text ? `<div class="design-rules md">${md(text)}</div>` : ""}</section>`;
 };
 /** A group heading of the page, and its entry in the contents. */
@@ -140,10 +142,10 @@ const BROWSE_GROUPS = BROWSE.map(([title, rs], i) => ({ title, count: String(rs.
 const VIEWS = [{ id: "list", label: "List" }, { id: "flow", label: "Flow" }];
 const RUNS = [{ secs: 540, cls: "done", tip: "build done 9m 00s" }, { secs: 120, cls: "error", tip: "checks error 2m 00s" }, { secs: 300, cls: "run", tip: "build running 5m 00s" }];
 
-const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
-  ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
-  ["data", "Data colours", /^--(series|chart|seg|fill)-/]];
-// The pairs of the doc's Contrast table.
+const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/, "colour-token"],
+  ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/, "meaning-is-tone"],
+  ["data", "Data colours", /^--(series|chart|seg|fill)-/, "colour-use"]];
+// The pairs of the Contrast rule.
 const PAIRS = [["--ink", "--surface"], ["--ink-2", "--surface"], ["--muted", "--surface"], ["--muted", "--bg"], ["--muted", "--sunk"], ["--muted", "--raised"],
   ["--need", "--need-bg"], ["--error", "--error-bg"], ["--done", "--done-bg"], ["--run", "--run-bg"], ["--hot", "--surface"], ["--focus", "--surface"], ["--on-fill", "--seg-reran"]];
 const AGO = new Date(T0 - 3 * 36e5);
@@ -159,27 +161,27 @@ const VALUES = [
 ];
 
 function renderDesign(d) {
-  doc = d?.body ?? "";
+  index = d ?? [];
   const sort = { key: "at", dir: -1 };
   items = [["design-every", "Every component"]];
   const head = `<div class="page design">${crumb("#/", [["aleph", "#/"], ["design"]])}` +
     pageHead("Design") +
-    `<p class="hint">Each component of <code>docs/design.md</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>`;
-  const body = `<section class="design-spec" id="design-every" data-annotate="design/every"><h3>Every component</h3><div class="design-rules md">${md(section(doc, "Every component"))}</div></section>` +
+    `<p class="hint">Each component of <code>design/components</code>, drawn by its own helper. Pin a note on a specimen with the annotate tool.</p>`;
+  const body = `<section class="design-spec" id="design-every" data-annotate="design/every"><h3>Every component</h3><div class="design-rules md">${md(rulesOf(["component-*"]))}</div></section>` +
 
     group("Foundations") +
-    COLOURS.map(([id, name]) => spec(id, name, `<div class="design-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "")).join("") +
+    COLOURS.map(([id, name, , rule]) => spec(id, name, `<div class="design-swatches" data-tokens="${id}"></div>`, id === "surfaces" ? "Each swatch: light on the left, dark on the right, read from the stylesheet." : "", rule)).join("") +
     spec("contrast", "Contrast", `<div data-tokens="contrast"></div>`, "Each ratio is computed now from the light and the dark token values. Text needs 4.5:1.") +
-    spec("type", "Type", `<div data-tokens="type"></div>`, "", ["Sizes", "Weights and families", "Tracking and line height"]) +
+    spec("type", "Type", `<div data-tokens="type"></div>`, "", ["weight-token", "tracking", "line-height"]) +
     spec("space", "Space and shape", `<div class="design-row" data-tokens="space"></div><div class="design-row" data-tokens="radius"></div><div class="design-row" data-tokens="layers"></div>`, "",
-      ["Spacing", "Radii", "Controls and layers", "Breakpoints and motion"]) +
+      ["dot-size", "measure", "sticky-top", "size-literal", "state-selected", "state-current", "state-parked", "breakpoint-literal", "motion"]) +
 
     group("Content") +
     spec("values", "Values", dataTable(heads(["Kind", "Helper", "Renders", "Missing"]), VALUES.map(([k, h, f, xs, none]) =>
       `<tr><td>${k}</td><td><code>${h}</code></td><td class="num">${xs.map((x) => f(x)).join(", ")}</td><td class="num">${none ? '<span class="quiet">none</span>' : f(null) || '<span class="quiet">empty</span>'}</td></tr>`).join(""), { fit: true }),
-      "Each helper's output now, and its output for no value.") +
+      "Each helper's output now, and its output for no value.", "value-*") +
     spec("words", "Words", pageHead("Running", { count: 3 }) + row(badge("running"), badge("landed"), priorityBadge("critical")) +
-      empty() + error("Could not load the agents.") + loadingLine("Jobs")) +
+      empty() + error("Could not load the agents.") + loadingLine("Jobs"), "", "words-*") +
 
     group("Structure") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() }) + pageHead("Issues", { after: viewTabs(VIEWS, "list") }), "The second head has view tabs; the first view is the default.") +
@@ -198,7 +200,7 @@ function renderDesign(d) {
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/design-page</code>"]])) +
 
     group("Page") +
-    spec("page", "Page grammar", `<div class="views">${pageHead("Hooks", { after: viewTabs([{ id: "list", label: "List" }, { id: "holds", label: "Holds" }, { id: "errors", label: "Errors" }], "list") })}${attention([{ tone: "error", text: "151 hook errors, 72 from a moved hook file", act: { label: "Errors", href: "#/design" } }])}${factsLine([["24", "hooks"], ["3", "hold"]])}</div>`, "Head with tabs, attention row, then the facts line.", "Page grammar") +
+    spec("page", "Page grammar", `<div class="views">${pageHead("Hooks", { after: viewTabs([{ id: "list", label: "List" }, { id: "holds", label: "Holds" }, { id: "errors", label: "Errors" }], "list") })}${attention([{ tone: "error", text: "151 hook errors, 72 from a moved hook file", act: { label: "Errors", href: "#/design" } }])}${factsLine([["24", "hooks"], ["3", "hold"]])}</div>`, "Head with tabs, attention row, then the facts line.", "page-*") +
     spec("attention", "Attention rows", attention([{ tone: "error", text: "OpenRouter: API Error: 402 Insufficient credits", act: { label: "Add credits", href: "#/design" } }, { tone: "need", text: "Start context 5,950 B of 6,000 B" }])) +
     spec("facts-line", "Facts line", factsLine([["3", "running"], ["12", "runs today"], [money(4.1), "today"], ["28", "landed this week"]])) +
     spec("figure-band", "Figure band", figureBand([{ k: "Cost", v: "$41", cmp: "$38 last week", trend: "warn" }, { k: "Success", v: "92%", cmp: "86% baseline", trend: "good" }, { k: "p50", v: "6m 40s", cmp: "5m 10s last week" }])) +
@@ -296,7 +298,7 @@ function renderDesign(d) {
       `<div style="max-width:320px">${barList(barRow("Pressed bar row", 60, "6.0h", { key: "design-bar", on: true }) + barRow("Bar row", 30, "3.0h", { key: "design-bar-off" }))}</div>` +
       dataTable(heads(["Row", "State"]), `<tr class="mrow" aria-selected="true"><td>Selected</td><td>aria-selected="true"</td></tr><tr class="mrow" aria-selected="false"><td>Not selected</td><td>aria-selected="false"</td></tr>`) +
       `<div style="max-width:320px">${tiles("Pressed metric card", statCard({ k: "Selector", v: "7", note: "pressed", key: "a", on: true }))}</div>`,
-      "Focus, hover and active are drawn with inline styles, so they show without a pointer or a keyboard.", "States");
+      "Focus, hover and active are drawn with inline styles, so they show without a pointer or a keyboard.", "state-*");
   return `${head}${toc(items, body)}</div>`;
 }
 

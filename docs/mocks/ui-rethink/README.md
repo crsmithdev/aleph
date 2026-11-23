@@ -37,7 +37,7 @@ others. A running run has a negative `secs`.
 
 ## What is wrong today
 
-1. **One template for every page.** `docs/design.md` says "page head, metric cards, then cards". A browser, an
+1. **One template for every page.** `design.md` says "page head, metric cards, then cards". A browser, an
    analysis, a settings page and an inventory all open with 5 or 6 metric cards and 3 or 4 charts. The page's own
    content starts below the first screen.
 2. **Pages mix kinds.** Automation holds settings, evidence, the monitor and an audit log. Jobs holds a timing analysis
@@ -65,7 +65,7 @@ Each decision names the rule behind it.
    headline metrics", and each figure needs a comparison.
 5. **A row carries its evidence.** A job row draws its runs as a strip. A hook row draws its outcomes. A role row draws
    its success rate against the baseline. Rule: Principle 4, "A mechanism earns its place with evidence".
-6. **A row hides its defaults.** No `medium`, no `aleph`, no zero, and a muted `done`. Rule: `docs/design.md`,
+6. **A row hides its defaults.** No `medium`, no `aleph`, no zero, and a muted `done`. Rule: `design.md`,
    Principles 5 and 6 (terse UI text).
 7. **Row select opens an inspector at the right.** The detail pages stay, behind "Open page". Rule: Chris's wish of
    2026-11-20 to look into a hook "without a hook detail page". `.browse` and the Memory inspector exist already.

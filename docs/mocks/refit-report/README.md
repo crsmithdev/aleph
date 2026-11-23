@@ -17,10 +17,10 @@ CSS of the scanned commit, as `skills/refit/REPORT.md` (Directory) asks. A copy 
 5. Components lists only the components with a broken rule. Passing entries, their `passes` badges and every
    "Rules followed" list are gone (note 5). I read "the passes part" to cover the followed lists too.
 6. Design pass (note 6):
-   - The Overview card closes before Components, so no card sits in a card (`docs/design.md`, Card: "Do not put a
+   - The Overview card closes before Components, so no card sits in a card (`design.md`, Card: "Do not put a
      card in a card").
    - An entry names its variant in `span.quiet` on its own line, in place of an `h4` above it.
-   - The `broken` badge on each finding is gone, because every finding left is broken (`docs/design.md`, Principle 6:
+   - The `broken` badge on each finding is gone, because every finding left is broken (`design.md`, Principle 6:
      "Do not fill a space because it is there").
    - A finding shown in two entries (3, 5, 12, 16) keeps its block in the first and an "Also" link in the second.
 
@@ -31,7 +31,7 @@ The shape rules changed with the sample: `skills/refit/REPORT.md`, `skills/refit
 
 Chris's notes on round 2 (shelf `20261116-224328-gyi9`):
 
-1. The row fold button goes in the first column. `docs/design.md`, Table, now puts it first in the column order.
+1. The row fold button goes in the first column. `design.md`, Table, now puts it first in the column order.
    Finding 7's fix says so.
 2. A finding card shows no proof line. The hunt proves a finding, and the report does not repeat it.
 3. Each picture shows once. A later finding on the same picture has a "Shot: see" link to the first. This removes
@@ -50,7 +50,7 @@ Chris's notes on round 4 (shelf `20261116-230251-csrn`):
 3. A fix changes the shared helper that makes the fault. Finding 11 now fixes the Flow error line in the shared
    Flow fetch, so every Flow page gets it.
 4. Size shows rank: the problem title at `--fs-2xl`, the fix at `--fs-lg` in `--ink`, the rule, locations and
-   guard at `--fs-sm` in `--muted`. Each size and colour is a token (`docs/design.md`, Principle 1, "One token set, two
+   guard at `--fs-sm` in `--muted`. Each size and colour is a token (`design.md`, Principle 1, "One token set, two
    themes").
 
 ## Round 6

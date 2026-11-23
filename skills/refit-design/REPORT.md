@@ -2,7 +2,7 @@
 
 The report of a refit-design run. It has the shape of [refit/REPORT.md](../refit/REPORT.md), with the
 markup and `report.css` of [refit/HTML.md](../refit/HTML.md). This file holds only what is specific to design. The
-report uses the aleph classes and tokens of `ui/app.css`, no Tailwind. It cites only rules of `docs/design.md`.
+report uses the aleph classes and tokens of `ui/app.css`, no Tailwind. It cites only rules of `design/rules.md` and `design/components/`.
 
 ## Directory
 
@@ -22,7 +22,7 @@ another host, where `/#/design` finds nothing. The link text names the specimen 
    variant differs. A table is its own component when its columns or rows differ from the specimen.
 2. **Row.** The strength is the kind: missing token, one-off, mismatch, local defect, state, stress, hand markup or
    slop. The signal is the lens. After the signal, the Design link.
-3. **Proposals.** Each change to `docs/design.md` that the scan asks for: where, the evidence (3 or more uses, with
+3. **Proposals.** Each change to `design/` that the scan asks for: where, the evidence (3 or more uses, with
    `file:line`) and the sentence the doc needs.
 
 ## Finding
@@ -35,10 +35,10 @@ The finding card of [refit/REPORT.md](../refit/REPORT.md), with three changes:
 2. **Before / after** is a screenshot of the part the finding names, as drawn on the page, cropped from the shots,
    with no caption: its `alt` names it. Show it at most 480px wide, as a link that opens the full shot in a new
    tab. Show no Design specimen: the Design link stands for the rule. Show each picture once.
-3. **Locations, guard** opens with the rule: its `docs/design.md` section and the rule text, quoted. A repeated
+3. **Locations, guard** opens with the rule: its rule id and the rule text, quoted. A repeated
    picture gets a "Shot: see" line with a link to the finding that shows it.
 
-**No rule.** A component that no rule of `docs/design.md` covers says "No rule covers this." It is a proposal in
+**No rule.** A component that no rule in `design/` covers says "No rule covers this." It is a proposal in
 Proposals when 3 or more places use it.
 
 ```html

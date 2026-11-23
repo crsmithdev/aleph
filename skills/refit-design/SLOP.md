@@ -1,8 +1,8 @@
 # Slop lens
 
 Slop is UI that draws correctly and carries more than it needs: a card in a card, a border on a border, a shadow,
-an icon, a label that explains the title. The reader looks for what matters. Principle 6 of `docs/design.md` is the
-rule: be terse. This is the [refit-code](../refit-code/SLOP.md) lens applied to the UI.
+an icon, a label that explains the title. The reader looks for what matters. The `be-terse` rule of `design/rules.md` is the
+rule. This is the [refit-code](../refit-code/SLOP.md) lens applied to the UI.
 
 ## Signals
 

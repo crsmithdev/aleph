@@ -2,7 +2,7 @@
 
 Chris asked on 2026-11-21 for a clean re-think of the Status page (`ui/views/now.js`): keep cards like the scorecard,
 add an event viewer, and show at a glance memory, the factory's efficiency, flow and problems, the work in progress,
-and the alerts, Asks and problems. The pages stay in the design language of `docs/design.md`.
+and the alerts, Asks and problems. The pages stay in the design language of `design.md`.
 
 Open `index.html`. Each page has a State control (Busy, Quiet) and a Theme control. Not built.
 
@@ -33,15 +33,15 @@ pages order the blocks by the two decisions.
 
 | Block | Shows | Rule |
 |---|---|---|
-| Head | The time and the status sentence. A problem with no Ask reads "Warning: OpenRouter has no credit." Today a warning follows "Everything is fine; ". | `docs/design.md`, Page head |
+| Head | The time and the status sentence. A problem with no Ask reads "Warning: OpenRouter has no credit." Today a warning follows "Everything is fine; ". | `design.md`, Page head |
 | Scorecard | Six metric cards. Each is the headline of one block and links to it. | `aleph:datavis`: at most 7 headline metrics |
 | Needs You | The alert and each Ask, with its actions and its Always button. Nothing when nothing waits. | `PRINCIPLES.md`: what waits for Chris shows at the top, with no scroll |
 | Problems | New. What the factory sees outside its usual range: a word in its tone, the value, the usual value. | Principle 3; `aleph:datavis`, step 4: each number has a comparison |
 | Active work | The issues that run, and the issues that wait with what they wait on. One form per page. | `aleph:datavis`: an item beside the typical item of its kind |
-| Events | A filter by kind (Problems, Landed, Asks, Holds) and a search by ID or title. One form per page. | `docs/design.md`, Table: an event log puts the time first |
+| Events | A filter by kind (Problems, Landed, Asks, Holds) and a search by ID or title. One form per page. | `design.md`, Table: an event log puts the time first |
 | Efficiency, Flow | Agent hours by outcome, lost time by cause, failed runs by stage, the week's counts, time by phase, landed per day. | `aleph:datavis`: a count beside each rate, p50 and p90 for a duration |
 | Memory | The start context against its budget, six counts under the Memory page's names, offers per day. | `aleph:datavis`: two views show one name with one formula |
-| Lights | Workers, tick, CI, suite, backend and vault, each with a word. | `docs/design.md`, Status light |
+| Lights | Workers, tick, CI, suite, backend and vault, each with a word. | `design.md`, Status light |
 
 The scorecard:
 
@@ -128,7 +128,7 @@ The Recommended section is of round 1.
 
 ## New parts
 
-Each needs a place in `docs/design.md` before a build.
+Each needs a place in `design.md` before a build.
 
 - A meter fill in the need tone (`.m-need`): a run past its p90, a budget at 95%.
 - The Problems table: a hand cell of what the problem is and a muted detail (`.pwhat`, `.pdetail`).
@@ -137,7 +137,7 @@ Each needs a place in `docs/design.md` before a build.
 - A row of status lights (`.lights`), and the filter row of the event viewer (`.evbar`).
 - The column charts are hand SVG (`.cols`). A build draws them as `<aleph-chart>` panels.
 - B only: the board (`.board`, `.bcol`, `.bitem`), and a small link button in a table row.
-- C only: the timeline in a card on a list page. `docs/design.md` gives the Timeline to detail pages.
+- C only: the timeline in a card on a list page. `design.md` gives the Timeline to detail pages.
 
 ## Data
 

@@ -97,6 +97,6 @@ A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-
 - [UI](docs/ui.md): run and extend `aleph-ui`
 - [Langfuse](docs/langfuse.md): set up tracing
 - [Naming](docs/naming.md): the names, keys and status words aleph shows and stores
-- [UI design reference](docs/design.md): tokens, formats and components of the UI
+- [UI design rules](design/rules.md): rules, tokens and components of the UI, with a file for each component in `design/components/`
 - [Start at boot](docs/start-at-boot.md): start WSL, the UI and the tick after a Windows restart
 - [Decision records](docs/adr/): [Holds are events](docs/adr/0001-holds-are-events.md), [Detail word has one writer](docs/adr/0002-detail-word-has-one-writer.md), [Verify gate judges substance](docs/adr/0003-verify-gate-judges-substance.md), [Context gate ends a session early](docs/adr/0004-context-gate-ends-a-session-early.md)

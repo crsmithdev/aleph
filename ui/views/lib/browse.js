@@ -1,4 +1,4 @@
-// The list surface (docs/design.md, List surface): one card of a search, filters and grouped rows on one grid, with the
+// The list surface (design/components/list-surface.md): one card of a search, filters and grouped rows on one grid, with the
 // inspector of the selected row at its right. What the reader sets (the search, the filters, the selected row) lives in
 // this module, not in the markup, so a redraw by the router's morph draws it again as the reader left it.
 import { keep, kept } from "./address.js";
@@ -57,6 +57,7 @@ function rows(list, st, sel) {
  * `id` names the list for its kept state; `label` names the card; `search` is the search box's placeholder and `hint` the key it shows.
  * `cap` limits the rows of all groups together, as a group's `cap` limits its own. The inspector opens on the selected row, else the first;
  * each drawn row's own inspector waits in a template.
+ * @design list-surface
  */
 export function browse({ id, label, search, hint = "", filters = [], groups, cap }) {
   const list = { groups, cap };
@@ -70,7 +71,10 @@ export function browse({ id, label, search, hint = "", filters = [], groups, cap
     shown.map((r) => `<template data-inspect="${esc(r.key)}">${inspect(r)}</template>`).join("") + `</div>`;
 }
 
-/** The inspector's content for one item: its id with "Open page" to its page, its title, a status row, its facts, then `body`. `rows` is `[[label, html]]`. */
+/**
+ * The inspector's content for one item: its id with "Open page" to its page, its title, a status row, its facts, then `body`. `rows` is `[[label, html]]`.
+ * @design inspector
+ */
 export const inspector = ({ id, title, status = "", rows: kv = [], body = "", href }) =>
   `<div class="inspect-head"><span class="idp">${esc(id)}</span>${href ? linkButton("Open page", href) : ""}</div><h3>${esc(title)}</h3>${status}${facts(kv)}${body}`;
 

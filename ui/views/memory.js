@@ -212,7 +212,7 @@ function logView(m) {
 }
 
 
-// A frontmatter key in sentence case: written_by is "Written by", last_verified is "Last verified" (docs/design.md, Words).
+// A frontmatter key in sentence case: written_by is "Written by", last_verified is "Last verified" (design/rules.md, words-sentence-case).
 const titleKey = (k) => { const s = k.split(/[_-]/).join(" "); return s[0].toUpperCase() + s.slice(1); };
 const crumbs = (t) => `<ul>${t.map((n) => `<li>${link(n.title)}${meta([esc(n.kind), esc(n.scope)])}</li>`).join("")}</ul>`;
 

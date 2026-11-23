@@ -19,7 +19,7 @@ The `aleph` CLI (cli/cli.ts) is the entry point for issues and the factory. `ale
 - [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The items repo, issues, the `aleph issue` commands and fields
 - [Vault](https://github.com/crsmithdev/aleph/blob/main/docs/vault.md): The memory vault, its commands and its note format
 - [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, pair a device, and add a page
-- [UI design reference](https://github.com/crsmithdev/aleph/blob/main/docs/design.md): Tokens, formats, tables, charts and components of the UI
+- [UI design rules](https://github.com/crsmithdev/aleph/blob/main/design/rules.md): Rules for tokens, formats and content; a file for each component in design/components/
 - [Langfuse](https://github.com/crsmithdev/aleph/blob/main/docs/langfuse.md): Set up tracing, and what a trace holds
 
 ## Decision records

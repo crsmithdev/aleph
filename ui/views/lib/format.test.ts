@@ -16,10 +16,10 @@ test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a ba
   expect(when("x")).toBe("");
 });
 
-test("wkText follows the pct rule, and the Values table of docs/design.md lists those examples", async () => {
+test("wkText follows the pct rule, and the Values table of design/rules.md lists those examples", async () => {
   const got = [1.4, 0.4].map((p) => wkText({ pct: p }));
   expect(got).toEqual(["≈1% wk", "≈0.4% wk"]);
-  const row = (await Bun.file(new URL("../../../docs/design.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Weekly share |"))!;
+  const row = (await Bun.file(new URL("../../../design/rules.md", import.meta.url)).text()).split("\n").find((l) => l.startsWith("| Weekly share |"))!;
   expect(row.split("|")[2].trim().split(", ")).toEqual(got);
 });
 

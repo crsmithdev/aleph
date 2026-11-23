@@ -19,20 +19,35 @@ export const costHtml = (cost, wk) => {
   if (!wk) return dollars;
   return `${wkHtml(wk)}${dollars ? ` <span class="quiet">${dollars}</span>` : ""}`;
 };
-/** The one empty state: "No data". Pass `line` only for a state that is not missing data, in at most three words. */
+/**
+ * The one empty state: "No data". Pass `line` only for a state that is not missing data, in at most three words.
+ * @design empty-state
+ */
 export const empty = (line = "No data") => `<div class="empty"><p>${esc(line)}</p></div>`;
 /** The loading spinner: one CSS mark, which stands still under prefers-reduced-motion. Only the loading helpers draw it. */
 const spin = `<i class="spin" aria-hidden="true"></i>`;
-/** An inline loading line: a spinner and "Loading <what>…". Use it for any data that has not returned its first answer; a missing answer after that is empty() or error(). */
+/**
+ * An inline loading line: a spinner and "Loading <what>…". Use it for any data that has not returned its first answer; a missing answer after that is empty() or error().
+ * @design empty-state
+ */
 export const loadingLine = (what) => `<p class="quiet" role="status">${spin}Loading ${esc(what)}…</p>`;
 /** The first-load state of a view, shown until its API answers. */
 export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">${spin}Loading ${esc(title)}…</p></div>`;
-/** The error state: what failed, and under Technical details the upstream text. */
+/**
+ * The error state: what failed, and under Technical details the upstream text.
+ * @design empty-state
+ */
 export const error = (line, { detail = "" } = {}) =>
   `<div class="error" role="alert"><p>${esc(line)}</p>${detail ? fold("Technical details", `<pre>${esc(detail)}</pre>`) : ""}</div>`;
-/** A note above data that still shows: `bad` marks that the data is stale or wrong. */
+/**
+ * A note above data that still shows: `bad` marks that the data is stale or wrong.
+ * @design empty-state
+ */
 export const notice = (line, bad = false, id = "") => `<p class="notice${bad ? " bad" : ""}" role="${bad ? "alert" : "status"}"${id ? ` id="${esc(id)}"` : ""}>${esc(line)}</p>`;
-/** A command the reader copies to run; the page's click handler does the copying. */
+/**
+ * A command the reader copies to run; the page's click handler does the copying.
+ * @design command
+ */
 export function cmd(text, { primary = false, hint = "" } = {}) {
   return `<button class="cmd${primary ? " primary" : ""}" type="button" data-cmd="${esc(text)}"><span>${esc(text)}</span>${hint ? `<span class="hint">${esc(hint)}</span>` : ""}<span class="cp">Copy</span></button>`;
 }
@@ -55,7 +70,10 @@ function inline(text) {
   }).join("");
 }
 const emph = (s) => s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>").replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
-/** Markdown to HTML: headings, lists, pipe tables, fenced code, paragraphs, inline code, links and [[wiki links]]. Everything else is escaped. */
+/**
+ * Markdown to HTML: headings, lists, pipe tables, fenced code, paragraphs, inline code, links and [[wiki links]]. Everything else is escaped.
+ * @design markdown-and-code
+ */
 export function md(src) {
   const lines = String(src ?? "").replace(/\r\n?/g, "\n").split("\n");
   const out = [];
@@ -171,7 +189,10 @@ export function restoreState(root, state) {
   for (const k of state.open ?? []) if (clamps.has(k)) openClamp(clamps.get(k), true);
   clamps.get(state.focus)?.focus();
 }
-/** A diff as HTML: one span per line, marked by kind. An empty diff says so. */
+/**
+ * A diff as HTML: one span per line, marked by kind. An empty diff says so.
+ * @design diff
+ */
 export const diffHtml = (t) => String(t ?? "").trim()
   ? `<pre>${String(t).split("\n").map((l) => {
       const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
@@ -196,7 +217,10 @@ export const tone = (state) => TONES[state] ?? "quiet";
 
 // The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
 // Column order for every table: id or name, title, state badge, priority, project, labels, numbers, then time.
-/** The page header: the serif title (none when `title` is empty), a muted count, and an optional right-hand aside (`aside` is HTML); `head` adds a class to the header. */
+/**
+ * The page header: the serif title (none when `title` is empty), a muted count, and an optional right-hand aside (`aside` is HTML); `head` adds a class to the header.
+ * @design page-head
+ */
 export const pageHead = (title, { count, aside = "", cls = "", after = "", head = "" } = {}) =>
   `<header class="ph${head ? ` ${head}` : ""}">${title ? `<h1${cls ? ` class="${cls}"` : ""}>${esc(title)}</h1>` : ""}${after}${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
 /** An id as a link: mono, small, muted, underlined on hover. */
@@ -208,6 +232,7 @@ export function blockersHtml(waits, repo, id) {
   const label = `Stop waiting on ${dead.map((b) => shortText(b.id)).join(", ")}`;
   return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", path: `${issueApi(repo, id)}/unblock`, label })}</div>`;
 }
+/** @design link */
 export const idLink = (id, href, { title } = {}) => {
   const t = title === undefined ? "" : ` title="${esc(title)}"`;
   return href ? `<a class="idl"${t} href="${esc(safeHref(href))}">${esc(id)}</a>` : `<span class="idp"${t}>${esc(id)}</span>`;
@@ -222,38 +247,66 @@ export const meta = (parts) => `<p class="meta">${parts.filter(Boolean).map((p) 
 export const note = (text) => `<p class="note">${esc(text)}</p>`;
 /** A head inside a card, under its title. */
 export const subHead = (text) => `<h3 class="sub-head">${esc(text)}</h3>`;
-/** One table cell of text: `num` right-aligns it; a `wide` cell is the stretching one and shows its text as its title, or `title`. */
+/**
+ * One table cell of text: `num` right-aligns it; a `wide` cell is the stretching one and shows its text as its title, or `title`.
+ * @design row-and-cell
+ */
 export const cell = (v, { num = false, wide = false, title } = {}) => {
   const t = title ?? (wide ? v : undefined);
   return `<td${num || wide ? ` class="${[num && "num", wide && "wide"].filter(Boolean).join(" ")}"` : ""}${t === undefined ? "" : ` title="${esc(t)}"`}>${esc(v)}</td>`;
 };
-/** A table row of `cells` (each from `cell` or other `<td>` HTML). */
+/**
+ * A table row of `cells` (each from `cell` or other `<td>` HTML).
+ * @design row-and-cell
+ */
 export const row = (cells) => `<tr>${cells.join("")}</tr>`;
-/** A stack of rows or cards (HTML). */
+/**
+ * A stack of rows or cards (HTML).
+ * @design list-and-group
+ */
 export const list = (html) => `<div class="list">${html}</div>`;
-/** A named part of a page or card (HTML), with an id to link to. */
+/**
+ * A named part of a page or card (HTML), with an id to link to.
+ * @design list-and-group
+ */
 export const group = (id, html) => `<div class="grp" id="${esc(id)}">${html}</div>`;
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
-/** An id as a link with its short id. */
+/**
+ * An id as a link with its short id.
+ * @design link
+ */
 export const repoIdLink = (id, href) => idLink(shortId(id), href);
-/** A small badge of any text in one of the badge tones, with an optional title. */
+/**
+ * A small badge of any text in one of the badge tones, with an optional title.
+ * @design badge
+ */
 export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(tone)}"${title === undefined ? "" : ` title="${esc(title)}"`}>${esc(text)}</span>`;
-/** A state as a badge, toned by `tone`. */
+/**
+ * A state as a badge, toned by `tone`.
+ * @design badge
+ */
 export const badge = (state) => tag(state, tone(state));
 /** A priority as a badge: critical is the alert tone, high the warning tone, medium and low quiet. Missing or unknown reads medium. */
 const PRIORITY_TONES = ["quiet", "quiet", "need", "error"];
+/** @design badge */
 export function priorityBadge(p) {
   const i = priorityRank(p);
   return tag(PRIORITIES[i], PRIORITY_TONES[i], PRIORITIES[i]);
 }
-/** The status row of a detail page around its built parts: the state, the priority, then the labels. */
+/**
+ * The status row of a detail page around its built parts: the state, the priority, then the labels.
+ * @design status-row
+ */
 export const statusRow = (state, priority, labels) => `<div class="status-row">${state}${priority}${labels}</div>`;
 /** One chip: `text` escaped, or `html` as given; `el` is the tag, `cls` extra classes, `attrs` extra attributes (with a leading space, already escaped). */
 export const chip = (text, { el = "span", cls = "", attrs = "", html } = {}) => `<${el} class="chip${cls ? ` ${cls}` : ""}"${attrs}>${html ?? esc(text)}</${el}>`;
 /** Built chips in their row; `el` is the row's tag. */
 export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${el}>`;
-/** Labels as small rounded chips; "" for none. */
+/**
+ * Labels as small rounded chips; "" for none.
+ * @design chip
+ */
 export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(l, { attrs: ` title="${esc(l)}"` })).join("")) : "");
 /** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs, icon?}`, `attrs` the button's own attributes. An `icon` button shows the icon, and its label is the name and the tooltip. */
 export const seg = (label, items, attrs = "") =>
@@ -264,6 +317,7 @@ const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label
  * options is a segmented control; `data: true` says the options come from the data, and they make a `<select>`.
  * The first option of a filter says All. Options are strings or `{value, label}`. The view wires the events:
  * a segmented button carries `data-name` on its group and `data-value`, pressed is `aria-pressed="true"`.
+ * @design filter-bar
  */
 export function filterBar(groups) {
   const control = (g) => {
@@ -276,11 +330,16 @@ export function filterBar(groups) {
   };
   return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label && !g.bare ? `<span class="fl">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
 }
-/** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
+/**
+ * The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types.
+ * @design search-box
+ */
 export const searchBox = (ui, value, placeholder, action = "") =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">${action}</div>`;
 /** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes.
- * With `head`, the control is a card's head beside `head.aside`, and `head.top` sits between the head and the panes, so it shows on every tab. */
+ * With `head`, the control is a card's head beside `head.aside`, and `head.top` sits between the head and the panes, so it shows on every tab.
+ * @design tabs
+ */
 export const tabs = (label, items, panes, on = items[0]?.[0], head) => {
   const bar = seg(label, items.map(([id, l]) => ({ label: l, on: id === on, attrs: ` data-tab="${esc(id)}"` })));
   return `<div class="tabs">${head ? `<div class="sh">${bar}<span class="aside">${head.aside}</span></div>${head.top}` : bar}` +
@@ -300,7 +359,9 @@ export function wireTabs(root, onTab) {
   });
 }
 /** A page's contents beside its `body`: one link per section, in a rail that stays in view. `items` is `[[id, label, sub]]`;
- * a `sub` entry sits indented under the entry before it. The router scrolls an `#id` link in place. */
+ * a `sub` entry sits indented under the entry before it. The router scrolls an `#id` link in place.
+ * @design contents
+ */
 export const toc = (items, body) =>
   `<div class="toc-wrap"><nav class="toc" aria-label="Contents"><details open><summary>Contents</summary><ol>` +
   items.map(([id, label, sub]) => `<li${sub ? ' class="sub"' : ""}><a href="#${esc(id)}">${esc(label)}</a></li>`).join("") +
@@ -339,12 +400,16 @@ export function wireToc(root) {
   addEventListener("click", (e) => { if (picked && !nav.contains(e.target)) { picked = null; mark(); } }, { signal });
   for (const k of links.keys()) { const el = document.getElementById(k); if (el) root._toc.observe(el); }
 }
-/** A dot and a word for whether something is up: `state` is "fine", "alert" or anything else for unknown (a muted dot). `label` is the whole text. */
+/**
+ * A dot and a word for whether something is up: `state` is "fine", "alert" or anything else for unknown (a muted dot). `label` is the whole text.
+ * @design status-light
+ */
 export const statusLight = (state, label) =>
   `<span class="light"><span class="event-dot ${state === "fine" || state === "alert" ? state : ""}" aria-hidden="true"></span>${esc(label)}</span>`;
 /**
  * The second click of an action that is hard to undo. Call it on the click: it returns true when it armed the button
  * (the text becomes `text`, in the `.ask` look, for `ms`) and false when the button was already armed, so the action goes on.
+ * @design two-click-confirm
  */
 export function arm(btn, text, ms = 5000) {
   if (btn.classList.contains("ask")) { clearTimeout(btn._t); return false; }
@@ -354,25 +419,38 @@ export function arm(btn, text, ms = 5000) {
   btn._t = setTimeout(() => { btn.classList.remove("ask"); btn.textContent = was; }, ms);
   return true;
 }
-/** A `<select>`: `label` is its accessible name; `options` are strings or `{value, label, disabled}`; `o` has `id` and `attrs` (raw attributes). */
+/**
+ * A `<select>`: `label` is its accessible name; `options` are strings or `{value, label, disabled}`; `o` has `id` and `attrs` (raw attributes).
+ * @design select
+ */
 export const selectBox = (label, name, options, value, o = {}) =>
   `<select name="${esc(name)}"${o.id ? ` id="${esc(o.id)}"` : ""} aria-label="${esc(label)}"${o.attrs ?? ""}>${options.map((x) => {
     const v = typeof x === "object" ? x : { value: x };
     return `<option value="${esc(v.value)}"${String(v.value) === String(value) ? " selected" : ""}${v.disabled ? " disabled" : ""}>${esc(v.label ?? v.value)}</option>`;
   }).join("")}</select>`;
-/** A text, number or search `<input>`; `o` has `id`, `type` (default text) and `attrs` (raw attributes, such as `required` or `pattern`). */
+/**
+ * A text, number or search `<input>`; `o` has `id`, `type` (default text) and `attrs` (raw attributes, such as `required` or `pattern`).
+ * @design field-and-form
+ */
 export const inputBox = (name, value, o = {}) =>
   `<input name="${esc(name)}" type="${o.type ?? "text"}"${o.id ? ` id="${esc(o.id)}"` : ""} value="${esc(value ?? "")}"${o.attrs ?? ""}>`;
-/** One field of a form: its label over its control; `hint` is a line under it; `check` puts a checkbox control before the label text. */
+/**
+ * One field of a form: its label over its control; `hint` is a line under it; `check` puts a checkbox control before the label text.
+ * @design field-and-form
+ */
 export const field = (label, control, { hint = "", check = false } = {}) =>
   `<label class="field">${check ? `${control} ${esc(label)}` : `${esc(label)} ${control}`}${hint ? `<small class="hint">${esc(hint)}</small>` : ""}</label>`;
-/** A form of fields, stacked, with its submit button and the message beside it; `ui` is the `data-ui` key the view wires. */
+/**
+ * A form of fields, stacked, with its submit button and the message beside it; `ui` is the `data-ui` key the view wires.
+ * @design field-and-form
+ */
 export const form = (ui, fields, submit, attrs = "") =>
   `<form class="stack" data-ui="${esc(ui)}"${attrs}>${fields.join("")}${actButton(submit, {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form>`;
 /**
  * One setting: a label, its control and, with `save`, a Save button that submits it alone (a form of its own; the view wires `submit` on `attrs`' data key).
  * `id` is the control's id, so the label names it. Without `save` the control applies on change and the row is a `<div>`. `hint` is a line under the control.
  * `stack` puts the label over the control at any width, for a setting in a narrow card.
+ * @design settings-list
  */
 export const setting = (label, control, { id, hint = "", save = "", attrs = "", stack = false } = {}) => {
   const body = `<label class="sl"${id ? ` for="${esc(id)}"` : ""}>${esc(label)}</label><span class="sctl">${control}${save ? actButton(save, {}, { type: "submit" }) : ""}</span>` +
@@ -390,9 +468,15 @@ if (typeof document !== "undefined") {
   document.addEventListener("input", mark);
   document.addEventListener("change", mark);
 }
-/** The rows of `setting()`, one group under a name. The settings of a page live here, not in table cells. */
+/**
+ * The rows of `setting()`, one group under a name. The settings of a page live here, not in table cells.
+ * @design settings-list
+ */
 export const settings = (label, rows) => `<div class="settings" role="group" aria-label="${esc(label)}">${rows.join("")}</div>`;
-/** A value and its editor in one place: the container's `.editing` class shows the editor and hides the value. */
+/**
+ * A value and its editor in one place: the container's `.editing` class shows the editor and hides the value.
+ * @design edit-toggle
+ */
 export const editable = (shown, editor) => `<span class="view-only">${shown}</span><span class="edit-only">${editor}</span>`;
 /** Toggle `.editing` on the `.editable` that holds a `data-editor` button: `start` turns it on, anything else (`cancel`) off and resets its forms. */
 export function wireEdit(root) {
@@ -444,6 +528,7 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis,
  * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
  * While a figure waits (`loading`) or its fetch failed (`failed`, the error line), a mark takes the trend's place and an
  * undefined `v` or `v2` leaves its space blank, so the card keeps its height.
+ * @design metric-card
  */
 export function statCard({ k, v, v2, q, note, title, trend = "", extra = "", href, key, on = false, loading = false, failed = "" }) {
   const rest = [v2].flat().filter((x) => x !== undefined);
@@ -467,16 +552,25 @@ export function onTile(el, fn) {
     if (b) fn(b.dataset.tile);
   });
 }
-/** A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. An empty title draws no head, for a body of `tabs()` with a card head. */
+/**
+ * A block of a page: the section head (`sectionHead`'s options; `id` is also the section's id), `lede` as one summary sentence, then its body. `label` is the aria label, the title by default. An empty title draws no head, for a body of `tabs()` with a card head.
+ * @design card
+ */
 export const card = (title, body, { count, aside, id, level, cls = "", label = title, lede } = {}) =>
   `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${title ? sectionHead(title, { count, aside, id, level }) : ""}${lede ? `<p class="lede">${esc(lede)}</p>` : ""}${body}</section>`;
-/** A card split 3 : 1 by a rule: the head and `main` on the left, `side` on the right. */
+/**
+ * A card split 3 : 1 by a rule: the head and `main` on the left, `side` on the right.
+ * @design split-card
+ */
 export const splitCard = (title, main, side, { aside, id, label = title } = {}) =>
   `<section class="card duo"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}"><div class="duo-main">${sectionHead(title, { aside })}${main}</div><div class="duo-side">${side}</div></section>`;
 /** The side stats of a split card: each `{ k, v, note, state, title }` a key over a value; `state` colours the value by `tone(state)`; `title` is its tooltip. */
 export const sideStats = (items) =>
   `<dl class="sstats">${items.map(({ k, v, note, state, title }) => `<div${title ? ` title="${esc(title)}"` : ""}><dt>${esc(k)}</dt><dd><b${state ? ` class="${tone(state)}"` : ""}>${esc(v)}</b>${note ? `<span>${esc(note)}</span>` : ""}</dd></div>`).join("")}</dl>`;
-/** The one table: `head` is the cells of the header row, or "" for none; `rows` the rows. */
+/**
+ * The one table: `head` is the cells of the header row, or "" for none; `rows` the rows.
+ * @design table
+ */
 export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
   `<div class="tscroll"><table class="tbl${fit ? " fit" : ""}"${id ? ` id="${esc(id)}"` : ""}>${head ? `<thead><tr>${head}</tr></thead>` : ""}<tbody>${rows}</tbody></table></div>`;
 /** Plain header cells from labels; a label in `num` is right-aligned. */
@@ -485,6 +579,7 @@ export const heads = (labels, num = []) => labels.map((l) => `<th${num.includes(
  * A 10px bar: `parts` is one share in percent, or segments `{pct, cls}` in percent of the whole bar. `label` (plain text)
  * is the text alternative; with none the bar is hidden from assistive tech, for a bar beside its visible value.
  * `mark` is a tick at that percent.
+ * @design meter
  */
 export function meter(parts, label, { mark = null } = {}) {
   const segs = (Array.isArray(parts) ? parts.filter((s) => s.pct > 0) : [{ pct: parts }]).map((s) => `<i${s.cls ? ` class="${s.cls}"` : ""} style="width:${Number(s.pct).toFixed(1)}%"></i>`).join("");
@@ -493,6 +588,7 @@ export function meter(parts, label, { mark = null } = {}) {
 /**
  * One row of a bar list: a label (HTML), a bar and a value (HTML). `pct` is the bar's width, or `bar` is HTML in its place.
  * `top` marks the largest; with `key` the row is a selector, as a tile is.
+ * @design meter
  */
 export function barRow(label, pct, value, { top = false, key, on = false, bar } = {}) {
   const inner = `<span class="bl">${label}</span>${bar ?? meter(pct)}<span class="bv">${value}</span>`;
@@ -501,7 +597,10 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 }
 /** The rows of a bar list on one grid, so their bars start and end together. */
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
-/** The HTML legend: one `<li>` per `[label, cls, attrs]`; a `cls` gives the item a swatch that CSS colours; `attrs` (HTML attributes) makes the item a button. */
+/**
+ * The HTML legend: one `<li>` per `[label, cls, attrs]`; a `cls` gives the item a swatch that CSS colours; `attrs` (HTML attributes) makes the item a button.
+ * @design legend
+ */
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls, attrs]) => { const in_ = `${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}`; return `<li>${attrs ? `<button type="button" class="lgo" ${attrs}>${in_}</button>` : in_}</li>`; }).join("")}</ul>`;
 const param = (q, k) => (typeof q.get === "function" ? q.get(k) : q[k]);
 /** The page number in the query `q` (URLSearchParams or object): 1 unless `page` is a larger whole number. */
@@ -518,7 +617,10 @@ export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
   const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
   return c * sort.dir || (tie ? tie(a, b) : 0);
 });
-/** Under a long table: "Previous 50" and "Next 50" (`data-page` holds the page each goes to) and "51–100 of 345". */
+/**
+ * Under a long table: "Previous 50" and "Next 50" (`data-page` holds the page each goes to) and "51–100 of 345".
+ * @design pager
+ */
 export function pager(page, total, step = 50, { cls = "" } = {}) {
   const p = pageIn(page, total, step), from = (p - 1) * step, to = Math.min(total, from + step);
   const prev = p > 1 ? actButton(`Previous ${step}`, { page: p - 1 }) : "", next = to < total ? actButton(`Next ${Math.min(step, total - to)}`, { page: p + 1 }) : "";
@@ -530,7 +632,10 @@ function turnPage(box, page, step = 50) {
   rows.forEach((r, i) => { r.hidden = i < (p - 1) * step || i >= p * step; });
   box.querySelector(".pager").outerHTML = pager(p, rows.length, step);
 }
-/** A `dataTable` that shows `step` rows and a pager that turns the page in place. `rows` is an array of `<tr>` strings. */
+/**
+ * A `dataTable` that shows `step` rows and a pager that turns the page in place. `rows` is an array of `<tr>` strings.
+ * @design pager
+ */
 export const pagedTable = (head, rows, step = 50) =>
   `<div class="paged" data-step="${step}">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${rows.length > step ? pager(1, rows.length, step) : ""}</div>`;
 /** Open or close the clamped text before the button `b`, and set the button to match. */
@@ -567,10 +672,16 @@ export const sectionHead = (title, { count, aside, id, level = 2 } = {}) =>
   `<div class="sh"><h${level}${id ? ` id="h-${esc(id)}"` : ""}>${esc(title)}</h${level}>${count != null ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<span class="aside">${aside}</span>` : ""}</div>`;
 /** Long text, clamped, with a button that opens and closes it. `html` is HTML. */
 export const clamp = (html) => `<div class="clamp">${html}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button>`;
-/** A fold: `summary` and `body` are HTML. `keep` keeps its open state across page loads; `id` names the fold for a refresh (page memory, no storage), where its summary text changes; `cls` is the fold's class, as `more` for technical details; `head` is the summary's class. */
+/**
+ * A fold: `summary` and `body` are HTML. `keep` keeps its open state across page loads; `id` names the fold for a refresh (page memory, no storage), where its summary text changes; `cls` is the fold's class, as `more` for technical details; `head` is the summary's class.
+ * @design disclosure
+ */
 export const fold = (summary, body, { open = false, keep = "", id = "", cls = "", head = "" } = {}) =>
   `<details${cls ? ` class="${esc(cls)}"` : ""}${id ? ` data-fold="${esc(id)}"` : ""}${keep ? ` data-keep="${esc(keep)}"` : ""}${open ? " open" : ""}><summary${head ? ` class="${esc(head)}"` : ""}>${summary}</summary>${body}</details>`;
-/** The first `n` rows of a list; the rest sit under a "N more" fold. `row` returns the HTML inside one `<li>`. */
+/**
+ * The first `n` rows of a list; the rest sit under a "N more" fold. `row` returns the HTML inside one `<li>`.
+ * @design disclosure
+ */
 export const moreFold = (items, row, n = 10) => {
   const ul = (xs) => `<ul class="tight">${xs.map((x) => `<li>${row(x)}</li>`).join("")}</ul>`;
   return ul(items.slice(0, n)) + (items.length > n ? fold(`${items.length - n} more`, ul(items.slice(n))) : "");
@@ -583,25 +694,43 @@ if (typeof document !== "undefined") {
     openClamp(b, b.getAttribute("aria-expanded") !== "true");
   });
 }
-/** Shows `text` in the `.act-msg` line beside `el`, and makes the line when there is none. */
+/**
+ * Shows `text` in the `.act-msg` line beside `el`, and makes the line when there is none.
+ * @design form-message
+ */
 export function say(el, text) {
   let n = el.parentElement.querySelector(".act-msg");
   if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); el.after(n); }
   n.textContent = text;
 }
-/** An `.act` button: `data` becomes data attributes; `o` has `primary`, `kind` ("danger", "small" or "always"), `cls` (more classes) and `type` (default button). */
+/**
+ * An `.act` button: `data` becomes data attributes; `o` has `primary`, `kind` ("danger", "small" or "always"), `cls` (more classes) and `type` (default button).
+ * @design button
+ */
 export const actButton = (label, data = {}, o = {}) =>
   `<button class="act${o.primary ? " primary" : ""}${o.kind ? ` ${esc(o.kind)}` : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
-/** A row action: a small `actButton` in a last `td.acts` cell. */
+/**
+ * A row action: a small `actButton` in a last `td.acts` cell.
+ * @design row-actions
+ */
 export const rowAct = (label, data) => `<td class="acts">${actButton(label, data, { kind: "small" })}</td>`;
-/** A link that looks like a button, to another page: navigation only. `label` names the page; `href` goes through `safeHref`. */
+/**
+ * A link that looks like a button, to another page: navigation only. `label` names the page; `href` goes through `safeHref`.
+ * @design link-button
+ */
 export const linkButton = (label, href) => `<a class="act" href="${esc(safeHref(href))}">${esc(label)}</a>`;
-/** Text with its `code` spans set as code, escaped. */
+/**
+ * Text with its `code` spans set as code, escaped.
+ * @design markdown-and-code
+ */
 export const codeText = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
 /** One fact of a facts list; "" for an empty value. `v` is HTML. */
 export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
-/** The facts list of `[label, html]` pairs. */
+/**
+ * The facts list of `[label, html]` pairs.
+ * @design fact-list
+ */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
 /** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text), or nothing when `runNow` is absent. A gate that binds shows it disabled, its text in a short note and as the title. */
 export const runNowButton = (repo, ref, runNow) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null

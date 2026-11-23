@@ -2,7 +2,11 @@
 
 `aleph-ui` serves the factory UI: the Status page, issues, jobs, sessions, skills and memory. It binds to `127.0.0.1` and prints its URL.
 
-The design reference (tokens, formats, tables, charts and components) is [docs/design.md](design.md).
+The design reference is [design/rules.md](../design/rules.md), with a file for each component in `design/components/`.
+
+Components: [Ask card](../design/components/ask-card.md), [Attention rows](../design/components/attention-rows.md), [Badge](../design/components/badge.md), [Button](../design/components/button.md), [Card](../design/components/card.md), [Chart panel](../design/components/chart-panel.md), [Chip](../design/components/chip.md), [Command](../design/components/command.md), [Contents](../design/components/contents.md), [Detail panel](../design/components/detail-panel.md), [Diff](../design/components/diff.md), [Disclosure](../design/components/disclosure.md), [Edit toggle](../design/components/edit-toggle.md), [Empty state](../design/components/empty-state.md), [Fact list](../design/components/fact-list.md), [Facts line](../design/components/facts-line.md), [Feed row](../design/components/feed-row.md), [Field and form](../design/components/field-and-form.md), [Figure band](../design/components/figure-band.md), [Filter bar](../design/components/filter-bar.md), [Findings list](../design/components/findings-list.md), [Form message](../design/components/form-message.md), [Inspector](../design/components/inspector.md), [KPI strip](../design/components/kpi-strip.md), [Legend](../design/components/legend.md), [Link](../design/components/link.md), [Link button](../design/components/link-button.md), [List and group](../design/components/list-and-group.md), [List surface](../design/components/list-surface.md), [Markdown and code](../design/components/markdown-and-code.md), [Meter](../design/components/meter.md), [Metric card](../design/components/metric-card.md), [Needs-you strip](../design/components/needs-you-strip.md), [Page head](../design/components/page-head.md), [Pager](../design/components/pager.md), [Pair](../design/components/pair.md), [Row actions](../design/components/row-actions.md), [Row and cell](../design/components/row-and-cell.md), [Row bars](../design/components/row-bars.md), [Search box](../design/components/search-box.md), [Select](../design/components/select.md), [Settings list](../design/components/settings-list.md), [Split card](../design/components/split-card.md), [Status light](../design/components/status-light.md), [Status row](../design/components/status-row.md), [Tab card](../design/components/tab-card.md), [Table](../design/components/table.md), [Tabs](../design/components/tabs.md), [Timeline](../design/components/timeline.md), [Two-click confirm](../design/components/two-click-confirm.md).
+
+The tokens are in `ui/app.css`. `design rules --for <component>` and `design tokens` print them.
 
 ```bash
 aleph-ui --port 3020    # the default port is ALEPH_UI_PORT, else 3020
@@ -99,7 +103,7 @@ Add two files and change no shared file.
      mount: (root) => { root.onclick = (e) => {}; },   // runs after each render: use on* properties, not addEventListener
    };
    ```
-   [Views](design.md#views) lists each field and the rules for `mount`.
+   The `view-module` and `view-mount` rules in [design/rules.md](../design/rules.md) list each field and the rules for `mount`.
 2. `ui/api/<page>.ts` exports `routes`, a map from a method and path to a handler:
    ```ts
    import type { Routes } from "../server.ts";

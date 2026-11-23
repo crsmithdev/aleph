@@ -308,7 +308,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       error: !!document.querySelector("#view > .page > .error"),
     })`);
     expect(r).toMatchObject({ error: false, charts: 5 });
-    // Each specimen shows its rules from docs/design.md; the variants of a component have none.
+    // Each specimen shows its rules from the index at /api/design; the variants of a component have none.
     expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, action"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
     // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Error colour.
@@ -335,12 +335,13 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       for (const sheet of document.styleSheets) for (const r of (() => { try { return sheet.cssRules; } catch { return []; } })()) if (r.selectorText === ":root") for (const p of r.style) if (p.startsWith("--") && !/^--(wa|dock)-/.test(p)) bare.add(p);
       return [...bare].filter((p) => !named.has(p));
     })()`)).toEqual([]);
-    // Every heading of docs/design.md has a specimen, a group or a place in a specimen's rules, but the prose-only sections and the containers of specimens.
-    const exempt = ["Principles", "Rules", "The dock bridge", "Palettes", "Layout", "Views", "Accessibility", "Deviations", "Appendix", "What could not be determined", "Bypasses that stay", "Inventory", "Colour", "Components"];
+    // Every component of the index has a specimen, and every specimen of a component has a component file.
+    // The other specimens with rules show global rules: colours, type, space, values, words, page grammar and states.
     expect(await page.ev(`fetch("/api/design").then((r) => r.json()).then((d) => {
-      const have = new Set([...document.querySelectorAll(".design-spec h3, h2.design-h, .design-rules h4")].map((h) => h.textContent));
-      return d.body.split("\\n").filter((l) => /^#{2,4} /.test(l)).map((l) => l.replace(/^#+ /, "")).filter((h) => !${JSON.stringify(exempt)}.includes(h) && !have.has(h));
-    })`)).toEqual([]);
+      const comps = d.filter((e) => e.kind === "component").map((e) => e.id), drawn = [...document.querySelectorAll(".design-spec[data-component]")].map((s) => s.dataset.component);
+      const global = [...document.querySelectorAll(".design-spec:not([data-component])")].filter((s) => s.querySelector(".design-rules")).map((s) => s.querySelector("h3").textContent);
+      return { missing: comps.filter((c) => !drawn.includes(c)), unfiled: drawn.filter((c) => !comps.includes(c)), global };
+    })`)).toEqual({ missing: [], unfiled: [], global: ["Every component", "Surfaces and text", "Tones", "Data colours", "Contrast", "Type", "Space and shape", "Values", "Words", "Page grammar", "States"] });
     // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.
     expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.design-h, .design-spec[id]");
       return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...nav.querySelectorAll("li:not(.sub) a")].map((a) => a.textContent) }; })()`)).toEqual({

@@ -1,4 +1,4 @@
-// The Automation view: Rules, Limits and Log (docs/design.md, Page). Each render function takes the /api/automation object and returns an HTML
+// The Automation view: Rules, Limits and Log (design/rules.md, page-grammar). Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the browse list; `mount` runs the settings forms.
 import { moved, redraw } from "./lib/router.js";
 import { postJson, scope } from "./lib/address.js";

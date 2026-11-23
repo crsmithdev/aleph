@@ -139,6 +139,7 @@ export function eventHtml(e, { el = "div", clamped = true } = {}) {
  * The Timeline panel. `segments` is `[{ title, aside?, rows }]`; a row is
  * `{ head, bars: [{ start, end, tone, label, tip, href? }], waits: [{ start, end, chris }], marks: [{ at, tone: "made" | "done", tip }], result, time, cost, events: [{ at?, tag, tone, html }] }`.
  * "" for no rows; a row with nothing timed has an empty lane.
+ * @design timeline
  */
 export function renderTimeline(segments) {
   const rows = segments.flatMap((s) => s.rows);
@@ -167,13 +168,22 @@ export function renderTimeline(segments) {
     `</div></section>`;
 }
 
-/** The KPI strip: `[{ k, v, sub, text? }]`, where `v` and `sub` are HTML; a `text` value is words, set smaller than a figure. */
+/**
+ * The KPI strip: `[{ k, v, sub, text? }]`, where `v` and `sub` are HTML; a `text` value is words, set smaller than a figure.
+ * @design kpi-strip
+ */
 export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-label="Summary">${items.map((i) => `<div class="dp-kpi"><span class="dp-k">${esc(i.k)}</span><span class="dp-v${i.text ? " text" : ""}">${i.v}</span>${i.sub ? `<span class="dp-sub">${i.sub}</span>` : ""}</div>`).join("")}</section>`;
 
-/** A Detail panel, open: its title, an aside (HTML) beside it, its body, and an `id` for a contents link. */
+/**
+ * A Detail panel, open: its title, an aside (HTML) beside it, its body, and an `id` for a contents link.
+ * @design detail-panel
+ */
 export const detailPanel = (title, aside, body, id = "") => `<details${id ? ` id="${esc(id)}"` : ""} class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
 
-/** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
+/**
+ * A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML.
+ * @design detail-panel
+ */
 export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls ? ` ${cls}` : ""}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
 
 /** "$1.11", or "$0.00" for none. */

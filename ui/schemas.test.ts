@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SCHEMAS, check, epochs } from "./schemas.ts";
+import { root as toolsRoot } from "./dock.ts";
 import { loadRoutes } from "./server.ts";
 
 let base: string, proc: ReturnType<typeof Bun.spawn>, port: number;
@@ -15,7 +16,7 @@ beforeAll(async () => {
   const env: Record<string, string> = { ...process.env as Record<string, string>, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" };
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
   // A systemctl that is not there, so the schedules have no interval: every is null for tick and suite, as on a host with no user systemd.
-  proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env: { ...env, HOME: join(base, "empty"), ALEPH_SYSTEMCTL: join(base, "no-systemctl") }, stdout: "pipe", stderr: "ignore" });
+  proc = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env: { ...env, HOME: join(base, "empty"), ALEPH_TOOLS: toolsRoot, ALEPH_SYSTEMCTL: join(base, "no-systemctl") }, stdout: "pipe", stderr: "ignore" });
   const line = new TextDecoder().decode((await (proc.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
   port = Number(new URL(line.trim()).port);
 });

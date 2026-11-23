@@ -14,8 +14,8 @@ view. This is the [refit-code](../refit-code/SEAMS.md) lens applied to the UI.
 - an import from `aleph-tools` internals instead of the helper that wraps the widget;
 - a sibling class that copies the declarations of a design class.
 
-`docs/design.md` names the helper of each component in its section. A part with no helper is a row of the
-Deviations table: do not report it.
+The component file in `design/components/` names the helper of its component, and the helper's JSDoc has `@design <id>`. A part with no helper is a row of the
+`deviations` rule in `design/rules.md`: do not report it.
 
 **Drawn view.** Compare the view's component with its specimen on `#/design`. A difference in padding, radius,
 colour or type that the helper does not take as an option shows an override.
@@ -24,7 +24,7 @@ colour or type that the helper does not take as an option shows an override.
 
 A finding has all of:
 
-- the design class or helper, and its section of `docs/design.md`;
+- the design class or helper, and its component file in `design/components/`;
 - `file:line` of the override or of the hand-built markup;
 - the helper call that gives the same result, or the option the helper lacks.
 

@@ -82,7 +82,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
   "/api/hooks": { days: "number", holds: [hold], byHook: [holdsBy], errors: [hookError], hooks: [{ ...hook, holds: "number" }], calls: "object?" },
   "/api/hooks/:event/:name": { ...hook, holds: [hold], byKind: [holdsBy], errors: [hookError] },
-  "/api/design": { body: "string" },
+  "/api/design": [{ id: "string", kind: "string", scope: "string", text: "string", "reason?": "string", except: [{ place: "string", reason: "string" }], home: "string" }],
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/memory": {
     project: "string?", exists: "boolean", total: "number", scopes: ["string"],

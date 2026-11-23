@@ -17,7 +17,7 @@ annotate card is drawn by hand after `~/aleph-tools/annotate.js`. The state bar 
 1. **Pick.** Hover a control, then press D for the quick actions. Canon (C) is a fifth action after Delete, Move, Refit and Explain.
 2. **Read.** The note saves with kind `canon`. The agent replies in the same card while it reads the style, DOM and source.
 3. **Decide.** The card widens to show the class, its helper, and one row per feature. Each row has its tokens, its class against
-   `docs/design.md` (Doc, New, Conflict) and Keep, Drop or Edit. Approve and Deny are the card's own buttons. The doc
+   `design.md` (Doc, New, Conflict) and Keep, Drop or Edit. Approve and Deny are the card's own buttons. The doc
    change folds under the rows.
 4. **Pinned.** The note resolves and docks in the annotate panel. Each control off the canon gets an agent pin
    where it lives, with Fix or Not one (Yes or No for a similar match). The panel can also fix all of them.
@@ -30,7 +30,7 @@ annotate card is drawn by hand after `~/aleph-tools/annotate.js`. The state bar 
   pins. No shelf item and no review page.
 - **Tokens only.** A feature names tokens (`--ctl-h`, `--fs-sm`, `--rule-2`), never px or a font name. A raw value with no
   token would be its own class, No token, so the canon cannot set a one-off value.
-- **Doc stays the source.** Approve writes the `docs/design.md` section and the `#/design` specimen on a branch.
+- **Doc stays the source.** Approve writes the `design.md` section and the `#/design` specimen on a branch.
 - **Canon names one helper.** Fixes move look-alikes onto `seg()` and `wireSeg()`.
 - **Similar needs a yes.** A match found by shape (the KPI tiles) asks Yes or No on its pin.
 

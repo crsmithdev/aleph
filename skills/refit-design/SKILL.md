@@ -2,7 +2,7 @@
 name: refit-design
 description: >
   Refit a UI to its design reference: compare a page or the whole UI to
-  docs/design.md in the code and in the drawn page: hard-coded or missing
+  its design homes (`design/rules.md`, `design/components/`, the token comments of `ui/app.css`) in the code and in the drawn page: hard-coded or missing
   tokens, one-off components, pages that differ from the Design page, local defects.
   Use when asked to audit, review or check a UI against the design language,
   or to find where a page leaves the design doc. NOT for: writing the design
@@ -11,8 +11,8 @@ description: >
 
 # Refit design
 
-[refit-code](../refit-code/SKILL.md) for the look of a UI. `docs/design.md` is the reference and the code is the
-truth: where they differ, the finding says which one to change. This skill changes no `docs/design.md` text: a gap
+[refit-code](../refit-code/SKILL.md) for the look of a UI. `design/rules.md` and `design/components/` are the reference and the code is the
+truth: where they differ, the finding says which one to change. This skill changes no text in `design/`: a gap
 in the doc is a proposal. Follow [refit/PROCESS.md](../refit/PROCESS.md) for the modes, the steps and the Act loop.
 This file holds what differs.
 
@@ -20,7 +20,7 @@ This file holds what differs.
 
 | Lens | Asks | File |
 |---|---|---|
-| **apply** | Does the page follow `docs/design.md`, in code and as drawn? | [APPLY.md](APPLY.md) |
+| **apply** | Does the page follow `design/`, in code and as drawn? | [APPLY.md](APPLY.md) |
 | **variants** | Is each component drawn one way? | [VARIANTS.md](VARIANTS.md) |
 | **states** | Does each component draw its empty, loading, error, hover, focus, disabled and phone-width state? | [STATES.md](STATES.md) |
 | **stress** | Does the page hold with long text, many rows, a missing value and no data? | [STRESS.md](STRESS.md) |
@@ -45,9 +45,9 @@ none, the run covers each route of the router. The report's unit is a component 
    an id (`<kind>[/<variant>]`) and the specimen id of `spec(id, ...)` in `ui/views/design.js`. Then follow each lens
    file: the code view, then the drawn view. For the whole UI, spawn one Explore subagent per route in one
    message, in place of one per lens, each with the Signals sections of the lens files and the component list
-   verbatim. Each returns the candidates as: rule of `docs/design.md`, `file:line` or screenshot, the kind. It also
-   returns, per component, the rules it breaks and the rules it follows (each by `docs/design.md` section and rule
-   text) and the Design specimen id. Done when each route has returned and each component has an entry.
+   verbatim. Each returns the candidates as: rule id of `design/rules.md` or a component file, `file:line` or screenshot, the kind. It also
+   returns, per component, the rules it breaks and the rules it follows (each by rule id and
+   text, from `design rules --for <component>`) and the Design specimen id. Done when each route has returned and each component has an entry.
 
 ## Act order
 
@@ -68,4 +68,4 @@ Each lens file's Guard section names its guard and its kind (tool, rule or unche
 - **You judged from the code alone.** A rule can hold in the CSS and fail on the page: draw it.
 - **You fixed a pattern the doc does not cover.** That is a proposal to amend the doc. The Act loop leaves it.
 - **You changed the doc to fit the page.** The doc changes only through design-language, with a proposal.
-- **You compared the page to your taste.** A finding names a rule of `docs/design.md`, or it is dropped.
+- **You compared the page to your taste.** A finding names a rule id of `design/`, or it is dropped.

@@ -26,7 +26,7 @@ page can show (empty, loading, error), and the console errors.
 
 A finding has all of:
 
-- the rule: its section and the line of `docs/design.md` that the page breaks;
+- the rule: its id (`design rules --for <component>`) and the text that the page breaks;
 - the evidence: the `file:line` of the code that breaks it, or the screenshot where it shows, with the Design page
   specimen that shows the rule kept;
 - one kind:
@@ -48,7 +48,7 @@ component for it, else dropped.
 ## Fix
 
 One change per finding, in the view or style file. Use the token, helper or component that the doc names. Leave
-`docs/design.md` unchanged and do not fix a proposal: design-language owns the doc.
+`design/` unchanged and do not fix a proposal: design-language owns the doc.
 
 ## Guard
 

@@ -42,7 +42,10 @@ export function needItems(m) {
   return items.map(([, k, t, text, href, tip]) => `<a href="${href}" title="${esc(tip)}">${tag(k, t)} ${esc(text)}</a>`);
 }
 
-/** The Needs-you strip of `needItems(m)`; nothing when none is over its threshold. */
+/**
+ * The Needs-you strip of `needItems(m)`; nothing when none is over its threshold.
+ * @design needs-you-strip
+ */
 export function needs(m, now = Date.now()) {
   const items = needItems(m);
   return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";

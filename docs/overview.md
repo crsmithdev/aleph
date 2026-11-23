@@ -16,7 +16,7 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 | Vault | Notes that a session reads and writes, in an Obsidian vault | `vault/` | [Vault](vault.md) |
 | Items repo | The issues of every project, in a private git repo | `issues/` | [Issues](issues.md) |
 | Factory | The `aleph` CLI and the processes that build issues | `jobs/` | [Factory](factory.md), [Workflow](workflow.md) |
-| UI | `aleph-ui`: Status, issues, jobs, sessions, memory | `ui/` | [UI](ui.md), [Design](design.md) |
+| UI | `aleph-ui`: Status, issues, jobs, sessions, memory | `ui/` | [UI](ui.md), [Design](../design/rules.md) |
 | Tracing | Self-hosted Langfuse | `compose/` | [Langfuse](langfuse.md) |
 | Identity | The global `CLAUDE.md` and code style the hooks assume | `identity/` | |
 

@@ -49,7 +49,7 @@ Numbers in brackets are the settled decisions of the concept. "Default" is a lin
 - **An exception names its place and rule.** The form warns that many exceptions on one rule become a finding against
   the rule (default). The guide marks such a rule "finding".
 - **First run is by layer.** Tokens, Components, Patterns [4, 11]. A group with an open split cannot be approved until you
-  answer it. Each draft rule carries "adopted as found" [11]. `docs/design.md` is the first draft and the page says so [11].
+  answer it. Each draft rule carries "adopted as found" [11]. `design.md` is the first draft and the page says so [11].
 - **The guide is one table per layer.** Each rule shows class, test, home, reason, marks and exception count.
 - **The measure strip.** Design notes per agent-built page is the first tile. Survey and coverage are the checks [14].
   Your minutes per week is the cost (default).
@@ -61,8 +61,8 @@ Numbers in brackets are the settled decisions of the concept. "Default" is a lin
 Real:
 
 - Tokens and their counts: `ui/app.css` `:root`.
-- Groups, parts and rule counts: `docs/design.md`. The drafted-rule count is bullets plus table rows of a section.
-- The first-draft sources and principles: `docs/design.md`.
+- Groups, parts and rule counts: `design.md`. The drafted-rule count is bullets plus table rows of a section.
+- The first-draft sources and principles: `design.md`.
 - Places and files of each difference, measured in `ui/views` on 2026-11-21: `fold()` 27 calls, `button.fold` 2
   (`issues.js:187`, `factory-agents.js:80`), `clamp()` 3 (`session.js:37`, `gates.js:190`, `lib/timeline.js:135`);
   hand textarea 3 and checkbox 2; `moreFold()` has no caller outside the Design page and a test.

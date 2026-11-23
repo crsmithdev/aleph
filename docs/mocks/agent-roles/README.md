@@ -13,7 +13,7 @@ runs to 2026-11-15, grouped by role, size and model, from the run ledger. `app.c
 |---|---|
 | A · one table | Every size and role on the same columns. One Output column carries the role's own noun: landed builds, verdicts, triages. ▸ opens the earlier models of a row. |
 | B · workers + roles | Two tables. Workers keep the build columns (Landed, First pass, Review pass, $ / landed). Roles get only the shared columns. ▸ opens earlier models. |
-| C · settings apart | The toggles and model selects move to one Models list, as `docs/design.md` asks. The table has one row per agent and model, with a Now / All models switch. |
+| C · settings apart | The toggles and model selects move to one Models list, as `design.md` asks. The table has one row per agent and model, with a Now / All models switch. |
 
 ## Decisions in the mock
 

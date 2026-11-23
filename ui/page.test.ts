@@ -48,9 +48,9 @@ test("the style sheet defines the dot and measure tokens and draws no circle wit
   expect(css).not.toMatch(/border-radius:\s*50%/);
 });
 
-test("the Container widths row of the design doc lists exactly the @container widths of the style sheet", () => {
+test("the @container exception of the breakpoint-literal rule lists exactly the @container widths of the style sheet", () => {
   const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const row = readFileSync(new URL("../docs/design.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("| Container widths |"))!;
+  const row = readFileSync(new URL("../design/rules.md", import.meta.url), "utf8").split("\n").find((l) => l.startsWith("- except: ui/app.css @container"))!;
   const widths = (s: string) => [...new Set([...s.matchAll(/(\d+)px/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
   const queries = [...css.matchAll(/@container[^{]*\(\s*(?:max|min)-width:\s*(\d+)px/g)].map((m) => `${m[1]}px`).join(" ");
   expect(widths(row)).toEqual(widths(queries));

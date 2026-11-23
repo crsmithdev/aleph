@@ -15,13 +15,13 @@ line at body size, 58 findings in one 23,955 px column.
 ## Decisions
 
 1. Split by tier. Ask (14) comes first and open; Auto (44) folds to one row each. Chris acts on the ask
-   findings, and an auto fix keeps behaviour (`docs/design.md`, Principle 6).
+   findings, and an auto fix keeps behaviour (`design.md`, Principle 6).
 2. Group by lens, not by unit. In this run 40 of 47 units held one finding, so a unit head cost a row per
    finding. The unit moves onto the row as muted mono text.
 3. Overview is three counts: ask, auto, dropped, each a link to its card. Lenses, seed and sweep go into one
    closed fold. The legend moves to the Ask card, above the first figure.
 4. A row reads: number, title, unit, strength badge, signal. The lens chip is gone, because the group head names it.
-5. Before and after is a `.diff-panel` with `d-del` and `d-add` lines (`docs/design.md`, Diff), not two `<pre>`
+5. Before and after is a `.diff-panel` with `d-del` and `d-add` lines (`design.md`, Diff), not two `<pre>`
    blocks with "Before:" and "After:".
 6. Sizes follow the round 6 rule of `refit-report` (no part outranks its parent) with the round 7 sizes. Card head `--fs-xl`, lens head `--fs-lg`,
    finding title `--fs-md`, fix `--fs-sm`, Details `--fs-xs`.

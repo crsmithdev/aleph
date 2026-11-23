@@ -13,7 +13,7 @@ design, and still gets copied. This is the [refit-code](../refit-code/DEAD.md) l
 - a specimen on `#/design` that calls a helper no view calls, or draws a component the doc no longer names;
 - a media query block whose rules are all in the list above.
 
-Grep the bare class and token name over `ui/` and `docs/design.md`.
+Grep the bare class and token name over `ui/` and `design/`.
 
 **Drawn view.** Open `#/design` in light and dark. A specimen that draws nothing, or that draws a component no page
 shows, is a candidate.
@@ -28,14 +28,14 @@ A candidate is dead when each of these is ruled out:
 | State class | A class that script adds on an event (`.open`, `.collapsed`, a `data-` attribute) |
 | Chart and dock reads | A token that `readTokens()` or the `--dock-*` bridge reads by name |
 | Fixture data | A class that only a state of the data reaches, such as an error row |
-| Docs | A class or token that a section of `docs/design.md` names as part of the language |
+| Docs | A class or token that a file or rule in `design/` names as part of the language |
 
 A rule that matches no element in the markup, the helpers and the states of the data is dead. A class that an
 element carries but no rule styles is a seams candidate if the element is hand-built, else a leftover.
 
 ## Fix
 
-Delete the rule, the token or the specimen, one commit per kind, rules first. A section of `docs/design.md` that
+Delete the rule, the token or the specimen, one commit per kind, rules first. A file or rule in `design/` that
 names a deleted part is reported as a proposal: the doc changes only through design-language.
 
 ## Guard

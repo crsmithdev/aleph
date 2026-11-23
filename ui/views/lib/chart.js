@@ -138,7 +138,10 @@ export function panel(f, form, bare = false) {
   return bare ? body : card(title(f), body, { aside: forms });
 }
 
-/** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. `bare` draws the chart alone, in its frame's form, for a part of a card. */
+/**
+ * A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. `bare` draws the chart alone, in its frame's form, for a part of a card.
+ * @design chart-panel
+ */
 export const panelOf = (key, f, cls = "", { bare = false } = {}) => `<aleph-chart key="${esc(key)}"${cls ? ` class="${esc(cls)}"` : ""}${bare ? " bare" : ""}>${panel(f, bare ? formOf(f) : formOf(f, kept(key, {}).form), bare)}</aleph-chart>`;
 
 if (globalThis.customElements && !customElements.get("aleph-chart")) {

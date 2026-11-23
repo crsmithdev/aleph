@@ -11,7 +11,7 @@ A component that draws only its full state breaks on the first empty list, slow 
 | empty | `empty()`: `No data`, in the card (Content, Words) |
 | loading | `loadingLine(what)` until the first fetch returns |
 | error | `error(line, hint, { detail })` for a failed fetch |
-| hover, focus, disabled | the States table of `docs/design.md`; focus is `:focus-visible` |
+| hover, focus, disabled | the `state-*` rules of `design/rules.md`; focus is `:focus-visible` |
 | phone | the component's Rules on a phone; the layout at 720px and narrower |
 
 A state with no branch in the view, and no rule in `ui/app.css` for a control, is a candidate.
@@ -25,7 +25,7 @@ same state on `#/design`. Read the console too.
 A finding has all of:
 
 - the component and the state it lacks, or draws wrong;
-- the line of `docs/design.md` that gives the state, or the specimen on `#/design` that draws it;
+- the rule id that gives the state, or the specimen on `#/design` that draws it;
 - `file:line` that has no branch, or the screenshot that shows the fault.
 
 A state the doc leaves out is a proposal to amend the doc. A state that draws but breaks a value rule (a literal

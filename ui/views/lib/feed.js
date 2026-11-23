@@ -8,10 +8,16 @@ export function findingHtml(text) {
     : part.replace(/(&#?\w+;)|(\$?\d+(?:[.,]\d+)*%?)/g, (m, entity) => (entity ? m : `<b>${m}</b>`))).join("");
 }
 
-/** The findings of a Monitor report as a numbered list, each through findingHtml(). */
+/**
+ * The findings of a Monitor report as a numbered list, each through findingHtml().
+ * @design findings-list
+ */
 export const findingsList = (findings) => `<ol class="findings">${findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`;
 
-/** A feed row in two columns: the time (the clock, or the day), then the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor, `attrs` more attributes. */
+/**
+ * A feed row in two columns: the time (the clock, or the day), then the body's HTML. `cls` is added to the row's class, `bodyCls` to the body's, `by` is the actor, `attrs` more attributes.
+ * @design feed-row
+ */
 export function feedRow({ tone, at, body, by, cls = "", bodyCls = "", attrs = "" }) {
   return `<div class="event-row ${tone}${cls}"${by === undefined ? "" : ` data-by="${esc(by)}"`}${attrs}>` +
     `<span class="event-time">${esc(at ? (clock(at) || when(at)) : "")}</span>` +
@@ -41,5 +47,8 @@ export function eventRow(r) {
 const briefRow = (l) => `<div class="event-brief ${tone(l.action)}"><span class="event-time">${esc(clock(l.at) || when(l.at))}</span>` +
   `<span class="brief-label" title="${esc(l.label)}">${esc(l.label)}</span><span class="brief-text" title="${esc(piecesText(l.text))}">${piecesHtml(l.text)}</span></div>`;
 
-/** A Herald row of the server (ui/herald.ts), with its older lines in a fold named by the row's `fold`. */
+/**
+ * A Herald row of the server (ui/herald.ts), with its older lines in a fold named by the row's `fold`.
+ * @design feed-row
+ */
 export const heraldRow = (r) => (r.lines.length ? fold(eventRow(r), `<div class="herald-older">${r.lines.map(briefRow).join("")}</div>`, { cls: "herald-group", id: r.fold }) : eventRow(r));

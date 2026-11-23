@@ -10,7 +10,7 @@ A mock is a design draft for Chris: HTML pages, images, a canvas.
 - Keep it in the repo at `docs/mocks/<name>/`, never in `/tmp` or the scratchpad, and commit it.
 - Its `README.md` names the request and each decision, and cites the design rule behind each one.
 - Use the repo's design rules. In aleph, these are the tokens and classes of `ui/app.css` and the components of
-  `docs/design.md`.
+  `design/components/` and `design/rules.md`.
 
 ## Show it
 
