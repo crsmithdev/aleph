@@ -218,6 +218,21 @@ describe("POST /api/issues/:id/drop", () => {
   });
 });
 
+describe("the drop note's lead", () => {
+  test("a reason with a drop lead, old or new, stays as it is; any other reason, a `Users…` one too, gets `User dropped: `", async () => {
+    const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+    const ids = writeList({ key: "fac" }, "seed", (doc) => [1, 2, 3].map((k) => add(doc, `drop ${k}`).id))!.value;
+    const reasons = ["Chris denied: old", "User denied: new", "Users cannot see it"];
+    await withRealCli(async () => {
+      for (const [k, reason] of reasons.entries()) expect((await at(`/api/issues/fac-${ids[k]}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason }) })).status).toBe(200);
+      const notes = ids.map((id) => readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.at(-1));
+      expect(notes[0]).toContain(": Chris denied: old");
+      expect(notes[1]).toContain(": User denied: new");
+      expect(notes[2]).toContain(": User dropped: Users cannot see it");
+    });
+  });
+});
+
 describe("POST /api/issues/:id/media and GET /api/issues/:id/media/:name", () => {
   test("an upload attaches the file through the real CLI and the GET serves it with its type; no files is 400, an unknown name 404", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => add(doc, "with a screenshot").id)!.value;
@@ -650,7 +665,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
       const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);
       const i = item(n);
-      expect(i.notes.at(-1)).toContain("Chris decided: A: do a");
+      expect(i.notes.at(-1)).toContain("User decided: A: do a");
       expect(i.fm.labels).toBeUndefined();
       expect(i.fm.question).toBeUndefined();
       expect((await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) })).status).toBe(409);
@@ -686,7 +701,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ recommendation: true }) });
       expect(r.status).toBe(200);
-      expect(item(n).notes.at(-1)).toContain("Chris decided: My recommendation is B, it is smaller.");
+      expect(item(n).notes.at(-1)).toContain("User decided: My recommendation is B, it is smaller.");
       expect(item(n).fm.labels).toBeUndefined();
     });
   });
@@ -707,7 +722,7 @@ describe("POST /api/issues/:id/decide and deny", () => {
       const r = await at(`/api/issues/fac-${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ approve: true }) });
       expect(r.status).toBe(200);
       const i = item(n);
-      expect(i.notes.at(-1)).toContain("Chris approved it");
+      expect(i.notes.at(-1)).toContain("User approved it");
       for (const k of ["ask", "reason", "question"]) expect(i.fm[k]).toBeUndefined();
     });
   });
@@ -723,10 +738,11 @@ describe("POST /api/issues/:id/decide and deny", () => {
       const a = capped();
       expect((await at(`/api/issues/fac-${a}/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
       expect(askOf(`issue.${a}`)).toBeNull();
-      expect(find(a).notes.at(-1)).toContain("run it again");
+      expect(find(a).notes.at(-1)).toContain("User: run it again");
       const c = dotted();
       expect((await at(`/api/issues/fac-${c}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "no" }) })).status).toBe(200);
       expect(todos.status(find(c))).toBe("dropped");
+      expect(find(c).notes.at(-1)).toMatch(/User dropped: no/);
       expect((await at(`/api/issues/fac-x.y/rerun`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
     });
   });
@@ -736,7 +752,7 @@ describe("POST /api/issues/:id/retriage and rerun", () => {
   const h = { "x-aleph-ui": "1", "content-type": "application/json" };
   const ask = () => writeList({ key: "fac" }, "seed", (doc) => (() => { const i = add(doc, "errored triage", { request: "x" }); setAsk(refIn(i), { reason: "triage-failed", question: "triage failed", options: [], why: [] }); return i.id; })(), true)!.value;
 
-  for (const [verb, argv] of [["retriage", ["issue", "note", "--", "fac", "N", "Chris: run intake again"]], ["rerun", ["issue", "decide", "--", "fac", "N", "Chris: run it again"]]] as const) {
+  for (const [verb, argv] of [["retriage", ["issue", "note", "--", "fac", "N", "User: run intake again"]], ["rerun", ["issue", "decide", "--", "fac", "N", "User: run it again"]]] as const) {
     test(`${verb} refuses without the header, 404s an unknown issue and runs the CLI on an item with an ask`, async () => {
       const n = ask();
       rmSync(argvFile, { force: true });

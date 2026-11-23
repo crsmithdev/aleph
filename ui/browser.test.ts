@@ -624,7 +624,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
       document.querySelector("#view > *").dataset.mark = "1";
       document.querySelector("#view > *").insertAdjacentHTML("afterbegin", askCard({ id: "tools-4", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a second input file",
-        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-4/drop", body: { reason: "Chris denied it" }, input: { name: "reason", lead: "Chris denied: " } }] }));
+        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-4/drop", body: { reason: "User denied it" }, input: { name: "reason", lead: "User denied: " } }] }));
       const b = document.querySelector('#view article.issue-row button.act[data-act="deny"]');
       window.card = b.closest("article");
       b.click();
@@ -635,7 +635,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.when("!window.card.isConnected");
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1");
     const posts = await page.ev<[string, string][]>("window.posts");
-    expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools-4/drop", { reason: "Chris denied: not now" }]]);
+    expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools-4/drop", { reason: "User denied: not now" }]]);
     await page.reload(); // Takes the patched fetch away.
     // A decided Ask stays off the Status page when the Herald draws again from its last state.
     await page.when('document.querySelector("#herald")');

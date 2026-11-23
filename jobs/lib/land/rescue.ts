@@ -369,7 +369,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     }
     const why = askFromRun(last, repo, issue, ask, question, spec);
     if (why) logEvent({ subject: "gate", action: "failed", object: name, detail: `no issue note: ${why}` });
-    await say(`asks Chris: ${question}`);
+    await say(`asks the user: ${question}`);
   };
   const take = async (step: Step) => {
     if (step.rerun) writeRerun(name, step.rerun);

@@ -164,6 +164,12 @@ describe("asks", () => {
     } finally { STORE = undefined; }
   });
 
+  test("a question note shows without its `intake: for` lead, the old name and the new", () => {
+    for (const lead of ["intake: for Chris:", "intake: for User:", "triage: for Chris:", "triage: for User:"]) {
+      expect(ofIssues(issue({ reason: "question", question: `${lead} Should it be A or B?` }))[0].problem).toBe("Should it be A or B?");
+    }
+  });
+
   test("an issue with a reason the table does not name is a question", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });

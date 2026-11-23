@@ -217,8 +217,8 @@ const create = post(async (b, _p, url) => {
 const drop = post((b, params) => {
   const { repo, n } = target(params);
   const given = typeof b.reason === "string" ? b.reason.trim() : "";
-  // The note starts with Chris, so the Gates log shows the drop as his: a Deny reason already does, any other gets "Chris dropped: ".
-  const reason = !given ? `${NOTE.dropped} it` : given.startsWith("Chris") ? given : `${NOTE.dropped}: ${given}`;
+  // The note starts with the user, so the Gates log shows the drop as theirs: a Deny reason already does (old "Chris…" too), any other gets "User dropped: ".
+  const reason = !given ? `${NOTE.dropped} it` : /^(?:Chris|User) (?:denied|dropped|declined)\b/.test(given) ? given : `${NOTE.dropped}: ${given}`;
   return aleph(["issue", "drop", "--", repo.key, String(n), reason]);
 });
 

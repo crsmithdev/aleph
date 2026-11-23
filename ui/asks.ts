@@ -47,7 +47,7 @@ function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")
-    .replace(/^\s*-\s*/, "").replace(/^\s*(?:intake: for Chris|triage: (?:for Chris|a live check)):\s*/i, "")
+    .replace(/^\s*-\s*/, "").replace(/^\s*(?:intake: for (?:Chris|User)|triage: (?:for (?:Chris|User)|a live check)):\s*/i, "")
     .replace(/\s+/g, " ").trim();
   return oneSentence(t);
 }

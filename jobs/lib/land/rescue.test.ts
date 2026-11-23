@@ -72,6 +72,7 @@ test("a spec edit tells Chris through the rescue's Tell, not the network", async
   const rescue = { ...f.rescue, tell: { send: async (line: string) => { lines.push(line); return true; } } };
   await dispatchIssues(f.start, undefined, rescue);
   const asked = lines.length;
+  expect(lines.some((l) => l.includes("asks the user: "))).toBe(true);
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
   await dispatchIssues(f.start, undefined, rescue);
   expect(lines.slice(asked)).toEqual([`fac/issue.${id}: the spec was edited; the issue starts again`]);

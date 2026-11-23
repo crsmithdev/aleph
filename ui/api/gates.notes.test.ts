@@ -30,7 +30,7 @@ beforeAll(() => {
   mkdirSync(factory);
   writeRepos({ fac: { path: repo, sandbox: true } }, items);
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
-  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); note(add(doc, "d task"), "Chris declined: the claim stays", new Date("2026-11-03T12:00:00Z")); return true; }, true);
+  writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); note(add(doc, "b task"), "Chris decided: go on", new Date("2026-11-03T10:00:00Z")); add(doc, "c task").notes.push("- 2026-11-03 11:00: Chris decided: stop"); note(add(doc, "d task"), "Chris declined: the claim stays", new Date("2026-11-03T12:00:00Z")); note(add(doc, "e task"), "User dropped: not needed", new Date("2026-11-03T13:00:00Z")); note(add(doc, "f task"), "User decided: go on", new Date("2026-11-03T14:00:00Z")); note(add(doc, "g task"), "User declined: the claim stays", new Date("2026-11-03T15:00:00Z")); return true; }, true);
 });
 // The test's clock: the notes sit a day before it, inside the 7-day log.
 beforeAll(() => setSystemTime(Date.parse("2026-11-04T00:00:00Z")));
@@ -50,4 +50,11 @@ test("log() finds a Chris decision note with an ISO UTC stamp, and not one with 
 test("log() shows a declined core change `Chris declined: <why>` as a human drop on the issue, the note its text", async () => {
   const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
   expect(d.log.entries.find((x: any) => x.subject === "human" && x.object === "fac-4")).toMatchObject({ action: "dropped", detail: "Chris declined: the claim stays" });
+});
+
+test("log() gives a note with the new `User` lead the same action as one with the old `Chris` lead", async () => {
+  const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
+  const action = (obj: string) => d.log.entries.find((x: any) => x.subject === "human" && x.object === obj)?.action;
+  expect([action("fac-5"), action("fac-6"), action("fac-7")]).toEqual([action("fac-1"), action("fac-2"), action("fac-4")]);
+  expect([action("fac-5"), action("fac-6"), action("fac-7")]).toEqual(["dropped", "answered", "dropped"]);
 });

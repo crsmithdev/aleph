@@ -28,6 +28,15 @@ test("askChris with a null text sets the Ask and adds no note; an unknown issue 
   } finally { teardown(); }
 });
 
+test("askChris with a text sets the Ask and adds the note `asks the user: <said>`", () => {
+  setup();
+  try {
+    const id = newIssue();
+    expect(askChris({ key: "fac" }, id, ask, "which one?")).toBeNull();
+    expect(issues.find(readList({ key: "fac" })!, id)!.notes).toEqual([expect.stringContaining("asks the user: which one?")]);
+  } finally { teardown(); }
+});
+
 test("setAsk keeps the Ask whole in the issue's job record, and askOf reads it back", () => {
   setAsk("issue.11", ask);
   expect(askOf("issue.11")).toEqual(ask);

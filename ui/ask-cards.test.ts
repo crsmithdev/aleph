@@ -165,11 +165,11 @@ test("a decide card marks the recommendation once, on the action when one carrie
 
 test("the reason box is an inputBox() with its attributes and the reason kept by keepReason", () => {
   keepReason("tools", 4, "not now");
-  const row = askCard(plain({ actions: [{ act: "dismiss", label: "Drop the issue", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "Chris denied: " } }] }), "2026-10-27T17:00:00Z");
+  const row = askCard(plain({ actions: [{ act: "dismiss", label: "Drop the issue", hint: "Closes it.", path: "/api/issues/tools-4/drop", body: {}, input: { name: "reason", lead: "User denied: " } }] }), "2026-10-27T17:00:00Z");
   keepReason("tools", 4, "");
   const input = row.match(/<input [^>]*>/)![0];
   expect(input.startsWith('<input name="reason" type="text" value="not now"')).toBe(true);
-  for (const a of ['aria-label="Reason to dismiss tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="Chris denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
+  for (const a of ['aria-label="Reason to dismiss tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="User denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
 });
 
 test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {

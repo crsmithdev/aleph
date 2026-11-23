@@ -43,7 +43,7 @@ const noCommitRuns = (id: number, n: number, back: number) => {
   for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: ago((back - i) * 1000) });
 };
 const unlabel = async (id: number) => clearAsk(`issue.${id}`);
-const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
+const chrisNotes = (id: number) => notes(id).split("asks the user:").length - 1;
 
 test("answering the Ask restarts the no-commit streak; three more no-commit runs give it another Ask", async () => {
   const id = newIssue();
@@ -92,6 +92,6 @@ test("a fourth start in an hour is skipped with one Ask note, and the issue is n
   await dispatch(f);
   await dispatch(f);
   expect(f.specs).toEqual([]);
-  expect(notes(id).split("asks Chris:").length - 1).toBe(1);
+  expect(notes(id).split("asks the user:").length - 1).toBe(1);
 });
 

@@ -24,7 +24,7 @@ import { cutTitle } from "./title.ts";
 import { issueKey } from "../../../lib/naming.ts";
 
 /** The leads of the issue notes written for Chris: the writers build a note from one and the Gates log (ui/api/gates.ts) reads his answers by them. */
-export const NOTE = { said: "Chris:", rerun: "Chris: run it again", retriage: "Chris: run intake again", checked: "Chris: checked", decided: "Chris decided:", approved: "Chris approved", declined: "Chris declined", dropped: "Chris dropped", denied: "Chris denied" };
+export const NOTE = { said: "User:", rerun: "User: run it again", retriage: "User: run intake again", checked: "User: checked", decided: "User decided:", approved: "User approved", declined: "User declined", dropped: "User dropped", denied: "User denied" };
 
 /** Notes re-checked per run, most recalled first. */
 export const BUDGET = 5;

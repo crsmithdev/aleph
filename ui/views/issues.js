@@ -408,7 +408,7 @@ const renderNoteForm = (d, ref) => formOf("issue-note", [field("Add a note", `<t
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
 const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
 /** The notes a person or a job needs to read, which stay visible. */
-const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
+const READ = /^(?:intake: for (?:Chris|User):|triage: for (?:Chris|User):|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note (`{ at, text }`) is a machine line: the prefix at the start of its text. */
 const isMachineNote = (n) => MACHINE.test(n.text) && !READ.test(n.text);
 

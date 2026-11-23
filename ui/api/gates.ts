@@ -79,7 +79,7 @@ function tickEntries(since: number): LogEntry[] {
   return readEvents(since).filter((e) => e.subject !== "gate" && e.subject !== "reviewer" && e.object !== "settings");
 }
 
-/** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`Chris: …`, `Chris decided: …`, `Chris approved it`). The note is the whole text. */
+/** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`User: …`, `User decided: …`, `User approved it`, and the old `Chris…` leads). The note is the whole text. */
 function noteEntries(): LogEntry[] {
   const lists = reader({ fetch: false });
   const out: LogEntry[] = [];
@@ -88,8 +88,9 @@ function noteEntries(): LogEntry[] {
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.id}`;
       for (const { at, text: t } of item.notes.map(noteOf)) {
-        if (!at || !Object.values(NOTE).some((lead) => t.startsWith(lead))) continue;
-        const action = t === NOTE.rerun || t === NOTE.retriage ? "reran" : t.startsWith(NOTE.checked) ? "done" : [NOTE.denied, NOTE.dropped, NOTE.declined].some((lead) => t.startsWith(lead)) ? "dropped" : "answered";
+        const u = t.replace(/^Chris\b/, "User"); // notes stored before the rename lead with the old name
+        if (!at || !Object.values(NOTE).some((lead) => u.startsWith(lead))) continue;
+        const action = u === NOTE.rerun || u === NOTE.retriage ? "reran" : u.startsWith(NOTE.checked) ? "done" : [NOTE.denied, NOTE.dropped, NOTE.declined].some((lead) => u.startsWith(lead)) ? "dropped" : "answered";
         out.push({ time: at, subject: "human", action, object: ref, detail: t });
       }
     }

@@ -246,11 +246,11 @@ export const logAlways = (reason: string, ref: string, action: string, more: Par
 };
 
 /**
- * Put `ask` on item `id` with the note `asks Chris: <said>`, as one store write. With `said` null the Ask is set and
+ * Put `ask` on item `id` with the note `asks the user: <said>`, as one store write. With `said` null the Ask is set and
  * no note is added (the caller has written the text once already). Returns why it could not, or null.
  */
 export function askChris(place: Place, id: number | string, ask: Ask, said: string | null): string | null {
-  const text = said === null ? "" : `asks Chris: ${said}`;
+  const text = said === null ? "" : `asks the user: ${said}`;
   try {
     let found = false;
     writeList(place, `todo: item ${id}: ${text}`, (doc) => {
