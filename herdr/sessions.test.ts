@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { pending, record, sort } from "./sessions.ts";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { found, pending, record, scan, sort } from "./sessions.ts";
 
 const ask = (id: string) => ({ type: "assistant", timestamp: "2026-11-23T10:00:00Z", message: { content: [{ type: "tool_use", id, name: "AskUserQuestion", input: { questions: [{ question: "Which store?", options: [{ label: "db" }, { label: "file" }] }] } }] } });
 const result = (id: string) => ({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content: "db" }] } });
@@ -57,4 +60,47 @@ test("a done terminal is sorted by its last answer, and without a transcript by 
   const got = { status: { state: "done", msg: "m" }, labels: { "claude-resume.session": "s" } };
   expect(record("t1", got, [say("Shall I go on?")] as any)).toMatchObject({ kind: "asks", session: "s", at: Date.parse("2026-11-23T10:00:00Z") });
   expect(record("t1", got, [])).toMatchObject({ kind: "plain", text: "m", at: null });
+});
+
+const use = (id: string, name: string, input: object) => ({ type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } });
+const out = (id: string, content: unknown) => ({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: id, content }] } });
+const file = (...lines: object[]) => {
+  const f = join(mkdtempSync(join(tmpdir(), "sessions-")), "s.jsonl");
+  writeFileSync(f, lines.map((l) => JSON.stringify(l)).join("\n"));
+  return f;
+};
+const obj = (n: number, title: string) => JSON.stringify({ repo: "aleph", added: n, title, commit: "abc" }, null, 2);
+
+test("an aleph issue add result with two objects gives two issues, and a failed add gives none", () => {
+  const s = scan(file(
+    use("a", "Bash", { command: "aleph issue add --title x && aleph issue add --title y" }),
+    out("a", `${obj(1, "First {braced}")}\n${obj(2, "Second")}`),
+    use("b", "Bash", { command: "aleph issue add --title z" }),
+    out("b", "error: no repo named zz"),
+    use("c", "Bash", { command: "ls" }),
+    out("c", obj(9, "not an add")),
+  ));
+  expect(s.added).toEqual([{ repo: "aleph", n: 1, title: "First {braced}" }, { repo: "aleph", n: 2, title: "Second" }]);
+});
+
+test("a shelf put by the MCP tool or the CLI gives its item id", () => {
+  const s = scan(file(
+    use("a", "mcp__shelf__put", { title: "Mock", path: "/x" }),
+    out("a", [{ type: "text", text: '{"id":"20261121-212835-e5bq","url":"/shelf/i/20261121-212835-e5bq/"}' }]),
+    use("b", "Bash", { command: "shelf put /x --title y" }),
+    out("b", "ok\n20261121-194453-v4ql http://127.0.0.1:3020/shelf/i/20261121-194453-v4ql/"),
+    use("c", "Bash", { command: "shelf put /x" }),
+    out("c", "error: no such file"),
+  ));
+  expect(s.puts).toEqual([{ id: "20261121-212835-e5bq", title: "Mock" }, { id: "20261121-194453-v4ql" }]);
+});
+
+test("found takes shelf titles from the server, else the put input, else the id, and an issue stage from the lookup", () => {
+  const scanned = { added: [{ repo: "aleph", n: 1, title: "T" }, { repo: "aleph", n: 2, title: "U" }], puts: [{ id: "20261121-212835-e5bq", title: "Mock" }, { id: "20261121-194453-v4ql" }] };
+  const r = found(scanned, new Map([["aleph-1", "done"]]), new Map([["20261121-212835-e5bq", { title: "Served", pending: 2 }]]));
+  expect(r.issues.map((i) => [i.title, i.stage, i.url])).toEqual([["T", "done", "http://aleph.home/#/issues/aleph/1"], ["U", "unknown", "http://aleph.home/#/issues/aleph/2"]]);
+  expect(r.shelf).toEqual([
+    { id: "20261121-212835-e5bq", title: "Served", pending: 2, url: "http://aleph.home/shelf/i/20261121-212835-e5bq/" },
+    { id: "20261121-194453-v4ql", title: "20261121-194453-v4ql", pending: 0, url: "http://aleph.home/shelf/i/20261121-194453-v4ql/" },
+  ]);
 });
