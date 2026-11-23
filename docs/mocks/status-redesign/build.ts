@@ -200,8 +200,8 @@ function waitingRows(v: View) {
   }).join("");
 }
 
-/** The waiting issues as a card, by what they wait on; nothing when nothing waits. */
-const waitingCard = (v: View) => (v.waiting.length ? card("Waiting", dataTable(heads(["Hold", "On", "Issues", "Waited"], ["Waited"]), waitingRows(v)), { count: count(v.waiting.length), id: "waiting" }) : "");
+/** The waiting issues under a sub-head with their count, by what they wait on; nothing when nothing waits. */
+const waitingPart = (v: View) => (v.waiting.length ? `<div class="sub-count" id="waiting">${subHead("Waiting")}<span class="count">${count(v.waiting.length)}</span></div>` + dataTable(heads(["Hold", "On", "Issues", "Waited"], ["Waited"]), waitingRows(v)) : "");
 
 /** A column chart as SVG in chart colours, `h` px tall: a value over each bar, a label under it. */
 function columns(values: number[], labels: string[], h = 64) {
@@ -251,8 +251,8 @@ function flowCard(v: View) {
   return card("Flow", `${stats}${subHead("Time by Phase, p50 / p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { aside: "7 days", id: "flow", cls: "flow" });
 }
 
-/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. */
-function memoryCard({ compact = false } = {}) {
+/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context; `stacked` adds the offers under them. */
+function memoryCard({ compact = false, stacked = false } = {}) {
   const m = d.memory;
   const start = barList(Object.entries<any>(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= 0.95 })).join(""));
   const days = m.offers, labels = days.map((_: number, i: number) => String(new Date(Date.parse(d.taken) - (9 - i) * 86_400_000).getDate()));
@@ -262,8 +262,9 @@ function memoryCard({ compact = false } = {}) {
     { k: "Refused", v: count(m.refused), state: m.refused ? "failed" : "", title: "Notes that lint refuses" }, { k: "Stale", v: count(m.stale), note: `${count(m.late)} late`, title: `${count(m.stale)} notes past their re-check date, ${count(m.late)} by more than 30 days` },
   ]);
   const aside = statusLight("fine", `Maintain: ${clock(m.maintained)}`);
-  if (compact) return card("Memory", `${stats}${subHead("Start Context")}${start}`, { aside, id: "memory" });
-  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${columns(days, labels)}`, stats, { aside, id: "memory" });
+  const offers = `${subHead("Offers per Day")}${columns(days, labels)}`;
+  if (compact || stacked) return card("Memory", `${stats}${subHead("Start Context")}${start}${stacked ? offers : ""}`, { aside, id: "memory", cls: stacked ? "memstack" : "" });
+  return splitCard("Memory", `${subHead("Start Context")}${start}${offers}`, stats, { aside, id: "memory" });
 }
 
 // ---- The event viewer ----
@@ -315,7 +316,7 @@ function eventsLog(v: View) {
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${problems(v, { alerts: true })}${motion(v)}${waitingCard(v)}${eventsLog(v)}${memoryCard()}</div><div class="stack">${efficiencyCard()}${flowCard(v)}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${problems(v, { alerts: true })}${motion(v, { waiting: true })}${eventsLog(v)}</div><div class="stack">${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
 
 // ---- B: Board ----
 
@@ -357,7 +358,7 @@ const pageB = (v: View) => `${head(v)}${scorecard(v)}${triage(v)}${board(v)}<div
 // ---- C: Timeline ----
 
 /** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. */
-function motion(v: View) {
+function motion(v: View, { waiting = false } = {}) {
   const n = 12; // lanes above the fold
   const span = v.busy ? 3_600_000 : v.st.span, from = v.T - span, x = (t: number) => Math.min(100, Math.max(0, ((t - from) / span) * 100));
   const ticks = Array.from({ length: 5 }, (_, i) => from + (i * span) / 4);
@@ -383,7 +384,7 @@ function motion(v: View) {
   const spans = seg("Span", ["1h", "2h", "12h"].map((l) => ({ label: l, on: l === (v.busy ? "1h" : "12h"), attrs: "" })));
   const rest = lanes.length > n ? `<details class="more-lanes"><summary>${count(lanes.length - n)} more</summary>${lanes.slice(n, n + 30).map(lane).join("")}</details>` : "";
   const body = lanes.length ? `<div class="dp-scroll">${axis}${lanes.slice(0, n).map(lane).join("")}${rest}</div>` : empty();
-  return card("Issues in Motion", `${legend}${body}`, { count: count(v.active.length), aside: `${statusLight(v.workers ? "fine" : "unknown", `Workers: ${v.workers} / ${F.agents.cap}`)}${spans}`, id: "now", cls: "motion" });
+  return card("Issues in Motion", `${legend}${body}${waiting ? waitingPart(v) : ""}`, { count: count(v.active.length), aside: `${statusLight(v.workers ? "fine" : "unknown", `Workers: ${v.workers} / ${F.agents.cap}`)}${spans}`, id: "now", cls: "motion" });
 }
 
 /** The week's efficiency and flow as six figures and the outcome bar, for a narrow column. */

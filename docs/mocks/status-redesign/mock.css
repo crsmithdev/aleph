@@ -21,8 +21,9 @@
 .m-need { background: var(--need); }
 .tile .meter { margin: var(--sp-2) 0; }
 
-/* A count beside a sub-head. */
-.bhead .count, .barrow .bl .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+/* A sub-head with a count, as Waiting under the lanes. */
+.sub-count { display: flex; align-items: baseline; gap: var(--sp-8); }
+.sub-count .count, .bhead .count, .barrow .bl .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
 .wtitle { color: var(--ink-2); }
 .needs > .sh { margin-bottom: var(--sp-10); }
 .needs { margin: 0; }
@@ -41,7 +42,7 @@ tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
 /* A meter that takes the card's width, over its legend. */
 .wide-meter { display: flex; }
 .wide-meter .meter { flex: 1; }
-.flow .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.flow .sstats, .memstack .sstats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* A small column chart drawn as SVG in the chart's colours. */
 .cols { display: block; overflow: visible; }
