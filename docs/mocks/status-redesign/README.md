@@ -71,7 +71,7 @@ An issue with an Ask shows once, as its Ask.
 
 | Page | Order | Active work | Events |
 |---|---|---|---|
-| A · Briefing, `a-briefing.html` | Main column: Problems with the alert and the Asks, Issues in Motion, Events. Rail: Efficiency, Flow, Memory. | C's lanes, then a Waiting section in the same card: the waiting issues by what they wait on. | C's log table. |
+| A · Briefing, `a-briefing.html` | Main column: Issues in Motion, Events. Rail: Problems with the alert and the Asks, Efficiency, Flow, Memory. In one column Problems leads. | C's lanes, then a Waiting section in the same card: the waiting issues by what they wait on. | C's log table. |
 | B · Board, `b-board.html` | Attention, Pipeline, then Events beside Efficiency and Memory. | A board: a column per stage with the week's median and failed share in its head, and the issues in it now. | The Herald feed in a card. |
 | C · Timeline, `c-timeline.html` | Left: Issues in Motion, Events. Right: Needs You, Problems, Factory, Memory. | Lanes: each issue of the last hour on one time axis, its runs as bars in the tone of their result. | A log table of one event a row: time, event, issue, title, job, by, model, cost, took. |
 
@@ -79,7 +79,7 @@ Where each block sits at 1600 × 1000 px, in px from the top of the page:
 
 | Page | Busy | Quiet |
 |---|---|---|
-| A | Problems 285 to 674, lanes and Waiting 698 to 1412, Events from 1436 | Problems 285 to 541, lanes 565 to 786, Events from 810 |
+| A | Problems 285 to 696 in the rail, lanes and Waiting 285 to 999, Events from 1023 | Problems 285 to 563 in the rail, lanes 285 to 506, Events from 530 |
 | B | Attention 285 to 600, Pipeline 624 to 1109, Events from 1133 | Attention 285 to 541, Pipeline 565 to 836, Events from 860 |
 | C | Needs You 285 to 810, lanes 285 to 826, Problems 834 to 1026, Events from 850 | Problems 285 to 540, lanes 285 to 506, Events from 530 |
 
@@ -109,6 +109,8 @@ Round 3, the same day:
 
 1. Waiting is a section under the lanes, in the Issues in Motion card.
 2. Memory moves to the rail, stacked: the six counts in three columns, then Start Context, then Offers per Day.
+
+Round 4: Problems moves to the top of the rail. At 1100 px and under, the page is one column and Problems leads it.
 
 The Recommended section is of round 1.
 

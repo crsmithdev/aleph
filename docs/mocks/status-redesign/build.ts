@@ -315,8 +315,8 @@ function eventsLog(v: View) {
 
 // ---- A: Briefing ----
 
-/** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${problems(v, { alerts: true })}${motion(v, { waiting: true })}${eventsLog(v)}</div><div class="stack">${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
+/** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
+const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { waiting: true })}${eventsLog(v)}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
 
 // ---- B: Board ----
 
@@ -405,7 +405,7 @@ const pageC = (v: View) => `${head(v)}${scorecard(v)}<div class="split wide-left
 // ---- Pages ----
 
 const PAGES: [string, string, string, (v: View) => string][] = [
-  ["a-briefing.html", "A · Briefing", "Problems with the alerts, the work and the event log down one column; the week's figures in a rail", pageA],
+  ["a-briefing.html", "A · Briefing", "The work and the event log down one column; Problems with the alerts over the week's figures in a rail", pageA],
   ["b-board.html", "B · Board", "One triage table, then the pipeline as a live board", pageB],
   ["c-timeline.html", "C · Timeline", "Each issue as a lane in time, over the event log", pageC],
 ];

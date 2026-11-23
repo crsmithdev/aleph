@@ -74,6 +74,8 @@ tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
 @media (max-width: 1100px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--sp-16); } .bcol:nth-child(odd) { padding-left: 0; border-left: 0; } }
 
 /* A stack of cards in one column of a split. */
+/* In one column, Problems leads A's page: the rail's cards are the grid's items. */
+@media (max-width: 1100px) { .rail > .stack { display: contents; } .rail #problems { order: -1; } }
 .stack { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 .sp > .split { gap: var(--gap); }
 .split.wide-left { grid-template-columns: minmax(0, 5fr) minmax(0, 2fr); }
