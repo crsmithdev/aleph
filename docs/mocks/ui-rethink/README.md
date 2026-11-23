@@ -127,12 +127,10 @@ Chris decided these on 2026-11-22, from the mock on the shelf.
 2. Analysis views: open with a figure band.
 3. The cuts in the Pages table: accepted. These go from the pages: the Notes and Jobs columns of Issues, the Holds by
    Day chart of Hooks, the defaults in rows, and the 5 buttons on each chart.
-
-## Open points
-
-1. Automation: cut a column that shows only a default, such as No Answer, which reads "wait" on every rule.
-2. Agents: the switch on every role, or on the 3 worker sizes only, as the live page has it.
-3. Hooks: fold the events with one hook into one group, because the List view is 1931 px tall at 1440 px.
+4. A column that shows only a default goes. Automation's No Answer reads "wait" on every rule, so it shows only in
+   the inspector.
+5. Agents: a switch on every role, not only on the 3 worker sizes.
+6. Hooks: the events with one hook fold into one Other group, where each row names its event.
 
 ## Rebuild
 

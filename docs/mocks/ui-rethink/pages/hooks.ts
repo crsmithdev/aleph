@@ -53,9 +53,9 @@ function inspectHook(h: any, d: Data) {
 }
 
 /** One hook as a row: its name and only what differs from the defaults (no `sync`, no `runs`), its outcomes, holds and error causes. */
-function hookRow(h: any, d: Data, hold: boolean): Row {
+function hookRow(h: any, d: Data, event: boolean): Row {
   const causes = causesOf(d, h);
-  const main = `<span class="t">${esc(h.name)}</span>${hold ? chip(h.event) : ""}${h.matcher ? codeText(`\`${h.matcher}\``) : ""}${h.mode ? chip(h.mode) : ""}${h.workers === "skips" ? chip("skips workers") : ""}`;
+  const main = `<span class="t">${esc(h.name)}</span>${event ? chip(h.event) : ""}${h.matcher ? codeText(`\`${h.matcher}\``) : ""}${h.mode ? chip(h.mode) : ""}${h.workers === "skips" ? chip("skips workers") : ""}`;
   const errs = causes.length ? `<span class="quiet" title="${esc(causes.map((e: any) => e.cause).join(", "))}">${esc(plural(causes.length, "cause"))}</span>` : "";
   return {
     key: `${h.event}/${h.name}`, lead: "", main, inspect: inspectHook(h, d), data: { workers: h.workers },
@@ -74,10 +74,12 @@ const STYLE = `<style>.rt-hooks-out { display: inline-flex; width: 140px; vertic
 function listView(d: Data) {
   const H = d.hooks, inv = H.inventory, o = H.outcomes;
   const holding = inv.filter((h: any) => h.holds).sort((a: any, b: any) => b.holds - a.holds), rest = inv.filter((h: any) => !h.holds);
-  const events = [...Map.groupBy(rest, (h: any) => h.event)];
+  // 13 events hold one hook each: a group per event made the list 1931 px tall at 1440 px.
+  const events = [...Map.groupBy(rest, (h: any) => h.event)], shared = events.filter(([, hs]) => hs.length > 1), lone = events.filter(([, hs]) => hs.length === 1).map(([, hs]) => hs[0]);
   const groups: Group[] = [
     { title: "Hold", count: count(holding.length), heads: ["Outcomes", "Holds", "Errors"], rows: holding.map((h: any) => hookRow(h, d, true)) },
-    ...events.map(([e, hs]): Group => ({ title: e, count: count(hs.length), heads: ["", "", ""], rows: hs.map((h: any) => hookRow(h, d, false)) })),
+    ...shared.map(([e, hs]): Group => ({ title: e, count: count(hs.length), heads: ["", "", ""], rows: hs.map((h: any) => hookRow(h, d, false)) })),
+    { title: "Other", count: count(lone.length), heads: ["", "", ""], rows: lone.map((h: any) => hookRow(h, d, true)) },
   ];
   const key = legendHtml(OUTS.map(([k, cls]) => [k, cls]));
   return STYLE + `<div class="rt-hooks-key">${factsLine([[count(H.holds), "holds"], [count(o.caught), "caught"], [count(o.false), "false"], [count(o["no effect"]), "no effect"]])}${key}</div>` +

@@ -36,9 +36,6 @@ function decided(x: any) {
   return `<span class="rt-automation-dec">${meter([["rule", x.rule], ["dir", x.director], ["user", x.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), line)}</span>`;
 }
 
-/** What an escalated Ask does with no answer, `timeout` in minutes: a muted "wait" is the default; a rule with no timeout setting has none. */
-const noAnswer = (r: any) => (r.timeout === undefined ? "" : r.timeout ? esc(`${MODES[r.noAnswer] ?? "Drop"} after ${dur(r.timeout * 60)}`) : `<span class="quiet">wait</span>`);
-
 /** The inspector of one rule: its line, its counts, then its two settings. */
 function ruleInspect(r: any, d: Data) {
   const at = new Date(now(d)), x = r.decided, o = r.outcome;
@@ -59,10 +56,10 @@ function ruleInspect(r: any, d: Data) {
   return inspector({ id: r.reason, title: r.name, rows: kv, body: `<p class="rt-automation-detail">${esc(r.line)}</p>${edit}`, href: HREF });
 }
 
-/** One rule as a row: the ask, its fires, who decided, the result with no answer, and who decides first. Defaults are muted or blank. */
+/** One rule as a row: the ask, its fires, who decided, and who decides first. Defaults are muted or blank; No answer reads "wait" on every rule, so it shows only in the inspector. */
 const ruleRow = (r: any, d: Data): Row => ({
   key: r.reason, lead: esc(r.name), main: `<span class="t" title="${esc(r.line)}">${esc(r.line)}</span>`, text: `${r.name} ${r.line} ${r.reason}`, inspect: ruleInspect(r, d),
-  cells: [nz(r.fired), decided(r.decided), noAnswer(r), r.granted ? esc(MODES[r.granted.action] ?? r.granted.action) : `<span class="quiet">director</span>`],
+  cells: [nz(r.fired), decided(r.decided), r.granted ? esc(MODES[r.granted.action] ?? r.granted.action) : `<span class="quiet">director</span>`],
 });
 
 /** The monitor report, shown only while the address names it. */
@@ -73,7 +70,7 @@ function monitor(d: Data) {
 
 function rulesView(d: Data) {
   const A = d.automation, m = A.metrics;
-  const groups: Group[] = [{ title: "Asks", count: count(A.rules.length), heads: ["Fired", "Decided", "No Answer", "Decides"], rows: A.rules.map((r: any) => ruleRow(r, d)) }];
+  const groups: Group[] = [{ title: "Asks", count: count(A.rules.length), heads: ["Fired", "Decided", "Decides"], rows: A.rules.map((r: any) => ruleRow(r, d)) }];
   return STYLE + monitor(d) +
     factsLine([[pct(m.rate.percent), "automatic"], [count(m.catches.fired), "sent back"], [count(m.catches.fixed), "fixed"], [hours(m.held.hours), "held"]]) +
     `<div class="rt-automation-rules">${list({ label: "Rules", search: "Search rules", groups })}</div>`;
