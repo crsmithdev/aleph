@@ -292,7 +292,8 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
       const real = counting(runs).run;
       if (isWaiting(real.state)) needs.push(toJob(runs));
       // A run whose `next` is set already has its rework, recheck or land queued: it is between steps, not errored.
-      else if (isError(real)) errored.push(toJob(runs));
+      // A judge run that failed or returned is lost, not errored: no cleanup ends it, so it shows on no card.
+      else if (isError(real)) { if (real.role !== "judge") errored.push(toJob(runs)); }
       else {
         const k = issueKeyOf(real), on = onOf(real);
         const item = real.repo === undefined || on === undefined ? undefined : lists.item(real.repo, on);

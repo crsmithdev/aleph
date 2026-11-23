@@ -322,6 +322,13 @@ describe("an errored job whose last run failed a check", () => {
   });
 });
 
+describe("a judge run that failed", () => {
+  test("is lost, not errored, so it shows on no Problems card", () => {
+    run("20261027-000072-a", { kind: "judge", job: "fac-72", name: "fac-72", state: "failed", cause: "unanswered", reason: "failed: its process ended before a verdict", started: ago(2) });
+    expect(state(now).errored.some((x) => x.name === "fac-72")).toBe(false);
+  });
+});
+
 describe("a returned run whose rework is queued", () => {
   test("is not errored, so the status does not flash an alert before the rework starts", () => {
     run("20261027-000071-a", { job: "fac-71", name: "fac-71", state: "returned", cause: "check", next: "worker", started: ago(2) });
