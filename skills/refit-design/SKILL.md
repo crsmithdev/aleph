@@ -49,6 +49,19 @@ none, the run covers each route of the router. The report's unit is a component 
    returns, per component, the rules it breaks and the rules it follows (each by rule id and
    text, from `design rules --for <component>`) and the Design specimen id. Done when each route has returned and each component has an entry.
 
+## Notes
+
+Each finding also becomes a note on the page it audited, so Chris answers it in the dock as he answers his own.
+Each finding in `findings.json` carries three more fields:
+
+- `rule`: the rule id of `design/` that the finding breaks.
+- `url`: the page as the dock stores it, `http://aleph.home/` and the route, such as `http://aleph.home/#/issues`.
+- `selector`: a CSS selector that finds the element the finding names on the drawn page, else `body`.
+
+After you write the findings, run `bun skills/refit-design/scripts/notes.ts <run dir>`. It adds an agent note for
+each `open` or `reverted` finding, with its key `<lens>:<rule>:<unit>`, title, fix and locations. It skips a finding
+whose key an unresolved note on that page holds. The HTML report stays as it is.
+
 ## Act order
 
 Local defect, one-off, mismatch, then missing token. A proposal to amend the doc is not fixed: report it. Two
