@@ -112,19 +112,25 @@ export function renderMotion(s) {
 
 /** What a hold waits on: the issues an `after` waits for, else the hold's facts. */
 const holdOn = (q) => (q.waits?.length ? q.waits.map((w) => (w.href ? idLink(shortText(w.id, q.repo), w.href) : esc(shortText(w.id, q.repo)))).join(" ") : esc(shortText(factsOf(q.ev ?? {}), q.repo)));
+/** What a hold waits on as plain text. */
+export const onText = (q) => (q.waits?.length ? q.waits.map((w) => shortText(w.id, q.repo)).join(" ") : shortText(factsOf(q.ev ?? {}), q.repo));
+
+/** The issues that wait, one group per hold and what it waits on, each with the seconds its oldest has waited, or null. */
+export const holdsOf = (s) => [...Map.groupBy(waitingOf(s), (q) => `${q.kind} ${onText(q)}`).values()].map((qs) => {
+  const held = qs.map((q) => Date.parse(q.heldAt ?? "")).filter(Number.isFinite);
+  return { qs, waited: held.length ? (Date.parse(s.now) - Math.min(...held)) / 1000 : null };
+});
 
 /** The Waiting section: one row per hold, its word, what it waits on, its issues and how long the oldest has waited. Nothing when nothing waits. */
 export function renderWaiting(s) {
-  const waiting = waitingOf(s);
-  if (!waiting.length) return "";
-  const groups = Map.groupBy(waiting, (q) => `${q.kind} ${holdOn(q)}`);
-  const rows = [...groups.values()].map((qs) => {
-    const held = qs.map((q) => Date.parse(q.heldAt ?? "")).filter(Number.isFinite);
+  const holds = holdsOf(s);
+  if (!holds.length) return "";
+  const rows = holds.map(({ qs, waited }) => {
     const issues = qs.map((q) => { const id = `${q.repo}-${q.id}`; return `${repoIdLink(id, issueHref(id))} ${esc(q.title)}`; }).join(" · ");
     // The cell's text is escaped once already, so the title takes it with the tags cut.
-    return row([`<td>${tag(qs[0].kind, "quiet")}</td>`, `<td>${holdOn(qs[0])}</td>`, `<td class="wide" title="${issues.replace(/<[^>]*>/g, "")}">${issues}</td>`, cell(held.length ? dur((Date.parse(s.now) - Math.min(...held)) / 1000) : "–", { num: true })]);
+    return row([`<td>${tag(qs[0].kind, "quiet")}</td>`, `<td>${holdOn(qs[0])}</td>`, `<td class="wide" title="${issues.replace(/<[^>]*>/g, "")}">${issues}</td>`, cell(waited === null ? "–" : dur(waited), { num: true })]);
   });
-  return sectionHead("Waiting", { count: count(waiting.length), level: 3 }) + dataTable(heads(["Hold", "On", "Issues"]) + iconHead("stopwatch", "Waited"), rows.join(""));
+  return sectionHead("Waiting", { count: count(waitingOf(s).length), level: 3 }) + dataTable(heads(["Hold", "On", "Issues"]) + iconHead("stopwatch", "Waited"), rows.join(""));
 }
 
 // ---- Events ----
@@ -184,19 +190,23 @@ export function renderMemory(m, now) {
   if (!m) return card("Memory", loadingLine("the memory"), { id: "memory" });
   if (m.error) return card("Memory", error(m.error), { id: "memory" });
   const start = barList(Object.entries(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core.length)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= FULL })).join(""));
+  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${panelOf("status/offers", offersFrame(m, Date.parse(now)), "", { bare: true })}`, sideStats(memoryStats(m, now)), { id: "memory" });
+}
+
+/** The six counts of the Memory page at `now`, as `sideStats` takes them. */
+export function memoryStats(m, now) {
   const stale = m.processes.decay.stale, late = stale.filter((x) => x.over > 30).length;
-  const stats = sideStats([
+  return [
     { k: "Notes", v: count(m.total) },
     { k: "Offered", v: count(m.notes.filter((n) => offered(n, Date.parse(now))).length), title: "Notes that recall offered to an agent in 7 days" },
     { k: "Never offered", v: count(m.notes.filter((n) => !n.read).length), title: "Notes that recall never offered" },
     { k: "Unoffered reads", v: count(m.misses?.unoffered_reads), title: "Wiki reads in 7 days that no offer preceded" },
     { k: "Refused", v: count(m.lint.refuse.length), state: m.lint.refuse.length ? "failed" : "", title: "Notes that lint refuses" },
     { k: "Stale", v: count(stale.length), note: `${count(late)} late`, title: `${count(stale.length)} notes past their re-check date, ${count(late)} by more than 30 days` },
-  ]);
-  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${panelOf("status/offers", offersFrame(m, Date.parse(now)), "", { bare: true })}`, stats, { id: "memory" });
+  ];
 }
 /** The share of the start budget at which the start context counts as full, as `/api/attention` counts it. */
-const FULL = 0.95;
+export const FULL = 0.95;
 
 // ---- Problems ----
 
@@ -204,7 +214,7 @@ const FULL = 0.95;
 const jobLink = (j) => (j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j));
 
 /** One plain sentence of what went wrong for an errored job, from its cause; a time box or a stall takes its length from `limit`, in seconds. */
-const errorSentence = (j) => {
+export const errorSentence = (j) => {
   const span = j.limit ? (j.limit % 60 === 0 ? [j.limit / 60, "minute"] : [j.limit, "second"]) : null;
   const check = j.checkName ? `The check ${j.checkName}` : "A check";
   return {
@@ -262,12 +272,15 @@ export function renderProblems(s, stale = false) {
 const STAGES = ["intake", "build", "review", "recheck", "land"];
 
 /** The lost hours of the window by cause, over every lost class, largest first; the causes past the first four fold into Other. */
-function lostCauses(d) {
+export function lostCauses(d) {
   const by = new Map();
   for (const c of d.classes.filter((x) => x.lost)) for (const k of c.causes) by.set(k.name, (by.get(k.name) ?? 0) + k.hours);
   const all = [...by].sort((a, b) => b[1] - a[1]), rest = all.slice(4).reduce((n, [, h]) => n + h, 0);
   return rest > 0 ? [...all.slice(0, 4), ["Other", rest]] : all;
 }
+
+/** The stages with a failed run in the window, most failed runs first: /api/flow stage rows. */
+export const failedRuns = (d) => d.stages.rows.filter((r) => STAGES.includes(r.stage) && r.unusable > 0).sort((a, b) => b.unusable - a.unusable);
 
 /** Rows of `[label, value, shown]` as a bar list on the scale of the largest; empty() with none. */
 const bars = (rows) => {
@@ -284,7 +297,7 @@ export function renderEfficiency(d) {
   const legend = legendHtml(classes.map((c) => [`${c.key} ${hours(c.hours)}`, `seg-${c.key}`]));
   const lost = bars(lostCauses(d).map(([name, h]) => [esc(name), h, hours(h)]));
   // The bar is the count of failed runs: Recheck's 9 of 13 is not a rate to read alone.
-  const failed = bars(d.stages.rows.filter((r) => STAGES.includes(r.stage) && r.unusable > 0).sort((a, b) => b.unusable - a.unusable).map((r) => [esc(NAMES[r.stage]), r.unusable, `${count(r.unusable)} of ${count(r.runs)}`]));
+  const failed = bars(failedRuns(d).map((r) => [esc(NAMES[r.stage]), r.unusable, `${count(r.unusable)} of ${count(r.runs)}`]));
   return card("Efficiency", `${bar}${legend}${subHead("Lost Time by Cause")}${lost}${subHead("Failed Runs by Stage")}${failed}`, { aside: `${hours(f.kept)} of ${hours(all)} reached main`, id: "efficiency" });
 }
 
@@ -298,20 +311,29 @@ export const landedFrame = (d) => {
 /** The phase of a live run: a review and a recheck run inside Implement, as /api/flow counts them. */
 const phaseOf = (kind) => (kind === "intake" || kind === "land" ? kind : "implement");
 
+/** The issues in each phase now: the waiting ones in Queue, each live run in its phase. */
+export function phasesNow(s) {
+  const now = { intake: 0, queue: waitingOf(s).length, implement: 0, land: 0 };
+  for (const j of s.running) now[phaseOf(j.run.kind)]++;
+  return now;
+}
+
+/** The six counts of the Flow card, as `sideStats` takes them. */
+export const flowStats = (d) => [
+  { k: "Filed", v: count(d.figures.filed) }, { k: "Landed", v: count(d.figures.landed), state: "landed" }, { k: "Dropped", v: count(d.figures.dropped) },
+  { k: "First Pass", v: cardPct(d.issues.firstPass), title: "Landed issues whose first run landed" },
+  { k: "Open", v: count(d.open.open), note: d.open.parked ? `+${count(d.open.parked)}` : "", title: `${plural(d.open.open, "open issue")}, ${plural(d.open.parked, "parked issue")}` },
+  { k: "Asks", v: count(d.asks.count), note: `${count(d.asks.manual)} yours`, title: `${count(d.asks.count)} Asks in the window, ${count(d.asks.manual)} answered by the user` },
+];
+
 /** The Flow card: the window's issues in and out, each phase's p90 with the issues in it now, and the issues landed per bucket. `d` is /api/flow, null while it loads, or `{ error }`. */
 export function renderFlow(d, s) {
   if (!d) return card("Flow", loadingLine("the flow"), { id: "flow" });
   if (d.error) return card("Flow", error(d.error), { id: "flow" });
-  const f = d.figures, now = { intake: 0, queue: waitingOf(s).length, implement: 0, land: 0 };
-  for (const j of s.running) now[phaseOf(j.run.kind)]++;
+  const now = phasesNow(s);
   const keys = Object.keys(now), slow = Math.max(...keys.map((k) => d.phases[k].p90 ?? 0));
   const phases = barList(keys.map((k) => barRow(`${esc(NAMES[k === "implement" ? "build" : k])} <span class="count">${count(now[k])}</span>`, slow ? ((d.phases[k].p90 ?? 0) / slow) * 100 : 0, d.phases[k].count ? dur(d.phases[k].p90) : "–", { top: d.phases[k].p90 === slow })).join(""));
-  const stats = sideStats([
-    { k: "Filed", v: count(f.filed) }, { k: "Landed", v: count(f.landed), state: "landed" }, { k: "Dropped", v: count(f.dropped) },
-    { k: "First Pass", v: cardPct(d.issues.firstPass), title: "Landed issues whose first run landed" },
-    { k: "Open", v: count(d.open.open), note: d.open.parked ? `+${count(d.open.parked)}` : "", title: `${plural(d.open.open, "open issue")}, ${plural(d.open.parked, "parked issue")}` },
-    { k: "Asks", v: count(d.asks.count), note: `${count(d.asks.manual)} yours`, title: `${count(d.asks.count)} Asks in the window, ${count(d.asks.manual)} answered by the user` },
-  ]);
+  const stats = sideStats(flowStats(d));
   const landed = landedFrame(d);
   return card("Flow", `${stats}${subHead("Time by Phase, p90")}${phases}${subHead(`Landed per ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`)}${panelOf("status/landed", landed, "", { bare: true })}`, { id: "flow", cls: "flow" });
 }
