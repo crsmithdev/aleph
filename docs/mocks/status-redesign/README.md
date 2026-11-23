@@ -166,6 +166,8 @@ Each needs a place in `design.md` before a build.
 - The Herald sends grouped rows. The event filter, the search and the log's pages need an API that serves them.
 - The page drops the stage table, the Active Issues chart and the Herald's Active and Inspector tabs. They need a
   place one click down, or they go.
+- The build's lanes must use the card's width: at 1600 px the 1h axis of A gets 293 of the card's 809 px, and all 17 bars
+  start at 75.7% of the axis or later (Chris, 11/23; not a fix for the mock).
 - The mocks use one project. A second project needs a column or a group in Problems, Now and Events.
 
 ## Checked
