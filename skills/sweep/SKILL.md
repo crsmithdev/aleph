@@ -1,44 +1,54 @@
 ---
 name: sweep
 description: >
-  Find unhandled follow-ups in this repo's handoffs and recent sessions. Use when asked to sweep.
-argument-hint: "[--since <ISO time>]"
+  Find unhandled follow-ups of this session, or with `all` of every recent session and handoff of this repo. Use
+  when asked to sweep.
+argument-hint: "[all] [--since <ISO time>]"
 ---
 
 # Sweep
 
-Go through this repo's handoffs and the user's recent session transcripts, find the items nobody handled, explain
-them, and ask the user about the ones that need them. A pickup archives a handoff when a session reads it, not when its
-items are done, and a session can end with a follow-up nobody filed. So judge each item from the current state,
-never from the handoff or transcript text alone.
+Find the items this session leaves open, explain them, and ask the user about the ones that need them. With `all`,
+do the same for this repo's handoffs and every session since the last sweep. A pickup archives a handoff when a
+session reads it, not when its items are done, and a session can end with a follow-up nobody filed. So judge each
+item from the current state, never from the handoff or transcript text alone.
 
 ## Find the items
 
 1. Set `<handoffs dir>` to `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`. Get `<scope>` from
    `d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.
    The ledger is `<handoffs dir>/handled.jsonl`.
-2. **Handoffs.** Read the waiting `<handoffs dir>/projects/<scope>.md` and every `<handoffs dir>/projects/<scope>/<pane>.md`, if they exist, and every
-   `<YYYY-MM-DD-HHMMSS>-<scope>.md` in `<handoffs dir>`, newest first. A handoff item is one bullet of **Open
-   questions**, one step of **Active plan** that the handoff does not mark done, or the next action of **Resume
-   instructions**.
-3. **Transcripts.** Set `<since>` to the `--since` value in `$ARGUMENTS`, else the `at` of the newest ledger line with
-   `"verdict": "swept"`, else 7 days ago. Run this from the main checkout and write the output to the scratchpad:
+2. **Transcripts.** Run one of these from the main checkout:
+   - Without `all`, read this session from its start, so a compaction loses no item:
 
-   ```bash
-   bun <this skill's dir>/turns.ts --since <since> --repo "$(dirname "$d")" > <scratchpad>/turns.md
-   ```
+     ```bash
+     bun <this skill's dir>/turns.ts --session "$CLAUDE_CODE_SESSION_ID" --repo "$(dirname "$d")" > <scratchpad>/turns.md
+     ```
+
+   - With `all`, set `<since>` to the `--since` value in `$ARGUMENTS`, else the `at` of the newest ledger line with
+     `"verdict": "swept"`, else 7 days ago:
+
+     ```bash
+     bun <this skill's dir>/turns.ts --since <since> --repo "$(dirname "$d")" > <scratchpad>/turns.md
+     ```
 
    It prints one `## <session id> <start> to <end>` block per session that the user drove, with what they typed or
    answered (`Chris:`), each question put to them (`Asks:`) and the reply that ended each turn (`Reply:`). A long
    reply keeps its start and its end. A transcript item is one of these:
+   - A question put to the user that they did not answer in that session or a later one.
+   - A decision left open: options offered and none chosen, or a choice the session put off.
    - A follow-up, risk, `Left out:` or `Not verified:` line that a reply names and no issue, commit or later
      session holds.
-   - A question to the user that they did not answer in that session or a later one.
    - A request from the user that the session did not finish: it ended mid-work, or its branch or worktree did not
      land.
+   - A loose end the session leaves: uncommitted changes, a worktree not removed, a server or background job still
+     running, an issue named but not filed.
    - The next action at the end of a session that no later session took.
-
-   Skip a transcript item that a handoff item already covers. Skip this session.
+3. **Handoffs**, only with `all`. Read the waiting `<handoffs dir>/projects/<scope>.md` and every
+   `<handoffs dir>/projects/<scope>/<pane>.md`, if they exist, and every `<YYYY-MM-DD-HHMMSS>-<scope>.md` in
+   `<handoffs dir>`, newest first. A handoff item is one bullet of **Open questions**, one step of **Active plan**
+   that the handoff does not mark done, or the next action of **Resume instructions**. Skip a transcript item that
+   a handoff item already covers.
 4. Skip an item when the ledger has a line with the same `file` and the same item. For a transcript item, `file` is
    `<session id>.jsonl`, and the same item is the same follow-up in other words.
 
@@ -75,7 +85,7 @@ For a handoff, `file` is the handoff file name.
    there is no question UI: skip steps 3 and 4, leave the open items out of the ledger, and go to step 5.
 4. Act on each answer as the session's work mode says (`/aleph:mode`, solo if none is set). Append it to the
    ledger with the verdict `decided` or `dropped` and the answer in `note`.
-5. Append one line that marks the transcripts as swept up to the time `turns.ts` ran:
+5. With `all`, append one line that marks the transcripts as swept up to the time `turns.ts` ran:
    `{"at": "<that ISO time>", "file": "transcripts", "item": "sweep", "verdict": "swept", "note": "<n> sessions"}`.
-6. If every item of a waiting `projects/<scope>.md` or `projects/<scope>/<pane>.md` is now in the ledger, archive it the way a pickup does: move it
+6. With `all`, if every item of a waiting `projects/<scope>.md` or `projects/<scope>/<pane>.md` is now in the ledger, archive it the way a pickup does: move it
    to `<handoffs dir>/$(date +%Y-%m-%d-%H%M%S)-<scope>.md`.

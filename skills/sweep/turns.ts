@@ -2,7 +2,9 @@
  * The turns of the user's sessions in one repo: what they typed or answered, and the reply that ended each turn.
  * Headless (`claude -p`) and factory sessions are left out. Prints one block per session, oldest first.
  *
- *   bun turns.ts [--since <ISO time>] [--repo <path>] [--root ~/.claude/projects]
+ *   bun turns.ts [--since <ISO time>] [--session <id>] [--repo <path>] [--root ~/.claude/projects]
+ *
+ * --since defaults to 7 days ago, or to the start of the session when --session names one.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -67,15 +69,16 @@ export const dirs = (root: string, repo: string): string[] => {
 if (import.meta.main) {
   const { values: v } = parseArgs({
     options: {
-      since: { type: "string", default: new Date(Date.now() - WEEK).toISOString() },
+      since: { type: "string" },
+      session: { type: "string" },
       repo: { type: "string", default: process.cwd() },
       root: { type: "string", default: claudeProjects() },
     },
   });
-  const since = new Date(v.since!).toISOString();
+  const since = new Date(v.since ?? (v.session ? 0 : Date.now() - WEEK)).toISOString();
   const files = dirs(v.root!, v.repo!)
     .flatMap((d) => readdirSync(d).filter((f) => f.endsWith(".jsonl")).map((f) => join(d, f)))
-    .filter((f) => statSync(f).mtime.toISOString() > since);
+    .filter((f) => (v.session ? f.endsWith(`/${v.session}.jsonl`) : statSync(f).mtime.toISOString() > since));
   const found = files
     .map((f) => ({ id: f.split("/").at(-1)!.slice(0, -6), ts: turns(readFileSync(f, "utf8"), since) }))
     .filter((s) => s.ts?.some((t) => t.who === "chris"))
