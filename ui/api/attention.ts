@@ -14,14 +14,13 @@ import { count, dur, plural } from "../views/lib/format.js";
 import type { Routes } from "../server.ts";
 import { respond, updater } from "../updater.ts";
 import { byCause, scan } from "./hooks.ts";
-import { lintOf, start, vaultNotes } from "./memory.ts";
+import { lintOf, vaultNotes } from "./memory.ts";
 import { downModels } from "./models.ts";
 import { parseScope, type Scope } from "./scope.ts";
 
 /** One problem of a page: its tone, its line and, optionally, the action that removes it. */
 export type Row = { tone: "error" | "need"; text: string; act?: { label: string; href: string } };
 
-const FULL = 0.95; // share of the start budget at which the start context counts as full
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** Automation: the backend hold after an API credit error, and the newest monitor report's findings. */
@@ -35,12 +34,11 @@ function automation(): Row[] {
   ];
 }
 
-/** Memory: a start context at its budget, and the lint findings with a refusal. */
+/** Memory: the lint findings with a refusal. A full start context needs no one: a write demotes the oldest core line. */
 async function memory(): Promise<Row[]> {
-  const root = vaultDir(), all = await vaultNotes(root), { bytes, budget } = start(root, all).aleph as { bytes: number; budget: number };
+  const root = vaultDir(), all = await vaultNotes(root);
   const lint = lintOf(root, all), found = lint.refuse.length + lint.warn.length;
   return [
-    ...(bytes >= FULL * budget ? [{ tone: "need" as const, text: `Start context ${count(bytes)} B of ${count(budget)} B`, act: { label: "Health", href: "#/memory?view=health" } }] : []),
     // A refused note is the error tone, as the Needs-you strip has it.
     ...(lint.refuse.length ? [{ tone: "error" as const, text: `${count(found)} ${found === 1 ? "lint finding" : "lint findings"}, ${count(lint.refuse.length)} refused`, act: { label: "Health", href: "#/memory?view=health" } }] : []),
   ];

@@ -7,8 +7,8 @@ import { vault } from "../../../tests/git.testkit.ts";
 import { compiledDays, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { allRuns } from "../records/record.ts";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
-import type { Draft } from "../../../vault/lib/ops.ts";
-import { compileDay, draft, related } from "./maintainer.ts";
+import { put, type Draft } from "../../../vault/lib/ops.ts";
+import { compileDay, draft, related, reviewDemotions } from "./maintainer.ts";
 import { setModel } from "../routing/models.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
@@ -159,4 +159,39 @@ test("an off maintainer opens no run, and marks the day so the next pass compile
   setModel("maintainer", { enabled: true });
   expect((await compileDay(root, DAY, false)).notes).toHaveLength(1);
   expect(retryDays(root)).toEqual([]);
+});
+
+/** Seed the vault: a kept core line, and a line demoted on DAY by a write. */
+async function demotedDay(): Promise<void> {
+  const d = (title: string) => draft(note(title), DAY);
+  const kept = d("Kept Line"), gone = d("Gone Line");
+  expect((await put(root, { ...kept, fm: { ...kept.fm, core: "A kept line" } }, "seed")).ok).toBe(true);
+  expect((await put(root, { ...gone, fm: { ...gone.fm, was_core: "A gone line", demoted: DAY, demoted_by: "write" } }, "seed")).ok).toBe(true);
+}
+const swaps = (list: unknown[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ type: "result", is_error: false, result: "", structured_output: { swaps: list } }) + "\n");
+const fileOf = (title: string) => readFileSync(join(root, "wiki", "decisions", `${title}.md`), "utf8");
+
+test("a review restores the demoted line the reply names and demotes the kept one, and refuses a swap of no demoted line", async () => {
+  await demotedDay();
+  swaps([{ restore: "Gone Line", demote: "Kept Line", why: "the gone line is a decision in force" }, { restore: "Kept Line", demote: "Gone Line", why: "x" }]);
+  const r = await reviewDemotions(root, DAY, false);
+  expect(r.swaps.map((s) => [s.restore, !!s.commit, s.refused])).toEqual([["Gone Line", true, undefined], ["Kept Line", false, "Kept Line is not a line demoted on 2026-11-03"]]);
+  expect(fileOf("Gone Line")).toContain("core: A gone line");
+  expect(fileOf("Gone Line")).not.toContain("was_core");
+  expect(fileOf("Kept Line")).toContain("was_core: A kept line");
+  expect(fileOf("Kept Line")).toContain("demoted_by: maintainer");
+  expect(fileOf("Kept Line")).not.toMatch(/^core:/m);
+  const prompt = readFileSync(join(base, "prompt.md"), "utf8");
+  expect(prompt).toContain("Gone Line: A gone line");
+  expect(prompt).toContain("Kept Line (updated 2026-11-03): A kept line");
+  expect(notes()[0].run.reason).toBe("1 swaps, 1 refused");
+});
+
+test("a dry review reports the swaps and changes nothing; a day with no demotion makes no model call", async () => {
+  await demotedDay();
+  swaps([{ restore: "Gone Line", demote: "Kept Line", why: "x" }]);
+  expect((await reviewDemotions(root, DAY, true)).swaps).toEqual([{ restore: "Gone Line", demote: "Kept Line", why: "x" }]);
+  expect(fileOf("Kept Line")).toContain("core: A kept line");
+  expect((await reviewDemotions(root, "2026-11-02", false)).skipped).toBe("no demotion on the day");
+  expect(notes()).toHaveLength(1);
 });

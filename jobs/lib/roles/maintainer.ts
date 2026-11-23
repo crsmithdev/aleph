@@ -2,11 +2,13 @@
  * The maintainer's compile: one read-only `claude -p` run per day reads the compile digest of yesterday and replies
  * typed notes. Code builds each note and writes it with the vault `put` op in-process, so each write is a pushed,
  * revertible vault commit and each refusal is the op's own. The model never writes a file and never sets `core:`
- * (core lines change only through an Ask). A dry compile runs the model, reports the notes and writes nothing.
+ * (a write demotes core lines, and the review below swaps them). A dry compile runs the model, reports the notes and writes nothing.
+ * The review reads the core lines a write demoted on a day and swaps one back in where it outranks a kept line.
  */
 import { compileDigest } from "../../../vault/lib/compile.ts";
 import { outcome, put, type Draft } from "../../../vault/lib/ops.ts";
-import { markRetry, recordCompiled, recordRun } from "../../../vault/lib/vault.ts";
+import { coreNotes, loadVault, markRetry, recordCompiled, recordRun, scopeOf, START_BUDGET, startContext, wikiNotes } from "../../../vault/lib/vault.ts";
+import { today } from "../../../lib/day.ts";
 import { lock } from "../../../lib/locks.ts";
 import { readModels } from "../routing/models.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -96,7 +98,7 @@ export interface Pass {
   /** The `--allowedTools` list: the tools the run gets are the names in it. */
   allowed: string[];
   /** The reply's list: its key. */
-  key: "notes" | "verdicts";
+  key: "notes" | "verdicts" | "swaps";
   prompt: string;
   /** Put the reply's list into the report; a throw fails the run. */
   act: (list: any[]) => Promise<void>;
@@ -171,5 +173,68 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
   });
   // A day the switch skipped is marked as a failed one, so the next pass after the switch is on compiles it again.
   if (report.skipped === OFF && !dry) markRetry(root, day, true);
+  return report;
+}
+
+/** The JSON schema of the review's reply: the swaps to make, possibly none. */
+const REVIEW_SCHEMA = {
+  type: "object",
+  properties: { swaps: { type: "array", items: { type: "object", properties: { restore: TEXT, demote: TEXT, why: TEXT }, required: ["restore", "demote", "why"] } } },
+  required: ["swaps"],
+};
+
+/** One swap: the demoted line to restore, the kept line to demote in its place, and its outcome. */
+export interface Swap { restore: string; demote: string; why: string; commit?: string | null; rule?: string; refused?: string }
+interface ReviewReport { day: string; dry: boolean; run?: string; swaps: Swap[]; skipped?: string; error?: string }
+
+/** The live notes whose core line a write demoted on `day`. The maintainer's own demotions are not reviewed again. */
+const demotedOn = (notes: Awaited<ReturnType<typeof loadVault>>, day: string) =>
+  wikiNotes(notes).filter((n) => !n.archived && String(n.fm.demoted) === day && n.fm.demoted_by === "write" && typeof n.fm.was_core === "string");
+
+function reviewPrompt(root: string, notes: Awaited<ReturnType<typeof loadVault>>, gone: typeof notes, day: string): string {
+  const scopes = [...new Set(gone.map(scopeOf))];
+  return [
+    `You are the memory maintainer. Writes on ${day} demoted the core lines below to keep a start context under its budget of ${START_BUDGET} bytes: each write pushed out the oldest core line of its scope.`,
+    "Age is a rough guide. A decision in force, or a fact every session needs before it starts, outranks a line that repeats a rule a CLAUDE.md or a skill already loads, or one a session can find with `aleph memory recall` when it needs it.",
+    "For each demoted line worth more than a kept line, reply a swap: `restore` the demoted title, `demote` the kept title, `why` in one sentence. Zero swaps is a valid answer: reply `{\"swaps\": []}`.",
+    "Reply only with the JSON the schema asks for. Code makes each swap through the vault; a restored line that does not fit pushes out the oldest kept line.",
+    "",
+    `## Demoted on ${day}`,
+    ...gone.map((n) => `- ${n.title}: ${n.fm.was_core}`),
+    ...scopes.flatMap((s) => ["", `## Kept in scope ${s} and global, oldest first, ${startContext(root, notes, s).bytes} of ${START_BUDGET} bytes`,
+      ...coreNotes(notes, s).reverse().map((n) => `- ${n.title} (updated ${n.fm.updated}): ${n.fm.core}`)]),
+  ].join("\n");
+}
+
+/** Make each swap through the vault `put` op, the demotion first. A swap that names no line demoted on `day` or no kept line is refused, and the rest go on. */
+async function swap(root: string, list: Swap[], day: string): Promise<Swap[]> {
+  const out: Swap[] = [];
+  for (const s of list) {
+    const notes = await loadVault(root);
+    const back = demotedOn(notes, day).find((n) => n.title === s.restore);
+    const kept = wikiNotes(notes).find((n) => !n.archived && n.title === s.demote && typeof n.fm.core === "string");
+    if (!back) { out.push({ ...s, refused: `${s.restore} is not a line demoted on ${day}` }); continue; }
+    if (!kept) { out.push({ ...s, refused: `${s.demote} is not a core line` }); continue; }
+    const why = reason("review", day, s.why);
+    const { core, ...fm } = kept.fm;
+    const down = outcome(await put(root, { title: kept.title, fm: { ...fm, was_core: core, demoted: today(), demoted_by: "maintainer" }, body: kept.body }, why));
+    out.push({ ...s, ...("refused" in down ? down : outcome(await put(root, { title: back.title, fm: { ...back.fm, core: back.fm.was_core }, body: back.body }, why))) });
+  }
+  return out;
+}
+
+/** Review the core lines writes demoted on `day`. A day with no demotion makes no model call; a dry review reports the swaps and makes none. */
+export async function reviewDemotions(root: string, day: string, dry: boolean): Promise<ReviewReport> {
+  const report: ReviewReport = { day, dry, swaps: [] };
+  const notes = await loadVault(root), gone = demotedOn(notes, day);
+  if (!gone.length) return { ...report, skipped: "no demotion on the day" };
+  await pass(report, {
+    label: "maintainer-review", root, record: "review", day, dry, schema: REVIEW_SCHEMA, allowed: ALLOWED, key: "swaps", prompt: reviewPrompt(root, notes, gone, day),
+    act: async (list) => { report.swaps = dry ? list : await swap(root, list, day); },
+    done: () => {
+      const made = report.swaps.filter((s) => !s.refused).length;
+      return `${made} swaps${report.swaps.length > made ? `, ${report.swaps.length - made} refused` : ""}`;
+    },
+  });
   return report;
 }

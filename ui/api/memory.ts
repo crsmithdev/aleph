@@ -86,7 +86,7 @@ function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: stri
 /**
  * Each scope's core lines and the bytes of its start context against the budget. A core line's `bytes` is its line in
  * the start context with its newline; `kept` is false for the lines startContext() cut, the oldest. `memory` is the
- * bytes of MEMORY.md as sent.
+ * bytes of MEMORY.md as sent. `demoted` is the scope's lines a write or the maintainer took out, newest first.
  */
 export function start(root: string, all: Note[]) {
   const memory = Buffer.byteLength(all.find((n) => n.rel === "MEMORY.md")?.text.trim() ?? "");
@@ -94,7 +94,9 @@ export function start(root: string, all: Note[]) {
     const { text, cut } = startContext(root, all, scope);
     const notes = coreNotes(all, scope), keep = notes.length - cut;
     const core = notes.map((n, i) => ({ title: n.title, core: String(n.fm.core).trim(), scope: scopeOf(n), bytes: Buffer.byteLength(`- ${String(n.fm.core).trim()} [[${n.title}]]\n`), kept: i < keep }));
-    return [scope, { core, bytes: Buffer.byteLength(text), budget: START_BUDGET, cut, memory }];
+    const demoted = wikiNotes(all).filter((n) => !n.archived && typeof n.fm.was_core === "string" && n.fm.core === undefined && [scope, "global"].includes(scopeOf(n)))
+      .map((n) => ({ title: n.title, core: String(n.fm.was_core), scope: scopeOf(n), on: String(n.fm.demoted), by: String(n.fm.demoted_by) })).sort((a, b) => b.on.localeCompare(a.on));
+    return [scope, { core, bytes: Buffer.byteLength(text), budget: START_BUDGET, cut, memory, demoted }];
   }));
 }
 

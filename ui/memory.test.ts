@@ -317,6 +317,7 @@ test("/api/memory lists each scope's core lines and the start-context bytes agai
   core("decisions", "Core A", "aleph", "line for aleph");
   core("decisions", "Core G", "global", "line for global");
   core("decisions", "Core O", "other", "line for other");
+  writeFileSync(join(root, "wiki", "decisions", "Core D.md"), `---\nkind: decision\nscope: aleph\nconfidence: measured\nupdated: ${today}\nwas_core: line put out\ndemoted: 2026-11-03\ndemoted_by: write\nsupersedes: []\nsources: [trace:abc123]\n---\n**Claim.** x\n`);
   try {
     const all = await loadVault(root);
     await fresh("vault");
@@ -328,8 +329,10 @@ test("/api/memory lists each scope's core lines and the start-context bytes agai
     }
     expect(t.start.aleph.core.map((c: any) => c.core).sort()).toEqual(["line for aleph", "line for global"]);
     expect(JSON.stringify(t.start)).not.toContain("line for other");
+    expect(t.start.aleph.demoted).toEqual([{ title: "Core D", core: "line put out", scope: "aleph", on: "2026-11-03", by: "write" }]);
+    expect(t.start.global.demoted).toEqual([]);
   } finally {
-    for (const t of ["Core A", "Core G", "Core O"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
+    for (const t of ["Core A", "Core G", "Core O", "Core D"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
     await fresh("vault");
   }
 });
@@ -485,6 +488,9 @@ test("the Health view opens on a figure band, then the flow chart and the cards,
   expect(words(find(h, 'section[aria-label="Offers"] dd'))).toEqual(["12,345 in 30 days", "1,000", "2,000", "7"]);
   expect(words(find(h, 'section[aria-label="Start Context"] .bv'))).toEqual(["5,950 B / 6,000 B"]);
   expect(words(find(h, 'section[aria-label="Start Context"] tbody tr')).map((t) => t.split(" ")[0])).toEqual(["M", "N"]);
+  expect(words(find(h, 'section[aria-label="Start Context"] .empty'))).toEqual(["No data"]);
+  const out = draw({ ...big, start: { aleph: { ...big.start.aleph, demoted: [{ title: "D", core: "a line", scope: "aleph", on: "2026-11-03", by: "write" }] } } }, "view=health");
+  expect(find(out, 'section[aria-label="Start Context"] td.acts button').map((b) => [b.text, b.attrs["data-path"], b.attrs["data-body"]])).toEqual([["Restore", "/api/memory/notes/D/core", '{&quot;core&quot;:&quot;a line&quot;}']]);
   expect(words(find(h, 'section[aria-label="Lint by Rule"] .bl, section[aria-label="Lint by Rule"] .bv'))).toEqual(["template", "1,200", "schema refused", "1"]);
   expect(find(h, 'section[aria-label="Lint by Rule"] .meter i').map((i) => i.attrs.class)).toEqual([undefined, "c-err"]);
   expect(words(find(h, 'section[aria-label="Lint Fixes"] tbody tr')).map((t) => t.split(" ").slice(0, 2).join(" "))).toEqual(["template add", "schema d"]);

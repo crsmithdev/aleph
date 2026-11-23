@@ -105,25 +105,14 @@ function grown(root: string, prior: Note[], notes: Note[], scope: string): { bef
 }
 
 /**
- * The refusal for a core line the start context cannot hold: a write that
- * grows a scope's start context past the budget. A write that keeps an
- * over-budget scope the same size or smaller, such as a shorter core line,
- * passes. A global core line is on in every scope, so it is checked against
- * each scope that has core lines.
+ * The scope whose start context `draft`'s core line grows past the budget, or
+ * undefined. A write that keeps an over-budget scope the same size or smaller,
+ * such as a shorter core line, grows none. A global core line is on in every
+ * scope, so it is checked against each scope that has core lines.
  */
-function coreFindings(root: string, prior: Note[], notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
+function overflow(root: string, prior: Note[], notes: Note[], draft: Note): string | undefined {
   const scope = scopeOf(draft);
-  const scopes = scope === "global" ? coreScopes(notes) : [scope];
-  for (const s of scopes) {
-    if (!grown(root, prior, notes, s)) continue;
-    const ranked = coreNotes(notes, s).reverse();
-    return {
-      findings: [{ note: draft.title, rule: "core", detail: `the start context of scope ${s} is over ${START_BUDGET} bytes with this core line` }],
-      hint: ["", `Core lines of ${s} and global ranked for demotion, oldest first. Remove the core: field of one; the note stays and recall still finds it:`,
-        ...ranked.map((n) => `  ${n.title} (updated ${n.fm.updated ?? "never"}, ${n.fm.scope}): ${n.fm.core}`)].join("\n"),
-    };
-  }
-  return { findings: [], hint: "" };
+  return (scope === "global" ? coreScopes(notes) : [scope]).find((s) => grown(root, prior, notes, s));
 }
 
 export const init = (root: string) => op(async (w) => {
@@ -174,7 +163,7 @@ export const precommit = (root: string) => op(async () => {
   return { op: "precommit" };
 });
 
-export interface Written extends Committed { op: string; title: string; path: string; archived?: string[]; warnings?: Finding[] }
+export interface Written extends Committed { op: string; title: string; path: string; archived?: string[]; demoted?: string[]; warnings?: Finding[] }
 
 export const write = (root: string, src: string, why: string) => op<Written>(async (w) => {
   requireVault(root);
@@ -219,6 +208,11 @@ export const put = (root: string, draft: Draft, why: string) => op<Written>(asyn
 
 /** Check `draft` against the vault, place it at `dest` and commit; `src` is the file it came from, `dest` for a `put`. */
 async function accept(root: string, w: string[], draft: Note, dest: string, src: string, why: string): Promise<Written> {
+  // A core line back in place ends its demotion.
+  if (typeof draft.fm.core === "string" && draft.fm.was_core !== undefined) {
+    const { was_core, demoted, demoted_by, ...fm } = draft.fm;
+    draft = { ...draft, fm, text: serializeFrontmatter(fm) + draft.body };
+  }
   const notes = (await loadVault(root)).filter((n) => n.path !== src && n.path !== dest);
   const placed: Note = { ...draft, path: dest, rel: relative(root, dest), wiki: true, archived: false };
   const findings = validateNote(placed, notes);
@@ -285,19 +279,30 @@ async function accept(root: string, w: string[], draft: Note, dest: string, src:
     log({ op: "supersede", title: o.title, why: `superseded by [[${draft.title}]]` });
   }
   log({ op: "write", title: draft.title, why });
-  const after = await loadVault(root);
+  let after = await loadVault(root);
   const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
   if (budget.length) { rollback(root, touched); refuse(budget); }
+  const demoted: string[] = [];
   if (typeof draft.fm.core === "string") {
     // A draft written in place is already on disk, so the vault before the write holds the committed note.
     const head = git(root, "show", `HEAD:${relative(root, dest)}`);
-    const core = coreFindings(root, head.ok ? [...notes, parseNote(dest, root, head.out)] : notes, after, placed);
-    if (core.findings.length) { rollback(root, touched); refuse(core.findings, core.hint); }
+    const prior = head.ok ? [...notes, parseNote(dest, root, head.out)] : notes;
+    // A core line that does not fit pushes out the oldest of its scope. The note stays, and `was_core` keeps the line for a restore.
+    for (let s = overflow(root, prior, after, placed); s; s = overflow(root, prior, after, placed)) {
+      const out = coreNotes(after, s).reverse().find((n) => n.title !== draft.title);
+      if (!out) { rollback(root, touched); refuse([{ note: draft.title, rule: "core", detail: `the start context of scope ${s} is over ${START_BUDGET} bytes with this core line and no other to demote` }]); }
+      const { core, ...fm } = out!.fm;
+      writeFileSync(out!.path, serializeFrontmatter({ ...fm, was_core: core, demoted: today(), demoted_by: "write" }) + out!.body);
+      touched.push(out!.path);
+      demoted.push(out!.title);
+      log({ op: "demote", title: out!.title, why: `made room for [[${draft.title}]]` });
+      after = await loadVault(root);
+    }
   }
   warn(w, lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
-  const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
+  const subject = (archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`) + (demoted.length ? `; demote: ${demoted.join(", ")}` : "");
   const commit = commitAndPush(root, w, subject, touched);
-  return { op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, commit };
+  return { op: archived.length ? "supersede" : "write", title: draft.title, path: relative(root, dest), archived, demoted, commit };
 }
 
 // A query returns the best few: an agent reads the top of the list, and a full match list ran to 10,323 lines.

@@ -3,7 +3,7 @@
 // Offer dates start when the recall log does, so a note written before the first one may be unused or unrecorded.
 import { noteHref } from "../../../lib/naming.ts";
 import { count, day, localMs, plural, when } from "./format.js";
-import { barList, barRow, card, cell, chip, dataTable, empty, esc, facts, heads, meter, miss, row, subHead, tag } from "./html.js";
+import { barList, barRow, card, cell, chip, dataTable, empty, esc, facts, heads, meter, miss, row, rowAct, subHead, tag } from "./html.js";
 import { figureBand } from "./page.js";
 import { panelOf } from "./chart.js";
 
@@ -54,7 +54,7 @@ export function needs(m, now = Date.now()) {
   return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";
 }
 
-/** The share of its budget at which a start context needs the user, as `ui/api/attention.ts` has it. */
+/** The share of its budget at which the Start Context card marks a start context as full. */
 const FULL = 0.95;
 const B = (n) => `${count(n)} B`;
 
@@ -104,7 +104,10 @@ export function renderHealth(m, now = Date.now()) {
   const offers = notes.length ? barList([["Offered, 7 days", used], ["Earlier", notes.length - used - never], ["Never", never]].map(([k, v]) => barRow(esc(k), (v / notes.length) * 100, count(v))).join("")) : empty();
   const quality = ms ? facts([["Recalls", `${count(ms.recalls)} in ${count(ms.days)} days`], ["Empty", count(ms.empty)], ["Reformulated", count(ms.reformulated)], ["Unoffered reads", count(ms.unoffered_reads)]]) : "";
   const start = barList(Object.entries(m.start).map(([k, x]) => barRow(esc(k), 0, `${B(x.bytes)} / ${B(x.budget)}`, { bar: meter((x.bytes / x.budget) * 100, `${k} ${B(x.bytes)} of ${B(x.budget)}`, { mark: FULL * 100 }) })).join("")) +
-    subHead("Largest Core Lines") + dataTable(heads(["Core line", "Scope", "Bytes"], ["Bytes"]), [...s.core].sort((a, b) => b.bytes - a.bytes).slice(0, 5).map((c) => row([noteLink(c.title), `<td>${scopeChip(c.scope)}</td>`, cell(B(c.bytes), { num: true })])).join(""));
+    subHead("Largest Core Lines") + dataTable(heads(["Core line", "Scope", "Bytes"], ["Bytes"]), [...s.core].sort((a, b) => b.bytes - a.bytes).slice(0, 5).map((c) => row([noteLink(c.title), `<td>${scopeChip(c.scope)}</td>`, cell(B(c.bytes), { num: true })])).join("")) +
+    // A restore sets the core line back through vault write, which demotes the oldest line again if this one does not fit.
+    subHead("Demoted") + (s.demoted?.length ? dataTable(heads(["Core line", "By", "Day", "Action"]), s.demoted.map((d) => row([noteLink(d.title), cell(d.by), cell(shortDay(d.on)),
+      rowAct("Restore", { act: "restore", label: "Restore", name: d.title, path: `/api/memory/notes/${encodeURIComponent(d.title)}/core`, body: JSON.stringify({ core: d.core }) })])).join("")) : empty());
   const most = Math.max(1, ...rules.map((r) => r.n));
   const lint = rules.length ? barList(rules.map((r) => barRow(`<code>${esc(r.rule)}</code>${r.refused ? ` ${tag("refused", "error")}` : ""}`, 0, count(r.n), { bar: meter([{ pct: (r.n / most) * 100, cls: r.refused ? "c-err" : "" }], `${r.rule} ${r.n}`) })).join("")) : empty();
   const fixes = rules.length ? dataTable(heads(["Rule", "Fix", "Notes"]), rules.map((r) => row([`<td><code>${esc(r.rule)}</code></td>`, cell(FIX[r.rule] ?? r.detail, { wide: true }), cell(r.notes.join(", "), { wide: true, title: r.notes.join("\n") })])).join("")) : empty();

@@ -67,11 +67,8 @@ test("the factory's alerts, a backend hold and an Ask are alerts in that order",
   expect(withAttn(s)).toContain('href="https://openrouter.ai/settings/credits"');
 });
 
-test("a start context at 95% of its budget is an alert that links to Memory's health", () => {
-  const memory = (bytes: number) => ({ start: { aleph: { bytes, budget: 6000, core: Array(40).fill("x") } } });
-  expect(withAttn({ ...calm, memory: memory(5800) })).toContain('<b class="ask-kind">Memory:</b>');
-  expect(withAttn({ ...calm, memory: memory(5800) })).toContain('href="#/memory?view=health"');
-  expect(withAttn({ ...calm, memory: memory(5000) })).not.toContain("Memory:");
+test("a full start context is no alert: a write demotes the oldest core line", () => {
+  expect(withAttn({ ...calm, memory: { start: { aleph: { bytes: 5990, budget: 6000, core: Array(40).fill("x") } } } })).not.toContain("Memory:");
 });
 
 test("an Ask alert and a Waiting row show an issue key in the short form of its project", () => {

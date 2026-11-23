@@ -360,24 +360,30 @@ describe("core", () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("core must be one line of 1 to 160 characters");
   });
-  test("a core write over the start budget is refused with the scope's core lines ranked, and changes nothing", async () => {
-    const line = (i: number) => `Core fact ${i} ${"y".repeat(140)}`;
-    let i = 0;
-    for (; i < 60; i++) {
-      const r = (await cli("write", note(`Budget Core ${i}`, { kind: "decision", scope: "budgetcore", updated: `2026-09-${String(1 + (i % 28)).padStart(2, "0")}`, core: line(i) }), "--why", "x"));
-      if (r.code !== 0) {
-        expect(r.stderr).toContain("refuse core Budget Core");
-        expect(r.stderr).toContain("start context of scope budgetcore is over 6000 bytes");
-        expect(r.stderr).toContain("ranked for demotion, oldest first");
-        expect(r.stderr).toContain("Budget Core 0 (updated 2026-09-01, budgetcore)");
-        break;
-      }
-    }
-    expect(i).toBeGreaterThan(20);
-    expect(i).toBeLessThan(60);
-    expect(existsSync(join(vault, `wiki/decisions/Budget Core ${i}.md`))).toBe(false);
+  test("a core write over the start budget demotes the scope's oldest core line, and a restore demotes the next", async () => {
+    overCore();
+    writeFileSync(join(vault, "wiki/decisions/Old Core.md"), readFileSync(note("Old Core", { kind: "decision", scope: "overcore", updated: "2026-08-01", core: "An old core fact" }), "utf8"));
+    Bun.spawnSync(["git", "-C", vault, "add", "-A"]);
+    expect(handCommit("--no-verify").exitCode).toBe(0);
+    const r = await cli("write", note("New Core", { kind: "decision", scope: "overcore", core: "A new core fact" }), "--why", "x");
+    expect(r.code).toBe(0);
+    expect(r.json.demoted).toEqual(["Old Core"]);
+    const old = readFileSync(join(vault, "wiki/decisions/Old Core.md"), "utf8");
+    expect(old).not.toMatch(/^core:/m);
+    expect(old).toContain("was_core: An old core fact");
+    expect(old).toContain("demoted: 2026-11-04");
+    expect(old).toContain("demoted_by: write");
+    expect(gitLog()).toContain("demote: Old Core");
     expect(gitStatus()).toBe("");
-    for (let j = 0; j < i; j++) (await cli("archive", `Budget Core ${j}`, "--why", "test fixture"));
+
+    const back = await cli("write", note("Old Core", { kind: "decision", scope: "overcore", updated: "2026-08-01", core: "An old core fact", was_core: "An old core fact", demoted: "2026-11-04", demoted_by: "write" }), "--why", "x");
+    expect(back.code).toBe(0);
+    expect(back.json.demoted).toHaveLength(1);
+    expect(back.json.demoted).not.toContain("Old Core");
+    const restored = readFileSync(join(vault, "wiki/decisions/Old Core.md"), "utf8");
+    expect(restored).toContain("core: An old core fact");
+    expect(restored).not.toContain("was_core");
+    expect(restored).not.toContain("demoted:");
   });
   test("a write that shortens a core line of a scope over the start budget succeeds", async () => {
     overCore();

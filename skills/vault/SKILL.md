@@ -70,10 +70,11 @@ re-derive at any price. Prefer them.
 **`core:` is for a fact every session in the scope needs before it starts**,
 such as a decision in force. It is injected at every session start, so the
 budget is small: MEMORY.md plus the core lines of a scope and `global` must
-fit in 6,000 bytes. A write over that is refused with the scope's core lines
-ranked oldest first; remove the `core:` field of one (the note stays and
-`recall` finds it), or leave `core:` off the new note. Most notes have no
-core line.
+fit in 6,000 bytes. A core write over that demotes the oldest core lines of
+the scope until it fits: each note stays, `recall` still finds it, and its
+line moves to `was_core:`. The write's `demoted` field names them. Do not
+restore one by hand; the maintainer reviews each day's demotions and swaps a
+line back when it outranks a kept one. Most notes have no core line.
 
 MEMORY.md holds standing context about the user and the environment. Rewrite
 the section, keep it under 150 lines, commit the same way.

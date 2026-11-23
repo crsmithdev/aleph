@@ -4,7 +4,7 @@
 // main column; Problems, Efficiency and Flow in the rail.
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { cardPct, clock, count, dur, hours, pct, plural, when } from "./lib/format.js";
+import { cardPct, clock, count, dur, hours, plural, when } from "./lib/format.js";
 import { actButton, barList, barRow, card, cell, dataTable, empty, error, esc, filterBar, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
@@ -205,7 +205,7 @@ export function memoryStats(m, now) {
     { k: "Stale", v: count(stale.length), note: `${count(late)} late`, title: `${count(stale.length)} notes past their re-check date, ${count(late)} by more than 30 days` },
   ];
 }
-/** The share of the start budget at which the start context counts as full, as `/api/attention` counts it. */
+/** The share of the start budget at which the Memory card marks a start context as full. */
 export const FULL = 0.95;
 
 // ---- Problems ----
@@ -247,21 +247,13 @@ function backendAlert(b) {
   return alertCard({ card: "unstick", kind: "Backend", title: `${esc(b.via)} is down`, detail: b.why, acts: link ? linkButton("Credits", link) : "" });
 }
 
-/** A start context at FULL of its budget as an alert. */
-function memoryAlert(m) {
-  const s = m.start.aleph;
-  return alertCard({ card: "need", kind: "Memory", title: "Start context near its budget", detail: `${count(s.budget - s.bytes)} B left in aleph`, tag: `${count(s.core.length)} lines`, side: pct((s.bytes / s.budget) * 100), acts: linkButton("Memory", "#/memory?view=health") });
-}
-
-/** The Problems card: each thing that needs the user as a compact alert. The factory's alerts, the Asks, the errored jobs, a backend that is down and a full start context. */
+/** The Problems card: each thing that needs the user as a compact alert. The factory's alerts, the Asks, the errored jobs, and a backend that is down. */
 export function renderProblems(s, stale = false) {
-  const m = s.memory && !s.memory.error ? s.memory : null;
   const alerts = [
     ...verdict(s, stale).errors.map((l) => alertCard({ card: "unstick", kind: "Alert", title: esc(l.text) })),
     ...undecided(s.asks).map((i) => askAlert(i, s.now)),
     ...(s.errored ?? []).map((j) => errorAlert(j, s.now)),
     ...(s.factory.backend ? [backendAlert(s.factory.backend)] : []),
-    ...(m && m.start.aleph.bytes >= FULL * m.start.aleph.budget ? [memoryAlert(m)] : []),
   ];
   return card("Problems", alerts.length ? `<div class="alerts">${alerts.join("")}</div>` : empty(), { count: count(alerts.length), id: "problems" });
 }

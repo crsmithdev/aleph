@@ -116,7 +116,7 @@ export function trimRecallLog(root: string): void {
 export type Op = { op: string; title: string; why: string };
 
 /** The ops whose line links the note as `[[title]]`. A delete does not: its note is gone, and the link would dangle. */
-const LINKED = ["write", "supersede", "archive", "adopt"];
+const LINKED = ["write", "supersede", "archive", "adopt", "demote"];
 
 const opText = ({ op, title, why }: Op): string => `${op} ${LINKED.includes(op) ? `[[${title}]]` : title} — ${why}`;
 

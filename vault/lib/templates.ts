@@ -76,9 +76,10 @@ Body: a first paragraph \`**Claim.** … as of YYYY-MM-DD.\`, then
 date is how a vault rots.
 
 \`aleph memory write\` refuses a note that breaks any of: schema, duplicate title or
-alias, dangling link, folder/kind mismatch, the MEMORY.md line budget, a
-core line that puts a scope's start context over 6,000 bytes, the body
-template. It warns on stale claims, relative dates and same-scope overlap.
+alias, dangling link, folder/kind mismatch, the MEMORY.md line budget, the
+body template. A core line that puts a scope's start context over 6,000
+bytes demotes the scope's oldest core lines to \`was_core:\`. It warns on
+stale claims, relative dates and same-scope overlap.
 `;
 
 /** The vault's pre-commit hook: `aleph memory precommit` under the bun and the CLI that installed it. Findings go to stderr. */
