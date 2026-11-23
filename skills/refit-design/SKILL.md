@@ -52,20 +52,23 @@ none, the run covers each route of the router. The report's unit is a component 
 ## Notes
 
 Each finding also becomes a note on the page it audited, so the user answers it in the dock as they answer their own.
-Each finding in `findings.json` carries five more fields:
+Each finding in `findings.json` carries six more fields:
 
 - `rule`: the rule id of `design/` that the finding breaks.
 - `url`: the page as the dock stores it, `http://aleph.home/` and the route, such as `http://aleph.home/#/issues`.
 - `selector`: a CSS selector that finds only the element the finding names: `document.querySelectorAll(selector)`
   gives 1 on the drawn page. On `#/design`, start it with the specimen's section, `#design-<id>`. Else `body`.
+- `seen`: `true` when the drawn page shows the fault at that element, or the specimen lacks a state its rule asks
+  for. A fault in the code alone, such as an unused token, a hand-built copy that draws the same, or a value that
+  shows only with an extreme input, is `false`.
 - `headline`: what is wrong, in plain words, at most 8 words: "Two motion tokens are never used".
 - `plain`: why it matters and the change, in one or two short sentences with no path or line:
   "Nothing reads `--t-fast` or `--t-slow`. Delete both."
 
 After you write the findings, run `bun skills/refit-design/scripts/notes.ts <run dir>`. It adds an agent note for
-each `open` or `reverted` finding: the headline, the plain sentence, then `rule:`, `where:`, `from:` and the key line
+each `open` or `reverted` finding with `seen` true: the headline, the plain sentence, then `rule:`, `where:`, `from:` and the key line
 `finding: <lens>:<rule>:<unit>`. The dock shows the first two and folds the rest. It skips a finding whose key an
-unresolved note on that page holds. The HTML report stays as it is.
+unresolved note on that page holds. A finding with `seen` false is in the HTML report only, which stays as it is.
 
 ## Act order
 
