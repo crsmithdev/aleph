@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A conversation on a note</title>
+<style>
+/* The dock's dark tokens (aleph-tools dock.js and shelf.ts), plus --agent from a01aef2. */
+:root { --bg: #202331; --card: #292D3E; --sunk: #191C28; --ink: #EEF1F8; --ink-2: #BFC7D5; --muted: #9AA2C6; --rule: #2E3245; --accent: #C792EA;
+  --field: #191C28; --agent: #82AAFF; --font: 'Work Sans', system-ui, sans-serif; --code: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
+  --lift: 0 1px 2px rgb(0 0 0 / .35), 0 6px 20px -8px rgb(0 0 0 / .55); }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 28px 40px; background: #16181F; color: var(--ink); font: 14px/1.45 var(--font); }
+h1 { font: 600 20px var(--font); margin: 0 0 4px; }
+.lede { color: var(--muted); margin: 0 0 20px; max-width: 80ch; }
+.row { display: flex; gap: 36px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 36px; }
+.col h2 { font: 600 14px var(--font); margin: 0 0 2px; }
+.col > p { color: var(--muted); font-size: 12px; margin: 0 0 10px; max-width: 320px; }
+code { font: 11px var(--code); color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--lift); padding: 10px; }
+.edit { display: grid; gap: 8px; width: 320px; }
+.edit.agent { border-left: 3px solid var(--agent); }
+button { font: 13px var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 4px 10px; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.save, .send { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+textarea { width: 100%; min-height: 40px; padding: 6px; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; font: 13px/1.4 var(--font); resize: none; }
+.byline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.byline code { margin-left: auto; }
+.who { white-space: nowrap; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--agent); background: color-mix(in srgb, var(--agent) 14%, var(--bg)); }
+.said b { display: block; }
+.said p { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); }
+.more { font-size: 12px; color: var(--muted); }
+/* The thread */
+.thread { display: grid; gap: 6px; max-height: 420px; overflow-y: auto; }
+.m { display: block; padding: 6px 8px; border-radius: 8px; font-size: 13px; max-width: 92%; }
+.m .f { display: block; font-size: 11px; font-weight: 600; }
+.m.you { background: color-mix(in srgb, var(--accent) 12%, var(--sunk)); justify-self: end; }
+.m.you .f { color: var(--accent); }
+.m.ag { background: var(--sunk); }
+.m.ag .f { color: var(--agent); }
+.m.prop { border: 1px solid color-mix(in srgb, var(--agent) 45%, transparent); }
+.wait { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.dots::after { content: "···"; letter-spacing: 2px; color: var(--agent); }
+.ask { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: end; }
+.ask textarea { min-height: 34px; }
+.tabs2 { display: flex; gap: 2px; padding: 2px; background: var(--sunk); border-radius: 8px; width: max-content; }
+.tabs2 span { padding: 2px 10px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+.tabs2 span.on { background: var(--card); color: var(--ink); }
+/* The page under B and C */
+.page { position: relative; width: 640px; padding: 18px; border-radius: 10px; background: #1B1D27; border: 1px dashed var(--rule); }
+.tok { display: flex; gap: 14px; align-items: end; font: 12px var(--code); color: var(--ink-2); }
+.sq { background: #3D7BE0; }
+.target { outline: 2px solid var(--agent); outline-offset: 4px; border-radius: 3px; }
+.pin { position: absolute; width: 22px; height: 22px; border-radius: 11px; border: 2px solid var(--bg); background: var(--agent); color: var(--bg); font: 600 11px/18px var(--font); text-align: center; }
+.side { width: 340px; display: grid; gap: 8px; align-self: stretch; border-left: 3px solid var(--agent); }
+.bubble { position: absolute; width: 330px; display: grid; gap: 8px; }
+.bubble::before { content: ""; position: absolute; top: -7px; left: 22px; width: 12px; height: 12px; background: var(--card); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule); transform: rotate(45deg); }
+.k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+</style></head><body>
+<h1>A conversation on a note</h1>
+<p class="lede">You ask the agent about one finding, it answers in the note, and the talk can end in a proposal you approve. All three use the same thread: the finding, then each message, named. Answers stream from the page's chat agent in seconds; the thread is saved as the note's replies.</p>
+
+<div class="row">
+
+<!-- A -->
+<section class="col"><h2>A. Thread in the editor</h2><p>The editor grows into the thread. The answer buttons stay under it, so a talk can end in Change UI or Change language.</p>
+<div class="card edit agent">
+  <div class="byline"><span class="who">refit-design</span>agent<code>#design-space</code></div>
+  <div class="said"><b>Two motion tokens are never used</b><p>Nothing reads --t-fast or --t-slow. Delete both.</p></div>
+  <div class="thread">
+    <div class="m you"><span class="f">You</span>Doesn't anything animate with --t-slow?</div>
+    <div class="m ag"><span class="f">Agent</span>No. Four transitions write <code>.15s ease-out</code> themselves. Nothing reads <code>var(--t-slow)</code>.</div>
+    <div class="m you"><span class="f">You</span>Then make those four use a token.</div>
+    <div class="m ag prop"><span class="f">Agent · proposal</span>Keep <code>--t-fast</code>, use it in the four transitions, delete <code>--t-slow</code>.<div class="acts" style="margin-top:4px"><button>Approve</button><button>Discard</button></div></div>
+  </div>
+  <div class="ask"><textarea placeholder="Ask the agent"></textarea><button class="send">Ask</button></div>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+  <div class="acts"><button>Delete</button><button>Resolve</button><button>Close</button></div>
+</div>
+</section>
+
+<!-- A, waiting -->
+<section class="col"><h2>A, while the agent answers</h2><p>Your message shows at once. The agent's answer streams in under it. Close keeps the talk going; the pin shows a dot until you read it.</p>
+<div class="card edit agent">
+  <div class="byline"><span class="who">refit-design</span>agent<code>#design-space</code></div>
+  <div class="said"><b>Two motion tokens are never used</b><p>Nothing reads --t-fast or --t-slow. Delete both.</p></div>
+  <div class="thread">
+    <div class="m you"><span class="f">You</span>Doesn't anything animate with --t-slow?</div>
+    <div class="m ag"><span class="f">Agent</span>No. Four transitions write <code>.15s ease-out</code><span class="dots"></span></div>
+  </div>
+  <div class="wait"><span class="dots"></span>Reading app.css</div>
+  <div class="ask"><textarea placeholder="Ask the agent"></textarea><button class="send">Ask</button></div>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+</div>
+<p class="k" style="margin-top:14px">Pin with an unread answer</p>
+<div style="position:relative;height:26px"><span class="pin" style="left:0;top:0">7</span><span style="position:absolute;left:16px;top:-2px;width:9px;height:9px;border-radius:5px;background:var(--accent);border:2px solid var(--bg)"></span></div>
+</section>
+</div>
+
+<div class="row">
+<!-- B -->
+<section class="col"><h2>B. Side panel</h2><p>The talk opens in a panel at the side of the page. The element keeps its outline, so you read the page and the talk together. One panel holds one note at a time.</p>
+<div style="display:flex;gap:0">
+  <div class="page">
+    <div class="tok"><span><span class="sq" style="display:block;width:12px;height:12px"></span>--sp-12</span><span><span class="sq" style="display:block;width:16px;height:16px"></span>--sp-16</span><span><span class="sq" style="display:block;width:20px;height:20px"></span>--sp-20</span></div>
+    <p class="tok target" style="margin:18px 0 0;padding:4px">--t-fast 150ms &nbsp; --t-mid 220ms &nbsp; --t-slow 320ms &nbsp; --ease</p>
+    <span class="pin" style="right:12px;top:58px">7</span>
+  </div>
+  <div class="card side">
+    <div class="byline"><span class="who">refit-design</span>agent<code>7 of 40</code></div>
+    <div class="said"><b>Two motion tokens are never used</b><p>Nothing reads --t-fast or --t-slow. Delete both.</p></div>
+    <div class="thread">
+      <div class="m you"><span class="f">You</span>Doesn't anything animate with --t-slow?</div>
+      <div class="m ag"><span class="f">Agent</span>No. Four transitions write <code>.15s ease-out</code> themselves. Nothing reads <code>var(--t-slow)</code>.</div>
+    </div>
+    <div class="ask"><textarea placeholder="Ask the agent"></textarea><button class="send">Ask</button></div>
+    <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+    <div class="acts"><button>‹ Prev</button><button>Next ›</button><button>Resolve</button></div>
+  </div>
+</div>
+</section>
+</div>
+
+<div class="row">
+<!-- C -->
+<section class="col"><h2>C. Bubble on the element</h2><p>The talk hangs from the pin, as a comment thread in a document. It stays small: the finding folds to its headline once you start to talk.</p>
+<div class="page" style="height:400px">
+  <div class="tok"><span><span class="sq" style="display:block;width:12px;height:12px"></span>--sp-12</span><span><span class="sq" style="display:block;width:16px;height:16px"></span>--sp-16</span></div>
+  <p class="tok target" style="margin:18px 0 0;padding:4px;width:max-content">--t-fast 150ms &nbsp; --t-mid 220ms &nbsp; --t-slow 320ms</p>
+  <span class="pin" style="left:330px;top:52px">7</span>
+  <div class="card bubble agent" style="left:310px;top:84px;border-left:3px solid var(--agent)">
+    <div class="byline"><span class="who">refit-design</span><b style="color:var(--ink);font-size:13px">Two motion tokens are never used</b></div>
+    <div class="thread">
+      <div class="m you"><span class="f">You</span>Doesn't anything animate with --t-slow?</div>
+      <div class="m ag"><span class="f">Agent</span>No. Four transitions write <code>.15s ease-out</code> themselves.</div>
+    </div>
+    <div class="ask"><textarea placeholder="Reply"></textarea><button class="send">Ask</button></div>
+    <div class="acts"><button>Change UI</button><button>Change language</button><button>···</button></div>
+  </div>
+</div>
+</section>
+</div>
+</body></html>
