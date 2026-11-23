@@ -14,11 +14,9 @@ const FALLBACK = "haiku";
 export async function oneShot(role: "judge", cmd: string, system: string, input: string, box: number): Promise<{ code: number; stderr: string; result: string; timedOut: boolean }> {
   const run = openRun({
     role, who: role, name: role, command: role, shown: true, model: readModels()[role].model, cmd, fallback: FALLBACK, seconds: Math.max(box, 0) / 1000,
-    flags: ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--system-prompt", system],
-    env: {
-      CLAUDE_CODE_ENTRYPOINT: undefined,
-      MAX_THINKING_TOKENS: "0", // measured: 3 s without thinking, 15-45 s with it, same verdicts
-    },
+    // Effort high keeps Haiku thinking whatever MAX_THINKING_TOKENS says (measured on 2.1.331: 66 thinking tokens at high, 0 at low, 2 s a verdict).
+    flags: ["--setting-sources", "", "--effort", "low", "--max-turns", "1", "--tools", "", "--system-prompt", system],
+    env: { CLAUDE_CODE_ENTRYPOINT: undefined },
   });
   let r;
   try {

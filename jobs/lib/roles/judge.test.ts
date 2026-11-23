@@ -39,6 +39,21 @@ test("a final message that may claim completion goes to Haiku, whose verdict and
   expect(existsSync(join(dir, "haiku-ran"))).toBe(true);
 });
 
+test("the Haiku call carries effort low and no setting of effort high, so it does not think", async () => {
+  reply = jev(0.3);
+  writeFileSync(join(dir, "spy"), `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a"; done > ${join(dir, "argv")}\necho '{"type":"result","is_error":false,"result":"{\\"verdict\\":\\"pass\\",\\"reason\\":\\"ok\\"}"}'\n`, { mode: 0o755 });
+  const saved = process.env.ALEPH_JUDGE_CMD;
+  process.env.ALEPH_JUDGE_CMD = join(dir, "spy");
+  try {
+    await judge("x", "tests pass");
+    const argv = readFileSync(join(dir, "argv"), "utf8").split("\n");
+    const after = (flag: string) => argv[argv.indexOf(flag) + 1];
+    expect(after("--effort")).toBe("low");
+    expect(JSON.parse(after("--settings"))).toMatchObject({ env: { ALEPH_AGENT: "1" } });
+    expect(argv.join("\n")).not.toContain("effortLevel");
+  } finally { process.env.ALEPH_JUDGE_CMD = saved; }
+});
+
 test("an error from Jev falls through to Haiku", async () => {
   reply = { status: 500, body: { error: { message: "down" } } };
   const r = await judge("x", "done");

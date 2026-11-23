@@ -57,14 +57,16 @@ export function modelEnv(model: string | undefined): Record<string, string | und
  * is high whatever the user sets for their own sessions: nobody watches an agent run to raise it.
  */
 const userMd = join(homedir(), ".claude", "CLAUDE.md");
-export const AGENT_SETTINGS = JSON.stringify({ claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], effortLevel: "high", env: { ALEPH_AGENT: "1" } });
+const AGENT = { claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], env: { ALEPH_AGENT: "1" } };
+export const AGENT_SETTINGS = JSON.stringify({ ...AGENT, effortLevel: "high" });
 
 /**
  * The argv of a `claude -p` call on `model` (no `--model` when it is undefined), then the caller's flags. With
  * `terminal` the call has neither the agent settings nor `NO_SKILLS`: it runs like the user's own terminal session.
+ * A call with its own `--effort` gets the agent settings without their effort `high`, so no recorded setting says `high` for it.
  */
 export const modelArgv = (cmd: string, model: string | undefined, flags: string[], terminal = false): string[] =>
-  [cmd, "-p", "--strict-mcp-config", ...(terminal ? [] : [NO_SKILLS, "--settings", AGENT_SETTINGS]), ...(model ? ["--model", MODELS[model]?.id ?? model] : []), ...flags];
+  [cmd, "-p", "--strict-mcp-config", ...(terminal ? [] : [NO_SKILLS, "--settings", flags.includes("--effort") ? JSON.stringify(AGENT) : AGENT_SETTINGS]), ...(model ? ["--model", MODELS[model]?.id ?? model] : []), ...flags];
 
 /** Whether a model's backend can take a call now: the local server answers /health, or an OpenRouter key is set. */
 export async function backendUp(model: string): Promise<boolean> {

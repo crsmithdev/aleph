@@ -24,7 +24,7 @@ A fast model judges each turn that changed code. [Hooks](../hooks.md#verify-gate
 
 ## Measurements
 
-- **Thinking off.** The Haiku call runs with `MAX_THINKING_TOKENS=0` and `--tools ""`: 3 s per verdict without thinking, against 15 to 45 s with it, with the same verdicts.
+- **Thinking off.** The Haiku call runs with `--tools ""` and `--effort low`, and its settings leave out the agent effort `high`: that effort keeps Haiku thinking, even with `MAX_THINKING_TOKENS=0`. A verdict takes 3 s without thinking, against 11 to 14 s with it, with the same verdicts.
 - **Deny shape.** On Claude Code 2.1.259 the documented `hookSpecificOutput.permissionDecision` shape does nothing for `Stop`. Three shapes were measured in headless sessions, and `{"decision":"block","reason":…}` is the one that blocks.
 
 ## Jev screen
