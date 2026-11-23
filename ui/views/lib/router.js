@@ -48,11 +48,12 @@ async function dataOf(route, get) {
 
 /**
  * The one path for every load of the shown view: the first one, a `change`, the `refresh` timer and the reload after an action.
- * `env` is the page: fetch(url), EventSource, hidden(), focused() (an input has focus), armed() (a button waits for its
+ * `env` is the page: fetch(url, stream), EventSource, hidden(), focused() (an input has focus), armed() (a button waits for its
  * second click), ok(route), fail(route, error, first), draw(route, data, first) -> the mount's promise, event(ev),
  * heard() (the stream delivered a message).
  */
 export function loader(env) {
+  let stream = ""; // the id of the open stream: the server keeps built the keys a GET asks for with it
   let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, full = false, events = null, heardAt = 0, firstLoad = Promise.resolve(), timer = 0, okAt = 0;
   const read = new Set(); // the keys the shown view's loads returned
 
@@ -63,7 +64,7 @@ export function loader(env) {
   async function get(url, slot) {
     const route = shown, mine = slot ? (slots.get(slot) ?? 0) + 1 : 0;
     if (slot) slots.set(slot, mine);
-    const res = await env.fetch(url);
+    const res = await env.fetch(url, stream);
     if (route !== shown || (slot && slots.get(slot) !== mine)) return slot ? null : res;
     for (const k of keysOf(res)) read.add(k);
     return res;
@@ -147,8 +148,10 @@ export function loader(env) {
   function follow() {
     events?.close();
     events = null;
+    stream = "";
     if (!shown?.view || env.hidden()) return;
-    const es = events = new env.EventSource(scope(shown.query).url("/api/events"));
+    stream = Math.random().toString(36).slice(2);
+    const es = events = new env.EventSource(scope(shown.query).url(`/api/events?stream=${stream}`));
     heardAt = Date.now();
     const heard = () => { heardAt = Date.now(); env.heard?.(); };
     es.addEventListener("ping", heard);
@@ -185,7 +188,7 @@ export function loader(env) {
     return (firstLoad = route.view ? load(route, true) : Promise.resolve());
   }
 
-  return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; } };
+  return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; }, get stream() { return stream; } };
 }
 
 function compile(path) {
@@ -229,8 +232,8 @@ export async function start() {
 
   // The page imports each view once; when the server restarts or a land changes a page file (the version header changes), reload to load it, unless the reader is typing.
   let version = null;
-  async function api(url) {
-    const res = await fetch(url, { cache: "no-store" });
+  async function api(url, stream) {
+    const res = await fetch(url, { cache: "no-store", headers: { "x-aleph-stream": stream } });
     const stale = res.headers.get("x-aleph-stale") === "1";
     if (stale === $("stale").hidden) {
       $("stale").hidden = !stale;
@@ -319,7 +322,7 @@ export async function start() {
   async function readTone() {
     const mine = ++reads;
     try {
-      const t = (await (await fetch("/api/status", { cache: "no-store" })).json()).tone;
+      const t = (await (await fetch("/api/status", { cache: "no-store", headers: { "x-aleph-stream": page.stream } })).json()).tone;
       // An answer that a later read has overtaken is stale: it must not overwrite the newer tone.
       if (mine === reads && typeof t === "string" && t !== tone) { tone = t; paintTone(); }
     } catch {}
@@ -330,7 +333,7 @@ export async function start() {
   async function readAttention() {
     const mine = ++looks;
     try {
-      const rows = await (await fetch("/api/attention", { cache: "no-store" })).json();
+      const rows = await (await fetch("/api/attention", { cache: "no-store", headers: { "x-aleph-stream": page.stream } })).json();
       if (mine !== looks) return;
       const path = page.shown?.view?.path, before = JSON.stringify(rowsOf(path));
       if (!setRows(rows)) return;

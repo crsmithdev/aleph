@@ -5,7 +5,8 @@
  * page can tell a quiet stream from a dead one. The `ev` data is `{ seq, rows }`: all of the Herald's rows as of the newest event, not
  * the rows of the new event only, so a group the event changed or ended is whole and a row that left is gone. With `?project=<key>` the
  * `ev` events follow only the events of an issue or job of that project and those whose subject names no project (a routine), and
- * none for a key that is not in the registry; `change` and `ping` go to every client.
+ * none for a key that is not in the registry; `change` and `ping` go to every client. With `?stream=<id>` the keys the page
+ * asks for with the header `x-aleph-stream: <id>` stay built while the stream is open (ui/updater.ts).
  */
 import { eventsAfter, lastSeq } from "../../lib/layout.ts";
 import { eventIn, projectOf, withProjects } from "./scope.ts";
@@ -19,12 +20,20 @@ export const pings = { ms: 25_000 };
 const encoder = new TextEncoder();
 const event = (name: string, data: string) => encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
 
-/** The open streams, each with the project it follows ("" for all). */
-const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
+/** The open streams, each with the project it follows ("" for all) and the page's stream id. */
+const clients = new Map<ReadableStreamDefaultController<Uint8Array>, { project: string; stream: string | null }>();
 let ping: Timer | undefined;
 
+/** Forget a stream that closed: its page shows no key now. */
+function drop(c: ReadableStreamDefaultController<Uint8Array>): void {
+  const stream = clients.get(c)?.stream;
+  clients.delete(c);
+  if (stream) updater.closed(stream);
+  if (!clients.size) stop();
+}
+
 function send(bytes: Uint8Array): void {
-  for (const c of clients.keys()) try { c.enqueue(bytes); } catch { clients.delete(c); }
+  for (const c of clients.keys()) try { c.enqueue(bytes); } catch { drop(c); }
 }
 
 updater.onChange((keys) => send(event("change", JSON.stringify({ keys }))));
@@ -39,10 +48,10 @@ function tail(): void {
   if (!added.length) return;
   sent = added.at(-1)!.seq!;
   const built = new Map<string, Uint8Array>();
-  for (const [c, project] of clients) {
+  for (const [c, { project }] of clients) {
     if (!added.some((row) => eventIn(row.object, project, row.project))) continue;
     if (!built.has(project)) built.set(project, event("ev", JSON.stringify(heraldNow(project || null))));
-    try { c.enqueue(built.get(project)!); } catch { clients.delete(c); }
+    try { c.enqueue(built.get(project)!); } catch { drop(c); }
   }
 }
 
@@ -61,18 +70,18 @@ function stop(): void {
 
 export const routes: Routes = {
   "GET /api/events": (req) => {
-    const project = projectOf(new URL(req.url)) ?? "";
+    const url = new URL(req.url), project = projectOf(url) ?? "", stream = url.searchParams.get("stream");
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         mine = c;
         if (!clients.size) start();
-        clients.set(c, project);
+        clients.set(c, { project, stream });
+        if (stream) updater.opened(stream);
         c.enqueue(event("ping", JSON.stringify({ at: Date.now() })));
       },
       cancel() {
-        clients.delete(mine);
-        if (!clients.size) stop();
+        drop(mine);
       },
     });
     return new Response(body, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });

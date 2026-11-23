@@ -67,8 +67,8 @@ async function facts(): Promise<Record<string, Row[]>> {
 
 export const routes: Routes = {
   "GET /api/attention/facts": async () => Response.json(await facts()),
-  "GET /api/attention": async (_req, _params, url) => {
-    const rows = await (await respond(new URL("/api/attention/facts", url))).json() as Record<string, Row[]>, mark = updater.mark("/api/sessions");
+  "GET /api/attention": async (req, _params, url) => {
+    const rows = await (await respond(new URL("/api/attention/facts", url), req.headers.get("x-aleph-stream"))).json() as Record<string, Row[]>, mark = updater.mark("/api/sessions");
     return Response.json({ ...rows, "/sessions": mark ? [{ tone: "need", text: `Sessions is ${dur((Date.now() - Date.parse(mark.since)) / 1000)} old: ${mark.error}` }] : [] });
   },
 };

@@ -6,7 +6,9 @@
  * When a source changes, the updater builds again each kept key that read it, keeps the new answers (the old ones
  * are served until then), and only then sends `change` with the keys whose answer or mark changed.
  *
- * - Kept: a key asked for in the last 10 min is built again on each change and poll. An older one is only marked
+ * - Kept: a key that an open page shows, or that was asked for in the last minute, is built again on each change and poll.
+ *   A page shows a key when it asks for it with the id of its open `/api/events` stream (`x-aleph-stream`); the
+ *   stream's close ends it, and a page opens a new stream for each view. Any other key is only marked
  *   dirty; a request for a dirty key that has an answer gets that answer, except after an action (a Sessions or Skills key still gets it),
  *   with a mark `{ error, since }` while a rebuild runs, and `change` names the key when it ends. A key not asked for in 1 h is dropped.
  *   A Sessions or Skills key's last good answer is also saved to `<aleph>/ui/answers/`; with none in memory (a restart, the drop) a request gets the saved one the same way.
@@ -42,7 +44,7 @@ import { verdict, type Facts } from "../lib/status-words.ts";
 import { checkStatus, logOnce } from "./state.ts";
 
 const SETTLE_MS = 500;
-export const KEEP_MS = 10 * 60_000, DROP_MS = 60 * 60_000;
+export const KEEP_MS = 60_000, DROP_MS = 60 * 60_000;
 const POLL_MS = 30_000, DATA_VERSION_MS = 100;
 const SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 60_000;
 
@@ -65,7 +67,7 @@ export function keyOf(url: URL): string {
 interface Got { answer: Answer; error?: string; since?: string; stale?: boolean }
 type Mark = { error: string; since: string };
 
-interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; /** How many requests wait for the key's build: theirs goes before the rebuilds. */ waits: number; /** An action since the last build began: the page that acted must read a build, not the old answer (not for Langfuse keys: a build takes minutes). */ hard?: boolean; building?: Promise<void> }
+interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; /** How many requests wait for the key's build: theirs goes before the rebuilds. */ waits: number; /** The open streams of the pages that show the key. */ seen: Set<string>; /** An action since the last build began: the page that acted must read a build, not the old answer (not for Langfuse keys: a build takes minutes). */ hard?: boolean; building?: Promise<void> }
 
 interface Deps {
   build: (key: string, gens: Record<string, number>, asked: () => boolean) => Promise<Built>;
@@ -94,7 +96,8 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   let settle: Timer | undefined, polls = 0, saved = "";
 
   const iso = () => new Date(now()).toISOString();
-  const kept = (s: Slot) => now() - s.asked < KEEP_MS;
+  const open = new Set<string>();
+  const kept = (s: Slot) => s.seen.size > 0 || now() - s.asked < KEEP_MS;
   const markOf = (s: Slot): Mark | null => (s.error ? { error: s.error, since: s.since! } : s.note ? { error: s.note, since: s.at! } : fetchError && s.sources.has("store") ? fetchError : null);
   const sig = (s: Slot) => `${s.hash}|${markOf(s) ? 1 : 0}`;
   const keysWith = (pick: (key: string, s: Slot) => boolean) => [...slots].filter(([k, s]) => pick(k, s)).map(([k]) => k);
@@ -186,11 +189,12 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
   return {
     gens,
     flush,
-    /** The answer of `key`: the kept one, or a build's when the key is new, failed or dirty. */
-    async get(key: string): Promise<Got> {
+    /** The answer of `key`: the kept one, or a build's when the key is new, failed or dirty. A page asks with its open `stream`. */
+    async get(key: string, stream?: string | null): Promise<Got> {
       let s = slots.get(key);
-      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set(), marked: 0, built: 0, waits: 0 })); save(); }
+      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set(), marked: 0, built: 0, waits: 0, seen: new Set() })); save(); }
       s.asked = now();
+      if (stream && open.has(stream)) s.seen.add(stream);
       load(key, s);
       if (s.answer && dirty(s) && !s.hard) {
         if (!s.note) {
@@ -262,16 +266,23 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       const saved = readJsonOr<Record<string, number>>(f, {});
       for (const [k, asked] of Object.entries(saved)) {
         if (now() - asked >= DROP_MS || slots.has(k)) continue;
-        const s: Slot = { asked, sources: new Set(), marked: 0, built: 0, waits: 0 };
+        const s: Slot = { asked, sources: new Set(), marked: 0, built: 0, waits: 0, seen: new Set() };
         slots.set(k, s);
         load(k, s);
         void run(k, s);
       }
     },
+    /** A page's `/api/events` stream opened: the keys it asks for with its id stay kept until it closes. */
+    opened(stream: string): void { open.add(stream); },
+    closed(stream: string): void {
+      open.delete(stream);
+      for (const s of slots.values()) s.seen.delete(stream);
+    },
     onChange(f: (keys: string[]) => void): void { listeners.push(f); },
     /** Forget every key and change (a test's fresh start). */
     reset(): void {
       slots.clear();
+      open.clear();
       pending.clear();
       for (const k of Object.keys(gens)) delete gens[k];
       fetchError = null;
@@ -288,8 +299,8 @@ export const updater = createUpdater({ build: workerBuild, file: () => join(dirn
 onLater((source) => updater.changed(source));
 
 /** The answer of the keyed route at `url`, with `x-aleph-keys` and, on an object body, the mark of a failed build. */
-export async function respond(url: URL): Promise<Response> {
-  const key = keyOf(url), got = await updater.get(key), { answer } = got;
+export async function respond(url: URL, stream?: string | null): Promise<Response> {
+  const key = keyOf(url), got = await updater.get(key, stream), { answer } = got;
   const headers = new Headers({ "x-aleph-keys": key });
   if (got.error) {
     headers.set("x-aleph-error", got.error.replace(/\s+/g, " ").slice(0, 500));

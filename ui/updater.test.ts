@@ -223,6 +223,24 @@ test("a build goes before the rebuilds while a request waits for it", async () =
   expect(f.asked["/a"]()).toBe(false);
 });
 
+test("a key an open stream asks for stays kept until the stream closes; an unknown stream keeps nothing", async () => {
+  const f = fake(), u = createUpdater(f);
+  for (const k of ["/a", "/b", "/c"]) f.world[k] = { body: 1, sources: ["records"] };
+  u.opened("s1");
+  await u.get("/a", "s1");
+  await u.get("/b", "nope");
+  await u.get("/c");
+  f.tick(KEEP_MS);
+  f.log.length = 0;
+  u.changed("records");
+  await u.flush();
+  expect(f.log).toEqual(["/a"]);
+  u.closed("s1");
+  u.changed("records");
+  await u.flush();
+  expect(f.log).toEqual(["/a"]);
+});
+
 test("concurrent requests for a cold key share one build", async () => {
   const f = fake(), u = createUpdater(f);
   f.world["/a"] = { body: 1, sources: [] };
@@ -297,8 +315,8 @@ test("when the stopped-tick verdict flips with no source change, the clock check
   u.onChange((keys) => heard.push(keys));
   await u.clock();
   expect(heard).toEqual([]);
-  // Past the 5 min grace of a next tick, and past the 10 min a key is kept: a dead tick writes nothing, so the page asks nothing.
-  f.tick(KEEP_MS);
+  // Past the 5 min grace of a next tick, and past the 1 min a key is kept: a dead tick writes nothing, so the page asks nothing.
+  f.tick(5 * KEEP_MS + 1);
   for (const k of keys) f.world[k].body = status();
   f.world["/api/status"].body = { tone: "alert" };
   await u.clock();

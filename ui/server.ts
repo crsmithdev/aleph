@@ -107,7 +107,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
   const loaded = serverGraph(root);
   const loadedPrint = codePrint(root, loaded);
   skipFetches();
-  const routes = (await loadRoutes(join(import.meta.dir, "api"))).map((r) => (r.method === "GET" && KEYED.has(r.path) ? { ...r, handler: (_req: Request, _p: Record<string, string>, url: URL) => respond(url) } : r));
+  const routes = (await loadRoutes(join(import.meta.dir, "api"))).map((r) => (r.method === "GET" && KEYED.has(r.path) ? { ...r, handler: (req: Request, _p: Record<string, string>, url: URL) => respond(url, req.headers.get("x-aleph-stream")) } : r));
   if (apiDir) routes.push(...await loadRoutes(apiDir));
   const server = Bun.serve({
     hostname: "127.0.0.1",
