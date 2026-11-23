@@ -43,9 +43,18 @@ test("the first line is the coloured status sentence and the sections follow in 
   expect(lines[0].startsWith("\x1b[31m")).toBe(true);
   const narrow = plain(render(state, flow, { width: 20, height: 60 }))[0];
   expect(narrow.endsWith("…") && verdict(state).text.startsWith(narrow.slice(0, -1))).toBe(true);
-  const at = ["Scorecard", "Pipeline", "Issues", "Herald Not OK"].map((h) => text.indexOf(h));
+  const at = ["Scorecard", "Pipeline", "Issues", "Memory", "Herald"].map((h) => text.indexOf(h));
   expect(at.every((i) => i > 0)).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
+  expect(text[at[4]]).toBe("Herald");
+  expect(text.some((l) => /\bOK\b/.test(l))).toBe(false);
+});
+
+test("Memory lists a refused note, and says No data when nothing is over a threshold", () => {
+  const under = (s: any) => { const t = plain(render(s, flow, { width: 80, height: 60 })); return t.slice(t.indexOf("Memory") + 1, t.indexOf("Herald")); };
+  const memory = { start: { aleph: { cut: 0 } }, lint: { refuse: [{ note: "A note", rule: "dangling" }], warn: [] }, processes: { decay: { stale: [] } } };
+  expect(under({ ...state, memory })).toEqual(["1 note refused"]);
+  expect(under({ ...state, memory: { ...memory, lint: { refuse: [], warn: [] } } })).toEqual(["No data"]);
 });
 
 test("the scorecard has its four labels, and the alerts and running jobs come before the events", () => {
@@ -53,7 +62,7 @@ test("the scorecard has its four labels, and the alerts and running jobs come be
   const card = text.slice(text.indexOf("Scorecard"), text.indexOf("Pipeline"));
   for (const label of ["Working", "Efficiency", "Lead Time", "Usage"]) expect(card.some((l) => l.startsWith(label))).toBe(true);
   expect(card.find((l) => l.startsWith("Efficiency"))).toContain("▼");
-  const herald = text.indexOf("Herald Not OK"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
+  const herald = text.indexOf("Herald"), ask = text.findIndex((l) => l.includes("aleph-27")), errored = text.findIndex((l) => l.includes("aleph-30")), run = text.findIndex((l) => l.includes("Run now"));
   expect(herald).toBeLessThan(ask);
   expect(ask).toBeLessThan(errored);
   expect(errored).toBeLessThan(run);

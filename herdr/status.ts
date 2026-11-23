@@ -5,6 +5,7 @@
 import { baseline, openNow, speed } from "../ui/api/flow.ts";
 import { figures } from "../ui/flow/baseline.ts";
 import { stateBody } from "../ui/api/now.ts";
+import { routes as memoryRoutes } from "../ui/api/memory.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
 import { FACTORY, type Window } from "../lib/windows.ts";
@@ -14,9 +15,12 @@ import { plain, type Row } from "../ui/herald.ts";
 import { cardPct, clock, count, dur, hours, mean, when } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
 import { cardList } from "../ui/views/lib/flow-parts.js";
+// @ts-ignore plain JS, shared with the page
+import { needList } from "../ui/views/lib/memory-health.js";
 import { errText } from "../lib/errtext.ts";
 
-type State = Awaited<ReturnType<typeof stateBody>>;
+/** `memory` is /api/memory with /api/memory/processes as `processes`, as the page's Memory card reads it. */
+type State = Awaited<ReturnType<typeof stateBody>> & { memory?: any };
 type Flow = ReturnType<typeof speed> & { figures: ReturnType<typeof figures>; baseline: ReturnType<typeof baseline>; open: ReturnType<typeof openNow> };
 
 const REFRESH_MS = 10_000;
@@ -80,6 +84,7 @@ export function data(s: State, d: Flow) {
     // An errored job or an error outranks an Ask: the badge takes the worst alert's tone.
     badge: alerts ? { text: "Not OK", tone: errored.length || v.errors.length ? "alert" : "ask" } : { text: "OK", tone: "fine" },
     scorecard: scorecard(s, d),
+    memory: needList(s.memory ?? {}).map(([, , text]: string[]) => text),
     pipeline: pipeline(d, errored.length),
     active: (d.active ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, running: b.running, landed: b.landed })),
     speed: (d.buckets ?? []).map((b) => ({ at: b.at, intake: b.intake ?? 0, queue: b.queue ?? 0, implement: b.implement ?? 0, land: b.land ?? 0 })),
@@ -119,7 +124,11 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
   const now = p.active.at(-1);
   line(now ? `${NAMES.intake} ${now.intake} · Queued ${now.queue} · Running ${now.running} · Landed ${now.landed}` : "No data");
 
-  head(`Herald ${p.badge.text}`);
+  head("Memory");
+  for (const t of p.memory) line(t);
+  if (!p.memory.length) line("No data");
+
+  head("Herald");
   for (const a of p.asks) line(`${a.label} ${a.id} ${a.title}`);
   for (const j of p.errored) line(`Error ${j.id} ${j.title}`);
   for (const r of p.running) line(`${r.at} ${r.word} ${r.id} ${r.title}`);
@@ -132,10 +141,16 @@ export function render(s: State, d: Flow, { width, height }: { width: number; he
 const win = (process.argv[process.argv.indexOf("--window") + 1] ?? "week") as Window;
 if (process.argv.includes("--window") && !FACTORY.includes(win)) throw new Error(`--window takes ${FACTORY.join(", ")}`);
 
+/** The Memory page's data, read as its routes do. */
+async function memoryOf() {
+  const [m, processes] = await Promise.all(["/api/memory", "/api/memory/processes"].map(async (path) => (await memoryRoutes[`GET ${path}`](new Request(`http://aleph${path}`), {}, new URL(`http://aleph${path}`))).json()));
+  return { ...m, processes };
+}
+
 /** The state and the window's flow, read as the routes do. */
 async function load(): Promise<[State, Flow]> {
   const now = new Date(), fit = await currentFit(), d = speed(win, now, fit);
-  return [await stateBody(null), { ...d, figures: figures(d), baseline: baseline(win, now, fit), open: openNow() }];
+  return [{ ...(await stateBody(null)), memory: await memoryOf() }, { ...d, figures: figures(d), baseline: baseline(win, now, fit), open: openNow() }];
 }
 
 // `--json` prints the page once as data, for the Herdr desktop app's mod, and exits.
