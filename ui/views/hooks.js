@@ -81,10 +81,14 @@ const perDay = (holds, q, key) => holds.length ? panelOf(key, holdsFrame(holds, 
 
 /** Errors by cause, each with its fix. */
 const errorsTable = (errors) => !errors.length ? empty() : dataTable(heads(["Cause", "Hooks", "Event", "Fix", "Errors", "Sessions", "Last"], ["Errors", "Sessions"]), errors.map((e) =>
-  row([cell(e.cause), cell(e.hooks.join(", "), { wide: true }), cell(e.events.join(", ")), e.fix ? cell(e.fix) : `<td>${miss("no known fix")}</td>`,
+  row([cell(e.cause), cell(hooksOf(e).join(", "), { wide: true }), cell(uniq(e.pairs.map((x) => x.event)).join(", ")), e.fix ? cell(e.fix) : `<td>${miss("no known fix")}</td>`,
     badCount(e.n), cell(count(e.sessions), { num: true }), `<td class="time">${esc(when(e.last))}</td>`])).join(""));
 
 const uniq = (xs) => [...new Set(xs)].sort();
+/** The hook names of an error cause, from its (hook, event) pairs. */
+const hooksOf = (e) => uniq(e.pairs.map((x) => x.hook));
+/** The cause hit `hook` on `event`. */
+const hit = (e, hook, event) => e.pairs.some((x) => x.hook === hook && x.event === event);
 /** The filters of the holds log from the address. */
 const filtersOf = (q) => Object.fromEntries(["who", "kind", "out"].map((k) => [k, q?.get(k) ?? ""]));
 
@@ -129,7 +133,7 @@ function inspectHook(h, d, mine, causes) {
 
 /** One hook as a row: its name and only what differs from the defaults (no `sync`, no `runs`), its outcomes, holds and error causes; `event` names its event. */
 function hookRow(h, d, event) {
-  const mine = d.holds.filter((x) => x.event === h.event && x.hook === h.name), causes = d.errors.filter((e) => e.hooks.includes(h.name) && e.events.includes(h.event));
+  const mine = d.holds.filter((x) => x.event === h.event && x.hook === h.name), causes = d.errors.filter((e) => hit(e, h.name, h.event));
   const main = `<span class="t">${esc(h.name)}</span>${event ? chip(h.event) : ""}${h.matcher ? codeText(`\`${h.matcher}\``) : ""}${h.mode ? chip(h.mode) : ""}${h.workers === "skips" ? chip("skips workers") : ""}`;
   const errs = causes.length ? `<span title="${esc(causes.map((e) => e.cause).join(", "))}">${esc(plural(causes.length, "cause"))}</span>` : "";
   const bar = h.holds ? rowBar(OUTS.map(([k, , cls]) => ({ pct: (100 * mine.filter((x) => x.out === k).length) / h.holds, cls })), outcomes(mine).filter(([, , n]) => n).map(([k, , n]) => `${k} ${n}`).join(", ")) : "";
@@ -192,16 +196,16 @@ function errorsView(d) {
   const groups = d.errors.map((e) => ({
     title: e.cause, count: count(e.n), heads: ["Events"],
     more: `${e.fix ? `Fix: ${esc(e.fix)}` : "No fix"} · ${esc(plural(e.sessions, "session"))} · last ${esc(when(e.last))}`,
-    rows: e.hooks.map((name) => {
+    rows: hooksOf(e).map((name) => {
       // A hook the cause names but hooks.json does not hold is gone: its file moved or the hook was cut.
-      const own = d.hooks.filter((h) => h.name === name && e.events.includes(h.event)), gone = !d.hooks.some((h) => h.name === name), events = gone ? e.events : own.map((h) => h.event);
+      const own = d.hooks.filter((h) => h.name === name && hit(e, name, h.event)), gone = !d.hooks.some((h) => h.name === name), events = gone ? e.pairs.filter((x) => x.hook === name).map((x) => x.event) : own.map((h) => h.event);
       return {
         key: `${e.cause}/${name}`, lead: "", text: `${e.cause} ${name} ${events.join(" ")}`,
         main: `<span class="t">${esc(name)}</span>${gone ? tag("not in hooks.json", "need") : ""}`, cells: [esc(events.join(", "))],
         inspect: inspector({
           id: e.cause, title: name, href: own[0] ? hookHref(own[0]) : "#/hooks",
           rows: [["Errors", esc(count(e.n))], ["Sessions", esc(count(e.sessions))], ["Last", esc(when(e.last))], ["Fix", e.fix ? esc(e.fix) : miss("none")], ["Events", esc(events.join(", "))]],
-          body: `${subHead("Same Cause")}${chips(e.hooks.filter((x) => x !== name))}`,
+          body: `${subHead("Same Cause")}${chips(hooksOf(e).filter((x) => x !== name))}`,
         }),
       };
     }),

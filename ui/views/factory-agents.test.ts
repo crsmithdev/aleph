@@ -208,6 +208,14 @@ test("a row under 20 ended runs shows its counts and no bar; a role with no runs
   expect(cells(row(h, "director"))).toEqual(["", "", "", "", ""]);
 });
 
+test("builds with no size get an Unsized row in Workers, only when there are some", () => {
+  const h = page([full("worker", "haiku", { size: "small", runs: 5 }), full("worker", "sonnet", { size: null, runs: 7 })]);
+  expect(cells(row(h, "unsized"))[0]).toBe("7");
+  expect(cells(row(h, "small"))[0]).toBe("5");
+  expect(h).toContain("Unsized");
+  expect(page([full("worker", "haiku", { size: "small", runs: 5 })])).not.toContain('data-key="unsized"');
+});
+
 test("a count goes through count()", () => {
   expect(cells(row(page([full("worker", "haiku", { size: "small", runs: 1234 })]), "small"))[0]).toBe("1,234");
 });

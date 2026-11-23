@@ -551,14 +551,14 @@ test("agents: the reviewer's rate is its verdicts over its ended runs, and a wor
   expect(a.outcomes.find((x) => x.role === "worker")).toMatchObject({ reviewPass: 0.6667 });
 });
 
-test("agents: worker rows are one per size and model, a build with no size has no row but its verdict still counts for the reviewer, and each row runs from its first to its last start", () => {
+test("agents: worker rows are one per size and model, a build with no size has its own row and its verdict counts for the reviewer, and each row runs from its first to its last start", () => {
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   let n = 0;
   const e = (a: number, extra: object = {}) => ({ folder: `s${n}`, id: `s${n++}`, run: { n: 1, role: "build", job: `j${n}`, state: "passed", started: iso(a), ended: iso(a + 1), model: "claude-haiku", ...extra } }) as any;
-  const runs = [e(14, { size: "small" }), e(11, { size: "small" }), e(12, { size: "medium" }), e(13, { review: { call: "passed", model: "claude-opus-5-5" } }), e(9, { size: "small" })];
+  const runs = [e(14, { size: "small" }), e(11, { size: "small" }), e(12, { size: "medium" }), e(13, { review: { call: "passed", model: "claude-opus-5-5" } }), e(9, { size: "small" }), e(15, { model: "claude-opus-5-5", size: "huge" })];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], ["medium", "claude-haiku", 1, iso(12), iso(12)]]);
-  expect(a.outcomes.some((x) => x.role === "worker" && x.size === null)).toBe(false);
+  expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], [null, "unset", 2, iso(13), iso(15)], ["medium", "claude-haiku", 1, iso(12), iso(12)]]);
+  expect(a.roles[0].runs).toBe(a.outcomes.filter((x) => x.role === "worker").reduce((n, x) => n + x.runs, 0));
   expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", pass: 1 });
 });
 
@@ -754,15 +754,17 @@ test("GET /api/flow?project= counts only that repo's runs and issues, in the ans
   } finally { setSystemTime(); }
 });
 
-test("a bucket's cost per model is the recorded cost of the agent runs that started in it", () => {
+test("a bucket's cost per model is the recorded cost of the runs of every role that started in it", () => {
   const now3 = new Date(2026, 4, 10, 15), h = (hh: number, m = 0) => new Date(2026, 4, 10, hh, m).toISOString();
   run({ role: "build", repo: "pc", state: "passed", model: "opus", cost: 1.25, started: h(9, 5), ended: h(9, 10) });
   run({ role: "build", repo: "pc", state: "passed", model: "opus", cost: 0.5, started: h(9, 40), ended: h(10, 10) }); // ends in the next hour, counts where it starts
   run({ role: "build", repo: "pc", state: "passed", model: "sonnet", cost: 2, started: h(9, 20), ended: h(9, 30) });
   run({ role: "build", repo: "pc", state: "passed", cost: 4, started: h(11), ended: h(11, 5) });
+  run({ role: "review", repo: "pc", state: "passed", model: "opus", cost: 0.25, started: h(9, 50), ended: h(9, 55) });
+  run({ role: "land", repo: "pc", state: "landed", started: h(9, 56), ended: h(9, 57) });
   const d = speed("day", now3, null, "pc");
   const at9 = d.buckets.find((b) => b.at === h(9))!, at11 = d.buckets.find((b) => b.at === h(11))!;
-  expect(at9.cost).toEqual({ opus: 1.75, sonnet: 2 });
+  expect(at9.cost).toEqual({ opus: 2, sonnet: 2 });
   expect(at11.cost).toEqual({ unset: 4 });
   expect(d.buckets.find((b) => b.at === h(12))!.cost).toEqual({});
 });

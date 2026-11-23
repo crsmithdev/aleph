@@ -78,15 +78,19 @@ function parse(f: string): { holds: Hold[]; fails: Fail[] } {
 }
 
 /** Each transcript's parse, by path, while its mtime holds: a scan reads only the files written since the one before. */
-let parsed = new Map<string, { at: number; holds: Hold[]; fails: Fail[] }>();
+const parsed = new Map<string, { at: number; holds: Hold[]; fails: Fail[] }>();
+/** The widest window asked, in ms: a narrower scan keeps the parses of its files, so the next wide one does not read them again. */
+let widest = 0;
 
 /** The Stop-hook holds, newest first, and the hook errors of the scope's window and project. */
 export function scan({ ms, project }: Scope): { holds: Hold[]; fails: Fail[] } {
   touch("transcripts");
-  const since = Date.now() - ms;
+  const now = Date.now(), since = now - ms;
+  widest = Math.max(widest, ms);
   const files = list().map((t) => ({ f: t.path, at: t.at })).filter((x) => x.at >= since);
-  parsed = new Map(files.map(({ f, at }) => [f, parsed.get(f)?.at === at ? parsed.get(f)! : { at, ...parse(f) }]));
-  const recent = (x: { t: string; project: string }) => Date.parse(x.t) >= since && (!project || x.project === project), all = [...parsed.values()];
+  for (const { f, at } of files) if (parsed.get(f)?.at !== at) parsed.set(f, { at, ...parse(f) });
+  for (const [f, p] of parsed) if (p.at < now - widest) parsed.delete(f);
+  const recent = (x: { t: string; project: string }) => Date.parse(x.t) >= since && (!project || x.project === project), all = files.map((x) => parsed.get(x.f)!);
   return { holds: all.flatMap((p) => p.holds).filter(recent).sort((a, b) => b.t.localeCompare(a.t)), fails: all.flatMap((p) => p.fails).filter(recent) };
 }
 
@@ -99,10 +103,10 @@ const byKind = (holds: Hold[]) => [...Map.groupBy(holds, (h) => `${h.hook}\0${h.
   return { hook: xs[0].hook, event: xs[0].event, kind: xs[0].kind, holds: xs.length, interactive, workers: xs.length - interactive, outcomes: tally(xs) };
 });
 
-/** Errors by cause, most first, each with its fix. */
+/** Errors by cause, most first, each with its fix and the (hook, event) pairs it hit. */
 export const byCause = (fails: Fail[]) => [...Map.groupBy(fails, (f) => f.cause).entries()].map(([cause, xs]) => ({
   cause, fix: xs[0].fix, n: xs.length, sessions: new Set(xs.map((x) => x.sid)).size,
-  hooks: uniq(xs.map((x) => x.hook)), events: uniq(xs.map((x) => x.event)), last: xs.map((x) => x.t).sort().at(-1)!,
+  pairs: [...new Map(xs.map((x) => [`${x.hook}\0${x.event}`, { hook: x.hook, event: x.event }])).values()].sort((a, b) => a.hook.localeCompare(b.hook) || a.event.localeCompare(b.event)), last: xs.map((x) => x.t).sort().at(-1)!,
 })).sort((a, b) => b.n - a.n);
 
 type Cmd = { command: string; args: string[]; statusMessage?: string; timeout: number; async?: boolean };

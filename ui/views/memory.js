@@ -107,7 +107,8 @@ function notesView(m, q) {
     const xs = results.filter((it) => it.type === t.id), all = q.get("all") === t.id;
     const href = new URLSearchParams(q);
     href.set("all", t.id);
-    return { title: t.name, count: count(xs.length), heads: LAYOUT[t.id].heads, rows: xs.map(row), cap: all ? undefined : PAGE, more: `<a href="#/memory?${esc(href)}">Show all</a>` };
+    // MEMORY.md is a row, not a note: the count is the facts line's notes.
+    return { title: t.name, count: count(xs.filter((it) => it.source !== "memory-md").length), heads: LAYOUT[t.id].heads, rows: xs.map(row), cap: all ? undefined : PAGE, more: `<a href="#/memory?${esc(href)}">Show all</a>` };
   });
   const used = m.notes.filter((n) => offered(n, now)).length;
   return factsLine([[count(m.total), "notes"], [count(used), "offered in 7 days"], [count(m.notes.filter((n) => !n.read).length), "never offered"], [count((m.decay?.stale ?? []).length), "past re-check"]]) +

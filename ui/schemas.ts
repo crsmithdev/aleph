@@ -15,7 +15,7 @@ const hook = { event: "string", name: "string", matcher: "string", file: "string
 const hold = { t: "time", sid: "string", hook: "string", event: "string", kind: "string", who: "string", out: "string", why: "string" };
 const holdsBy = { hook: "string", kind: "string", holds: "number", interactive: "number", workers: "number", outcomes: { "*": "number" } };
 const attentionRow = { tone: "string", text: "string", "act?": { label: "string", href: "string" } };
-const hookError = { cause: "string", fix: "string", n: "number", sessions: "number", hooks: ["string"], events: ["string"], last: "time" };
+const hookError = { cause: "string", fix: "string", n: "number", sessions: "number", pairs: [{ hook: "string", event: "string" }], last: "time" };
 
 export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/factory": {

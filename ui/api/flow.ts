@@ -46,7 +46,7 @@ export interface Speed {
   /** Asks set in the window: `count` all of them, `manual` those that came to Chris (a director event "escalated" from the set time until the Ask cleared). */
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
-  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the agent runs that started in it, per model, and `tokens` their saved tokens (0 for a run with none). */
+  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the runs of every role that started in it, per model, and `tokens` their saved tokens (0 for a run with none). */
   /** Issues in each stage per bucket, for the Status page's chart. */
   active: Active[];
   buckets: ({ at: string; runs: number; cost: Record<string, number>; tokens: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
@@ -167,7 +167,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   for (const e of entries) {
     const t = Date.parse(e.run.started);
     if (t >= since.getTime() && t < now.getTime()) started[b.slotOf(t)]++;
-    if (!isAgentRun(e.run.role) || !(t >= since.getTime() && t < now.getTime())) continue;
+    // A land and a plain run run no model, so they have no cost to show.
+    if (e.run.role === "land" || e.run.role === "plain" || !(t >= since.getTime() && t < now.getTime())) continue;
     const spent = costs[b.slotOf(t)], model = e.run.model || "unset";
     spent[model] = round((spent[model] ?? 0) + (e.run.cost ?? 0), 4);
     const used = tokens[b.slotOf(t)];

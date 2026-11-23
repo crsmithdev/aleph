@@ -19,7 +19,7 @@ const holds = [
 const data = {
   days: 7, holds,
   byHook: [{ hook: "one way", event: "Stop", kind: "new-copy", holds: 1, interactive: 1, workers: 0, outcomes: { caught: 1 } }],
-  errors: [{ cause: "Moved hook file", fix: "Stub or stable entry", n: 53, sessions: 10, hooks: ["vault"], events: ["SessionStart"], last: "2026-11-19T09:13:00Z" }],
+  errors: [{ cause: "Moved hook file", fix: "Stub or stable entry", n: 53, sessions: 10, pairs: [{ hook: "vault", event: "SessionStart" }], last: "2026-11-19T09:13:00Z" }],
   hooks: [{ event: "Stop", name: "one way", matcher: "", file: "skills/refit-code/hook.ts", command: "bun skills/refit-code/hook.ts", mode: "", timeout: 30, workers: "skips", holds: 2, changed: null }],
 };
 /** A hook page's Command and Workers, which these tests do not vary. */
@@ -76,7 +76,7 @@ describe("the Hooks page", () => {
 
   test("a hook's inspector has its facts, an empty Matcher or Mode as miss(), its outcomes, newest holds and error causes", () => {
     const hook = { ...data.hooks[0], name: "vault", event: "SessionStart", matcher: "Bash", mode: "async", changed: { t: "2026-11-19T12:00:00Z", hash: "d90a0602bbbb", subject: "only own files" } };
-    const err = { ...data.errors[0], hooks: ["vault"] };
+    const err = { ...data.errors[0], pairs: [{ hook: "vault", event: "SessionStart" }] };
     const html = page("", { ...data, hooks: [data.hooks[0], hook], errors: [err] });
     const tpl = (key: string) => html.split(`<template data-inspect="${key}">`)[1].split("</template>")[0];
     expect(tpl("Stop/one way")).toContain('<dt>Matcher</dt><dd><span title="all">');
@@ -131,13 +131,22 @@ describe("the Hooks page", () => {
     expect(cards({ langfuse: "ok", hooks: [], denials: { total: 0, recent: [] } })).toContain(empty());
   });
 
+  test("an error cause marks a hook only on the events it hit", () => {
+    const vault = { ...data.hooks[0], name: "vault", holds: 0 };
+    const html = page("", { ...data, hooks: [vault, { ...vault, event: "SessionStart" }], errors: [{ ...data.errors[0], pairs: [{ hook: "vault", event: "SessionStart" }] }] });
+    expect(html.split('data-key="Stop/vault"')[1].split("</li>")[0]).not.toContain("cause");
+    expect(html.split('data-key="SessionStart/vault"')[1].split("</li>")[0]).toContain("1 cause");
+    const errors = page("errors", { ...data, hooks: [vault, { ...vault, event: "SessionStart" }], errors: [{ ...data.errors[0], pairs: [{ hook: "vault", event: "SessionStart" }] }] });
+    expect(errors).toContain('<dt>Events</dt><dd>SessionStart</dd>');
+  });
+
   test("Errors has a group per cause with its hooks, the Fix, sessions and last time under it, and a hook that hooks.json lacks marked", () => {
     const html = page("errors");
     expect(groups(html)).toEqual([["Moved hook file", "53"]]);
     expect(html).toMatch(/<li class="lmore">Fix: Stub or stable entry · 10 sessions · last [^<]+<\/li>/);
     expect(html).toContain('<span class="badge need">not in hooks.json</span>');
     expect(html).toContain("<b class=\"num\">53</b> errors");
-    const own = page("errors", { ...data, errors: [{ ...data.errors[0], hooks: ["one way"], events: ["Stop"], fix: "" }] });
+    const own = page("errors", { ...data, errors: [{ ...data.errors[0], pairs: [{ hook: "one way", event: "Stop" }], fix: "" }] });
     expect(own).not.toContain("not in hooks.json");
     expect(own).toContain("No fix");
     expect(own).toContain('href="#/hooks/Stop/one%20way"');

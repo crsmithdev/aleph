@@ -18,9 +18,11 @@ const MIN_ENDED = 20;
 
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
+/** A worker row's label by key: a size, or the builds with none. */
+const LABELS = { ...SIZES, unsized: "Unsized" };
 /** The groups of the Roles list: each model setting's key and the role whose outcomes its row shows. */
 const GROUPS = [
-  ["Workers", [["small", "worker"], ["medium", "worker"], ["large", "worker"]]],
+  ["Workers", [["small", "worker"], ["medium", "worker"], ["large", "worker"], ["unsized", "worker"]]],
   ["Review and Intake", [["review", "reviewer"], ["intake", "intake"], ["judge", "judge"]]],
   ["Oversight", [["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["investigator", "investigator"]]],
 ];
@@ -61,8 +63,8 @@ function roleInspect(key, role, label, model, cur, past) {
 
 /** One role as a row: the switch and the model select, then runs, success, p50, cost and cost per output; a blank for no value. `m` is /api/models, or null while it loads or after it failed. */
 function roleRow(key, role, outs, m) {
-  const set = m?.models ?? {}, label = SIZES[key] ?? NAMES[role];
-  const all = outs.filter((o) => o.role === role && o.runs && (role !== "worker" || o.size === key));
+  const set = m?.models ?? {}, label = LABELS[key] ?? NAMES[role];
+  const all = outs.filter((o) => o.role === role && o.runs && (role !== "worker" || (o.size ?? "unsized") === key));
   const last = [...all].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
   const now = set[key]?.model ?? last[0]?.model, cur = all.find((o) => shortModel(o.model) === shortModel(now)), past = last.filter((o) => o !== cur);
   const off = set[key] && !set[key].enabled;
@@ -85,7 +87,11 @@ function rolesView(s, d, m, win) {
   if (!a) return d?.error ? error("Could not load the agents.", { detail: d.error }) : loadingLine("the agents");
   const outs = a.outcomes ?? [], v = m?.spend?.[SPEND[win] ?? SPEND.week];
   if (!m && !outs.length) return empty();
-  const groups = GROUPS.map(([title, keys]) => ({ title, count: count(keys.length), heads: ["Runs", "Success", "p50", "Cost", "Per Output"], rows: keys.map(([k, r]) => roleRow(k, r, outs, m)) }));
+  // The Unsized row has no setting, so it shows only when a build had no size.
+  const groups = GROUPS.map(([title, all]) => {
+    const keys = all.filter(([k]) => k !== "unsized" || outs.some((o) => o.role === "worker" && o.size == null));
+    return { title, count: count(keys.length), heads: ["Runs", "Success", "p50", "Cost", "Per Output"], rows: keys.map(([k, r]) => roleRow(k, r, outs, m)) };
+  });
   return factsLine([[count(a.live), `of ${count(a.cap)} live`], [count(a.roles.reduce((n, r) => n + r.runs, 0)), "runs"], [cardPct(a.rates.success), "success"], [v == null ? "–" : money(v), "OpenRouter"]]) +
     (m === null ? notice("Could not load the models.", true) : "") + browse({ id: "roles", label: "Roles", search: "Search roles", groups });
 }

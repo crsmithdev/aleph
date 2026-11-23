@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { memory, use } from "../../lib/langfuse.ts";
-import { routes } from "./hooks.ts";
+import { byCause, routes } from "./hooks.ts";
 import { withEnv } from "../server.testkit.ts";
 
 // The Hooks page's routes on fixture transcripts, with the clock fixed so the 7-day window is known.
@@ -47,7 +47,13 @@ test("a terminal session's hold has its hook, event, kind, session kind and outc
     t: HOUR_AGO, sid: "s-term", project: "", hook: "verify gate", event: "Stop", kind: "unbacked hash", who: "interactive", out: "caught",
     why: "The final message cites commit abc123 and no run shows it.",
   });
-  expect(r.errors).toEqual([{ cause: "Moved hook file", fix: "Stub or stable entry", n: 1, sessions: 1, hooks: ["factory report"], events: ["SessionStart"], last: HOUR_AGO }]);
+  expect(r.errors).toEqual([{ cause: "Moved hook file", fix: "Stub or stable entry", n: 1, sessions: 1, pairs: [{ hook: "factory report", event: "SessionStart" }], last: HOUR_AGO }]);
+});
+
+test("an error cause lists the (hook, event) pairs that failed, not a set of hooks and a set of events", () => {
+  const f = (hook: string, event: string, t: string) => ({ t, sid: "s", project: "", hook, event, cause: "Other", fix: "" });
+  const [c] = byCause([f("obs", "Stop", "a"), f("obs", "Stop", "b"), f("vault", "SessionStart", "c")]);
+  expect(c.pairs).toEqual([{ hook: "obs", event: "Stop" }, { hook: "vault", event: "SessionStart" }]);
 });
 
 test("a headless worker session's hold counts under Workers, with no effect", async () => {
@@ -106,4 +112,17 @@ test("calls are the hooks' Langfuse counts and the verify gate's denials, and wi
     const { hooks, denials } = (await get("GET /api/hooks")).calls;
     expect([hooks.map((h: any) => [h.name, h.calls]), denials]).toEqual([[["verify-gate", 2]], { total: 1, recent: [{ at: HOUR_AGO, reason: "nothing was run" }] }]);
   } finally { use(null); }
+});
+
+test("a narrow window keeps the parses of a wider one, so the next wide scan reads no file again", async () => {
+  const file = join(base, "-home-u-repo", "s-keep.jsonl"), two = new Date(NOW.getTime() - 2 * 864e5);
+  /** The transcript with `lines`, last written two days ago: the hour window leaves it out. */
+  const write = (lines: object[]) => { transcript("-home-u-repo", "s-keep", lines); utimesSync(file, two, two); };
+  write([holdBy("keep gate", "Keep gate: x.", HOUR_AGO, terminal)]);
+  const keeps = async (q: string) => (await get("GET /api/hooks", {}, q)).holds.filter((h: any) => h.hook === "keep gate").length;
+  expect(await keeps("?window=month")).toBe(1);
+  expect(await keeps("?window=hour")).toBe(0);
+  // The file now holds no hold and keeps its mtime: only a read of it again would show that.
+  write([{ type: "user", timestamp: HOUR_AGO }]);
+  expect(await keeps("?window=month")).toBe(1);
 });

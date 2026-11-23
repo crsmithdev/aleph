@@ -365,6 +365,9 @@ test("the Notes view is a facts line, a Type filter on semantic and one list of 
   expect(words(find(h, ".lhead .h"))).toEqual(["Offers", "Offered", "Written"]);
   const every = withStore({ "browse.memory": { f: { type: "" } } }, () => draw({ results: rs }));
   expect(words(find(every, ".lhead h3"))).toEqual(["Semantic", "Procedural", "Episodic", "Working"]);
+  // MEMORY.md is a semantic row but not a note: the group counts notes, as the facts line does.
+  const withMd = draw({ results: [...rs, it({ source: "memory-md", key: "MEMORY.md", title: "MEMORY.md", scope: "global" })] });
+  expect(words(find(withMd, ".lhead .count"))).toEqual(["2"]);
   expect(find(every, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["note:N", "note:Never", "handoff:current.md"]);
   expect(words(find(every, ".lhead .h"))).toEqual(["Offers", "Offered", "Written", "Updated", "Age"]);
   // A note shows its offers, its last offer or never, and its written day; a default scope shows no chip.
