@@ -41,7 +41,7 @@ function entry(e: Entry, current?: boolean): string {
   }
   if (needs === "protected" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
-    lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
+    lines.push(`  aleph land ${r.name}   (lands it, with Held-by: user)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
   }
   for (const d of r.defaults ?? []) lines.push(`  DEFAULT: ${d}`);
   for (const c of r.checks ?? []) if (c.rerun) lines.push(`  ${c.name} passed on rerun`);

@@ -345,7 +345,7 @@ describe("the writers of the new shape", () => {
       issues.add(doc, "from deps", { source: "deps" }).id,
     ])!.value;
     const [a, b, c] = ids.map((id) => item(r, id));
-    expect(a.fm).toMatchObject({ source: "chris", areas: ["audio"], priority: "medium" });
+    expect(a.fm).toMatchObject({ source: "user", areas: ["audio"], priority: "medium" });
     expect(issues.status(a)).toBe("open");
     for (const i of [a, b, c]) for (const k of ["labels", "waiting_on", "id", "was"]) expect(k in i.fm).toBe(false);
     expect(b.fm).toMatchObject({ source: "worker", areas: ["ui"] });
@@ -407,16 +407,21 @@ describe("an issue's children", () => {
 });
 
 describe("a child's source", () => {
-  test("a child stores agent, or the parent's source when it is not chris; a child with none stored reads agent", () => {
+  test("a child stores agent, or the parent's source when it is not the user; a child with none stored reads agent", () => {
     const doc = issues.blank("r", "project.1");
-    const a = issues.add(doc, "from chris");
+    const a = issues.add(doc, "from user");
     const b = issues.add(doc, "from worker", { source: "worker" });
     expect(addPart(doc, a, { title: "p", spec: "x" }).fm.source).toBe("agent");
     expect(addPart(doc, b, { title: "p", spec: "x" }).fm.source).toBe("worker");
     const old = addPart(doc, a, { title: "old", spec: "x" });
     delete old.fm.source;
     expect(issues.sourceOf(old)).toBe("agent");
-    expect(issues.sourceOf(a)).toBe("chris");
+    expect(issues.sourceOf(a)).toBe("user");
+    a.fm.source = "chris";
+    expect(issues.sourceOf(a)).toBe("user");
+    expect(issues.lint(doc).filter((f) => f.problem.startsWith("source"))).toEqual([]);
+    a.fm.source = "bogus";
+    expect(issues.lint(doc).filter((f) => f.problem.startsWith("source"))).toHaveLength(1);
   });
 });
 

@@ -282,7 +282,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       : v.state === "waiting" ? [
         ...needsYouIssue(todo),
         { key: "Job", value: v.job },
-        ...(needsOf(asked) === "protected" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
+        ...(needsOf(asked) === "protected" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "user" }] : []),
       ] : [];
     if (trailers.length) job.trailers = trailers;
     return job;

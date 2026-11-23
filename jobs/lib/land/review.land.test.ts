@@ -47,7 +47,8 @@ describe("a factory run", () => {
     expect(state(run).needs).toBeUndefined();
     const l = await land("fheld");
     expect(state(l.json.run)).toMatchObject({ state: "landed", held: true });
-    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: user");
+    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).not.toContain("Held-by: Chris");
   });
 
   test("a held run that the reviewer passes does not pass by itself: it waits with its held-path Ask", async () => {

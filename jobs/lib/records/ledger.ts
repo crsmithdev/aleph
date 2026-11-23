@@ -123,8 +123,8 @@ export interface Run {
   stat?: string;
   /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
-  /** Who landed a held run: absent (a run from before this field) means Chris; `firefighter` is from before the director. */
-  lander?: "Chris" | "firefighter" | "director" | "timeout" | "rule";
+  /** Who landed a held run: absent (a run from before this field) means the user; `firefighter` is from before the director, `Chris` from before the neutral `user`. */
+  lander?: "user" | "Chris" | "firefighter" | "director" | "timeout" | "rule";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch when the job was made. */

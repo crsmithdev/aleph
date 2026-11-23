@@ -41,7 +41,7 @@ test("the legend of the Sources and the Live chart ends above the grid at 390 an
   const { sourceFrame } = await import("../issues.js");
   // @ts-ignore chart.js is plain JS, shared with the page
   const { option } = await import("./chart.js");
-  const filed = { ats: [Date.parse("2026-11-04T10:00:00Z")], counts: Object.fromEntries(["chris", "worker", "deps", "memory", "agent"].map((k) => [k, [1]])) };
+  const filed = { ats: [Date.parse("2026-11-04T10:00:00Z")], counts: Object.fromEntries(["user", "worker", "deps", "memory", "agent"].map((k) => [k, [1]])) };
   const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"];
   const live = {
     measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { name: "Role", keys: roles.map((n) => ({ key: n, name: n })) },

@@ -132,7 +132,7 @@ describe("state", () => {
     const s = state(now);
     const landed = jobProjector().toJob(allJobs().find((rs) => rs[0].run.name === "fac-7")!);
     expect(landed.trailers).toEqual([{ key: "Issue", value: "issue.1" }, { key: "Job", value: job }]);
-    expect(runAsks(s)[0].trailers).toEqual([{ key: "Issue", value: "issue.1" }, { key: "Job", value: K["20261027-000001-a"] }, { key: "Held-by", value: "Chris" }]);
+    expect(runAsks(s)[0].trailers).toEqual([{ key: "Issue", value: "issue.1" }, { key: "Job", value: K["20261027-000001-a"] }, { key: "Held-by", value: "user" }]);
   });
 
 });

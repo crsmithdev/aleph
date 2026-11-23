@@ -60,7 +60,7 @@ export function seed(text: string | null): void {
 
 /** Put item 4 back on origin/main with `fields` in its front matter, as an old writer would have left it. */
 export function breakItem(fields: string): void {
-  writeFileSync(join(fx.items, issueFile(4)), remoteItem(4).replace("source: chris", `source: chris\n${fields}`));
+  writeFileSync(join(fx.items, issueFile(4)), remoteItem(4).replace("source: user", `source: user\n${fields}`));
   sh(fx.items, "git", "add", "-A");
   sh(fx.items, "git", "commit", "-qm", "break");
   sh(fx.items, "git", "push", "-q", "origin", "main");

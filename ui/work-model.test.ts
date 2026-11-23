@@ -114,14 +114,14 @@ describe("the Issue page", () => {
     expect(d).toMatchObject({ title: "[Group] A new title", priority: "high", labels: ["ui", "bug"], frontmatter: { source: "worker" }, request: "New words." });
     expect(d.notes.map((n: any) => n.text).join("\n")).toContain("a page note");
     expect((await post("edit", { title: "t", priority: "high", source: "nobody", areas: "", description: "x" })).status).toBe(422);
-    await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
+    await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "user", areas: before.labels.join(","), description: before.request ?? before.body });
   }, 60_000);
 
   // Breaks if the edit route drops the picker's refs, clears them when the form sends none, or fails to clear an empty list.
   test("the page's edit sets refs from the picker, keeps them when it sends no refs, and an empty list clears them", async () => {
     const post = (body: unknown) => fetch(`http://127.0.0.1:${server.port}/api/issues/fac-1/edit`, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1", cookie: deviceCookie }, body: JSON.stringify(body) });
     const d = await getJson("/api/issues/fac-1");
-    const same = { title: d.title, priority: d.priority ?? "medium", source: d.frontmatter.source ?? "chris", areas: d.labels.join(","), description: d.request ?? "" };
+    const same = { title: d.title, priority: d.priority ?? "medium", source: d.frontmatter.source ?? "user", areas: d.labels.join(","), description: d.request ?? "" };
     expect((await post({ ...same, refs: ["issue.2"] })).status).toBe(200);
     expect((await getJson("/api/issues/fac-1")).refs.map((r: any) => r.key)).toEqual(["issue.2"]);
     expect((await post(same)).status).toBe(200);

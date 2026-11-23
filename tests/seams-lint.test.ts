@@ -148,7 +148,7 @@ test("no ui/views/*.js imports a sibling view, and no ui/views/lib/*.js imports 
 for (const [name, re] of Object.entries({
   closed: /\["done",\s*"dropped"/,
   priorities: /"low",\s*"medium",\s*"high",\s*"critical"|"critical",\s*"high",\s*"medium",\s*"low"/,
-  sources: /"chris",\s*"worker",\s*"deps",\s*"memory",\s*"agent"/,
+  sources: /"user",\s*"worker",\s*"deps",\s*"memory",\s*"agent"/,
 })) {
   test(`only lib/naming.ts writes out the ${name} list`, () => {
     expect(offenders(re, [], ["{jobs,ui,issues,hooks}/**"], "{ts,js}")).toEqual([]);

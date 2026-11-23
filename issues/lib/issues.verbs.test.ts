@@ -73,7 +73,7 @@ test("add allocates the next id and list shows it", async () => {
   expect(a.value!.result.added).toBe(4);
   const rows = list();
   expect(rows.map((r: any) => r.id)).toEqual([3, 4]);
-  expect(rows[1]).toMatchObject({ status: "open", priority: "medium", source: "chris", areas: [] });
+  expect(rows[1]).toMatchObject({ status: "open", priority: "medium", source: "user", areas: [] });
   expect(rows[1]).not.toHaveProperty("labels");
 });
 

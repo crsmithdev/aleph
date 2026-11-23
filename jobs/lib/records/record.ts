@@ -179,7 +179,7 @@ function logState(d: Database, x: RunRecord): void {
 }
 
 /** Who answers a run's Ask by starting the next job of its work, by a held land's lander or else the job's `by`: any other is a rule. */
-const ANSWERERS: Record<string, string> = { Chris: "human", human: "human", director: "director" };
+const ANSWERERS: Record<string, string> = { user: "human", Chris: "human", human: "human", director: "director" };
 
 /** An Ask on a run decides the issue's Ask: a later build, land or recheck of the same work takes it off. */
 const decides = (role: Run["role"]): boolean => ["build", "land", "recheck"].includes(role);

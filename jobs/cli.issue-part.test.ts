@@ -24,14 +24,14 @@ describe("aleph issue add --spec -", () => {
     const n = r.json.added as number;
     expect(commits()).toBe(before + 1);
     const issue = file(`fac-${n}`);
-    expect(issue).toContain("source: chris");
+    expect(issue).toContain("source: user");
     expect(issue).toContain(`# Spec\n\n${SPEC.trim()}`);
     expect(issue).not.toMatch(/^(labels|waiting_on|goals|status):/m);
     // An intake would run as a detached `aleph intake`: wait until none is alive, then look for its run.
     await dispatched();
     expect(intakeRuns()).toEqual([]);
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
-    expect(shown.json).toMatchObject({ source: "chris", areas: [] });
+    expect(shown.json).toMatchObject({ source: "user", areas: [] });
     expect(shown.json.spec).toContain("## Oracle");
     await dropIssue(n);
   });

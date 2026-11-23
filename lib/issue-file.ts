@@ -78,10 +78,10 @@ const text = (v: unknown): string => (typeof v === "string" ? v : "");
 /** The names of an item's media files. */
 export const mediaOf = (item: Issue): string[] => list(item.fm.media);
 
-/** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by chris) and chris for an issue. */
+/** Who raised the item: its `source`, else agent for a child (a child is made by the planner, never by the user) and user, and a stored `chris` reads as `user` for an issue. */
 export function sourceOf(item: Issue): Source {
   const s = text(item.fm.source);
-  return s !== "chris" && (SOURCES as readonly string[]).includes(s) ? (s as Source) : parentRef(item) === undefined ? "chris" : "agent";
+  return s !== "user" && (SOURCES as readonly string[]).includes(s) ? (s as Source) : parentRef(item) === undefined ? "user" : "agent";
 }
 /** The children of an issue, in number order: the issues with a `from` that names it. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => parentRef(i) === String(item.id));
@@ -179,7 +179,7 @@ const nextId = (doc: Doc): number => next("issue", Math.max(doc.floor ?? 0, ...d
 
 export type Source = (typeof SOURCES)[number];
 
-/** Add an issue: `source` (chris unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */
+/** Add an issue: `source` (user unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */
 /** Labels that say a source or an old state, never an area. */
 const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"];
 
@@ -209,7 +209,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const bad = kindProblem(kind) ?? titleProblem(title, { part: !!o.from });
   if (bad) throw new Error(bad);
   const given = o.labels ?? [];
-  const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("memory") ? "memory" : "chris");
+  const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("memory") ? "memory" : "user");
   const areas = o.areas ?? given.filter((l) => !(SOURCES as readonly string[]).includes(l) && !NOT_AREAS.includes(l));
   const item: Issue = {
     id: nextId(doc),
@@ -310,7 +310,7 @@ export function lint(doc: Doc): Finding[] {
     }
     if (item.fm.from !== undefined && !KEYS.test(String(item.fm.from))) findings.push({ id, problem: `from: ${item.fm.from} is not issue.<n>`, fixable: false });
     const source = item.fm.source;
-    if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id, problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
+    if (source !== undefined && source !== "chris" && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id, problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id, problem: `${key} is retired`, fixable: FIXABLE.includes(key) });
     const kind = item.fm.kind;
     if (kind === undefined || kind === "") findings.push({ id, problem: "kind is missing", fixable: true });

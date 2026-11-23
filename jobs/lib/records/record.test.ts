@@ -166,12 +166,15 @@ test("a run's Ask is answered by the next job of its work: a land's lander appro
   const held = { ...ASK, reason: "held-path" };
   const a = record.makeJob({ role: "build", name: "issue.9", target: "issue.9", state: "waiting", ask: held });
   record.makeJob({ role: "land", name: "issue.9", target: "issue.9", prev: a.id, held: true, lander: "Chris" });
+  const u = record.makeJob({ role: "build", name: "issue.12", target: "issue.12", state: "waiting", ask: held });
+  record.makeJob({ role: "land", name: "issue.12", target: "issue.12", prev: u.id, held: true, lander: "user" });
   const b = record.makeJob({ role: "build", name: "issue.10", target: "issue.10", state: "waiting", ask: held });
   record.makeJob({ role: "land", name: "issue.10", target: "issue.10", prev: b.id, held: true, lander: "director" });
   const c = record.makeJob({ role: "build", name: "issue.11", target: "issue.11", state: "waiting", ask: ASK });
   record.makeJob({ role: "recheck", name: "issue.11", target: "issue.11", prev: c.id, by: "human" });
   expect(readEvents().filter((e) => e.action === "answered").map(({ subject, object, detail }) => ({ subject, object, detail }))).toEqual([
     { subject: "human", object: "issue.9", detail: "held-path: approve" },
+    { subject: "human", object: "issue.12", detail: "held-path: approve" },
     { subject: "director", object: "issue.10", detail: "held-path: approve" },
     { subject: "human", object: "issue.11", detail: "question: continue" },
   ]);

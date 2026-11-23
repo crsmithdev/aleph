@@ -514,7 +514,7 @@ const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "clos
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
+  const areas = d.labels ?? [], priority = d.priority ?? "medium", source = d.source ?? (d.issue ? "agent" : "user");
   const tracker = fm.tracker === "true";
   const ref = d.ref, inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [shortText(d.issue.id), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];

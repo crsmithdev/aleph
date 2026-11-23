@@ -212,7 +212,7 @@ function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; fil
 }
 
 /** Whether closing or dropping this issue is Chris's: he filed it. */
-const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "chris";
+const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "user";
 
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
 

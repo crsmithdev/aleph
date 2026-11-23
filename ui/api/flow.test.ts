@@ -167,7 +167,7 @@ test("dropped: the issues closed as dropped in the window; a job's drop and an e
 test("figures: before the filer is named, a filed event counts by the issue's source, not its subject", () => {
   const store = join(base, "sources");
   writeRepos({ alpha: {} }, store);
-  for (const [n, source] of [[1, "worker"], [2, "chris"]] as const) {
+  for (const [n, source] of [[1, "worker"], [2, "user"]] as const) {
     mkdirSync(join(store, "issues", String(n)), { recursive: true });
     writeFileSync(join(store, "issues", String(n), "issue.md"), `---\nproject: project.1\nsource: ${source}\n---\n`);
   }
@@ -179,8 +179,8 @@ test("figures: before the filer is named, a filed event counts by the issue's so
   const restore = withEnv({ ALEPH_ITEMS: store });
   const file = (object: string, time: string) => conn().run("INSERT INTO events (time, subject, action, object) VALUES (?, 'rule', 'filed', ?)", [time, object]);
   file("issue.1", "2026-11-13T17:00:00Z"); // source: worker, before the filer is named
-  file("issue.2", "2026-11-13T17:10:00Z"); // source: chris, before it
-  file("issue.2", "2026-11-13T18:30:00Z"); // source: chris, after it: the subject decides
+  file("issue.2", "2026-11-13T17:10:00Z"); // source: user, before it
+  file("issue.2", "2026-11-13T18:30:00Z"); // source: user, after it: the subject decides
   try {
     expect(figures(speed("day", new Date("2026-11-13T19:00:00Z")))).toMatchObject({ followups: 2, filed: 3 });
   } finally {

@@ -342,7 +342,7 @@ ${PART_RULES}
 export function addParts(file: File, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
   const from = issueKey(issue.id);
-  const source = sourceOf(issue) === "chris" ? "agent" : sourceOf(issue);
+  const source = sourceOf(issue) === "user" ? "agent" : sourceOf(issue);
   // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
   const kind = issues.kindOf(issue);
   for (const c of parts) {

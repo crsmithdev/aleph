@@ -308,7 +308,7 @@ export function screenCandidates(draft: Note, notes: Note[]): Note[] {
 /** The draft's text with `written_by` and `session` added to its frontmatter where it has none. */
 export function stampProvenance(draft: Note, sessionId: string | undefined): string {
   const add: string[] = [];
-  if (draft.fm.written_by === undefined) add.push(`written_by: ${sessionId ? "claude" : "chris"}`);
+  if (draft.fm.written_by === undefined) add.push(`written_by: ${sessionId ? "claude" : "user"}`);
   if (sessionId && draft.fm.session === undefined) add.push(`session: ${sessionId}`);
   if (!add.length) return draft.text;
   return draft.text.replace(/^(---\r?\n[\s\S]*?\r?\n)(---)/, (_, head, close) => `${head}${add.join("\n")}\n${close}`);

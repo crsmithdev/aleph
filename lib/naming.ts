@@ -276,7 +276,7 @@ export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 /** The rank of priority `p` in PRIORITIES; none, or an unknown one, ranks as medium. */
 export const priorityRank = (p: unknown): number => { const i = (PRIORITIES as readonly unknown[]).indexOf(p); return i < 0 ? PRIORITIES.indexOf("medium") : i; };
 /** Who can raise an issue. */
-export const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
+export const SOURCES = ["user", "worker", "deps", "memory", "agent"] as const;
 /** The memory types aleph stores, in the Memory page's order: what each holds. */
 export const MEMORY_TYPES = [
   { id: "semantic", name: "Semantic", holds: "notes, MEMORY.md" },

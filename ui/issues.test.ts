@@ -150,6 +150,13 @@ describe("GET /api/issues", () => {
     expect(listRow(row).main).not.toContain("kind:");
   });
 
+  test("the issue page shows a stored source chris as the user, in its chip and its Source select", async () => {
+    const d = await getJson("/api/issues/fac-2");
+    const h = v.renderIssue({ ...d, source: "user", frontmatter: { ...d.frontmatter, source: "chris" } });
+    expect(h).toContain("source: user");
+    expect(h).not.toContain("chris");
+  });
+
   test("the issue page's head is pageHead: the title as editable() writes it and the Edit button", async () => {
     const d = await getJson("/api/issues/fac-2");
     const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
