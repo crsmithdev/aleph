@@ -9,16 +9,18 @@ import { createUpdater, DROP_MS, KEEP_MS, keyOf } from "./updater.ts";
 function fake() {
   const world: Record<string, { body: unknown; sources: string[]; status?: number; fails?: string }> = {};
   const log: string[] = [];
+  const asked: Record<string, () => boolean> = {};
   let gate: Promise<void> | null = null;
   let clock = 1_000_000;
-  const build = async (key: string, gens: Record<string, number>) => {
+  const build = async (key: string, gens: Record<string, number>, ask: () => boolean) => {
     log.push(key);
+    asked[key] = ask;
     if (gate) await gate;
     const w = world[key];
     if (w.fails) throw Object.assign(new Error(w.fails), { sources: w.sources });
     return { answer: { status: w.status ?? 200, body: w.body } as Answer, sources: w.sources, gens };
   };
-  return { world, log, build, now: () => clock, tick: (ms: number) => { clock += ms; }, hold: () => { let go = () => {}; gate = new Promise((r) => { go = r; }); return () => { gate = null; go(); }; } };
+  return { world, log, asked, build, now: () => clock, tick: (ms: number) => { clock += ms; }, hold: () => { let go = () => {}; gate = new Promise((r) => { go = r; }); return () => { gate = null; go(); }; } };
 }
 
 let dir: string;
@@ -198,6 +200,29 @@ test("a Skills rebuild served over its last answer signals when it ends, even wh
   expect(next.error).toBe("Langfuse down");
 });
 
+test("a build goes before the rebuilds while a request waits for it", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/a"] = { body: 1, sources: ["records"] };
+  f.world["/b"] = { body: 1, sources: ["records"] };
+  let release = f.hold();
+  const cold = u.get("/a");
+  expect(f.asked["/a"]()).toBe(true);
+  release();
+  await cold;
+  expect(f.asked["/a"]()).toBe(false);
+  release = f.hold();
+  u.changed("records");
+  const flushing = u.flush();
+  expect(f.asked["/a"]()).toBe(false); // a rebuild nobody waits for
+  expect(f.asked["/b"]).toBeUndefined();
+  u.changed("action");
+  const acted = u.get("/a"); // after an action the request waits for the rebuild already running
+  expect(f.asked["/a"]()).toBe(true);
+  release();
+  await Promise.all([flushing, acted]);
+  expect(f.asked["/a"]()).toBe(false);
+});
+
 test("concurrent requests for a cold key share one build", async () => {
   const f = fake(), u = createUpdater(f);
   f.world["/a"] = { body: 1, sources: [] };
@@ -365,7 +390,7 @@ test("a key whose build ends first is signalled first: a fast key does not wait 
   const f = fake();
   let go = () => {};
   const slow = new Promise<void>((r) => { go = r; });
-  const u = createUpdater({ ...f, build: async (key: string, gens: Record<string, number>) => { if (key === "/slow" && f.world["/slow"].body === 2) await slow; return f.build(key, gens); } });
+  const u = createUpdater({ ...f, build: async (key: string, gens: Record<string, number>, ask: () => boolean) => { if (key === "/slow" && f.world["/slow"].body === 2) await slow; return f.build(key, gens, ask); } });
   f.world["/fast"] = { body: 1, sources: ["usage"] };
   f.world["/slow"] = { body: 1, sources: ["usage"] };
   await u.get("/fast"); await u.get("/slow");

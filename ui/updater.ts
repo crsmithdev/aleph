@@ -65,10 +65,10 @@ export function keyOf(url: URL): string {
 interface Got { answer: Answer; error?: string; since?: string; stale?: boolean }
 type Mark = { error: string; since: string };
 
-interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; /** An action since the last build began: the page that acted must read a build, not the old answer (not for Langfuse keys: a build takes minutes). */ hard?: boolean; building?: Promise<void> }
+interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; /** How many requests wait for the key's build: theirs goes before the rebuilds. */ waits: number; /** An action since the last build began: the page that acted must read a build, not the old answer (not for Langfuse keys: a build takes minutes). */ hard?: boolean; building?: Promise<void> }
 
 interface Deps {
-  build: (key: string, gens: Record<string, number>) => Promise<Built>;
+  build: (key: string, gens: Record<string, number>, asked: () => boolean) => Promise<Built>;
   now?: () => number;
   /** Where the kept keys are saved; null: nowhere. */
   file?: () => string | null;
@@ -138,7 +138,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
         s.again = false;
         const marks = s.marked;
         try {
-          const { answer, sources } = await build(key, { ...gens });
+          const { answer, sources } = await build(key, { ...gens }, () => s.waits > 0);
           s.sources = new Set([...sources, "action"]);
           if (answer.status >= 500) fail(s, errorOf(answer));
           else {
@@ -189,7 +189,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
     /** The answer of `key`: the kept one, or a build's when the key is new, failed or dirty. */
     async get(key: string): Promise<Got> {
       let s = slots.get(key);
-      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set(), marked: 0, built: 0 })); save(); }
+      if (!s) { slots.set(key, (s = { asked: now(), sources: new Set(), marked: 0, built: 0, waits: 0 })); save(); }
       s.asked = now();
       load(key, s);
       if (s.answer && dirty(s) && !s.hard) {
@@ -198,7 +198,10 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
           // The note goes when the rebuild ends, so `change` goes out then even when the answer and mark look the same.
           void (s.building ?? run(key, s)).then(() => { if (slots.has(key)) signal([key]); });
         }
-      } else if (!s.answer || dirty(s)) await (s.building ?? run(key, s));
+      } else if (!s.answer || dirty(s)) {
+        s.waits++;
+        await (s.building ?? run(key, s)).finally(() => s.waits--);
+      }
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
       const m = markOf(s);
       return m ? { answer: s.answer, ...m, ...(m.error === s.note && !s.error ? { stale: true } : {}) } : { answer: s.answer };
@@ -259,7 +262,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       const saved = readJsonOr<Record<string, number>>(f, {});
       for (const [k, asked] of Object.entries(saved)) {
         if (now() - asked >= DROP_MS || slots.has(k)) continue;
-        const s: Slot = { asked, sources: new Set(), marked: 0, built: 0 };
+        const s: Slot = { asked, sources: new Set(), marked: 0, built: 0, waits: 0 };
         slots.set(k, s);
         load(k, s);
         void run(k, s);
