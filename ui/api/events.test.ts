@@ -9,10 +9,8 @@ import { seed, reseed, type Seed } from "../../jobs/job.testkit.ts";
 import { newItems, writeRepos } from "../../tests/projects.testkit.ts";
 import { writeList } from "../../lib/store.ts";
 import { add } from "../../lib/issue-file.ts";
-import { git } from "../../lib/git.ts";
-import { logEvent } from "../../lib/layout.ts";
 
-let base: string, runs: string, factory: string, ref: string, main: string;
+let base: string, runs: string, factory: string, ref: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void, pingMs: number;
 
 beforeAll(async () => {
@@ -29,7 +27,6 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_DB: join(base, "aleph.db"), ALEPH_ITEMS: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   // Issue 1 is p's and issue 2 is q's.
   for (const repo of ["p", "q"]) writeList({ key: repo }, "seed", (doc) => { add(doc, `an issue of ${repo}`); return true; }, true);
-  main = git(join(base, "issues"), "rev-parse", "origin/main").out;
   ({ server, stop } = await withServer({ warm: false }));
   // A change names only the keys a page asked for: Status's key is kept from here on.
   expect((await get("/api/factory")).headers.get("x-aleph-keys")).toBe("/api/factory");
@@ -83,10 +80,11 @@ test("a run's write to its job row sends a change naming the kept key, and the r
 });
 
 // AC1: the 3 s is the test's time limit, from the stream's first ping to the change.
-test("an event written by another process sends its change within 3 s", async () => {
+test("an event row written by another process sends a change and no ev event, within 3 s", async () => {
   const code = `import { logEvent } from "../lib/layout.ts"; logEvent({ subject: "human", action: "changed", object: "settings", detail: "x" });`;
   const text = await changeAfter(() => { Bun.spawn(["bun", "-e", code], { cwd: join(import.meta.dir, ".."), env: process.env }); });
-  expect(text).toMatch(/event: ev\ndata: .*"key":"issue:settings".*\n\nevent: change\ndata: \{"keys":\["\/api\/factory"\]\}/s);
+  expect(text).toMatch(/event: change\ndata: \{"keys":\["\/api\/factory"\]\}/);
+  expect(text).not.toContain("event: ev");
 }, 3_000);
 
 /** Ten pings in a row end the text: a second with no change, longer than a change takes to settle. */
@@ -106,46 +104,6 @@ test("a change in the factory folder or to the store's origin/main sends a chang
   expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""))).not.toBeNull();
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).not.toBeNull();
 });
-
-/** The pages the `ev` events of `text` link: each row's leading ID. */
-const linked = (text: string) => [...text.matchAll(/event: ev\ndata: (.*)\n/g)].flatMap((m) => JSON.parse(m[1]).rows.flatMap((r: any) => [...r.id, ...r.lines.flatMap((l: any) => l.text)].flatMap((p: any) => (p.to ? [p.to] : []))));
-
-/**
- * Runs `act` and returns the text once it holds the first `ev` that links `to()` and a `change`, or null when the
- * stream ends first. A `change` from another source, or from an earlier write in `act`, must not end the read before
- * the `ev` that links the row arrives. `to` is read after `act` runs, which names the row it seeded.
- */
-const evAndChange = (act: () => void, to: () => string, query = "") => streamUntil(act, (text) => linked(text).includes(to()) && CHANGE.test(text), query);
-
-test("a run that starts sends the Herald's rows as an ev, before the change, with the new event's row among them", async () => {
-  let id = "";
-  const text = (await changeAfter(() => { id = seed(run("p", 3)).id; }))!;
-  const ev = /event: ev\ndata: (.*)\n/.exec(text);
-  expect(ev).not.toBeNull();
-  const { seq, rows } = JSON.parse(ev![1]);
-  expect(seq).toBeGreaterThan(0);
-  expect(rows.find((r: any) => r.id[0]?.to === "#/issues/p/3")).toMatchObject({ by: "gate", word: "started" });
-  expect(JSON.stringify(rows)).toContain(`#/jobs/${id}`);
-  expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
-});
-
-test("a stream with a project sends only the ev events of that project, and a change to all", async () => {
-  const ids: Record<string, string> = {};
-  const text = (await evAndChange(() => { for (const repo of ["q", "p-x", "p"]) ids[repo] = seed(run(repo, 9)).id; }, () => `#/jobs/${ids.p}`, "?project=p"))!;
-  const to = linked(text);
-  expect(to).toContain(`#/jobs/${ids.p}`);
-  expect(to).not.toContain(`#/jobs/${ids.q}`);
-  expect(to).not.toContain(`#/jobs/${ids["p-x"]}`);
-}, 10_000);
-
-test("a stream with a project sends an ev with the row of an event on an issue of that project, and none for another's", async () => {
-  // The test above leaves a bad ref in the items repo.
-  writeFileSync(join(ref, "main"), `${main}\n`);
-  // Logged here, not by a process the test starts: the ref's change above comes 500 ms on, and under load a new bun can start later.
-  const text = (await evAndChange(() => { for (const n of [1, 2]) logEvent({ subject: "human", action: "changed", object: `issue.${n}` }); }, () => "#/issues/p/1", "?project=p"))!;
-  expect(linked(text)).toContain("#/issues/p/1");
-  expect(linked(text)).not.toContain("#/issues/q/2");
-}, 10_000);
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.
 test("a temporary factory file and a log count as no change", () => {

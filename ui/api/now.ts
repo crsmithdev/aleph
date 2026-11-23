@@ -1,27 +1,25 @@
 /** `GET /api/factory`: the Status view's data, narrowed to one project by `?project=<key>`. */
 import type { Routes } from "../server.ts";
 import { inProject, known, repoIn, scopeOf } from "./scope.ts";
-import { mineOf, state, type State } from "../state.ts";
-import { heraldRows } from "../herald.ts";
+import { state, type State } from "../state.ts";
 import { once } from "../../lib/sources.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
 
-/** The state with only `project`'s jobs, issues, asks and Herald events (none of a factory-wide job); the factory and ticks stay whole. */
+/** The state with only `project`'s jobs, issues and asks (none of a factory-wide job); the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
-  const herald = s.herald && { ...s.herald, events: mineOf(s.herald.events, project) };
-  return { ...s, errored: mine(s.errored), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
+  return { ...s, errored: mine(s.errored), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)) };
 }
 
-/** The `/api/factory` body for one project (null for all), with its asks and the Herald as rows. */
+/** The `/api/factory` body for one project (null for all), with its asks. */
 async function build(project: string | null) {
-  const { doneStamps, herald, ...s } = forProject(state(), project);
+  const { doneStamps, ...s } = forProject(state(), project);
   const fit = await currentFit();
   annotate([...s.errored, ...s.running], fit);
-  return { ...s, herald: herald && { seq: herald.seq, rows: heraldRows(herald.events, herald) }, usage: await summaryOff(fit) };
+  return { ...s, usage: await summaryOff(fit) };
 }
 
 /** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */

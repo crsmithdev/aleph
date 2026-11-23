@@ -18,7 +18,7 @@ import { askCard } from "./views/lib/ask-cards.js";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 import { logEvent, readEvents } from "../lib/layout.ts";
-import { getJson, putJson } from "../lib/db.ts";
+import { putJson } from "../lib/db.ts";
 import { factsOf, wordOf } from "../lib/naming.ts";
 import { verdict } from "../lib/status-words.ts";
 
@@ -292,25 +292,6 @@ describe("a passed job whose issue is parked", () => {
   });
 });
 
-describe("the Herald's attempts", () => {
-  test("an intake, a build, a review and a land job linked by prev are one attempt: the intake's job", () => {
-    const ids = (["intake", "build", "review", "land"] as const).map((kind, i) => run(`20261027-00019${i}-a`, { job: "fac-90", kind, name: "fac-90", on: "fac-90", state: "done" }));
-    const other = run("20261027-000199-a", { job: "fac-91", name: "fac-91", on: "fac-91", state: "done" });
-    for (const id of [...ids, other]) logEvent({ subject: "gate", action: "running", object: id });
-    const h = state(now).herald!;
-    expect(ids.map((id) => h.attempts[id])).toEqual([ids[0], ids[0], ids[0], ids[0]]);
-    expect(h.attempts[other]).toBe(other);
-  });
-
-  test("a Herald event on an issue key titles it from its project's list; an old full ID still does", () => {
-    logEvent({ subject: "gate", action: "done", object: "issue.1" });
-    logEvent({ subject: "gate", action: "done", object: "fac-2" });
-    const h = state(now).herald!;
-    expect(h.events.find((e) => e.object === "issue.1")?.project).toBe("fac");
-    expect(h.titles).toMatchObject({ "issue.1": "needs item", "fac-2": "waiting issue" });
-  });
-});
-
 describe("a returned run with its rework queued", () => {
   test("is running, not errored, so the Herald does not call it unhealthy; one with no next stays errored", () => {
     run("20261027-000080-a", { job: "fac-80", name: "fac-80", state: "returned", failed: "review", next: "worker", on: "fac-80" });
@@ -384,10 +365,9 @@ describe("a live job on a parked issue", () => {
   });
 });
 
-describe("the Herald's state", () => {
-  test("has no status history, and state() writes no herald.status row", () => {
-    expect(state(now).herald).not.toHaveProperty("history");
-    expect(getJson("state", "herald.status", null)).toBeNull();
+describe("the state", () => {
+  test("has no herald property", () => {
+    expect(state(now)).not.toHaveProperty("herald");
   });
 });
 

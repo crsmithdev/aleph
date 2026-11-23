@@ -3,20 +3,19 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { eventsOf, logEvent, readEvents } from "../lib/layout.ts";
+import { eventsOf, logEvent } from "../lib/layout.ts";
 import { detailOf, type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot } from "../jobs/lib/gates/factory-status.ts";
 import { decider } from "../jobs/lib/gates/decider.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { pendingWaits, waitsOf, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { isWaiting, issueKeyOf, loadRegistry, onOf, runOfJob, type CheckResult, type Entry, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
+import { isWaiting, issueKeyOf, loadRegistry, onOf, type CheckResult, type Repo, allJobs, isOpen } from "../jobs/lib/records/ledger.ts";
 import { stateOf, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { allRuns, counting, isError } from "../jobs/lib/records/record.ts";
+import { counting, isError } from "../jobs/lib/records/record.ts";
 import { type Cause } from "../jobs/lib/records/outcome.ts";
 import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
-import { eventIn, factoryWide, withProjects } from "./api/scope.ts";
-import { heraldRows, type Context as HeraldContext } from "./herald.ts";
+import { eventIn, factoryWide } from "./api/scope.ts";
 import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
 import { created, parentRef, parseIssueRef, status, updated, type Issue, afterOf, byPriority, partsOf, priorityOf, isTracker } from "../lib/issue-file.ts";
@@ -47,39 +46,6 @@ const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.de
 /** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
 interface Part { n: number; m: number; parent: string; href: string }
 
-/** The attempt of each job an issue event names, by its job ID: the first job of its `prev` chain. */
-function heraldAttempts(events: EventRow[], runs: Entry[]): Record<string, string> {
-  const attempts: Record<string, string> = {};
-  for (const e of events) {
-    const run = parseKey(e.object)?.kind === "job" && !(e.object in attempts) ? runOfJob(e.object, runs) : undefined;
-    if (run) attempts[e.object] = run.run.job;
-  }
-  return attempts;
-}
-
-/** The title of each run an issue event names, by its job ID: the run's kind, or "merge" for a merge-only run. */
-export function heraldRuns(events: EventRow[], runs: Entry[]): Record<string, string> {
-  const titles: Record<string, string> = {};
-  for (const e of events) {
-    const run = parseKey(e.object)?.kind === "job" && !(e.object in titles) ? runOfJob(e.object, runs) : undefined;
-    if (run) titles[e.object] = run.run.merge ? "merge" : run.run.role;
-  }
-  return titles;
-}
-
-/** The count of issues each housekeeper run reviewed, by its job ID: its job record's tally, for each run a done event names. */
-export function heraldReviewed(events: EventRow[], runs: Entry[]): Record<string, number> {
-  const reviewed: Record<string, number> = {};
-  for (const e of events) {
-    const n = e.action === "done" && parseKey(e.object)?.kind === "job" ? runOfJob(e.object, runs)?.run.tally?.reviewed : undefined;
-    if (n !== undefined) reviewed[e.object] = n;
-  }
-  return reviewed;
-}
-
-/** The newest HERALD_EVENTS events of the last day at `now` (ms), oldest first, each with its project. */
-export const heraldEvents = (now: number): EventRow[] => withProjects(readEvents(now - 86_400_000).slice(-HERALD_EVENTS));
-
 /** The title of each issue `events` target, by its target: a project's list gives it. */
 export function titlesOf(events: EventRow[], lists: ReturnType<typeof reader>): Record<string, string> {
   const titles: Record<string, string> = {};
@@ -89,11 +55,6 @@ export function titlesOf(events: EventRow[], lists: ReturnType<typeof reader>): 
     if (item) titles[issue] = item.title;
   }
   return titles;
-}
-
-/** What the Herald's rows name besides the events: the title of each issue they target, and the run, attempt and reviewed maps. */
-export function heraldContext(events: EventRow[], runs: Entry[], lists: ReturnType<typeof reader>): HeraldContext {
-  return { titles: titlesOf(events, lists), runs: heraldRuns(events, runs), attempts: heraldAttempts(events, runs), reviewed: heraldReviewed(events, runs) };
 }
 
 export interface Job {
@@ -158,9 +119,6 @@ interface RunningIssue { id: string; title: string; href: string; stage: string;
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
 interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
 
-/** The most events the Herald gets with the state; the stream adds the ones after. */
-const HERALD_EVENTS = 50;
-
 export interface State {
   now: string;
   factory: {
@@ -192,8 +150,6 @@ export interface State {
   done: DoneItem[];
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
-  /** The newest HERALD_EVENTS events of the event log in the last day, oldest first. */
-  herald?: HeraldContext & { /** The `seq` of the newest event: a later push of rows replaces these. */ seq: number; events: EventRow[] };
 }
 
 const DONE = 10;
@@ -487,11 +443,9 @@ export function state(now = new Date()): State {
   const jobs = allJobs();
   const { projector, errored, running, slots, picks, gated, factory, att, timers, backend } = statusOf(now, jobs);
   const { done, doneStamps } = doneOf(slots, picks, projector);
-  const events = heraldEvents(now.getTime());
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, backend, monitor: monitorPanel() },
-    herald: { seq: events.at(-1)?.seq ?? 0, events, ...heraldContext(events, jobs.flat(), projector.lists) },
     asks: att.items, done, doneStamps,
     errored, running, runningIssues: runningIssuesOf(slots, picks),
     queued: queuedOf(slots, picks, projector, (repo, item) => projector.decide(repo, item, { jobs, now: now.getTime(), gates: gated })),
@@ -500,9 +454,3 @@ export function state(now = new Date()): State {
 
 /** `events` narrowed to `project`'s: none of a factory-wide job. */
 export const mineOf = (events: EventRow[], project: string | null) => (project ? events.filter((e) => !factoryWide(e) && eventIn(e.object, project, e.project)) : events);
-
-/** The Herald's rows for one project (null for all) as of now, with the `seq` of the newest event: what the `ev` stream sends when an event is added. */
-export function heraldNow(project: string | null) {
-  const events = heraldEvents(Date.now()), mine = mineOf(events, project);
-  return { seq: events.at(-1)?.seq ?? 0, rows: heraldRows(mine, heraldContext(mine, allRuns(), reader())) };
-}

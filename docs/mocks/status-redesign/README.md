@@ -152,8 +152,8 @@ Each needs a place in `design.md` before a build.
   from 17:45 UTC. The director escalated a3397 at 18:10:11 UTC and the user answered at 18:11:55. It escalated a3359 at
   06:00:23 UTC. Not all three waited at 11:05.
 - The busy lights are set by hand, except CI. The busy tick time is the minute before the state.
-- The busy feed groups the events by issue with a rule simpler than `heraldRows()` of `ui/herald.ts`. The quiet feed is
-  the live Herald's rows.
+- The busy feed groups the events by issue with a rule simpler than the Herald's rows. The quiet feed is the live
+  Herald's rows. Its row builder is removed since.
 - The events of four issues that `/api/issues` does not list are left out. No job is in error in either state.
 
 ## Open

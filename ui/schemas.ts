@@ -20,7 +20,6 @@ const hookError = { cause: "string", fix: "string", n: "number", sessions: "numb
 export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/factory": {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
-    herald: { seq: "number", rows: [{ key: "string", at: "time", by: "string", word: "string", id: "array", text: "array", more: "number", lines: "array" }] },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     errored: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],

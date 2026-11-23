@@ -14,7 +14,7 @@
  *   A Sessions or Skills key's last good answer is also saved to `<aleph>/ui/answers/`; with none in memory (a restart, the drop) a request gets the saved one the same way.
  * - A failed build keeps the last answer and marks the key `{ error, since }`; `change` goes out when a key enters
  *   and when it leaves that state. A failed fetch of the work store marks every key that reads the store.
- * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row sends the `ev` rows and changes the source `events`.
+ * - `aleph.db` is polled for `PRAGMA data_version` every 100 ms; a new event row changes the source `events`.
  *   A write that logs no event (a job row, usage, tick) changes the source `records`, which Status reads.
  * - The stopped-tick verdict reads the clock, which no source changes: every 30 s, when a Status key's verdict flipped
  *   since its build, each Status key and the sidebar's /api/status are built again, kept or not: a dead tick writes
@@ -316,8 +316,6 @@ export async function respond(url: URL, stream?: string | null): Promise<Respons
 }
 
 let stops: (() => void)[] = [];
-/** Readers of the events a write added, for the `ev` stream (ui/api/events.ts). */
-export const eventTails: (() => void)[] = [];
 
 function follow(dir: string, counts: (file: string) => boolean, source: string, recursive = false): void {
   if (!existsSync(dir)) return;
@@ -330,7 +328,7 @@ function follow(dir: string, counts: (file: string) => boolean, source: string, 
 
 /**
  * `data_version` moves when another connection commits: the CLI, a job, or this process's own writes, which go through the
- * other connection of lib/db.ts. When it moves and an event row is new, the `ev` stream sends the rows and the source `events` changes;
+ * other connection of lib/db.ts. When it moves and an event row is new, the source `events` changes;
  * with no new event row, the source `records` changes.
  */
 function followEvents(): void {
@@ -345,7 +343,6 @@ function followEvents(): void {
     const n = (newest.get() as { n: number }).n;
     if (n === last) return updater.changed("records");
     last = n;
-    for (const tail of eventTails) tail();
     updater.changed("events");
   }, DATA_VERSION_MS);
   t.unref?.();
