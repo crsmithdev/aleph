@@ -1,6 +1,6 @@
 // The live Claude sessions of the Herdr terminals as data for the Deck mod's queue: what each one waits on, from its
 // `hc` status and the tail of its transcript, and the issues and shelf items the whole transcript filed.
-// `--json` prints one array, one record per `claude-code` terminal.
+// `--json` prints one array, one record per `claude-code` terminal, sub-agents included: `parent` is the address of the terminal that ran `hc run`.
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -14,13 +14,15 @@ export type Kind = "dialog" | "working" | "choice" | "asks" | "plain";
 export type Issue = { id: string; title: string; stage: string; url: string };
 export type Shelved = { id: string; title: string; pending: number; url: string };
 export type Found = { issues: Issue[]; shelf: Shelved[] };
-export type Session = { address: string; session: string | null; at: number | null; kind: Kind; text: string; opts: Opt[] } & Found;
+export type Session = { address: string; parent: string | null; session: string | null; at: number | null; kind: Kind; text: string; opts: Opt[] } & Found;
 type Block = { type: string; text?: string; content?: string | Block[]; name?: string; id?: string; tool_use_id?: string; input?: any };
 type Line = { type: string; timestamp?: string; message?: { content: string | Block[] } };
 
 const TAIL = 256 * 1024; // bytes of a transcript to read
 const TEXT_MAX = 200; // chars of a record's text
 const ESC: Opt = { label: "esc", key: "esc" };
+// A last line that tells the person to act: "say go", or a "Next action:" with one of these verbs after it. "Next action: none." does not match.
+const CLOSER = /\bsay go\b|\bnext action:.*\b(?:say|tell me|pick|name|answer|reply|confirm)\b/i;
 const SHELF = "http://127.0.0.1:3020/shelf/items"; // the shelf server's item list
 const SHELF_ID = "\\d{8}-\\d{6}-[a-z0-9]{4}";
 
@@ -66,7 +68,7 @@ export function pending(lines: Line[]): { text: string; opts: Opt[] } | null {
   return q ? { text: bare(q.question), opts: (q.options ?? []).map((o: any, i: number) => ({ label: o.label, key: String(i + 1) })) } : null;
 }
 
-/** How an answer ends, by its last paragraph: a question, a numbered list or neither. */
+/** How an answer ends, by its last paragraph: a question, a numbered list, a closer that tells the person to act, or none. */
 export function sort(text: string): { kind: Kind; text: string; opts: Opt[] } {
   const rows = text.split("\n").map((l) => l.trimEnd());
   const end = rows.findLastIndex((l) => l.trim()), from = rows.slice(0, end + 1).findLastIndex((l) => !l.trim()) + 1;
@@ -78,6 +80,7 @@ export function sort(text: string): { kind: Kind; text: string; opts: Opt[] } {
     const i = para.indexOf(nums[0]);
     return { kind: "choice", text: bare(i > 0 ? para[i - 1] : nums[0]), opts: nums.map((l) => ({ label: l.match(/\d+/)![0], send: l.match(/\d+/)![0] })) };
   }
+  if (CLOSER.test(rows[end] ?? "")) return { kind: "asks", text: bare(rows[end]), opts: /\bgo\b/i.test(rows[end]) ? [{ label: "go", send: "go" }] : [] };
   return { kind: "plain", text: bare(rows[end] ?? ""), opts: [] };
 }
 
@@ -85,9 +88,9 @@ export function sort(text: string): { kind: Kind; text: string; opts: Opt[] } {
 export function record(address: string, got: any, lines: Line[], found: Found = { issues: [], shelf: [] }): Session {
   const { state, msg = "" } = got.status ?? {}, session = got.labels?.["claude-resume.session"] ?? null;
   const at = lines.findLast((l) => l.type === "assistant")?.timestamp;
-  const base = { address, session, at: at ? Date.parse(at) : null, ...found };
+  const base = { address, parent: got.parent ?? null, session, at: at ? Date.parse(at) : null, ...found };
   if (state === "blocked") {
-    const ask = pending(lines) ?? { text: bare(msg), opts: [{ label: "yes", key: "1" }] };
+    const ask = pending(lines) ?? { text: bare(msg), opts: [] };
     return { ...base, kind: "dialog", ...ask, opts: [...ask.opts, ESC] };
   }
   if (state === "working") return { ...base, kind: "working", text: working(lines) || bare(msg), opts: [] };

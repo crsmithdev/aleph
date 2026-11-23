@@ -33,6 +33,20 @@ test("a numbered list followed by a closing sentence is plain", () => {
   expect(sort("1. keep\n2. drop\n\nTell me when it is done.")).toEqual({ kind: "plain", text: "Tell me when it is done.", opts: [] });
 });
 
+test("a last line that says go, or follows Next action: with a verb for the person, asks", () => {
+  expect(sort("Done.\n\nNext action: say go for step 6.")).toEqual({ kind: "asks", text: "Next action: say go for step 6.", opts: [{ label: "go", send: "go" }] });
+  expect(sort("Done.\n\nSay go when ready.").opts).toEqual([{ label: "go", send: "go" }]);
+  expect(sort("Done.\n\n**Next action:** tell me what you saw.")).toMatchObject({ kind: "asks", opts: [] });
+  expect(sort("Done.\n\nNext action: pick 1, 2 or 3.")).toMatchObject({ kind: "asks", opts: [] });
+});
+
+test("a Next action: line that names no act for the person, and a plain summary, stay plain", () => {
+  expect(sort("Done.\n\nNext action: none.").kind).toBe("plain");
+  expect(sort("Done.\n\nNext action: I will run the suite.").kind).toBe("plain");
+  expect(sort("The branch is merged and the tests pass.").kind).toBe("plain");
+  expect(sort("Say go when ready.\n\nThe branch is merged.").kind).toBe("plain");
+});
+
 test("a ? inside code earlier in the answer does not count", () => {
   expect(sort("```ts\nconst a = b ?\n  c : d;\nx?\n```\n\nThe branch is merged.").kind).toBe("plain");
 });
@@ -50,9 +64,9 @@ test("an AskUserQuestion with a tool_result after it is not pending", () => {
   expect(pending([ask("a"), result("a")] as any)).toBeNull();
 });
 
-test("a blocked terminal ends its options with esc, and falls back to its status message", () => {
+test("a blocked terminal ends its options with esc, and, with no question options, falls back to its status message and esc alone", () => {
   const got = { status: { state: "blocked", msg: "Run rm?" }, labels: {} };
-  expect(record("t1", got, [])).toMatchObject({ kind: "dialog", text: "Run rm?", opts: [{ label: "yes", key: "1" }, { label: "esc", key: "esc" }] });
+  expect(record("t1", got, [])).toMatchObject({ kind: "dialog", text: "Run rm?", opts: [{ label: "esc", key: "esc" }] });
   expect(record("t1", got, [ask("a")] as any).opts.map((o) => o.key)).toEqual(["1", "2", "esc"]);
 });
 
@@ -60,6 +74,12 @@ test("a done terminal is sorted by its last answer, and without a transcript by 
   const got = { status: { state: "done", msg: "m" }, labels: { "claude-resume.session": "s" } };
   expect(record("t1", got, [say("Shall I go on?")] as any)).toMatchObject({ kind: "asks", session: "s", at: Date.parse("2026-11-23T10:00:00Z") });
   expect(record("t1", got, [])).toMatchObject({ kind: "plain", text: "m", at: null });
+});
+
+test("a terminal started by another carries its parent's address, and others carry null", () => {
+  const got = { status: { state: "done", msg: "ok" }, labels: {} };
+  expect(record("t3y", { ...got, parent: "t3g" }, [])).toMatchObject({ address: "t3y", parent: "t3g", kind: "plain", text: "ok" });
+  expect(record("t3g", { ...got, parent: null }, []).parent).toBeNull();
 });
 
 const use = (id: string, name: string, input: object) => ({ type: "assistant", message: { content: [{ type: "tool_use", id, name, input }] } });
