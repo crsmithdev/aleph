@@ -29,8 +29,8 @@ const dot = (rows) => (rows.length ? `<span class="nav-dot" title="${esc(rows.ma
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
 
-/** The mark of a key that failed to rebuild, `{ error, since }`, or null. */
-export const markOf = (data) => (typeof data?.error === "string" && typeof data?.since === "string" ? { error: data.error, since: data.since } : null);
+/** The mark of a key that failed to rebuild or answers stale over a rebuild, `{ error, since }`, or null. */
+export const markOf = (data) => { const error = data?.error ?? data?.stale; return typeof error === "string" && typeof data?.since === "string" ? { error, since: data.since } : null; };
 
 /** The URL of a route's data: `view.api` with its ":params" filled in. */
 const urlOf = ({ view, params, query }) =>

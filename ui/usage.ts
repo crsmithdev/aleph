@@ -13,7 +13,7 @@ import { addKeyRow, addSnapshot, keyRows, snapshots, type Snapshot } from "../li
 export type { Snapshot };
 import { langfuse, need, type Hourly } from "../lib/langfuse.ts";
 import { openRouterSpend, viaOf } from "../jobs/lib/routing/models.ts";
-import { once, touch } from "../lib/sources.ts";
+import { later, touch } from "../lib/sources.ts";
 import { credentialsFile, usageUrl as usageUrlSetting } from "../jobs/lib/infra/settings.ts";
 import { errText } from "../lib/errtext.ts";
 
@@ -180,14 +180,14 @@ export function runShare(f: Fit | null, run: { cost?: number; model?: string; re
   return own || review ? { pct: (own?.pct ?? 0) + (review?.pct ?? 0), pooled: f!.pooled } : undefined;
 }
 
-/** The current fit over the last WINDOW, read once per pass of the UI's builds (sources.ts); null when Langfuse does not answer. */
+/** The current fit over the last WINDOW; null when Langfuse does not answer, and in a build until its first read ends: a build does not wait for Langfuse (`later`, sources.ts). */
 export function currentFit(): Promise<Fit | null> {
-  return once("fit", ["usage"], async () => {
+  return later("fit", ["usage"], async () => {
     const to = Date.now(), from = to - WINDOW;
     const snaps = readSnapshots(to).filter((s) => Date.parse(s.at) >= from);
     try { return fit(snaps, await need().hourly({ from: new Date(from), to: new Date(to) }, "usage")); }
     catch (e) { if (langfuse()) console.error(`ui/usage: no fit: ${errText(e)}`); return null; } // off is not an error
-  });
+  }, null);
 }
 
 /**

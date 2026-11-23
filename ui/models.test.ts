@@ -58,3 +58,10 @@ test("a missing header gives 403; a bad name, a model the entry does not offer, 
   expect(getJson("settings", "models", {})).toEqual(kept);
   expect((await post({ name: "judge", model: "haiku" })).status).toBe(200);
 });
+
+test("GET /api/models answers the last backend reads at once, within 30 s of them", async () => {
+  healthy = true;
+  expect(((await at("/api/models").then((r) => r.json())) as any).local).toBe("up");
+  healthy = false;
+  expect(((await at("/api/models").then((r) => r.json())) as any).local).toBe("up");
+});

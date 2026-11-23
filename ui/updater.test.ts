@@ -61,7 +61,7 @@ test("every key reads the action source: a POST makes each key's next request wa
   expect((await u.get("/a")).answer.body).toBe(2);
 });
 
-test("a key not asked for in 10 min is not built on a change, but its next request waits for a build; after 1 h it is dropped", async () => {
+test("a key not asked for in 10 min is not built on a change, but its next request gets the last answer over a rebuild; after 1 h it is dropped", async () => {
   const f = fake(), u = createUpdater({ ...f, file: () => join(dir, "drop.json") });
   f.world["/a"] = { body: 1, sources: ["records"] };
   await u.get("/a");
@@ -70,7 +70,12 @@ test("a key not asked for in 10 min is not built on a change, but its next reque
   u.changed("records");
   await u.flush();
   expect(f.log).toEqual(["/a"]);
-  expect((await u.get("/a")).answer.body).toBe(2); // never an answer from before the change
+  const got = await u.get("/a");
+  expect(got.answer.body).toBe(1);
+  expect(got.error).toContain("rebuild");
+  expect(got.stale).toBe(true);
+  await new Promise((r) => setTimeout(r, 0));
+  expect((await u.get("/a")).answer.body).toBe(2);
   expect(f.log).toEqual(["/a", "/a"]);
   f.tick(DROP_MS);
   u.sweep();
@@ -214,6 +219,7 @@ test("a failed build keeps the last answer with its error and time, and a change
   await u.flush();
   const got = await u.get("/a");
   expect(got).toMatchObject({ answer: { body: { n: 1 } }, error: "disk on fire", since: new Date(f.now()).toISOString() });
+  expect(got.stale).toBeUndefined();
   f.world["/a"] = { body: { n: 1 }, sources: ["records"], status: 502 };
   u.changed("records");
   await u.flush();

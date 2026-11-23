@@ -10,6 +10,7 @@ import { wkText } from "./views/lib/format.js";
 import { costHtml } from "./views/lib/html.js";
 import { openRouterFactor } from "../jobs/lib/routing/models.ts";
 import { memory, use } from "../lib/langfuse.ts";
+import { closePass, openPass } from "../lib/sources.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -203,6 +204,19 @@ test("currentFit reads Langfuse's hourly spend, and a snapshot dated after the c
     write([...good, future]);
     expect(await currentFit()).toEqual(base);
   } finally {
+    use(null);
+  }
+});
+
+test("in a build currentFit answers null at once while Langfuse is read", async () => {
+  let go = () => {};
+  use({ ...memory({ traces: [], observations: [] }), hourly: () => new Promise((r) => { go = () => r([]); }) } as any);
+  openPass({ usage: 1 }, "t");
+  try {
+    expect(await currentFit()).toBeNull();
+  } finally {
+    closePass();
+    go();
     use(null);
   }
 });

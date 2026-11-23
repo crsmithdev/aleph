@@ -141,10 +141,11 @@ test("a reload during a reload makes one more, not two", async () => {
   expect(p.asked.length).toBe(3);
 });
 
-test("keysOf splits the header, and markOf takes only an error with its time", () => {
+test("keysOf splits the header, and markOf takes only an error or a stale note with its time", () => {
   expect(keysOf(new Response("", { headers: { "x-aleph-keys": "a  b" } }))).toEqual(["a", "b"]);
   expect(keysOf(new Response(""))).toEqual([]);
   expect(markOf({ error: "boom", since: "2026-11-09T10:00:00Z", rows: [] })).toEqual({ error: "boom", since: "2026-11-09T10:00:00Z" });
+  expect(markOf({ stale: "old", since: "2026-11-09T10:00:00Z" })).toEqual({ error: "old", since: "2026-11-09T10:00:00Z" });
   expect(markOf({ error: "boom" })).toBeNull();
   expect(markOf(null)).toBeNull();
 });

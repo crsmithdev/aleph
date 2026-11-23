@@ -25,7 +25,7 @@ async function build(project: string | null) {
 }
 
 /** The sources a body of all projects reads (`touched` in the build Worker, and `action`). */
-const SOURCES = ["registry", "store", "events", "records", "runs", "usage", "factory", "action"];
+const SOURCES = ["registry", "store", "events", "records", "runs", "usage", "later:fit", "factory", "action"];
 
 /** The `/api/factory` body for one project; the body of all projects is built once per change of its sources, for `/api/status` too. */
 export const stateBody = (project: string | null): ReturnType<typeof build> => (project ? build(project) : once("state-body", SOURCES, () => build(null)));
