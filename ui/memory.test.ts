@@ -14,9 +14,7 @@ import { add } from "../lib/issue-file.ts";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { needs, writeWeeks } from "./views/lib/memory-health.js";
-// @ts-ignore
-import { renderMemoryJobs } from "./views/lib/processes.js";
+import { flowFrame, needs, renderHealth, writeWeeks } from "./views/lib/memory-health.js";
 // @ts-ignore
 import { noteView } from "./views/memory.js";
 import { writeRepos } from "../tests/projects.testkit.ts";
@@ -214,14 +212,6 @@ test("a failed load is kept until its source changes: no second spawn, no second
 });
 
 const row = (over: object) => ({ title: "T", kind: "gotcha", scope: "aleph", updated: "2026-10-01", read: null, problems: [], ...over });
-test("a note's status: a refusal first, then recent, earlier, never", () => {
-  const now = Date.parse("2026-11-01T12:00");
-  expect(v.noteStatus(row({ read: "2026-10-30" }), now)).toBe("use");
-  expect(v.noteStatus(row({ read: "2026-10-01" }), now)).toBe("stale");
-  expect(v.noteStatus(row({}), now)).toBe("never");
-  expect(v.noteStatus(row({ read: "2026-10-30", problems: [{ rule: "schema", detail: "x" }] }), now)).toBe("lint");
-});
-
 test("/api/memory lists the notes with their read date, and a page search logs no read", async () => {
   const log = join(base, "vault", ".recall.json");
   writeFileSync(log, JSON.stringify({ "Use Bun": "2026-10-30" }));
@@ -243,7 +233,7 @@ test("/api/memory reports an error, not unread notes, when the recall log does n
   } finally { rmSync(log, { force: true }); await fresh(); }
 });
 
-test("/api/memory gives each note its recall count per day over 30 days, and the inspector draws them", async () => {
+test("/api/memory gives each note its recall count per day over 30 days, and the page shows their sum", async () => {
   const log = join(base, "vault", ".recall-log.jsonl");
   const day = (n: number) => new Date(NOW - n * 86400_000).toISOString().slice(0, 10);
   writeFileSync(log, [day(0), day(0), day(3)].map((date) => JSON.stringify({ date, title: "Use Bun", query: "q" })).join("\n") + "\n");
@@ -257,17 +247,6 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
     expect(bun.history.reduce((a: number, b: number) => a + b)).toBe(3);
     expect(m.notes.find((n: any) => n.title !== "Use Bun").history).toEqual(Array(30).fill(0));
   } finally { rmSync(log, { force: true }); await fresh(); }
-  const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x", links: [], backlinks: [] };
-  const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
-  const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
-  const f = v.recallFrame(hist);
-  expect([f.measure.name, f.by.keys[0].name]).toEqual(["Offers per Day", "offers"]);
-  expect(f.rows.map((r: any) => r.recalls)).toEqual(hist);
-  const h = v.renderInspector(note, n, "use", hist);
-  expect(find(h, "aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/recall"]);
-  expect(find(h, "aleph-chart [role=img]").map((c) => c.attrs["aria-label"])).toEqual(["Offers per Day: offers 3"]);
-  expect(find(h, ".mhist, i[title]")).toEqual([]);
-  expect(find(v.renderInspector(note, n, "use", Array(30).fill(0)), "aleph-chart")).toEqual([]);
 });
 
 test("/api/memory lint still gives a stale finding to an old note that the read log shows read lately", async () => {
@@ -357,138 +336,90 @@ test("/api/memory lists each scope's core lines and the start-context bytes agai
 
 
 const it = (over: object) => ({ type: "semantic", source: "note", key: "N", title: "N", text: "claim", scope: "aleph", at: "2026-10-01", read: null, effect: "Reaches a session when vault recall returns it.", ...over });
-const page = { exists: true, total: 1, scopes: ["aleph", "other"], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
-  start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
+const page = { exists: true, total: 2, scopes: ["aleph", "other"], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03", history: [1, 2] }), row({ title: "Never" })], rows: [],
+  start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c", scope: "global", bytes: 100, kept: true }] } }, steps: [], decay: { stale: [] } };
+/** Run `fn` with a stub of the browser's storage that holds `kept` by key. */
+const withStore = <T>(kept: Record<string, unknown>, fn: () => T): T => {
+  const g: any = globalThis;
+  g.localStorage = { getItem: (k: string) => (`${k}`.slice(6) in kept ? JSON.stringify(kept[`${k}`.slice(6)]) : null), setItem() {} };
+  try { return fn(); } finally { delete g.localStorage; }
+};
+const draw = (m: object, q = "") => v.view.render({ ...page, ...m }, {}, new URLSearchParams(q)) as string;
 
-test("the Notes tab is the kind filter, the search, the freshness filter, the results and the inspector, with no health", () => {
-  const rs = [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })];
-  const status = new Map(v.noteRows(page, NOW).map((n: any) => [n.title, n.status]));
-  expect(v.options(new URLSearchParams("q=work"))).toEqual({ q: "work", type: "", fresh: "", item: "", kind: "" });
-  expect(v.typeCounts(rs, v.options(), status)).toEqual({ semantic: 1, procedural: 0, episodic: 0, working: 1, prospective: 0 });
-  expect(v.keepRows(rs, v.options(new URLSearchParams("fresh=never")), status)).toEqual([]);
-  const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), rs);
-  expect(find(h, ".msearch [data-ui=mem-search]").map((n) => n.attrs.value)).toEqual(["work"]);
-  expect(find(h, "#mem-inspector")).toHaveLength(1);
-  expect(find(h, "#mem-titles option").map((n) => n.attrs.value)).toEqual(["N", "Never"]);
-  expect(words(find(h, "h2"))).not.toContain("Health");
-  // The page head's filter is scope().bar(): the Project select, then the window control.
-  expect(words(find(h, "header select[name=project] option"))).toEqual(["All Projects", "aleph", "other"]);
-  expect(find(h, "header [data-name=window]").map((n) => n.attrs["aria-label"])).toEqual(["Window"]);
-  // Page head, kind filter, search, freshness filter, then the results.
-  expect(find(h, "h1, [name=project], #mem-kind, [data-ui=mem-search], #mem-fresh, #mem-results").map((n) => n.attrs.id ?? n.attrs.name ?? n.text))
-    .toEqual(["Memory", "project", "mem-kind", "q", "mem-fresh", "mem-results"]);
-  // mount() sets the query from the pressed option's data-value.
-  expect(find(h, "#mem-kind button").map((b) => [b.attrs["data-value"], b.attrs["aria-pressed"], b.text])).toEqual([
-    ["", "true", "All 2"], ["semantic", "false", "Semantic 1"], ["procedural", "false", "Procedural 0"],
-    ["episodic", "false", "Episodic 0"], ["working", "false", "Working 1"], ["prospective", "false", "Prospective 0"],
-  ]);
-  expect(find(h, "#mem-fresh button").map((b) => [b.attrs["data-value"], b.attrs["aria-pressed"], b.text]).slice(1, 3))
-    .toEqual([["use", "false", "Offered in 7 days 1"], ["never", "false", "Never offered 0"]]);
-  const loading = v.renderMemory(page, v.options(), null);
-  expect(text(loading)).toContain("Loading memory");
-  expect(words(find(loading, "#mem-kind button[aria-pressed=true]"))).toEqual(["All"]);
-  expect(v.view.api({}, new URLSearchParams("project=aleph"))).toEqual(["/api/memory?project=aleph", "/api/memory/processes"]);
-  expect(v.view.api({}, new URLSearchParams("tab=health"))).toEqual(["/api/memory", "/api/memory/processes", "/api/memory/log"]);
-  expect(v.view.combine([{ notes: [] }, { steps: [] }, { rows: [1] }])).toEqual({ notes: [], processes: { steps: [] }, rows: [1] });
-  const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha", written_by: "w", last_verified: "2026-11-01" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
-  expect(find(nh, "section[aria-labelledby=h-note] .md a").map((a) => a.attrs.href)).toEqual(["#/memory/U"]);
-  const none = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "x", links: [], backlinks: [] });
-  // A section with no links is left out: neither its detailPanel() nor a card.
-  expect(find(none, "details, .card")).toEqual([]);
-  expect(find(nh, ".card")).toEqual([]);
-  expect(words(find(nh, "details.dp-panel.dp-fold[open] > summary"))).toEqual(["Linked from 1"]);
-  const out = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: {}, body: "x", links: [{ title: "U", kind: "gotcha", scope: "a" }], backlinks: [] });
-  expect(words(find(out, "details.dp-panel.dp-fold[open] > summary"))).toEqual(["Links to 1"]);
-  expect(find(out, "details .dp-body li a").map((a) => [a.attrs.href, a.text])).toEqual([["#/memory/U", "U"]]);
-  expect(find(out, ".card")).toEqual([]);
-  expect(words(find(nh, "section[aria-labelledby=h-note] .md"))).toEqual(["see U"]);
-  expect(words(find(nh, "dt"))).toEqual(["Kind", "Written by", "Last verified"]);
+test("the page loads what its view draws: Notes the search, Health the log, Log the log alone", () => {
+  const api = (q: string) => v.view.api({}, new URLSearchParams(q));
+  expect(api("project=aleph")).toEqual(["/api/memory?project=aleph", "/api/memory/processes", "/api/memory/search?q=&project=aleph"]);
+  expect(api("view=health")).toEqual(["/api/memory", "/api/memory/processes", "/api/memory/log"]);
+  expect(api("view=log")).toEqual(["/api/memory", "/api/memory/log"]);
+  expect(v.view.combine([{ notes: [] }, { steps: [] }, { rows: [1] }])).toEqual({ notes: [], steps: [], rows: [1] });
 });
 
-test("each type has its own layout, filters keep by type and freshness, and the kind counts come before the type filter", () => {
-  const rs = [it({}), it({ key: "Never", title: "Never" }), it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" }),
-    it({ type: "episodic", source: "episode", key: "e.md", title: "e" }), it({ type: "prospective", source: "issue", key: "a/1", title: "a-1", priority: "high" })];
-  const status = new Map(v.noteRows(page, NOW).map((n: any) => [n.title, n.status]));
-  const keep = (q: string) => v.keepRows(rs, v.options(new URLSearchParams(q)), status, NOW).map((x: any) => x.title);
-  expect(keep("type=procedural")).toEqual(["skill vault"]);
-  expect(keep("fresh=use")).toEqual(["N"]);
-  expect(keep("fresh=never")).toEqual(["Never"]);
-  expect(keep("fresh=old")).toEqual(["skill vault"]);
-  expect(v.typeCounts(rs, v.options(new URLSearchParams("type=procedural&fresh=never")), status)).toMatchObject({ semantic: 1, procedural: 0 });
-  const h = v.renderResults(rs, v.options(), status);
-  // procedural: a table, its Updated column a number column
-  expect(find(h, "th").map((n) => [n.text, n.attrs.class])).toEqual([["Source", undefined], ["What It Says", undefined], ["Loaded When", undefined], ["Updated", "num"]]);
-  expect(find(h, "ul.mrows.tl > li").map((n) => n.attrs["data-id"])).toEqual(["episode:e.md"]);  // episodic: a timeline
-  expect(find(h, "td.wide").map((n) => n.attrs.title)).toEqual(["the vault"]);  // procedural: the title cell's full text
-  const undated = v.renderResults([it({ type: "episodic", source: "episode", key: "e.md", title: "e", at: "" })], v.options(), status);
-  expect(find(undated, ".time [title]").map((n) => [n.attrs.title, n.text])).toEqual([["No date", "–"]]);
-  expect(words(find(h, '[data-id="issue:a/1"] .badge'))).toEqual(["high"]);  // prospective: cards with the priority
-  expect(words(find(h, '[data-id="note:N"] .mm'))).toEqual(["written Oct 01 · offered never"]);  // semantic: the offer date
-  // Each row is a selectable stop: mount() reads its data-id on a click, Enter or Space.
-  expect(find(h, "li.mrow[tabindex='0'], tr.mrow[tabindex='0']").map((n) => n.attrs["data-id"])).toEqual(["note:N", "note:Never", "skill:vault", "episode:e.md", "issue:a/1"]);
-  expect(find(h, "tr.mrow[tabindex='0']").map((n) => n.attrs["data-id"])).toEqual(["skill:vault"]);
-  const nothing = v.renderResults([], v.options(new URLSearchParams("q=zz")), status);
-  expect(words(find(nothing, ".empty"))).toEqual([text(nothing)]);
-  const many = v.renderResults(Array.from({ length: 51 }, (_, i) => it({ key: `n${i}`, title: `n${i}` })), v.options(), status);
-  expect(text(many)).toContain("50 of 51");
-  expect(find(many, "li[hidden]").map((n) => n.attrs["data-id"])).toEqual(["note:n50"]);
+test("the Notes view is a facts line, a Type filter on semantic and one list of the four types, with no health", () => {
+  const rs = [it({ read: "2026-11-03" }), it({ key: "Never", title: "Never" }), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff", at: "2026-11-03T10:00:00Z" })];
+  const h = draw({ results: rs, decay: { stale: [{ note: "N" }] } });
+  expect(words(find(h, ".ph button[data-view]"))).toEqual(["Notes", "Health", "Log"]);
+  expect(text(find(h, ".factline")[0].text)).toBe("2 notes 1 offered in 7 days 1 never offered 1 past re-check");
+  expect(find(h, ".lcard select[name=type] option").map((o) => [o.attrs.value, "selected" in o.attrs])).toEqual([["", false], ["semantic", true], ["procedural", false], ["episodic", false], ["working", false]]);
+  // The list draws the rows of the filter's type; the others wait in the list for a search or a filter.
+  expect(find(h, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["note:N", "note:Never"]);
+  expect(words(find(h, ".lhead .h"))).toEqual(["Offers", "Offered", "Written", "Updated"]);
+  const every = withStore({ "browse.memory": { f: { type: "" } } }, () => draw({ results: rs }));
+  expect(words(find(every, ".lhead h3"))).toEqual(["Semantic", "Procedural", "Episodic", "Working"]);
+  expect(find(every, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["note:N", "note:Never", "handoff:current.md"]);
+  expect(words(find(every, ".lhead .h"))).toEqual(["Offers", "Offered", "Written", "Updated", "Age"]);
+  // A note shows its offers, its last offer or never, and its written day; a default scope shows no chip.
+  expect(words(find(h, '.lrow[data-key="note:N"] .c'))).toEqual(["3", "Nov 03", "Oct 01"]);
+  expect(words(find(h, '.lrow[data-key="note:Never"] .c'))).toEqual(["", "never", "Oct 01"]);
+  expect(find(h, ".lrow .chip")).toEqual([]);
+  expect(find(h, '.ph [name=project]')).toHaveLength(1);
 });
 
-test("the procedural table is dataTable's, so it has the tscroll wrapper, the tbl class and the heads", () => {
-  const proc = it({ type: "procedural", source: "skill", key: "vault", title: "skill vault", text: "the vault", at: "2026-01-01" });
-  const h = v.renderResults([proc], v.options(), new Map());
-  expect(words(find(h, ".tscroll > table.tbl > thead > tr > th"))).toEqual(["Source", "What It Says", "Loaded When", "Updated"]);
-  expect(words(find(h, ".tscroll > table.tbl > tbody > tr.mrow > td"))).toEqual(["skill vault", "the vault", "Reaches a session when vault recall returns it.", "Jan 01"]);
+test("a type shows its first 25 rows and a Show all link; ?all= shows every row of that type", () => {
+  const many = Array.from({ length: 30 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
+  const h = draw({ results: many });
+  expect(find(h, ".lrow")).toHaveLength(25);
+  expect(find(h, ".lmore").map((n) => n.text)).toEqual(["25 of 30 · Show all"]);
+  expect(find(h, ".lmore a").map((a) => a.attrs.href)).toEqual(["#/memory?all=semantic"]);
+  const all = draw({ results: many }, "all=semantic");
+  expect(find(all, ".lrow")).toHaveLength(30);
+  expect(find(all, ".lmore")).toEqual([]);
+  expect(words(find(draw({ results: [] }), ".lnone"))).toContain("No data");
 });
 
-test("the Notes and Health tabs write their counts through count()", () => {
-  const big = { ...page, misses: { recalls: 12345, days: 30, empty: 1000, empty_share: 0.1, reformulated: 2000, unoffered_reads: 0, missed: [], hook: { runs: 0, zero_candidates: 0, capped: 0 } }, lint: { refuse: [], warn: Array.from({ length: 1200 }, () => ({ rule: "r", note: "N", detail: "d" })) },
-    start: { aleph: { bytes: 2048, budget: 4096, cut: 1500, memory: 1000, core: [] } } };
-  const rs = Array.from({ length: 1000 }, (_, i) => it({ key: `n${i}`, title: `n${i}` }));
-  const h = v.renderMemory(big, v.options(), rs);
-  expect(words(find(h, "#mem-kind button[data-value=semantic]"))).toEqual(["Semantic 1,000"]);
-  expect(words(find(h, "#mem-results .sh"))).toEqual(["Semantic 1,000"]);
-  const health = v.renderHealthTab(big);
-  expect(words(find(health, 'section[aria-label="Offer Quality"] dd')).slice(0, 2)).toEqual(["12,345", "1,000 of 12,345 (10%)"]);
-  expect(words(find(health, 'section[aria-label="Start Context"] .bv'))).toEqual(["2,048 B / 4,096 B"]);
-  expect(words(find(health, "section[aria-label=Lint] .count, section[aria-label=Lint] td.num"))).toEqual(["1,200", "1,200", "1,200"]);
-  expect(words(find(health, ".tile b"))).toContain("1,500 / 0");
+test("the inspector says how a memory reaches the agent, with its facts, its state and its Open page link", () => {
+  const rs = [it({ read: "2026-11-03", kind: "gotcha", href: "#/memory/N" }), it({ type: "procedural", source: "rules", key: "r", title: "rule <x>", scope: "global" })];
+  const h = draw({ results: rs });
+    expect(words(find(h, "aside.ins .idp"))).toEqual(["Semantic · note"]);
+  expect(words(find(h, "aside.ins > h3"))).toEqual(["N"]);
+  expect(words(find(h, "aside.ins dt, aside.ins dd"))).toEqual(["Kind", "gotcha", "Scope", "aleph", "Written", "Oct 01", "Last offered", "Nov 03", "Offers", "3 in 30 days"]);
+  expect(find(h, "aside.ins .mreach p").map((n) => n.text)).toEqual(["Reaches a session when vault recall returns it."]);
+  expect(find(h, "aside.ins .inspect-head a").map((a) => a.attrs.href)).toEqual(["#/memory/N"]);
+  // The inspector of every other drawn row waits in a template; a rule without a page opens the Memory page, and a title is escaped.
+  const every = withStore({ "browse.memory": { f: { type: "" } } }, () => draw({ results: rs }));
+  expect(find(every, 'template[data-inspect="rules:r"] > h3').map((n) => n.text)).toEqual(["rule &lt;x&gt;"]);
+  expect(find(every, 'template[data-inspect="rules:r"] .inspect-head a').map((a) => a.attrs.href)).toEqual(["#/memory"]);
 });
 
-test("the procedural table hides its 51st row and its pager says 50 of 51", () => {
-  const procs = Array.from({ length: 51 }, (_, i) => it({ type: "procedural", source: "skill", key: `s${i}`, title: `s${i}` }));
-  const h = v.renderResults(procs, v.options(), new Map());
-  expect(text(h)).toContain("50 of 51");
-  const trs = find(h, "tbody > tr");
-  expect(trs.map((r) => r.attrs["data-id"])).toEqual(procs.map((p) => `skill:${p.key}`));
-  expect(trs.map((r) => "hidden" in r.attrs)).toEqual(Array.from({ length: 51 }, (_, i) => i === 50));
-});
-
-test("the inspector says how a memory reaches the agent, shows its recall history and offers the writes its source takes", () => {
-  const n = { title: "N", path: "wiki/gotchas/N.md", frontmatter: { scope: "aleph", confidence: "measured", core: "the <core>" }, body: "**Claim.** x", text: "", links: [{ title: "L" }], backlinks: [{ title: "B" }] };
-  const h = v.renderInspector(it({ read: "2026-11-03" }), n, "use");
-  expect(words(find(h, ".mreach > *")).slice(0, 2)).toEqual(["How it reaches the agent", "Reaches a session when vault recall returns it."]);
-  expect(find(h, "input[name=core]").map((i) => i.attrs.value)).toEqual(["the &lt;core&gt;"]);
-  // mount() runs the write that a button's or a form's data-mact names; unlink reads its data-target.
-  expect(find(h, "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["core", "unlink", "link", "edit", "archive", "delete"]);
-  expect(find(h, "button[data-mact]").map((b) => [b.attrs["data-mact"], b.attrs.class, b.attrs.type, b.attrs["data-target"], b.text])).toEqual([
-    ["unlink", "act small", "button", "L", "Unlink"], ["edit", "act primary", "button", undefined, "Edit"],
-    ["archive", "act", "button", undefined, "Archive"], ["delete", "act danger", "button", undefined, "Delete"],
-  ]);
-  // No button of the page carries data-act, which router.js's own handler takes.
+test("the inspector offers the writes its source takes: a note edits, archives and deletes, a handoff edits and deletes, a rule is a file", () => {
+  const rs = [it({}), it({ source: "memory-md", key: "MEMORY.md", title: "MEMORY.md" }), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }),
+    it({ type: "procedural", source: "rules", key: "r", title: "rule" }), it({ type: "episodic", source: "daily", key: "d", title: "daily" })];
+  const h = withStore({ "browse.memory": { f: { type: "" } } }, () => draw({ results: rs }));
+  const tpl = (key: string) => find(h, `template[data-inspect="${key}"]`)[0];
+  const writes = (key: string) => find(h, `template[data-inspect="${key}"] [data-mact]`).map((n) => n.attrs["data-mact"]);
+  expect(writes("note:N")).toEqual(["edit", "archive", "delete"]);
+  expect(find(h, 'template[data-inspect="note:N"] button[data-mact]').map((b) => [b.attrs.class, b.attrs.type, b.text])).toEqual([["act primary", "button", "Edit"], ["act", "button", "Archive"], ["act danger", "button", "Delete"]]);
+  expect(find(h, 'template[data-inspect="note:N"] [data-item] > .actions, template[data-inspect="note:N"] [data-item] > .medit').map((n) => n.attrs.class)).toEqual(["actions", "medit"]);
+  // The core line and the links come from the note's own answer: the slot waits for them.
+  expect(find(h, 'template[data-inspect="note:N"] .mnote').map((n) => [n.attrs["data-item"], n.attrs["data-title"]])).toEqual([["note:N", "N"]]);
+  expect(writes("memory-md:MEMORY.md")).toEqual(["edit"]);
+  expect(writes("handoff:current.md")).toEqual(["edit", "file-delete"]);
+  expect(find(h, 'template[data-inspect="handoff:current.md"] .mnote')).toEqual([]);
+  expect(writes("rules:r")).toEqual([]);
+  expect(text(tpl("rules:r").text)).toContain("change it on a branch");
+  expect(writes("daily:d")).toEqual([]);
   expect(find(h, "[data-act]")).toEqual([]);
-  expect(words(find(h, ".mtype, .mtype .badge"))).toEqual(["Semantic · note · in use", "in use"]);
-  expect(words(find(h, ".hint code"))).toEqual(["wiki/gotchas/N.md"]);
-  const bare = v.renderInspector(it({}), { ...n, links: [], backlinks: [] }, "use");
-  expect(words(find(bare, ".sub-head"))).toEqual(["How it reaches the agent"]);
-  expect(find(bare, ".empty")).toEqual([]);
-  const hand = v.renderInspector(it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" }));
-  expect(find(hand, "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["edit", "file-delete"]);
-  expect(find(v.renderInspector(it({ type: "working", source: "handoff", key: "current.md" }), null, "", [1]), "aleph-chart")).toEqual([]);
-  expect(text(v.renderInspector(it({ type: "procedural", source: "skill", key: "vault", href: "#/skills/vault" })))).toContain("change it on a branch");
-  expect(find(v.renderInspector(it({ type: "prospective", source: "issue", key: "a/1" })), "[data-mact]").map((n) => n.attrs["data-mact"])).toEqual(["drop"]);
-  expect(words(find(v.renderInspector(it({ title: "<x>" })), "h3")).slice(0, 1)).toEqual(["&lt;x&gt;"]);
-  expect(words(find(v.renderInspector(null), ".empty"))).toEqual(["Select a memory"]);
+  expect(find(h, "datalist#mem-titles option")).toHaveLength(page.notes.length);
+  expect(find(draw({ results: rs, scopes: ["aleph", "sidetone"] }), '.ph select[name=project] option').map((o) => o.attrs.value)).toContain("sidetone");
 });
 
 test("/api/memory/log lists writes and recalls newest first, one recall per call, and honours the project", async () => {
@@ -530,44 +461,67 @@ test("/api/memory/processes reads the tick and the stale notes", async () => {
     await fresh("factory");
     const r = (await (await at("/api/memory/processes")).json() as any).steps.slice(1).map((s: any) => [s.name, s.last, s.result, s.detail]);
     expect(r).toEqual([["seen prune", "2026-11-04T11:45:00.000Z", "ok", null], ["recall trim", null, null, null], ["vault push", "2026-11-04T11:50:00.000Z", "failed", "no route"]]);
-    const jobs = renderMemoryJobs(await (await at("/api/memory/processes")).json());
-    expect(find(jobs, "tr .badge.error").map((b) => [b.attrs.title, b.text])).toEqual([["no route", "failed"]]);
-    expect(words(find(jobs, "tbody tr")).find((t) => t.startsWith("vault push"))).toContain("failed");
   } finally { conn().run("DELETE FROM tick"); conn().run("DELETE FROM state"); rmSync(join(base, "vault", ".index", "runs"), { recursive: true, force: true }); }
 });
 
-test("the tabs link Notes, Health and Log; the log row opens a recall to its notes; Episode pages filter alone", () => {
-  const h = v.renderTabs("log", "aleph");
-  expect(find(h, "a").map((a) => [a.attrs.href, a.attrs["aria-current"], a.text])).toEqual([
-    ["#/memory?project=aleph", undefined, "Notes"], ["#/memory?tab=health&project=aleph", undefined, "Health"], ["#/memory?tab=log&project=aleph", "page", "Log"],
-  ]);
-  expect(find(v.renderMemory(page), "nav.vtabs")).toHaveLength(1);
-  const r = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A", "B"] };
-  // The query opens to the notes it returned, in rank order.
-  const lr = v.logRow(r);
-  expect(find(lr, "details > summary").map((n) => [n.attrs.title, n.text])).toEqual([["q", "q"]]);
-  expect(find(lr, "details > ol > li > a").map((a) => [a.attrs.href, a.text])).toEqual([["#/memory/A", "A"], ["#/memory/B", "B"]]);
-  expect(words(find(lr, ".quiet"))).toEqual(["+1"]);
-  const rows = [r, { ...r, kind: "miss", op: "miss", note: "", titles: [] }];
-  expect(find(v.renderLog({ project: "", rows }, v.options(new URLSearchParams("kind=miss"))), "details")).toEqual([]);
-  expect(words(find(v.renderLog({ project: "", rows: [] }), "#log-rows .empty"))).toEqual(["No data"]);
-  const ep = { at: "2026-11-03T10:00:00.000Z", kind: "write", op: "write", note: "aleph-1 Ship", why: "episode of aleph-1", titles: [] };
-  const w = { ...ep, note: "Use Bun", why: "a fix" };
-  const kept = (kind: string) => words(find(v.renderLog({ project: "", rows: [ep, w] }, v.options(new URLSearchParams(`kind=${kind}`))), "#log-rows tbody > tr > td:nth-child(3)"));
-  expect([kept("episode"), kept("write")]).toEqual([["aleph-1 Ship"], ["Use Bun"]]);
-  // An episode page is no note, so its row names it without a link.
-  expect([find(v.logRow(ep), "a"), words(find(v.logRow(ep), "td"))[2]]).toEqual([[], "aleph-1 Ship"]);
-  expect(find(v.logRow(w), "a").map((a) => a.attrs.href)).toEqual(["#/memory/Use%20Bun"]);
-  // mountLog() sets each chart's frame by its key.
-  expect(find(v.renderLog({ project: "", rows: [ep, w] }), "aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/writes", "memory/episode-writes", "memory/recalls"]);
+const flow = (rows: object[]) => ({ ...page, rows });
+const wr = (at: string, why = "x") => ({ at, kind: "write", op: "write", note: "N", why, titles: [] });
+
+test("the Health view opens on a figure band, then the flow chart and the cards, the memory jobs and the tables", () => {
+  const rows = [wr("2026-11-03T10:00:00.000Z"), { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: ["A"] }];
+  const big = { ...page, rows, misses: { recalls: 12345, days: 30, empty: 1000, reformulated: 2000, unoffered_reads: 7, missed: [] },
+    lint: { refuse: [{ rule: "schema", note: "A", detail: "d" }], warn: Array.from({ length: 1200 }, () => ({ rule: "template", note: "B", detail: "add a claim" })) },
+    start: { aleph: { bytes: 5950, budget: 6000, cut: 0, core: [{ title: "N", core: "c", scope: "global", bytes: 100, kept: true }, { title: "M", core: "c", scope: "aleph", bytes: 200, kept: true }] } },
+    steps: [{ name: "maintain", runs: "daily", last: "2026-11-04T10:00:00.000Z", next: null, result: "dry: 1 fixed", detail: "decay 3", does: "fixes" }, { name: "vault push", runs: "each write", last: null, next: null, result: "failed", detail: "no route", does: "pushes" },
+      { name: "seen prune", runs: "each recall", last: null, next: null, result: "ok", detail: null, does: "prunes" }],
+    decay: { stale: [{ note: "N", detail: "every 30 days", window: 30, over: 12 }] } };
+  const h = draw(big, "view=health");
+  expect(find(h, ".band .fig").map((f) => [f.text])).toEqual([["Start Context 5,950 B 50 B left of 6,000 B"], ["Offered, 7 Days 1 of 2 notes"], ["Lint 1,201 1 refused"], ["Writes, 7 Days 1 median week 0"]]);
+  expect(find(h, ".band .cmp").map((n) => n.attrs.class)).toEqual(["cmp warn", "cmp", "cmp warn", "cmp"]);
+  expect(find(h, ".pair aleph-chart").map((c) => c.attrs.key)).toEqual(["memory/flow"]);
+  expect(words(find(h, 'section[aria-label="Offers"] dd'))).toEqual(["12,345 in 30 days", "1,000", "2,000", "7"]);
+  expect(words(find(h, 'section[aria-label="Start Context"] .bv'))).toEqual(["5,950 B / 6,000 B"]);
+  expect(words(find(h, 'section[aria-label="Start Context"] tbody tr')).map((t) => t.split(" ")[0])).toEqual(["M", "N"]);
+  expect(words(find(h, 'section[aria-label="Lint by Rule"] .bl, section[aria-label="Lint by Rule"] .bv'))).toEqual(["template", "1,200", "schema refused", "1"]);
+  expect(find(h, 'section[aria-label="Lint by Rule"] .meter i').map((i) => i.attrs.class)).toEqual([undefined, "c-err"]);
+  expect(words(find(h, 'section[aria-label="Lint Fixes"] tbody tr')).map((t) => t.split(" ").slice(0, 2).join(" "))).toEqual(["template add", "schema d"]);
+  // The jobs: a failure is a badge with its detail, a result of ok is quiet, another result shows its detail.
+  expect(words(find(h, 'section[aria-label="Memory Jobs"] tbody tr')).map((t) => t.split(" ")[0])).toEqual(["maintain", "vault", "seen"]);
+  expect(find(h, 'section[aria-label="Memory Jobs"] .badge.error').map((b) => [b.attrs.title, b.text])).toEqual([["no route", "failed"]]);
+  expect(find(h, 'section[aria-label="Memory Jobs"] td.quiet').map((n) => n.text)).toEqual(["ok"]);
+  expect(find(h, 'section[aria-label="Memory Jobs"] td.wide').map((n) => [n.attrs.title, n.text])).toEqual([["dry: 1 fixed", "decay 3"]]);
+  expect(words(find(h, 'section[aria-label="Stale Notes"] tbody td'))).toEqual(["N", "30 d", "+12 d"]);
+  // Without the slow misses read, the offers card draws its bars alone.
+  expect(find(draw({ ...page, misses: undefined }, "view=health"), 'section[aria-label="Offers"] dd')).toEqual([]);
+  expect(words(find(draw({ ...page, lint: { refuse: [], warn: [] } }, "view=health"), 'section[aria-label="Lint by Rule"] .empty'))).toEqual(["No data"]);
+  expect(renderHealth(flow([]))).toContain("memory/flow");
 });
 
-test("a day frame counts the rows it keeps per local day, oldest first, and writeWeeks takes the median of the 3 weeks before", () => {
+test("the Log view groups its rows by day, a recall's inspector lists the notes it returned, and an episode page has no link", () => {
+  const recall = { at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "the query", titles: ["A", "B"] };
+  const ep = wr("2026-11-03T10:00:00.000Z", "episode of aleph-1");
+  ep.note = "aleph-1 Ship";
+  const h = draw({ rows: [ep, recall, wr("2026-11-02T09:30:00.000Z")] }, "view=log");
+  expect(text(find(h, ".factline")[0].text)).toBe("1 recalls 2 writes");
+  expect(words(find(h, ".lhead h3"))).toEqual(["Nov 03", "Nov 02"]);
+  expect(find(h, ".lrow").map((r) => r.attrs["data-key"])).toEqual(["log-0", "log-1", "log-2"]);
+  expect(find(h, ".lcard .seg[data-name=kind] button").map((b) => b.attrs["data-value"])).toEqual(["", "episode", "recall", "write"]);
+  expect(words(find(h, '.lrow[data-key="log-1"] .main'))).toEqual(["A +1"]);
+  expect(find(h, 'template[data-inspect="log-1"] li a').map((a) => [a.attrs.href, a.text])).toEqual([["#/memory/A", "A"], ["#/memory/B", "B"]]);
+  expect(find(h, 'template[data-inspect="log-1"] .inspect-head a').map((a) => a.attrs.href)).toEqual(["#/memory/A"]);
+  expect(find(h, 'template[data-inspect="log-0"] .inspect-head a').map((a) => a.attrs.href)).toEqual(["#/memory?view=log"]);
+  expect(words(find(draw({ rows: [] }, "view=log"), ".lnone"))).toContain("No data");
+  const many = draw({ rows: Array.from({ length: 150 }, () => wr("2026-11-03T10:00:00.000Z")) }, "view=log");
+  expect(find(many, ".lrow")).toHaveLength(100);
+  expect(find(many, ".lmore").map((n) => n.text)).toEqual(["100 of 150"]);
+});
+
+test("the flow frame counts note writes and recall runs per local day, oldest first, and writeWeeks takes the median of the 3 weeks before", () => {
   const now = Date.parse("2026-11-17T12:00:00");
   const at = (d: number) => new Date(now - d * 86400_000).toISOString();
-  const rows = [at(0), at(0), at(2), at(8), at(9), at(15), at(22), at(22), at(22)].map((a) => ({ at: a, kind: "write", op: "write", note: "N", why: "x", titles: [] }));
-  const f = v.dayFrame(rows, () => true, 3, "W", now);
-  expect(f.rows.map((r: any) => r.n)).toEqual([1, 0, 2]);
+  const rows = [at(0), at(0), at(2), at(8), at(9), at(15), at(22), at(22), at(22)].map((a) => wr(a));
+  const f = flowFrame([...rows, wr(at(0), "episode of a-1"), { at: at(1).slice(0, 10), kind: "recall", op: "recall", note: "A", why: "q", titles: ["A"] }], now, 3);
+  expect(f.rows.map((r: any) => [r.writes, r.recalls])).toEqual([[1, 0], [0, 1], [2, 0]]);
   expect(writeWeeks(rows, now)).toEqual({ week: 3, median: 2, lo: 1, hi: 3 });
 });
 
@@ -579,27 +533,4 @@ test("the Needs-you strip shows each item only over its act-threshold, and nothi
   expect(words(find(h, ".badge.error"))).toEqual(["refused"]);
   const calm = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
   expect(needs(calm, NOW)).toBe("");
-});
-
-test("the Start Context card splits what the agent receives, lists the cut lines and the kept lines to trim first", () => {
-  const core = (title: string, scope: string, bytes: number, kept: boolean) => ({ title, core: "c", scope, bytes, kept });
-  const m = { notes: [row({ title: "A", history: Array(30).fill(1) }), row({ title: "B" }), row({ title: "C" })], lint: { refuse: [], warn: [] },
-    start: { aleph: { bytes: 1000, budget: 6000, cut: 1, memory: 600, core: [core("A", "aleph", 100, true), core("B", "global", 150, true), core("C", "aleph", 80, false)] } } };
-  const h = v.renderHealthTab(m);
-  const card = 'section[aria-label="Start Context"]';
-  expect(words(find(h, `${card} .sub-head`))).toEqual(["What the aleph agent receives", "Cut lines, 1", "Trim first: fewest offers, then oldest"]);
-  // The tables in card order: what the agent receives, the cut lines, then the lines to trim first.
-  const trs = words(find(h, `${card} tbody > tr`));
-  expect(trs.slice(0, 5)).toEqual(["MEMORY.md 600 B 60%", "Global core lines · 1 150 B 15%", "Aleph core lines · 1 100 B 10%", "Tags and pointer 150 B 15%", "Total sent 1,000 B 5,000 B left"]);
-  expect(trs.slice(6).map((t) => t.split(" ")[0])).toEqual(["B", "A"]);
-});
-
-test("Health's Offer Quality card gives the unoffered reads, the empty share of all recalls and the hook runs, or No data", () => {
-  const rows = [3, 10, 10].map((n) => ({ at: "2026-11-03", kind: "recall", op: "recall", note: "A", why: "q", titles: Array(n).fill("A") }));
-  const h = v.renderHealthTab({ ...page, rows, misses: { days: 7, recalls: 7, empty: 0, empty_share: 0, reformulated: 0, unoffered_reads: 1234, missed: [{ query: "lit spike", at: "2026-11-13T08:49:00Z" }], hook: { runs: 1194, zero_candidates: 4, capped: 1100 } } });
-  const card = 'section[aria-label="Offer Quality"]';
-  expect(words(find(h, `${card} strong`))).toEqual(["1,234"]);
-  expect(find(h, `${card} dt, ${card} dd`).map((n) => n.text)).toEqual(["Recalls", "7", "Empty", "0 of 7 (0.0%)", "Reformulated", "0 turns", "Hook runs", "1,194: 4 with no candidate, 1,100 over 100", "Notes per offer", "p50 10, p95 10, n=3"]);
-  expect(find(h, 'section[aria-label="Empty Recalls"] td.wide').map((n) => [n.attrs.title, n.text])).toEqual([["lit spike", "lit spike"]]);
-  expect(words(find(v.renderHealthTab(page), `${card} .empty`))).toEqual(["No data"]);
 });

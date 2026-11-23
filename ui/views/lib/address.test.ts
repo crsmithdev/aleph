@@ -56,6 +56,10 @@ describe("projectKeysOnce", () => {
     // The chosen project and a name the page adds stay listed, though neither has an open issue in the registry.
     const picked = copy.scope(new URLSearchParams("project=idle")).bar({ more: ["notes"] });
     expect(picked).toContain('<option value="idle" selected>idle (0)</option><option value="zed">zed (2)</option><option value="notes">notes</option>');
+    // A name the page adds that the registry holds with no open issue is listed too.
+    expect(copy.scope(new URLSearchParams()).bar({ more: ["idle"] })).toContain('<option value="idle">idle (0)</option>');
+    // The select keeps the names, for the options that wireScope draws again when the registry answers.
+    expect(picked).toContain('aria-label="Project" data-more="notes">');
   });
 });
 

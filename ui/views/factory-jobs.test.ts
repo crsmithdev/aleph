@@ -1,10 +1,9 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { chartKey, FRAMES, redirect, renderFactoryJobs, slowestFrame, stripFrame, trendFrame } from "./factory-jobs.js";
+import { chartKey, FRAMES, redirect, renderFactoryJobs as renderPage, slowestFrame, stripFrame, trendFrame } from "./factory-jobs.js";
 // @ts-ignore plain JS shared with the page
 import { option, title } from "./lib/chart.js";
 // @ts-ignore plain JS shared with the page
-import { wireJobs } from "./lib/jobs-table.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const F1 = new Date(2026, 9, 27, 9).getTime(), F2 = new Date(2026, 9, 28, 14).getTime();
@@ -20,7 +19,13 @@ const D: any = {
   checks: [{ name: "tests", count: 5, p50: 51, p90: 171 }],
   wait: { count: 2, p50: 0.2 },
   builds: [],
+  classes: [],
+  issues: { landed: 3, firstPass: 0.6667 },
+  lost: { hours: 1.5, share: 0.12 },
 };
+
+/** The Timing view of stage `stage`, with `f` as more query. */
+const renderFactoryJobs = (d: any, day: any, stage = "lead", jobs: any = null, f: Record<string, string> = {}) => renderPage(d, day, jobs, new URLSearchParams({ view: "timing", stage, ...f }));
 
 const T = { hot: "H", run: "R", done: "D", need: "N", muted: "M" };
 
@@ -58,8 +63,8 @@ test("three chart panels in one row replace the old cards, each says its data fo
   expect(row).not.toContain('class=\"notice\"');
   expect(lead).not.toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
   expect(queue).toContain("Queue peak 10m 00s");
-  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead Time by Size", "Build Time by Model", "Checks", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead time by size", "Build time by model", "Checks", "Jobs"]);
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead Time by Size", "Build Time by Model", "Checks", "Run Hours by Outcome"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time by Day", "Lead Time by Outcome", "Slowest 10", "Lead time by size", "Build time by model", "Checks", "Run Hours by Outcome"]);
 });
 
 test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {
@@ -115,8 +120,21 @@ test("empty phases show dashes and no error", () => {
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 
-test("the title is the sidebar name", () => {
-  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><div class="fbar">');
+test("the title is the sidebar name, with the Runs and Timing tabs; only Timing has the scope bar", () => {
+  const timing = renderFactoryJobs(D, null, "lead"), runs = renderPage(D, null, [], new URLSearchParams());
+  expect(timing).toContain('<h1>Jobs</h1>');
+  expect([...timing.matchAll(/data-view="(\w+)"/g)].map((m) => m[1])).toEqual(["runs", "timing"]);
+  expect(timing).toContain('<select name="project"');
+  expect(runs).not.toContain('<select name="project"');
+});
+
+test("Timing opens with a figure band of four figures", () => {
+  const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
+  const band = h.match(/<section class="band".*?<\/section>/s)![0];
+  expect([...band.matchAll(/<span class="k">([^<]*)</g)].map((m) => m[1])).toEqual(["Lead Time", "Build", "First Pass", "Lost Time"]);
+  expect(band).toContain("24m 44s last 24h");
+  expect(band).toContain("<b class=\"num\">67%</b>");
+  expect(h.indexOf('class="band"')).toBeLessThan(h.indexOf('class="tiles"'));
 });
 
 test("the Checks table groups a job count", () => {
@@ -131,7 +149,7 @@ const cellsOf = (h: string, title: string) => [...h.match(new RegExp(`<h2>${titl
 
 test("Wait share is the p50 of queue over lead of the landed issues, after Lead Time, with no figure under 20 issues", () => {
   const h = renderFactoryJobs(D, null, "lead");
-  expect([...h.matchAll(/<span class="k">([^<]*)</g)].map((m) => m[1]).slice(0, 3)).toEqual(["Lead Time", "Wait share", "Intake"]);
+  expect([...h.slice(h.indexOf('class="tiles"')).matchAll(/<span class="k">([^<]*)</g)].map((m) => m[1]).slice(0, 3)).toEqual(["Lead Time", "Wait share", "Intake"]);
   const card = h.match(/<[^>]*>Wait share.*?<\/div>/s)![0];
   expect(card).toContain("<b>–</b>");
   expect(card).toContain("2 issues");
@@ -192,27 +210,56 @@ test("each Jobs chart frame with no data shows its empty line and its hint in th
   expect(blocks).toHaveLength(3);
 });
 
-const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", role: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: null, cost: 0.75, model: null };
+const J: any = { id: "fac-9#2", subject: "fac-9", name: "fac-9", repo: "fac", kind: "build", actor: "worker", state: "landed", title: "Fix it", issue: "fac-9", started: "2026-11-01T08:00:00Z", ended: null, seconds: 300, cost: 0.75, model: null };
+const SYS: any = { ...J, id: "job.77", name: "housekeeper-fac", kind: "housekeeper", issue: null, title: "housekeeper-fac", state: "done", cost: null };
+afterEach(() => setSystemTime());
+const runs = (jobs: any, q = "") => renderPage(D, null, jobs, new URLSearchParams(q));
 
-test("the page lists the jobs with the search, the State filter and the Project filter, and links no list", () => {
-  const h = renderFactoryJobs(D, null, "lead", [J], { state: "landed" });
+test("Runs is the first view: a row per issue with a strip of its runs, and the system runs as a second group", () => {
+  const h = runs([J, { ...J, id: "fac-9#3", kind: "land", state: "returned", seconds: 100, started: "2026-11-01T09:00:00Z" }, { ...J, id: "fac-8#1", issue: "fac-8", title: "Other" }, SYS, { ...SYS, id: "job.78" }]);
+  expect(h).not.toContain('id="perf"');
+  expect([...h.matchAll(/<li class="lrow" tabindex="0" data-key="([^"]*)"/g)].map((m) => m[1])).toEqual(["fac/fac-9", "fac/fac-8", "sys.housekeeper"]);
+  expect([...h.matchAll(/<span class="gt"><h3 class="sub-head">([^<]*)</g)].map((m) => m[1])).toEqual(["Issues", "System"]);
+  const strip = h.match(/<span class="runstrip".*?<\/span>/s)![0];
+  expect(strip.match(/<i /g)).toHaveLength(2);
+  expect(strip).toContain('class="done"');
+  expect(strip).toContain('class="error"');
+  expect(strip).toContain("implement landed 5m 00s");
+  expect(strip).toContain("land returned 1m 40s");
+  // One scale for all strips: the two housekeeper runs (600 s) are the longest, so 300 s is half.
+  expect(strip).toContain("width:50.00%");
+  expect(h).toContain('href="#/jobs/job.78"');
+  expect(h).toContain('<aside class="card ins"');
+});
+
+test("a Runs row links to its issue, and its inspector lists each run with a link to its job page", () => {
+  const h = runs([J]);
+  expect(h).toContain('<span class="idp">');
   expect(h).toContain('href="#/jobs/fac-9%232"');
-  expect(h).toContain('data-ui="jobs-search"');
-  expect(h).toContain('data-name="state"');
-  expect(h).toContain('data-value="landed" aria-pressed="true"');
-  expect(h).toContain('<select name="project"');
-  expect(h).not.toContain('href="#/jobs?');
-  expect(h.match(/<tr class="rowlink"/g)).toHaveLength(1);
-  expect(h).toContain('<table class="tbl">');
-  expect(h.slice(h.indexOf('id="jobs-table"')).match(/<th[ >]/g)).toHaveLength(8);
-  expect(h).not.toContain("<style>");
-  expect(h).not.toContain("data-page");
-  const many = renderFactoryJobs(D, null, "lead", Array.from({ length: 51 }, (_, i) => ({ ...J, id: `fac-${i}#1` })), {});
-  expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
-  expect(many).toContain('data-page="2">Next 1<');
-  expect(many).toContain("50 of 51");
-  expect(renderFactoryJobs(D, null, "lead", [], {})).toContain("<div class=\"empty\"><p>No data</p></div>");
-  expect(renderFactoryJobs(D, null, "lead", null, {})).toContain("Loading jobs");
+  expect(h).toContain("<th>Stage</th>");
+  expect(h).toContain("$0.75");
+});
+
+test("the facts line counts the running jobs, the runs and cost of today, and the landed issues", () => {
+  setSystemTime(new Date("2026-11-02T12:00:00Z"));
+  const now = "2026-11-02T11:59:00Z", h = runs([{ ...J, started: now, state: "running", seconds: null, cost: 1.5 }, { ...J, id: "fac-9#3", started: now }]);
+  const line = h.match(/<p class="factline">.*?<\/p>/s)![0];
+  expect([...line.matchAll(/<b class="num">([^<]*)<\/b> ([^<]*)</g)].map((m) => [m[1], m[2].trim()])).toEqual([["1", "running"], ["2", "runs today"], ["$2.25", "today"], ["3", "landed"]]);
+  // A running run has no seconds yet, so its strip reads from its start.
+  expect(h).toContain("running");
+});
+
+test("Runs shows the loading line while the jobs load, the error when they fail and empty() for none", () => {
+  expect(runs(null)).toContain("Loading jobs");
+  expect(runs(new Error("down"))).toContain("down");
+  expect(runs([])).toContain('<li class="lnone"><div class="empty"><p>No data</p></div></li>');
+  expect(runs(null)).not.toContain("factline");
+});
+
+test("Runs draws 50 issues and says how many more there are", () => {
+  const h = runs(Array.from({ length: 51 }, (_, i) => ({ ...J, id: `fac-${i}#1`, issue: `fac-${i}` })));
+  expect(h.match(/<li class="lrow"/g)).toHaveLength(50);
+  expect(h).toContain("50 of 51");
 });
 
 test("the Checks and Models tables head their count Jobs, and no line names a run", () => {
@@ -231,25 +278,10 @@ test("#/jobs redirects to the merged page with its query; a Job page does not", 
 });
 
 test("the Checks and Models tables show empty() with no rows and never page", () => {
-  const tables = (h: string) => h.slice(h.indexOf('<div class="pair">'), h.indexOf('aria-label="Jobs"'));
-  expect(tables(renderFactoryJobs({ ...D, checks: [], times: D.times.filter((i: any) => i.outcome !== "landed"), builds: [] }, null, "lead")).match(/class="empty"/g)!.length).toBe(3);
+  const tables = (h: string) => h.slice(h.indexOf('<div class="pair">'));
+  expect(tables(renderFactoryJobs({ ...D, checks: [], times: D.times.filter((i: any) => i.outcome !== "landed"), builds: [] }, null, "lead")).match(/class="empty"/g)!.length).toBe(4);
   const checks = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, count: 1, p50: 1, p90: 2 }));
   const h = renderFactoryJobs({ ...D, checks }, null, "lead");
   expect(h).toContain('<table class="tbl fit">');
   expect(h).not.toContain("50 of 51");
-});
-
-test("Next under the Checks table turns the page in place and leaves the Jobs table's page alone", () => {
-  const was = { location: globalThis.location, history: globalThis.history };
-  const set: string[] = [];
-  Object.assign(globalThis, { location: { hash: "#/factory/jobs" }, history: { replaceState: (_s: unknown, _t: string, url: string) => set.push(url) } });
-  try {
-    const root: any = {};
-    wireJobs(root, () => null);
-    const click = (paged: boolean) => root.onclick({ target: { closest: (s: string) => (s === "button[data-page]" ? { dataset: { page: "2" } } : s === ".paged" && paged ? {} : null) } });
-    click(true);
-    expect(set).toEqual([]);
-    click(false);
-    expect(set).toEqual(["#/factory/jobs?page=2"]);
-  } finally { Object.assign(globalThis, was); }
 });

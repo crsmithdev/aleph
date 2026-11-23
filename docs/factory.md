@@ -97,7 +97,6 @@ The live cap, the run cap, the intake tries, the job time limit, the fix rounds,
 | `ALEPH_INTAKE_CAP` | 5 | Intake runs one dispatch starts |
 | `ALEPH_INTAKE_TRIES` | 2 | Intake runs with no reply before an Ask |
 | `ALEPH_DIRECTOR_CAP` | 3 | Director runs per `aleph director`, one per Ask |
-| `ALEPH_MONITOR` | on | `off` turns off the tick's daily monitor step |
 | `ALEPH_RESCUE` | on | `off` leaves a returned or failed run as it is, so its open job keeps its issue not ready |
 | `ALEPH_RUN_ENV` | none | An env file that a worker, a check or a command run loads. A project's own `env` wins |
 | `ALEPH_HOME_URL` | `http://aleph.home/` | The address that `aleph doctor` checks |

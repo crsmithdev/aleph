@@ -15,12 +15,16 @@ import { setCodes } from "../../../lib/naming.ts";
 import { postJson, parseHash, scope } from "./address.js";
 import { actMessages, drawAt, keepReason, openDiffs, record } from "./decisions.js";
 import { failMessage, markLine } from "./format.js";
-import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
+import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, markDirty, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
+import { rowsOf, setRows, worst } from "./attention.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
 /** The paths of the views drawn by morphing, not by innerHTML: Automation, Jobs, Agents, Status, Sessions, Issues, Memory, a note, a Skill, Hooks and a hook. */
 export const morph = new Set(["/", "/automation", "/factory/jobs", "/factory/agents", "/sessions", "/issues", "/memory", "/memory/:title", "/skills/:name", "/hooks", "/hooks/:event/:name"]);
+
+/** The tone dot of a sidebar entry whose page has attention rows, titled with them; nothing for a page with none. */
+const dot = (rows) => (rows.length ? `<span class="nav-dot" title="${esc(rows.map((r) => r.text).join("; "))}"><span class="event-dot ${worst(rows) === "need" ? "warning" : "error"}" aria-hidden="true"></span></span>` : "");
 
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
@@ -262,6 +266,7 @@ export async function start() {
       else $("view").innerHTML = out;
     } catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} did not render: ${e.message}`)}</div>`; return; }
     if (saved) restoreState($("view"), saved);
+    markDirty($("view"));
     swapped?.();
     const mark = markOf(data);
     $("aged").hidden = !mark;
@@ -296,8 +301,9 @@ export async function start() {
     draw,
     event: (ev) => page.shown?.view?.event?.($("view"), ev),
     // The keys of each `change`, for code outside the views: the dock's note tool reloads on /api/annotations.
-    changed: (keys) => { if (keys.includes("/api/status")) readTone(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
-    opened: () => readTone(),
+    // A Sessions key's change carries the Sessions row (its mark), which the facts key does not.
+    changed: (keys) => { if (keys.includes("/api/status")) readTone(); if (keys.some((k) => k === "/api/attention/facts" || k.startsWith("/api/sessions"))) readAttention(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
+    opened: () => { readTone(); readAttention(); },
   });
 
   // The tone of the status sentence, from /api/status, kept for the Status entry of each nav draw.
@@ -319,6 +325,20 @@ export async function start() {
     } catch {}
   }
 
+  // The attention rows of every page, from /api/attention: a dot on each entry with a row, and the shown page's rows drawn again when they change.
+  let looks = 0;
+  async function readAttention() {
+    const mine = ++looks;
+    try {
+      const rows = await (await fetch("/api/attention", { cache: "no-store" })).json();
+      if (mine !== looks) return;
+      const path = page.shown?.view?.path, before = JSON.stringify(rowsOf(path));
+      if (!setRows(rows)) return;
+      nav(parseHash(location.hash).path);
+      if (path && JSON.stringify(rowsOf(path)) !== before && !armed()) page.redraw(parseHash(location.hash).query, false);
+    } catch {}
+  }
+
   function nav(path) {
     // The entry whose path is the longest segment prefix of the route is active: #/jobs/x marks Jobs.
     let active = null;
@@ -329,7 +349,7 @@ export async function start() {
     }
     const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
     $("nav").innerHTML = `<ul>${items.map((v, i) =>
-      `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
+      `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span>${dot(rowsOf(v.path))}</a></li>`).join("")}</ul>`;
     paintTone();
     $("nav").querySelector?.('[aria-current="page"]')?.scrollIntoView?.({ block: "nearest", inline: "center" });
   }
@@ -430,6 +450,7 @@ export async function start() {
   addEventListener("hashchange", route);
   wireFolds($("view"));
   route();
+  readAttention();
 }
 
 // Diff opens the run's diff, Always grants a rule; every other button posts the request its data names

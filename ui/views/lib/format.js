@@ -83,6 +83,8 @@ export function day(ts, now = new Date()) {
 }
 /** A model as its short name: "claude-opus-5-5" and "opus" are both "opus"; "" for none. */
 export const shortModel = (m) => bare(String(m ?? "")).replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
+/** The short weekday of a time in ms: "Mon". */
+export const weekday = (ms) => new Date(ms).toLocaleDateString("en-US", { weekday: "short" });
 /** A count with its noun: "1 run", "2 runs"; `many` is for a plural that is not `one` + "s". */
 export const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** A Title Case heading in sentence case, for an aria label: "Lead Time" is "Lead time". */

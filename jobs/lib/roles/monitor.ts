@@ -10,7 +10,7 @@ import { lock } from "../../../lib/locks.ts";
 import { writeJson } from "../../../lib/json.ts";
 import { recordRan } from "../gates/tables.ts";
 import { measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
-import { monitorHour, monitorOn } from "../infra/settings.ts";
+import { monitorHour } from "../infra/settings.ts";
 import { addDays, today } from "../../../lib/day.ts";
 import { readModels } from "../routing/models.ts";
 import { errText } from "../../../lib/errtext.ts";
@@ -85,7 +85,7 @@ export async function runMonitor(day: string): Promise<Report | null> {
 
 /** The tick's daily step: yesterday's report, once. It ignores the pause. It records its own result; the tick's `step` logs an error it throws. */
 export async function monitorStep(now = new Date()): Promise<Report | null> {
-  if (!monitorOn()) return null;
+  if (!readModels().monitor.enabled) return null;
   const day = monitorDue(now);
   if (!day) return null;
   const r = await runMonitor(day);

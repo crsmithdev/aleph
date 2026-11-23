@@ -1,53 +1,39 @@
-// The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
+// The Agents page: the Roles list (each role's model, switch and success) and the Usage charts. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get, moved, redraw } from "./lib/router.js";
-import { postJson, keep, kept, scope } from "./lib/address.js";
-import { cardPct, count, day, dur, money, shortModel } from "./lib/format.js";
-import { badCount, card, cardTrend, cell, dataTable, empty, error, esc, heads, loadingLine, miss, notice, pageHead, say, selectBox, statCard, tiles } from "./lib/html.js";
+import { postJson, scope } from "./lib/address.js";
+import { cardPct, count, day, dur, money, pct, shortModel } from "./lib/format.js";
+import { cell, dataTable, empty, error, esc, heads, loadingLine, notice, row, say, selectBox, subHead } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
-import { flowOf, lastPeriod, usageCard, windowTrend } from "./lib/flow-parts.js";
+import { flowOf, weekGone } from "./lib/flow-parts.js";
+import { browse, inspector } from "./lib/browse.js";
+import { rateBar } from "./lib/bars.js";
+import { factsLine, figureBand, pageViews } from "./lib/page.js";
 
 /** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
 const SPEND = { hour: "day", day: "day", week: "week", month: "month" };
 
-/** The OpenRouter tile: whether OpenRouter is up, over what it charged for the window's UTC period. */
-function openRouterCard(m, win) {
-  const v = m?.spend?.[SPEND[win] ?? SPEND.week];
-  return statCard({ k: "OpenRouter", ...(m ? { v: m.down.includes("deepseek-v4.1-flash") ? "down" : "up", v2: v == null ? "–" : money(v) } : {}), q: ["status", "spend"], loading: m === undefined, failed: m === null ? "Could not load the models." : "" });
-}
-
-/** The Follow-ups card: the issues the factory's own actors filed in the window and all the issues filed, with its trend against the baseline (neutral). `d` is /api/flow for the window with `baseline`, or null while it loads. */
-function followupsCard(d) {
-  const v = d?.figures?.followups;
-  const vs = !d || d.error ? {} : v == null ? { v: "–" } : { v: count(v), v2: count(d.figures.filed) };
-  return statCard({ k: "Follow‑ups", ...vs, q: ["follow-ups", "filed"], trend: windowTrend(d, "followups", v, { kind: "relative", lowerIsGood: null, format: count }), loading: !d, failed: d?.error ?? "" });
-}
-
-/** The Success card: the share of runs that succeeded and the share of builds that passed first time, with the success trend against its baseline. */
-function successCard(d) {
-  const r = d?.agents?.rates;
-  return statCard({ k: "Success", ...(r ? { v: cardPct(r.success), v2: cardPct(r.firstPass) } : d && !d.error ? { v: "–" } : {}), q: ["runs", "first pass"], trend: cardTrend(r?.success, r?.baseline, null, { kind: "points", lowerIsGood: false, format: cardPct, basis: "the baseline" }), loading: !d, failed: d?.error ?? "" });
-}
-
-function scorecard(s, d, m, win) {
-  const a = d?.agents;
-  return usageCard(s) + openRouterCard(m, win) +
-    statCard({ k: "Live agents", v: count(s.factory.liveRuns), ...(a ? { v2: count(a.live - a.workers) } : {}), q: ["workers", "other"], loading: !d, failed: d?.error ?? "" }) +
-    followupsCard(d) + successCard(d);
-}
-
-/** A success rate under this line (0 to 1) shows in the warn tone. */
-const WARN_RATE = 0.7;
 /** A row with fewer ended runs shows its counts, not a rate. */
 const MIN_ENDED = 20;
 
 /** The sizes by their label; the models each offers come from /api/models. */
 const SIZES = { small: "Small", medium: "Medium", large: "Large" };
-/** Each role model's role, whose name and outcomes its rows show; the models it offers come from /api/models. */
-const ROLE_MODELS = { review: "reviewer", intake: "intake", director: "director", monitor: "monitor", maintainer: "maintainer", housekeeper: "housekeeper", judge: "judge", investigator: "investigator" };
+/** The groups of the Roles list: each model setting's key and the role whose outcomes its row shows. */
+const GROUPS = [
+  ["Workers", [["small", "worker"], ["medium", "worker"], ["large", "worker"]]],
+  ["Review and Intake", [["review", "reviewer"], ["intake", "intake"], ["judge", "judge"]]],
+  ["Oversight", [["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["investigator", "investigator"]]],
+];
+
+/** What waits while a role is off, for its Off title: no run starts, and no work fails. The review stays on: a build with no verdict holds for Chris. */
+const WAITS = {
+  intake: "Issues wait unsorted", director: "Asks wait for you", monitor: "No daily reading", housekeeper: "Parked issues wait",
+  maintainer: "Memory passes wait", judge: "Stop gate passes unjudged", investigator: "No investigations",
+};
+const LOCKED = { review: "A build needs its review to land" };
 
 /** The noun of each role's output; a role not named here counts its OK runs. */
-const NOUNS = { worker: "landed", reviewer: "verdict", intake: "triage", director: "step", monitor: "reading", housekeeper: "sweep", judge: "call" };
+const NOUNS = { worker: "landed", reviewer: "verdicts", intake: "triages", director: "steps", monitor: "readings", housekeeper: "sweeps", judge: "calls" };
 
 /** Where an off size's work goes, as route() picks it: the next size up that is on, else the next one down. */
 function goesTo(key, set) {
@@ -55,38 +41,53 @@ function goesTo(key, set) {
   return SIZES[[...ks.slice(i + 1), ...ks.slice(0, i).reverse()].find((k) => set[k]?.enabled)];
 }
 
-function roles(a, m) {
-  const num = ["Runs", "OK", "Error", "p50", "p95", "Cost", "Per Output"];
-  const gone = miss("no runs in this window");
-  const outs = a.outcomes ?? [], set = m?.models ?? {}, open = new Set(kept("agents.open", []));
-  // The figures of one outcome. Its output is landed builds for a worker, verdicts for the reviewer and OK runs for another role.
-  const stats = (o) => {
-    if (!o) return `<td class="num">${gone}</td>`.repeat(num.length) + `<td class="out">${gone}</td>`;
-    const few = o.ended < MIN_ENDED, worker = o.role === "worker", reviewer = o.role === "reviewer";
-    const out = worker ? o.built : reviewer ? o.pass + o.fail : o.succeeded, noun = NOUNS[o.role] ?? "run";
-    const trend = few ? "" : cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: cardPct, basis: "the baseline", tip: `Baseline ${cardPct(o.baseline)}` });
-    const warn = !few && o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    const rate = few ? `${reviewer ? out : o.succeeded} / ${o.ended}` : `${esc(cardPct(o.rate))} <span class="quiet" title="ended">${count(o.ended)}</span> ${trend}`;
-    const q = worker ? ` <span class="quiet">· ${cardPct(o.built ? o.firstPass / o.built : null)} first · ${cardPct(o.reviewPass)} review</span>` : "";
-    return `${cell(count(o.runs), { num: true })}<td class="num${warn}">${rate}</td>${badCount(o.error)}${[dur(o.p50), dur(o.p95), money(o.cost), out ? money(o.cost / out) : "–"].map((v) => cell(v, { num: true })).join("")}<td class="out">${count(out)} ${worker || out === 1 ? noun : `${noun}s`}${q}</td>`;
+/** What a run made: landed builds for a worker, verdicts for the reviewer, OK runs for another role. */
+const output = (o) => (o.role === "worker" ? o.built : o.role === "reviewer" ? o.pass + o.fail : o.succeeded);
+
+/** The inspector of one role: the figures of its model, then each earlier model. */
+function roleInspect(key, role, label, model, cur, past) {
+  const out = cur ? output(cur) : 0;
+  const kv = !cur ? [] : [
+    ["Runs", esc(count(cur.runs))], ["Failed", cur.failed ? esc(count(cur.failed)) : ""], ["Error", cur.error ? esc(count(cur.error)) : ""],
+    ["Success", esc(cardPct(cur.rate))], ["Baseline", cur.baseline == null ? "" : esc(cardPct(cur.baseline))],
+    ["First Pass", cur.built ? esc(cardPct(cur.firstPass / cur.built)) : ""], ["Review Pass", cur.reviewPass == null ? "" : esc(cardPct(cur.reviewPass))],
+    ["p50", esc(dur(cur.p50))], ["p95", esc(dur(cur.p95))], ["Cost", cur.cost ? esc(money(cur.cost)) : ""],
+    ["Output", out ? esc(`${count(out)} ${NOUNS[role] ?? "runs"}`) : ""], ["Since", esc(day(cur.from))],
+  ];
+  const table = past.length ? subHead("Earlier Models") + dataTable(heads(["Model", "Until", "Runs", "Success", "Cost"], ["Runs", "Success", "Cost"]),
+    past.map((o) => row([cell(shortModel(o.model)), cell(day(o.to)), cell(count(o.runs), { num: true }), cell(cardPct(o.rate), { num: true }), cell(o.cost ? money(o.cost) : "", { num: true })])).join("")) : "";
+  return inspector({ id: key, title: model ? `${label} · ${shortModel(model)}` : label, rows: kv, body: table });
+}
+
+/** One role as a row: the switch and the model select, then runs, success, p50, cost and cost per output; a blank for no value. `m` is /api/models, or null while it loads or after it failed. */
+function roleRow(key, role, outs, m) {
+  const set = m?.models ?? {}, label = SIZES[key] ?? NAMES[role];
+  const all = outs.filter((o) => o.role === role && o.runs && (role !== "worker" || o.size === key));
+  const last = [...all].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
+  const now = set[key]?.model ?? last[0]?.model, cur = all.find((o) => shortModel(o.model) === shortModel(now)), past = last.filter((o) => o !== cur);
+  const off = set[key] && !set[key].enabled;
+  const ctl = () => {
+    const sw = `<input type="checkbox" data-name="${esc(key)}" aria-label="${esc(label)} on"${set[key].enabled ? " checked" : ""}${LOCKED[key] ? ` disabled title="${esc(LOCKED[key])}"` : ""}>`;
+    const pick = selectBox(`${label} model`, key, m.offers[key].map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
+    return `<span class="rolectl">${sw}${off ? `<span class="quiet" title="${esc(key in SIZES ? `Goes to ${goesTo(key, set)}` : WAITS[key])}">Off</span>` : pick}</span>`;
   };
-  const sel = (key, label) => selectBox(`${label} model`, key, (m.offers[key] ?? []).map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
-  const box = (key, label) => `<input type="checkbox" data-name="${esc(key)}" aria-label="${label} enabled"${set[key].enabled ? " checked" : ""}> `;
-  // A row per size and role: the figures of the model it is set to (with no setting, of the model it ran on last), then under ▸ a sub-row per earlier model.
-  const line = (key, label, rs) => {
-    const last = [...rs].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
-    const now = set[key]?.model ?? last[0]?.model, cur = rs.find((o) => shortModel(o.model) === shortModel(now));
-    const past = last.filter((o) => o !== cur), off = key in SIZES && set[key] && !set[key].enabled, shut = !open.has(key);
-    const fold = past.length ? `<button class="fold" data-fold="${esc(key)}" aria-expanded="${!shut}" aria-label="Earlier models of ${label}">${shut ? "▸" : "▾"}</button> ` : `<span class="fold" aria-hidden="true"></span> `;
-    const ctrl = !set[key] ? esc(shortModel(now)) : `${key in SIZES ? box(key, label) : ""}${off ? `<span class="quiet" title="Goes to ${goesTo(key, set)}">Off</span>` : sel(key, label)}`;
-    return `<tr><td title="${label}">${label}</td><td>${fold}${ctrl}</td>${off ? `<td colspan="${num.length + 1}"></td>` : stats(cur)}</tr>` +
-      (shut ? "" : past.map((o) => `<tr class="sub-row"><td></td><td>${esc(shortModel(o.model))} <span class="quiet">${day(o.from)} – ${day(o.to)}</span></td>${stats(o)}</tr>`).join(""));
+  const main = set[key] ? ctl() : esc(shortModel(now));
+  const out = cur ? output(cur) : 0;
+  const rate = !cur ? "" : cur.ended < MIN_ENDED ? esc(`${count(cur.succeeded)}/${count(cur.ended)}`) : rateBar(cur.rate, cur.baseline);
+  return {
+    key, lead: esc(label), main, text: `${label} ${role} ${now ?? ""}`, inspect: roleInspect(key, role, label, now, cur, past),
+    cells: !cur || off ? ["", "", "", "", ""] : [esc(count(cur.runs)), rate, esc(dur(cur.p50)), cur.cost ? esc(money(cur.cost)) : "", out && cur.cost ? esc(money(cur.cost / out)) : ""],
   };
-  const of = (role, size) => outs.filter((o) => o.role === role && (size === undefined || o.size === size));
-  const grp = (t) => `<tr class="grp"><th colspan="${num.length + 3}">${t}</th></tr>`;
-  const rows = grp("Workers") + Object.entries(SIZES).map(([k, l]) => line(k, l, of("worker", k))).join("") +
-    grp("Other") + Object.entries(ROLE_MODELS).map(([k, r]) => line(k, NAMES[r], of(r))).join("");
-  return m || outs.length ? dataTable(heads(["Agent", "Model", ...num, "Output"], num), rows) : empty();
+}
+
+function rolesView(s, d, m, win) {
+  const a = d?.agents;
+  if (!a) return d?.error ? error("Could not load the agents.", { detail: d.error }) : loadingLine("the agents");
+  const outs = a.outcomes ?? [], v = m?.spend?.[SPEND[win] ?? SPEND.week];
+  if (!m && !outs.length) return empty();
+  const groups = GROUPS.map(([title, keys]) => ({ title, count: count(keys.length), heads: ["Runs", "Success", "p50", "Cost", "Per Output"], rows: keys.map(([k, r]) => roleRow(k, r, outs, m)) }));
+  return factsLine([[count(a.live), `of ${count(a.cap)} live`], [count(a.roles.reduce((n, r) => n + r.runs, 0)), "runs"], [cardPct(a.rates.success), "success"], [v == null ? "–" : money(v), "OpenRouter"]]) +
+    (m === null ? notice("Could not load the models.", true) : "") + browse({ id: "roles", label: "Roles", search: "Search roles", groups });
 }
 
 const timed = (a) => a.roles.filter((r) => r.hours != null);
@@ -139,14 +140,27 @@ export const tokensFrame = (d) => modelFrame(d, "tokens", { name: "Tokens", unit
 const FRAMES = { live: liveFrame, tokens: tokensFrame, cost: costFrame };
 const key = (k) => `factory/agents/${k}`;
 
+/** The usage view: the figure band, then the three chart panels. `d` is /api/flow for the window, or null while it loads. */
+function usageView(s, d, m) {
+  const a = d?.agents;
+  if (!a) return d?.error ? error("Could not load the agents.", { detail: d.error }) : loadingLine("the agents");
+  const u = s.usage?.now, gone = weekGone(u?.seven_day_resets_at, s.now), r = a.rates;
+  const cost = (d.buckets ?? []).reduce((n, b) => n + Object.values(b.cost ?? {}).reduce((x, c) => x + c, 0), 0);
+  return figureBand([
+    { k: "Usage", v: u ? pct(u.seven_day) : "–", cmp: gone == null ? "" : `${pct(gone)} of week gone`, ...(gone == null ? {} : { trend: u.seven_day <= gone ? "good" : "warn" }) },
+    { k: "Success", v: cardPct(r.success), cmp: `${cardPct(r.baseline)} baseline`, ...(r.baseline == null ? {} : { trend: r.success >= r.baseline ? "good" : "warn" }) },
+    { k: "Peak Live", v: count(a.peak), cmp: `mean ${a.mean}`, title: `cap ${count(a.cap)} workers` },
+    { k: "Cost", v: money(cost), cmp: m?.spend?.[SPEND[d.window] ?? SPEND.week] == null ? "" : `${money(m.spend[SPEND[d.window] ?? SPEND.week])} OpenRouter` },
+  ]) + `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>`;
+}
+
 /** The page body. `d` is /api/flow for the window, or null while it loads. `m` is /api/models: undefined while it loads, null when it failed. */
-export function renderFactoryAgents(s, d, _key = "live", window = "week", m) {
-  const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
-  const wait = d?.error ? error("Could not load the agents.", { detail: d.error }) : loadingLine("the agents");
-  const head = scope().bar({ value: win });
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: head })}${m?.local === "down" ? notice("Local server down", true) : ""}${tiles("Scorecard", scorecard(s, d, m, win))}` +
-    (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", a ? (m === null ? notice("Could not load the models.", true) : "") + roles(a, m) : wait, { id: "roles" }) + `</div>`;
+export function renderFactoryAgents(s, d, q = new URLSearchParams(), m) {
+  const win = d?.window ?? scope(q).window;
+  return pageViews({ title: "Agents", path: "/factory/agents", query: q, views: [
+    { id: "roles", label: "Roles", scope: true, draw: () => rolesView(s, d, m, win) },
+    { id: "usage", label: "Usage", scope: true, draw: () => usageView(s, d, m) },
+  ] });
 }
 
 /** The old address. */
@@ -162,24 +176,16 @@ export const view = {
   live: true,
   refresh: 60,
   // `s.flow` is /api/flow for the window and `s.models` is /api/models, which `more` adds; the page draws without them first.
-  render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, "live", scope(q).window, s.models),
+  render: (s, _params, q) => renderFactoryAgents(s, s.flow ?? null, q, s.models),
   more: async (s, q) => {
     const [flow, models] = await Promise.all([flowOf(scope(q).window, q, true), get("/api/models").then((r) => (r.ok ? r.json() : null)).catch(() => null)]);
     return { ...s, flow, models };
   },
   mount: (root, s) => {
     scope().wire(root);
-    if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(s.flow);
-    root.onclick = (e) => {
-      const b = e.target.closest?.("#roles button[data-fold]");
-      if (!b) return;
-      const open = new Set(kept("agents.open", []));
-      if (!open.delete(b.dataset.fold)) open.add(b.dataset.fold);
-      keep("agents.open", [...open]);
-      redraw();
-    };
+    if (s.flow?.agents) for (const [k, fr] of Object.entries(FRAMES)) { const el = root.querySelector(`aleph-chart[key="${key(k)}"]`); if (el) el.frame = fr(s.flow); }
     root.onchange = async (e) => {
-      const b = e.target.closest?.("#roles [data-name]");
+      const b = e.target.closest?.(".browse [data-name]");
       if (!b || e.type !== "change") return;
       const m = await postJson("/api/models", { name: b.dataset.name, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => { say(b, err.message); if (b.type === "checkbox") b.checked = !b.checked; });
       if (m) await redraw(true);

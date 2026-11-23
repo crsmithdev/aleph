@@ -202,7 +202,7 @@ test("the Herald shows the rows of issues and of jobs together, with no toggles"
 test("the Memory panel lists each memory item that waits, linked to the Health tab; the empty mark when none waits; a loading line before the data", async () => {
   const draw = (memory: unknown) => { const h = view.view.render({ ...state, usage: USAGE, memory } as any, {}, new URLSearchParams()) as string; return h.slice(h.indexOf('id="memory"'), h.indexOf('id="herald"')); };
   const busy = draw(BUSY), links = [...busy.matchAll(/<a href="[^"]*"/g)].map((x) => x[0]);
-  expect(links).toEqual(Array(4).fill('<a href="#/memory?tab=health"'));
+  expect(links).toEqual(Array(4).fill('<a href="#/memory?view=health"'));
   expect(busy).toContain("1 core line cut");
   expect(busy).not.toContain(empty());
   const calm = draw(CALM);

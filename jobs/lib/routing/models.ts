@@ -138,8 +138,10 @@ export const OFFERS = {
 /** A size (small, medium, large) or a role model. */
 export type Name = keyof typeof OFFERS;
 export type Setting = { enabled: boolean; model: string };
-/** The sizes that can be disabled. */
-const DISABLES = ["small", "medium", "large"] as const;
+/** The sizes: one stays on, so a run always has a size to route to. */
+const SIZES = ["small", "medium", "large"] as const;
+/** The entry that cannot be disabled: a build needs the reviewer's verdict to land, and a build with no verdict does not wait, it holds for Chris's review. */
+const ALWAYS_ON = "review";
 /** The size of a run's model: a size word, which unit.ts replaces with the size's model, or the Claude model of a merge run. */
 export const SIZE_OF: Record<string, Name | undefined> = { small: "small", medium: "medium", large: "large", haiku: "small", sonnet: "medium", opus: "large" };
 /** The name each entry had in a models setting stored before the sizes. */
@@ -153,21 +155,21 @@ export function readModels(): Record<Name, Setting> {
   const all = Object.fromEntries((Object.keys(OFFERS) as Name[]).map((t) => {
     const m = stored[t] ?? stored[OLD_NAMES[t] ?? ""];
     return [t, {
-      enabled: !(DISABLES as readonly string[]).includes(t) || m?.enabled !== false,
+      enabled: t === ALWAYS_ON || m?.enabled !== false,
       model: OFFERS[t].includes(m?.model) ? m.model : OFFERS[t][0],
     }];
   })) as Record<Name, Setting>;
   return all;
 }
 
-/** Changes one entry; returns an error text for an unknown name, a model the entry does not offer, a disable of an entry that cannot be disabled, or of the last enabled size, else null. */
+/** Changes one entry; returns an error text for an unknown name, a model the entry does not offer, a disable of the review, or of the last enabled size, else null. */
 export function setModel(name: string, change: Partial<Setting>): string | null {
   if (!Object.hasOwn(OFFERS, name)) return `unknown name "${name}"; names: ${Object.keys(OFFERS).join(", ")}`;
   const t = name as Name;
   if (change.model !== undefined && !OFFERS[t].includes(change.model)) return `${t} offers ${OFFERS[t].join(", ")}, not "${change.model}"`;
-  if (change.enabled === false && !(DISABLES as readonly string[]).includes(t)) return `only ${DISABLES.join(", ")} can be disabled`;
+  if (change.enabled === false && t === ALWAYS_ON) return `${ALWAYS_ON} stays on: a build needs its verdict to land`;
   const m = readModels();
-  if (change.enabled === false && DISABLES.every((s) => s === t || !m[s].enabled)) return "one size stays on";
+  if (change.enabled === false && (SIZES as readonly string[]).includes(t) && SIZES.every((s) => s === t || !m[s].enabled)) return "one size stays on";
   write({ ...m, [t]: { ...m[t], ...change } });
   logSetting(detailOf("changed", t, Object.entries(change).map(([k, v]) => `${k} ${v}`).join(", ")));
   return null;

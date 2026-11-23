@@ -30,7 +30,7 @@ test("no setting gives small, medium and large on haiku, sonnet and Opus, and ea
   });
 });
 
-test("an entry set to a model it offers reads back; a model it does not offer, an unknown or old name, or a disable of a role model is an error text", () => {
+test("an entry set to a model it offers reads back; a model it does not offer, an unknown or old name, or a disable of the review is an error text", () => {
   expect(setModel("small", { model: "gpt-oss-20b" })).toBeNull();
   expect(setModel("medium", { enabled: false })).toBeNull();
   const m = readModels();
@@ -39,13 +39,12 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("housekeeper", { model: "sonnet" })).toBeNull();
   expect(m.housekeeper).toEqual({ enabled: true, model: "claude-opus-5-5" });
   expect(readModels().housekeeper.model).toBe("sonnet");
-  expect(setModel("monitor", { enabled: false })).toContain("can be disabled");
   expect(setModel("small", { model: "sonnet" })).toContain("offers");
   expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown");
   expect(setModel("title", { model: "haiku" })).toContain("unknown name");
   expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
-  expect(setModel("review", { enabled: false })).toContain("can be disabled");
+  expect(setModel("review", { enabled: false })).toContain("stays on");
   expect(setModel("merge", { model: "haiku" })).toContain("unknown");
   expect(readModels()).toEqual({ ...m, housekeeper: { enabled: true, model: "sonnet" } });
 });
@@ -58,6 +57,19 @@ test("any one size can be disabled, and a disable of the last enabled size is an
   expect(setModel("medium", { enabled: false })).toBeNull();
   expect(setModel("large", { enabled: false })).toContain("one size stays on");
   expect(readModels().large.enabled).toBe(true);
+});
+
+test("each role but the review turns off and on; the last size rule leaves the roles out", () => {
+  for (const r of ["intake", "director", "monitor", "housekeeper", "maintainer", "judge", "investigator"] as const) {
+    expect(setModel(r, { enabled: false })).toBeNull();
+    expect(readModels()[r]).toMatchObject({ enabled: false });
+    expect(setModel(r, { enabled: true })).toBeNull();
+    expect(readModels()[r].enabled).toBe(true);
+  }
+  expect(setModel("small", { enabled: false })).toBeNull();
+  expect(setModel("medium", { enabled: false })).toBeNull();
+  expect(setModel("intake", { enabled: false })).toBeNull();
+  expect(readModels().review.enabled).toBe(true);
 });
 
 test("a models setting stored under the old names reads back under small, medium and review", () => {

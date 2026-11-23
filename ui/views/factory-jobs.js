@@ -1,12 +1,15 @@
-// The Jobs page: how long each stage of the work takes. `d` is /api/flow for the window.
+// The Jobs page: Runs (a row per issue with a strip of its runs) and Timing (how long each stage takes). `d` is /api/flow for the window.
 import { get, moved, redraw } from "./lib/router.js";
 import { setQuery, scope } from "./lib/address.js";
-import { cardPct, dur, count, failMessage, MIN_LANDED, plural, shortModel } from "./lib/format.js";
-import { card, cell, dataTable, filterBar, miss, row, empty, error, heads, loadingLine, onTile, pageHead, searchBox, statCard, cardTrend, tiles } from "./lib/html.js";
-import { NAMES } from "../../lib/naming.ts";
+import { cardPct, dur, count, failMessage, hours, MIN_LANDED, money, plural, shortModel, when } from "./lib/format.js";
+import { badge, barList, barRow, card, cell, chip, dataTable, esc, filterBar, idLink, legendHtml, meter, miss, row, empty, error, heads, loadingLine, onTile, statCard, statusRow, subHead, cardTrend, tiles, tone } from "./lib/html.js";
+import { issueHref, jobHref, NAMES, shownId } from "../../lib/naming.ts";
 import { quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { listUrl, renderFilters, renderJobsTable, renderScope, wireJobs } from "./lib/jobs-table.js";
+import { listUrl } from "./lib/jobs-table.js";
+import { pageViews, factsLine, figureBand } from "./lib/page.js";
+import { browse, inspector } from "./lib/browse.js";
+import { runStrip } from "./lib/bars.js";
 import { bucketOf, flowOf, flowUrl, lastPeriod, trendOn, usable, windowTrend } from "./lib/flow-parts.js";
 
 export const STAGES = [
@@ -114,18 +117,102 @@ function buildByModel(d, size = "") {
   return rows.sort((a, b) => (a.per ?? Infinity) - (b.per ?? Infinity) || b.count - a.count || a.model.localeCompare(b.model));
 }
 
-/** The page body for a stage. `day` is /api/flow for the last 24h, or null. `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `f` is the route query. */
-export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
-  const [key, name] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
-  const head = renderScope(Array.isArray(jobs) ? jobs : [], { ...f, window: f.window ?? d.window });
-  return `<div class="page sp" id="perf">${pageHead("Jobs", { aside: head })}` +
-    tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).toSpliced(1, 0, waitTile(d)).join("")) +
+/** A run kind's stage word: a build run is the Implement stage. */
+const stage = (kind) => (kind === "build" ? "implement" : kind);
+const SHOWN = 50; // issue rows drawn: each drawn row carries an inspector, so 2000 jobs would draw too much
+const ROLES = new Set(["maintainer", "monitor", "housekeeper", "investigator", "director"]);
+/** A run's seconds: a running run has none yet, so its time is from its start to `now`. */
+const secsOf = (r, now) => (r.seconds ?? Math.max(0, (now - Date.parse(r.started)) / 1000));
+const sumSecs = (runs, now) => runs.reduce((n, r) => n + secsOf(r, now), 0);
+/** The state of a row of runs: running while one runs, else the last run's. */
+const stateOf = (runs) => (runs.some((r) => r.state === "running") ? "running" : runs.at(-1).state);
+const byStart = (a, b) => Date.parse(a.started) - Date.parse(b.started);
+
+/** The runs as a strip: a segment per run, its colour its state. */
+const strip = (runs, now, most, o) => runStrip(runs.map((r) => {
+  const s = secsOf(r, now);
+  return { secs: s, cls: tone(r.state), tip: `${stage(r.kind)} ${r.state} ${dur(s)}${r.model ? ` · ${shortModel(r.model)}` : ""}` };
+}), most, { label: `${plural(runs.length, "run")}, ${dur(sumSecs(runs, now))}`, ...o });
+
+const STATES = legendHtml([["done", "t-land"], ["returned", "t-bad"], ["dropped", "t-aux"], ["running", "t-build"]]);
+
+/** The inspector of one row: its state, facts, its runs as a strip at full width, then as a table. */
+function inspect(g, now) {
+  const { runs } = g, kv = [["Project", esc(g.repo)], ["Runs", esc(count(runs.length))], ["Took", esc(dur(sumSecs(runs, now)))], ["Cost", g.cost ? esc(money(g.cost)) : ""], ["Last", esc(when(runs.at(-1).started))]];
+  const rows = runs.map((r) => row([`<td><a href="${esc(jobHref(r.id))}">${esc(stage(r.kind))}</a></td>`, `<td>${badge(r.state)}</td>`, cell(shortModel(r.model)), cell(dur(secsOf(r, now)), { num: true }), cell(r.cost ? money(r.cost) : "", { num: true })])).join("");
+  const body = `${subHead("Runs")}${strip(runs, now, sumSecs(runs, now) || 1, { full: true })}${STATES}${dataTable(heads(["Stage", "State", "Model", "Took", "Cost"], ["Took", "Cost"]), rows)}`;
+  return inspector({ id: g.id, title: g.title, status: statusRow(badge(stateOf(runs)), "", ""), rows: kv, body, href: g.href });
+}
+
+/** A group of runs `{ key, id, title, href, repo, runs }` as a list row: the id, the title, the strip, the time, the cost and the last start. */
+const runRow = (g, now, most) => ({
+  key: g.key, lead: idLink(g.id, g.href), main: `<span class="t" title="${esc(g.title)}">${esc(g.title)}</span>${g.chips ?? ""}`,
+  cells: [strip(g.runs, now, most), esc(dur(sumSecs(g.runs, now))), g.cost ? esc(money(g.cost)) : "", esc(when(g.runs.at(-1).started))],
+  text: `${g.id} ${g.title} ${g.repo}`, inspect: () => inspect(g, now),
+});
+
+/** The runs of one issue, oldest first, as a row's group. */
+function issueGroup(issue, xs) {
+  const runs = [...xs].sort(byStart), repo = runs[0].repo || "aleph";
+  return { key: `${repo}/${issue}`, id: shownId(issue, repo), title: runs.at(-1).title, href: issueHref(issue, repo), repo: runs[0].repo, runs, cost: runs.reduce((n, r) => n + (r.cost ?? 0), 0), chips: repo !== "aleph" ? chip(repo) : "" };
+}
+
+/** The runs with no issue, by job: a maintainer, monitor, housekeeper, director or investigator by its role, any other by its name. Its id is its newest run. */
+function systemGroups(jobs) {
+  return [...Map.groupBy(jobs.filter((j) => !j.issue), (j) => (ROLES.has(j.kind) ? j.kind : j.name))].map(([name, xs]) => {
+    const runs = [...xs].sort(byStart), last = runs.at(-1);
+    return { key: `sys.${name}`, id: last.id.replace(/^job\./, ""), title: name, href: jobHref(last.id), repo: last.repo, runs, cost: runs.reduce((n, r) => n + (r.cost ?? 0), 0) };
+  });
+}
+
+/** The Runs view: `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load. `d` is /api/flow, for the landed figure. */
+function runsView(d, jobs) {
+  if (jobs instanceof Error) return error("Could not load the jobs.", { detail: jobs.message });
+  if (!jobs) return loadingLine("jobs");
+  const now = Date.now(), midnight = new Date(now).setHours(0, 0, 0, 0), today = jobs.filter((j) => Date.parse(j.started) >= midnight);
+  const issues = [...Map.groupBy(jobs.filter((j) => j.issue), (j) => `${j.repo}/${j.issue}`).values()].map((xs) => issueGroup(xs[0].issue, xs))
+    .sort((a, b) => Date.parse(b.runs.at(-1).started) - Date.parse(a.runs.at(-1).started));
+  const system = systemGroups(jobs);
+  // One scale for every strip, so a wider strip is a longer issue.
+  const most = Math.max(1, ...[...issues, ...system].map((g) => sumSecs(g.runs, now)));
+  const cols = ["Runs", "Took", "Cost", "Last"];
+  return factsLine([[count(jobs.filter((j) => j.state === "running").length), "running"], [count(today.length), "runs today"], [money(today.reduce((n, j) => n + (j.cost ?? 0), 0)), "today"], [count(d.issues.landed), "landed"]]) +
+    browse({ id: "jobs", label: "Jobs", search: "Search ids and titles", groups: [
+      { title: "Issues", count: count(issues.length), heads: cols, rows: issues.map((g) => runRow(g, now, most)), cap: SHOWN },
+      { title: "System", count: count(jobs.filter((j) => !j.issue).length), heads: cols, rows: system.map((g) => runRow(g, now, most)) },
+    ] });
+}
+
+/** The Run Hours by Outcome rows: a bar for each outcome class, in `--error` when the class is lost time. */
+function outcomeBars(d) {
+  if (!d.classes.length) return empty();
+  const most = Math.max(...d.classes.map((c) => c.hours)) || 1;
+  return barList(d.classes.map((c) => barRow(`${esc(c.key)} <span class="count">${count(c.runs)}</span>`, 0, esc(hours(c.hours)), { bar: meter([{ pct: (c.hours / most) * 100, cls: c.lost ? "c-err" : "" }], `${c.key} ${hours(c.hours)}`) })).join(""));
+}
+
+/** The Timing view: the figure band, the stage tiles, the charts of the stage shown, then the timing tables. `day` is /api/flow for the last 24h, or null. */
+function timingView(d, day, q) {
+  const key = (STAGES.find((s) => s[0] === q.get("stage")) ?? STAGES[0])[0], [, name] = STAGES.find((s) => s[0] === key), size = q.get("size") || "";
+  const P = d.phases, p = (k, f) => (P[k].count ? dur(P[k][f]) : "–"), today = trendOn(d) && day?.phases?.lead?.count ? day.phases.lead.p50 : null;
+  const lost = d.classes.filter((c) => c.lost).map((c) => `${c.key} ${hours(c.hours)}`).join(", ");
+  return `<div class="views" id="perf">` + figureBand([
+    { k: "Lead Time", v: p("lead", "p50"), cmp: today === null ? `p90 ${p("lead", "p90")}` : `${dur(today)} last 24h`, trend: today === null ? "" : today < P.lead.p50 ? "good" : "warn", title: `p50; p90 ${p("lead", "p90")}` },
+    { k: "Build", v: p("implement", "p50"), cmp: `p90 ${p("implement", "p90")}`, title: "Implement stage, p50" },
+    { k: "First Pass", v: cardPct(d.issues.firstPass), cmp: `of ${count(d.issues.landed)} landed` },
+    { k: "Lost Time", v: hours(d.lost.hours), cmp: `${cardPct(d.lost.share)} of run time`, trend: "warn", title: lost },
+  ]) + tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).toSpliced(1, 0, waitTile(d)).join("")) +
     `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
     `<div class="pair">${card("Lead Time by Size", table(["Size", "Issues", "p50", "p90"], ["Issues", "p50", "p90"], leadBySize(d)), { count: landedIssues(d).length, label: "Lead time by size" })}` +
-    card("Build Time by Model", filterBar([{ label: "Size", name: "size", value: f.size || "", options: [{ value: "", label: "All" }, ...SIZES] }]) + table(["Model", "Jobs", "p50", "p90", "Retried", "Per Landed"], ["Jobs", "p50", "p90", "Retried", "Per Landed"], buildByModel(d, f.size).map((m) => m.cells)), { count: buildsOf(d, f.size).length, label: "Build time by model" }) + `</div>` +
-    card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)]))) +
-    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs instanceof Error ? error("Could not load the jobs.", { detail: jobs.message }) : jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
+    card("Build Time by Model", filterBar([{ label: "Size", name: "size", value: size, options: [{ value: "", label: "All" }, ...SIZES] }]) + table(["Model", "Jobs", "p50", "p90", "Retried", "Per Landed"], ["Jobs", "p50", "p90", "Retried", "Per Landed"], buildByModel(d, size).map((m) => m.cells)), { count: buildsOf(d, size).length, label: "Build time by model" }) + `</div>` +
+    `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, count(x.count), dur(x.p50), dur(x.p90)])))}` +
+    card("Run Hours by Outcome", outcomeBars(d), { aside: legendHtml([["lost", "t-bad"]]) }) + `</div></div>`;
 }
+
+/** The page: Runs, then Timing. `d` is /api/flow for the window; `day` is /api/flow for the last 24h, or null; `jobs` is /api/jobs for the window, null while it loads, or the Error of a failed load; `q` is the route query. */
+export const renderFactoryJobs = (d, day, jobs, q) => pageViews({ title: "Jobs", path: "/factory/jobs", query: q, views: [
+  { id: "runs", label: "Runs", draw: () => runsView(d, jobs) },
+  { id: "timing", label: "Timing", scope: true, draw: () => timingView(d, day, q) },
+] });
 
 /** The old address. */
 export const redirect = (hash) => moved(hash, ["#/status/performance", "#/jobs"], "#/factory/jobs");
@@ -140,7 +227,7 @@ export const view = {
   live: true,
   refresh: 60,
   // `d.day` is /api/flow for the last 24h and `d.jobs` is /api/jobs for the window, which `more` adds; the page draws without them first.
-  render: (d, _params, q) => renderFactoryJobs(d, usable(d.day), q?.get("stage") ?? "lead", d.jobs ?? null, Object.fromEntries(q ?? [])),
+  render: (d, _params, q = new URLSearchParams()) => renderFactoryJobs(d, usable(d.day), d.jobs ?? null, q),
   more: async (d, q) => {
     // The API holds 2000 jobs a page and gives `next`, the `before` of the following page, until the window ends.
     const page = async (url) => {
@@ -153,7 +240,7 @@ export const view = {
     return { ...d, day: trendOn(d) ? await flowOf("day", q) : null, jobs: await jobs };
   },
   mount: (root, d, q) => {
-    const stage = q.get("stage") ?? "lead", [key, name] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
+    const [key, name] = STAGES.find((s) => s[0] === q.get("stage")) ?? STAGES[0];
     onTile(root.querySelector("#perf"), async (k) => {
       setQuery({ stage: k });
       await redraw();
@@ -165,12 +252,10 @@ export const view = {
       const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
       if (el) el.frame = fr(d, key, name);
     }
-    wireJobs(root, () => (Array.isArray(d.jobs) ? d.jobs : null));
-    // The Size filter changes only what the model table counts, so it redraws and does not fetch: wireJobs would goQuery.
-    const onclick = root.onclick;
+    // The Size filter changes only what the model table counts, so it redraws and does not fetch.
     root.onclick = async (e) => {
       const b = e.target.closest?.('.seg[data-name="size"] button');
-      if (!b) return onclick(e);
+      if (!b) return;
       setQuery({ size: b.dataset.value });
       await redraw();
       root.querySelector('.seg[data-name="size"] button[aria-pressed="true"]')?.focus();

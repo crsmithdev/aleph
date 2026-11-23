@@ -717,9 +717,10 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
 
 /**
  * The director's sweep: one run for each Ask with no case text, at most `ALEPH_DIRECTOR_CAP` a tick, all at once.
- * An error is logged, never thrown.
+ * An error is logged, never thrown. With the director off it runs none, and each Ask waits with Chris.
  */
 export async function directAll(repos: Repo[] = sandboxRepos(), ports: Ports = defaultPorts): Promise<Decision[]> {
+  if (!readModels().director.enabled) return [];
   try {
     await endLost("director", lockOf, "its decision");
     const todo = pendingCases(repos).slice(0, Math.max(0, DIRECTOR_CAP()));

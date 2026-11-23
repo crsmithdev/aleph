@@ -198,3 +198,16 @@ test("an issue the housekeeper changed, or kept in a drop, is left out of its re
   const [p] = (await housekeep(NOW + 2 * 86_400_000))!;
   expect(p.ids).toEqual(["1", "3", "4"]);
 });
+
+test("an off housekeeper opens no run and is never due, and the state stays for the run after it is on", async () => {
+  seed([{ title: "Parked issue" }]);
+  act([]);
+  setModel("housekeeper", { enabled: false });
+  expect(housekeepDue(NOW)).toBe(false);
+  expect(await housekeep(NOW)).toEqual([]);
+  expect(calls()).toBe(0);
+  expect(readState().daily).toBeUndefined();
+  setModel("housekeeper", { enabled: true });
+  expect(housekeepDue(NOW)).toBe(true);
+  expect((await housekeep(NOW))!.map((o) => o.ids.length)).toEqual([1]);
+});

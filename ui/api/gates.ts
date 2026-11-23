@@ -216,7 +216,7 @@ export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, pro
     rules: rules(all, asks, Date.now(), ms),
     ...security,
     repoHeld: repoHeld(),
-    log: { days: ms / DAY, max: LOG_MAX, entries },
+    log: { days: ms / DAY, max: LOG_MAX, total: all.length, entries },
   };
 }
 

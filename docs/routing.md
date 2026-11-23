@@ -87,12 +87,13 @@ The `models` setting maps each size and role model ([Naming](naming.md#terms)) t
 | `maintainer` | `sonnet` |
 | `judge` | `haiku` |
 
-You can disable any size except the last one that is on. A role model is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
+You can disable any size except the last one that is on, and any role except `review`. An off role starts no run, and its work waits until it is on: intake leaves issues unsorted, the director leaves Asks with you, the housekeeper and the maintainer keep their queues, and an off judge gives no verdict, which the Stop gate passes. A build needs its review to land, so `review` is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
 ```bash
 aleph models                          # show the sizes and role models
 aleph models set small deepseek-v4.1-flash
 aleph models disable large            # one size stays on
+aleph models disable intake           # no intake run starts; issues wait
 ```
 
 A build routed to a size records the model that ran as `model` and the size word as `size`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.

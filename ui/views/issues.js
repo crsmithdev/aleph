@@ -1,17 +1,17 @@
-// The Issues view: a browser for the issues of every repo: tiles, four charts, filters, fuzzy search, a sortable
-// table that offers to file the search text as an issue. `data` is /api/issues: { issues, projects }.
-// The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { issueApi, postJson, setQuery as setHash, hashQuery, scope, remember, keep, kept } from "./lib/address.js";
-import { redraw } from "./lib/router.js";
+// The Issues view: the list of every repo's issues (Open, Parked, Closed) and its flow (a figure band and four charts).
+// `data` is /api/issues: { issues, projects }. The issue detail (renderIssue) is routed at #/issues/:repo/:n.
+import { issueApi, postJson, scope, kept, hashQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { cardPct, count, days, plural, dur, money, when } from "./lib/format.js";
-import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, card, chip, chips, crumb, cell, miss, row, shaLink, dataTable, heads, pagedTable, empty, esc, field, filterBar, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, onTile, pageHead, pager, searchBox, pageOf, pageRows, sortRows as sortBy, sortOf, wireTable, cardTrend, sortHead, statCard, tiles } from "./lib/html.js";
+import { cardPct, count, plural, dur, money, when } from "./lib/format.js";
+import { actButton, editable, fold, runNowButton, say, blockersHtml, badge, statusRow, tag, priorityBadge, chip, chips, crumb, cell, miss, row, shaLink, heads, pagedTable, esc, field, idLink, inputBox, form as formOf, selectBox, wireEdit, toc, wireToc, md, pageHead } from "./lib/html.js";
 import { buckets, DAY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "./lib/chart.js";
-import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, priorityRank, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
+import { browse, inspector } from "./lib/browse.js";
+import { factsLine, figureBand, pageViews } from "./lib/page.js";
+import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
 import { askCard } from "./lib/ask-cards.js";
 import { investigateButton, investigationPanel } from "./lib/investigation.js";
-import { detailPanel, fromTo, gaps, laneRow, eventHtml, noteEvent, panel, renderKpis, renderTimeline, spans } from "./lib/timeline.js";
+import { CLOSED, ISSUE_KINDS as KINDS, PRIORITIES, SOURCES, shortText, shortId, issueHref, issueKey, jobHref, runWord } from "../../lib/naming.ts";
 
 export const view = {
   path: "/issues",
@@ -20,7 +20,7 @@ export const view = {
   group: "factory",
   order: 0,
   api: "/api/issues",
-  render: (d, _params, query) => renderIssues(d, hashOptions(query)),
+  render: (d, _params, query) => renderIssues(d, query),
   mount: (root, d) => mount(root, d),
 };
 
@@ -32,28 +32,11 @@ export function redirect(hash) {
   return old === "/projects" || old === "/contents" ? "#/issues" : null;
 }
 
-/** The Issues table shows this many rows, and this many more for each press of the pager's button. */
-export const PAGE = 50;
-
-/** The Status filter: with no status in the query the table opens on every status, and "any" (the All option) is the same. */
-const statusOf = (s) => (s == null || s === "any" ? "" : s);
-
-/** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&page=2. With a search and no sort, the best match comes first. */
-export function hashOptions(q = new URLSearchParams()) {
-  const s = scope(q);
-  return {
-    page: pageOf(q),
-    status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") ?? "", window: s.window,
-    sort: sortOf(q, SORT, null),
-  };
-}
-
 /** A row's own number: `910` for an issue, `910.1` for a sub-issue. */
 const own = (r) => r.ref;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => issueHref(ref(r));
 
-const ms = (s) => Date.parse(s) || 0;
 /** An ISO UTC time from the store as ms; 0 for none. */
 const isoMs = (s) => Date.parse(s ?? "") || 0;
 
@@ -136,82 +119,6 @@ function markHits(title, hits = []) {
   return out;
 }
 
-/** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
-export function filterRows(rows, o = {}, skip = []) {
-  const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
-  const q = (o.q ?? "").trim(), at = within(buckets(o.window, Date.now()));
-  const inTile = (r) => skip.includes("tile") || o.tile !== "flow" || at(r.createdTime) || (CLOSED.includes(r.status) && at(r.closedTime));
-  return rows.flatMap((r) => {
-    if (!inTile(r)) return [];
-    if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
-    if (o.label && !skip.includes("label") && !r.labels.includes(o.label)) return [];
-    if (!q) return [r];
-    const m = fuzzyMatch(q, r);
-    return m ? [{ ...r, score: m.score, hits: m.hits }] : [];
-  });
-}
-
-// Column order: id, title, state badge, priority, project, labels, numbers, then time. [key, label, { num }]
-export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["priority", "Priority"], ["project", "Project"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated", { num: true }]];
-const SORT = {
-  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
-  priority: (r) => priorityRank(r.priority), notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -isoMs(r.createdTime),
-};
-/** The keys that start with the largest first. */
-const DOWN_FIRST = new Set(["updated", "priority", "notes", "runs", "cost", "age"]);
-const UPDATED = { key: "updated", dir: -1 };
-
-/** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first; rows that tie on that too keep their order going down and reverse it going up. */
-export function sortRows(rows, sort = UPDATED) {
-  const at = new Map(rows.map((r, i) => [r, i]));
-  return sortBy(rows, SORT, { key: SORT[sort.key] ? sort.key : "updated", dir: sort.dir }, (a, b) => ms(b.at) - ms(a.at) || (at.get(a) - at.get(b)) * -sort.dir);
-}
-
-/** With a search and no chosen sort, the best match first. */
-const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.sort ?? UPDATED) : [...rows].sort((a, b) => b.score - a.score || ms(b.at) - ms(a.at)));
-
-/** When a row last changed, in ms. */
-const updatedMs = (r) => isoMs(r.atTime);
-/** The Updated cell: the local minute as `when()` gives it; "" for none. */
-export const updatedText = (r) => (updatedMs(r) ? when(new Date(updatedMs(r))) : "");
-
-/** The days since a store time, as "12d"; a closed issue counts to its closing. "" for none. */
-export function ageText(r, now = Date.now()) {
-  const from = isoMs(r.createdTime);
-  if (!from) return "";
-  return days(Math.max(0, Math.floor(((r.status === "open" ? now : isoMs(r.closedTime) || now) - from) / DAY)));
-}
-
-/** One issue row. `fold` is "open" or "closed" for a parent with parts, which gets a chevron, and "none" for a row without parts in a grouped table; `sub` indents a part shown under its parent. */
-export function renderRow(r, { fold, sub } = {}) {
-  const chevron = fold === "open" || fold === "closed" ? `<button class="fold" data-fold="${esc(r.id)}" aria-expanded="${fold === "open"}" aria-label="Parts of ${esc(r.title)}">${fold === "open" ? "▾" : "▸"}</button>` : "";
-  const id = shortId(`${r.repo}-${r.n}`);
-  return `<tr class="rowlink${sub ? " sub-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}" data-annotate="${esc(id)}">${fold ? `<td>${chevron}</td>` : ""}<td>${idLink(id, r.href)}</td>` +
-    `<td class="wide" title="${esc(r.title)}"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${priorityBadge(r.priority)}</td>${cell(r.project)}<td class="labels" title="${esc(r.labels.join(", "))}">${chips(r.labels)}</td>` +
-    `${cell(count(r.notes), { num: true })}${cell(count(r.runs), { num: true })}${cell(money(r.cost), { num: true })}${cell(ageText(r), { num: true })}<td class="time">${esc(updatedText(r))}</td></tr>`;
-}
-
-/** The project a filed search goes to: the scoped one, else aleph, else the first. */
-export const fileProject = (project, projects = []) => project || (projects.includes("aleph") ? "aleph" : projects[0] ?? "");
-
-/** The search box's action: it files the search text in `project`. CSS shows it only while the box has text. */
-const fileHint = (project) =>
-  `<button type="button" class="hint" data-file title="File the search text as an issue (Ctrl+Enter)">Ctrl+↵ File in ${esc(project)}</button>`;
-
-export function renderTable(rows, o = {}) {
-  const flat = ordered(filterRows(rows, o), o), group = kept("issues.group", false), open = new Set(kept("issues.open", []));
-  const ids = new Set(flat.map((r) => r.id)), parents = new Set(flat.map((r) => r.parent)), under = (r) => group && r.parent && ids.has(r.parent);
-  const kids = Map.groupBy(flat.filter(under), (r) => r.parent);
-  const all = group ? flat.filter((r) => !under(r)).flatMap((r) => [r, ...(open.has(r.id) ? kids.get(r.id) ?? [] : [])]) : flat;
-  if (!all.length) return empty();
-  const shown = pageRows(all, o.page ?? 1, PAGE);
-  const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
-  // The fold column has no name (design.md, Table).
-  const head = (group ? "<th></th>" : "") + COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
-  return `${dataTable(head, shown.map((r) => renderRow(r, group ? { fold: parents.has(r.id) ? (open.has(r.id) ? "open" : "closed") : "none", sub: under(r) } : {})).join(""))}${pager(o.page ?? 1, all.length, PAGE)}`;
-}
-
 /** Whether a stored time is inside the span of `b`, the buckets of a window. */
 const within = (b) => (time) => { const t = isoMs(time); return t >= b.since && t < b.until; };
 
@@ -219,7 +126,7 @@ const within = (b) => (time) => { const t = isoMs(time); return t >= b.since && 
 const closeSpans = (rows, inside) => rows.filter((r) => CLOSED.includes(r.status) && !r.everParked && inside(r.closedTime) && isoMs(r.createdTime))
   .map((r) => (isoMs(r.closedTime) - isoMs(r.createdTime)) / 1000).filter((s) => s >= 0);
 
-/** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
+/** The numbers over `rows` in the window: open and parked now, filed, closed and dropped in it, and the time to close. */
 export function stats(rows, now = new Date(), window = "week") {
   const b = buckets(window, now.getTime());
   // `at` is the window; `prior` is the window before it.
@@ -229,23 +136,9 @@ export function stats(rows, now = new Date(), window = "week") {
   return {
     open: rows.filter((r) => r.status === "open").length, parked: rows.filter((r) => r.status === "parked").length,
     filed: rows.filter((r) => at(r.createdTime)).length, filedBefore: rows.filter((r) => prior(r.createdTime)).length,
-    closed: closedIn(at), closedBefore: closedIn(prior),
+    closed: closedIn(at), closedBefore: closedIn(prior), dropped: rows.filter((r) => r.status === "dropped" && at(r.closedTime)).length,
     p50: quantile(spans, 0.5), p90: quantile(spans, 0.9), p50Before: quantile(before, 0.5),
   };
-}
-
-/** Closed per filed in a window, as a share; null with nothing filed. */
-const rateOf = (closed, filed) => (filed ? closed / filed : null);
-
-export function renderTiles(s, key = "open", win = "week") {
-  const on = (k) => ({ key: k, on: key === k });
-  const rate = rateOf(s.closed, s.filed), before = rateOf(s.closedBefore, s.filedBefore);
-  return tiles("Issue numbers",
-    statCard({ k: "Open", v: count(s.open), ...on("open") }) +
-    statCard({ k: "Backlog", v: count(s.parked), ...on("parked") }) +
-    statCard({ k: "Filed / Closed", v: count(s.filed), v2: count(s.closed), q: ["filed", "closed"], ...on("flow") }) +
-    statCard({ k: "Time to Close", v: s.p50 == null ? "–" : dur(s.p50), ...(s.p90 == null ? {} : { v2: dur(s.p90), q: ["p50", "p90"] }), trend: cardTrend(s.p50, s.p50Before, s.p50Before, { kind: "relative", lowerIsGood: true, tip: `${dur(s.p50Before)} the ${win} before` }) }) +
-    statCard({ k: "Close Rate", v: cardPct(rate), trend: cardTrend(rate, before, before, { kind: "points", lowerIsGood: false, tip: `${cardPct(before)} the ${win} before` }) }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */
@@ -332,68 +225,95 @@ export const closeFrame = (c) => {
 /** The key of an Issues chart panel: its frame, its kept form and its kept hidden series are its own. */
 export const chartKey = (k) => `issues/${k}`;
 
-/** What the filters set when a tile is selected, so the table shows the issues behind the number. */
-export const TILE_FILTER = {
-  open: { tile: "open", status: "open", sort: "", dir: "", page: "" },
-  parked: { tile: "parked", status: "parked", sort: "", dir: "", page: "" },
-  flow: { tile: "flow", status: "any", sort: "", dir: "", page: "" },
-};
-
 /** Each chart's frame over `rows` in the window. */
 const framesOf = (rows, win, now) => ({
   flow: flowFrame(flow(rows, win, now), win), source: sourceFrame(sources(rows, win, now), win),
   close: closeFrame(closeTimes(rows, win, now)), levels: levelFrame(levels(rows, win, now), win),
 });
 
-/** The four chart panels under the tiles, in one row of equal panels. */
-const renderCharts = (o, rows) => `<div class="quad">${Object.entries(framesOf(rows, o.window, new Date())).map(([k, f]) => panelOf(chartKey(k), f)).join("")}</div>`;
+
+/** The four chart panels, in one row of equal panels. */
+const renderCharts = (rows, win, now) => `<div class="quad">${Object.entries(framesOf(rows, win, now)).map(([k, f]) => panelOf(chartKey(k), f)).join("")}</div>`;
 
 const HIGH_FIRST = [...PRIORITIES].reverse();
-const PRIORITY_OPTIONS = [{ value: "", label: "All" }, ...HIGH_FIRST];
 
-/** The project filter scopes the tiles too: a select in the page head. */
-export function renderProjects(projects, _rows, o = {}) {
-  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects });
+/** The cost of an issue's jobs; "" for none (Decision 6: a row hides its zero). */
+const spent = (r) => (r.cost ? esc(money(r.cost)) : "");
+
+/** The row's title and only what differs from the defaults: no medium, no task, no aleph. */
+const mainOf = (r) => `<span class="t" title="${esc(r.title)}">${esc(r.title)}</span>` +
+  `${r.priority !== "medium" ? priorityBadge(r.priority) : ""}${r.kind !== "task" ? chip(r.kind) : ""}${r.project !== "aleph" ? chip(r.project) : ""}${chips(r.labels)}`;
+
+/** The inspector of one issue: its state and facts. Its jobs, request and notes are on its page. */
+function inspect(r, at) {
+  const shut = isoMs(r.closedTime);
+  const kv = [
+    ["Project", esc(r.project)], ["Kind", esc(r.kind)], ["Source", esc(r.source)],
+    ["Filed", esc(when(r.createdTime, new Date(at)))], ["Closed", esc(when(r.closedTime, new Date(at)))],
+    [shut ? "Took" : "Age", esc(dur(((shut || at) - isoMs(r.createdTime)) / 1000))],
+    ["Cost", spent(r)], ["Jobs", r.runs ? esc(count(r.runs)) : ""], ["Notes", r.notes ? esc(count(r.notes)) : ""],
+  ];
+  return inspector({ id: shortId(r.id), title: r.title, status: statusRow(badge(r.stage), priorityBadge(r.priority), chips(r.labels)), rows: kv, href: r.href });
 }
 
-export function renderFilters(rows, o = {}) {
-  const stages = [...new Set(rows.map((r) => r.stage))].sort();
-  const labels = [...new Set(rows.flatMap((r) => r.labels))].sort();
-  return filterBar([
-    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "All" }, "open", "parked", "done", "dropped"] },
-    { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
-    { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
-    { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: l }))] },
-    { html: `<label><input type="checkbox" name="group"${kept("issues.group", false) ? " checked" : ""}> Group</label>` },
-  ]);
+/** The closed issues the list draws, newest first: the search and the filters reach the rest. */
+const CLOSED_SHOWN = 40;
+
+/** The project a filed search goes to: the project filter's, else aleph, else the first. */
+export const fileProject = (project, projects = []) => project || (projects.includes("aleph") ? "aleph" : projects[0] ?? "");
+
+/** The groups of the list: Open, Parked, then the newest closed issues. A done row is a muted word: done is the default end. */
+export function groups(rows, at) {
+  const by = (key) => (a, b) => isoMs(b[key]) - isoMs(a[key]);
+  const line = (r, cells) => ({ key: r.id, lead: idLink(shortId(r.id), r.href), main: mainOf(r), cells, inspect: () => inspect(r, at), text: `${r.id} ${r.title} ${r.project} ${r.kind} ${r.labels.join(" ")}`, data: { project: r.project, kind: r.kind } });
+  const age = (r) => esc(dur((at - isoMs(r.createdTime)) / 1000));
+  const open = rows.filter((r) => r.status === "open").sort(by("atTime")), parked = rows.filter((r) => r.status === "parked").sort(by("atTime"));
+  const shut = rows.filter((r) => CLOSED.includes(r.status)).sort(by("closedTime"));
+  return [
+    { title: "Open", count: count(open.length), heads: ["", "Cost", "Age"], rows: open.map((r) => line(r, [badge(r.stage), spent(r), age(r)])) },
+    { title: "Parked", count: count(parked.length), heads: ["", "Cost", "Age"], rows: parked.map((r) => line(r, ["", spent(r), age(r)])) },
+    {
+      title: "Closed", count: count(shut.length), heads: ["", "Cost", "Took"], cap: CLOSED_SHOWN,
+      rows: shut.map((r) => line(r, [r.status === "done" ? `<span class="quiet">done</span>` : badge(r.status), spent(r), esc(dur((isoMs(r.closedTime) - isoMs(r.createdTime)) / 1000))])),
+    },
+  ];
 }
 
-/** The parts that change with the filters. The search box stays out of them, so it keeps the focus while the reader types. */
-function renderLive(projects, rows, o) {
-  const shown = filterRows(rows, o).length;
-  // The tiles and charts follow project, label, priority and search, not status, stage or the selected tile.
-  const scoped = filterRows(rows, o, ["status", "stage", "tile"]);
-  return {
-    scope: renderProjects(projects, rows, o),
-    filters: renderFilters(rows, o),
-    numbers: renderTiles(stats(scoped, new Date(), o.window), o.tile, o.window),
-    detail: renderCharts(o, scoped),
-    count: shown,
-    table: renderTable(rows, o),
-    hint: fileHint(fileProject(o.project, projects)),
-  };
+function listView(d) {
+  const rows = issueRows(d), at = Date.now(), s = stats(rows, new Date(at));
+  const shown = [...new Set(rows.map((r) => r.project))].sort(), kinds = [...new Set(rows.map((r) => r.kind))].sort();
+  return factsLine([[count(s.open), "open"], [count(s.parked), "parked"], [count(s.closed), "closed this week"], [dur(s.p50), "to close, p50"]]) +
+    browse({ id: "issues", label: "Issues", search: "Search or file an issue", hint: "Ctrl+Enter files", filters: [{ label: "Project", name: "project", options: shown }, { label: "Kind", name: "kind", options: kinds }], groups: groups(rows, at) });
+}
+
+/** The figures of the Flow band, each against what came before. */
+function figures(rows, win, now) {
+  const s = stats(rows, now, win), level = levels(rows, win, now).backlog, [first, last] = [level[0], level.at(-1)];
+  return [
+    { k: "Filed", v: count(s.filed), cmp: `${count(s.closed)} closed` },
+    { k: "Time to Close", v: dur(s.p50), cmp: s.p50Before == null ? "" : `${dur(s.p50Before)} the ${win} before`, ...(s.p50 == null || s.p50Before == null ? {} : { trend: s.p50 > s.p50Before ? "warn" : "good" }), title: `p50; p90 ${dur(s.p90)}` },
+    { k: "Backlog", v: count(last), cmp: `${count(first)} at start`, trend: last < first ? "good" : "warn" },
+    { k: "Dropped", v: cardPct(s.closed ? s.dropped / s.closed : null), cmp: `${count(s.dropped)} of ${count(s.closed)}` },
+  ];
+}
+
+/** The rows in the project of the head's scope. */
+const inScope = (rows, project) => (project ? rows.filter((r) => r.project === project) : rows);
+
+function flowView(d, query) {
+  const { project, window: win } = scope(query), now = new Date();
+  const rows = inScope(issueRows(d), project);
+  return figureBand(figures(rows, win, now)) + renderCharts(rows, win, now);
 }
 
 const projectsOf = (d) => [...new Set([...(d?.projects ?? []), ...(d?.issues ?? []).map((r) => r.repo)])].sort();
 
 const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
-/** Change the query in place: replaceState fires no hashchange, so the shell does not fetch; the router draws the data again. */
-const setQuery = (changes) => { setHash(changes); redraw(); };
-
-function draw(root, rows, o) {
-  // Each panel draws the frame of the window shown; its form and hidden series are its own.
-  for (const [k, f] of Object.entries(framesOf(filterRows(rows, o, ["status", "stage", "tile"]), o.window, new Date()))) {
+/** Each panel draws the frame of the window shown; its form and hidden series are its own. */
+function draw(root, d) {
+  const { project, window: win } = scope(hashQuery());
+  for (const [k, f] of Object.entries(framesOf(inScope(issueRows(d), project), win, new Date()))) {
     const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
     if (el) el.frame = f;
   }
@@ -411,41 +331,26 @@ async function fileFromSearch(el, title, repo) {
   } catch (err) { say(el, `Could not file it: ${err.message}`); } finally { filing = false; }
 }
 
-/** Draws the charts and wires the table. Ctrl+Enter in the search box or a click on its File button files the search text. */
+/** Draws the charts and wires the head's scope. Ctrl+Enter in the search box files the search text. */
 export function mount(root, d) {
-  const o = () => hashOptions(hashQuery()), repo = () => fileProject(o().project, projectsOf(d));
-  if (root.querySelector?.(".chartbox")) draw(root, issueRows(d), o());
-  const table = root.querySelector?.('section[aria-label="Issues"]');
-  if (!table) return;
-  wireTable(table, { redraw, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, search: "inv-search" });
-  // Properties, not listeners: a redraw keeps `table`, and each mount replaces the last one's handlers.
-  table.onkeydown = (e) => {
+  scope(hashQuery()).wire(root);
+  if (root.querySelector?.(".chartbox")) draw(root, d);
+  const list = root.querySelector?.('section[aria-label="Issues"]');
+  if (!list) return;
+  // A property, not a listener: a redraw keeps `list`, and each mount replaces the last one's handler.
+  list.onkeydown = (e) => {
     const title = e.target.value?.trim();
     // Plain Enter stays with the search; Cmd+Enter is the Mac's Ctrl+Enter.
-    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.isComposing || !e.target.matches?.('[data-ui="inv-search"]') || !title) return;
-    fileFromSearch(e.target, title, repo());
+    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey) || e.isComposing || !e.target.matches?.('input[type="search"]') || !title) return;
+    fileFromSearch(e.target, title, fileProject(kept("browse.issues", {}).f?.project, projectsOf(d)));
   };
-  const sort = table.onclick;
-  table.onclick = (e) => {
-    const b = e.target.closest?.("button[data-file]");
-    const title = table.querySelector('[data-ui="inv-search"]').value.trim();
-    if (b && title) fileFromSearch(b, title, repo());
-    else sort(e);
-  };
-  onTile(root.querySelector?.("#inv-numbers"), (k) => {
-    setQuery(TILE_FILTER[k]);
-    root.querySelector(`button[data-tile="${k}"]`)?.focus();
-  });
 }
 
-export function renderIssues(d, o = {}) {
-  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
-  return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
-    `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
-    `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels", parts.hint)}` +
-    `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
-    `<div id="issues-table">${parts.table}</div>`, { count: parts.count })}</div>`;
-}
+/** The Issues page: the List and Flow views. */
+export const renderIssues = (d, query = new URLSearchParams()) => pageViews({ title: "Issues", path: "/issues", query, views: [
+  { id: "list", label: "List", draw: () => listView(d) },
+  { id: "flow", label: "Flow", scope: true, draw: () => flowView(d, query) },
+] });
 
 /** The body as the page shows it: the `## Request` heading goes, because the section has its own heading. */
 export const description = (body) => String(body ?? "").replace(/^\s*## Request[ \t]*\r?\n+/, "");
@@ -652,27 +557,8 @@ export function renderIssue(d) {
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
-// listens on the document. Filters live in the route's query, the form posts.
+// listens on the document. The forms post.
 if (typeof document !== "undefined") {
-  document.addEventListener("click", (e) => {
-    const t = e.target.closest ? e.target : null;
-    const seg = t?.closest("#inv-filters .seg button");
-    if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, page: "" });
-    const fold = t?.closest("#issues-table button[data-fold]");
-    if (fold) {
-      const open = new Set(kept("issues.open", []));
-      if (!open.delete(fold.dataset.fold)) open.add(fold.dataset.fold);
-      keep("issues.open", [...open]);
-      return redraw();
-    }
-    const win = t?.closest("#inv-scope .seg button");
-    if (win) { remember("window", win.dataset.value); return setQuery({ window: win.dataset.value }); }
-  });
-  document.addEventListener("change", (e) => {
-    if (e.target.matches?.('#inv-filters input[name="group"]')) { keep("issues.group", e.target.checked); return redraw(); }
-    const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
-    if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, page: "" }); }
-  });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-edit"], form[data-ui="issue-note"]');
     if (!form) return;

@@ -1,6 +1,6 @@
 // The chart panel: `<aleph-chart key="view/chart">` draws a frame as a card that fills its box. The title, the
 // colours, the units, the aria label, the empty line and the forms on offer come from the frame. The form and the
-// hidden series stay per panel through keep(). A row with an `href` links to its issue: the option carries the link
+// hidden series stay per panel through keep(). One menu picks the form. A row with an `href` links to its issue: the option carries the link
 // of every point, and a click on a bar or a label opens it.
 //
 // A frame:
@@ -21,12 +21,12 @@
 import { keep, kept } from "./address.js";
 import { chart, legend, readTokens } from "./chart-theme.js";
 import { count, day, dur, markLine, money, pct, xLabel } from "./format.js";
-import { card, empty, esc, notice, seg } from "./html.js";
+import { card, empty, esc, notice, selectBox } from "./html.js";
 
 /** The forms of each group. The default is the first, except that a time frame of a flow (agg "sum") opens as columns. */
 export const FORMS = {
-  time: [{ key: "area", label: "Area", icon: "chart-area" }, { key: "columns", label: "Columns", icon: "chart-column" }, { key: "lines", label: "Lines", icon: "chart-line" }, { key: "points", label: "Points", icon: "circle" }, { key: "share", label: "Share", icon: "percent" }],
-  category: [{ key: "stacked", label: "Stacked", icon: "chart-bar" }, { key: "grouped", label: "Grouped", icon: "align-left" }, { key: "share", label: "Share", icon: "percent" }],
+  time: [{ key: "area", label: "Area" }, { key: "columns", label: "Columns" }, { key: "lines", label: "Lines" }, { key: "points", label: "Points" }, { key: "share", label: "Share" }],
+  category: [{ key: "stacked", label: "Stacked" }, { key: "grouped", label: "Grouped" }, { key: "share", label: "Share" }],
 };
 
 const FMT = { count, usd: money, seconds: dur };
@@ -131,7 +131,7 @@ const capMarks = (f, sums, fmt, t) => ({
 export function panel(f, form, bare = false) {
   const mark = f.error && f.since ? notice(markLine(title(f), f), true) : "";
   if (!shown(f).length) return bare ? mark + empty() : card(title(f), mark + empty());
-  const forms = seg("Chart form", FORMS[f.over.kind].map((x) => ({ label: x.label, icon: x.icon, on: x.key === form, attrs: ` data-form="${esc(x.key)}"` })));
+  const forms = selectBox("Chart form", "form", FORMS[f.over.kind].map((x) => ({ value: x.key, label: x.label })), form, { attrs: " data-form" });
   // The canvas has no keyboard path, so a linked row is also a link in a list that shows on focus.
   const links = f.rows.filter((r) => r.href).map((r) => `<li><a href="${esc(r.href)}">${esc(r.name ?? (f.over.kind === "time" ? `${day(new Date(r.at))} ${xLabel(r.at, f.over.window)}` : ""))}</a></li>`).join("");
   const body = mark + `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>` + (links ? `<ul class="chartlinks sr">${links}</ul>` : "");
@@ -177,10 +177,10 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
         const pick = f.rows[p.dataIndex]?.pick;
         if (pick !== undefined) this.dispatchEvent(new CustomEvent("chartpick", { detail: pick, bubbles: true }));
       });
-      this.onclick = (e) => {
-        const b = e.target.closest?.("button[data-form]");
-        if (!b) return;
-        keep(this.key, { ...kept(this.key, {}), form: b.dataset.form });
+      this.onchange = (e) => {
+        const m = e.target.closest?.("select[data-form]");
+        if (!m) return;
+        keep(this.key, { ...kept(this.key, {}), form: m.value });
         this.#render();
       };
     }

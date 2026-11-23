@@ -14,6 +14,7 @@ const turn = { n: "number", traceId: "string", start: "time", seconds: "number?"
 const hook = { event: "string", name: "string", matcher: "string", file: "string", mode: "string", timeout: "number" };
 const hold = { t: "time", sid: "string", hook: "string", event: "string", kind: "string", who: "string", out: "string", why: "string" };
 const holdsBy = { hook: "string", kind: "string", holds: "number", interactive: "number", workers: "number", outcomes: { "*": "number" } };
+const attentionRow = { tone: "string", text: "string", "act?": { label: "string", href: "string" } };
 const hookError = { cause: "string", fix: "string", n: "number", sessions: "number", hooks: ["string"], events: ["string"], last: "time" };
 
 export const SCHEMAS: Record<string, Schema | "text"> = {
@@ -27,10 +28,12 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     usage: "object?",
   },
   "/api/status": { tone: "string" },
+  "/api/attention": { "*": [attentionRow] },
+  "/api/attention/facts": { "*": [attentionRow] },
   "/api/automation": {
     now: "time", caps: { "*": { env: "string", min: "number", set: "boolean" } }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
     schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
-    held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
+    held: ["string"], repoHeld: "array", log: { days: "number", max: "number", total: "number", entries: "array" },
   },
   "/api/flow": {
     window: "string", done: "number", kinds: "object", phases: "object", asks: { count: "number", manual: "number" }, filed: { followups: "number", all: "number" }, dropped: "number", open: { open: "number", parked: "number" }, checks: "array",
@@ -77,7 +80,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     prompt: "string", output: "string", cost: "number", seconds: "number?", observations: "array",
   },
   "/api/skills/:name": { name: "string", days: "number", since: "string", asOf: "time", "failed?": "string", uses: "number", perDay: "array", projects: "array", sessions: "array", tools: "array", errors: "array" },
-  "/api/hooks": { days: "number", holds: [hold], byHook: [holdsBy], errors: [hookError], hooks: [{ ...hook, holds: "number" }] },
+  "/api/hooks": { days: "number", holds: [hold], byHook: [holdsBy], errors: [hookError], hooks: [{ ...hook, holds: "number" }], calls: "object?" },
   "/api/hooks/:event/:name": { ...hook, holds: [hold], byKind: [holdsBy], errors: [hookError] },
   "/api/design": { body: "string" },
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },

@@ -1,15 +1,16 @@
 /**
  * `GET /api/hooks`, `GET /api/hooks/:event/:name`: the Hooks page's data. The Stop-hook holds and the hook errors of the
  * request's window and project come from the hook entries of the Claude Code transcripts under `~/.claude/projects`; the hooks come from
- * `hooks/hooks.json`, each with its files and its newest commit of the window. A hold's outcome is a keyword pass over its reply: a guide, not a measurement.
+ * `hooks/hooks.json`, each with its files and its newest commit of the window. `calls` is the Langfuse call counts of the hooks and the verify gate's denials, null until the first read ends. A hold's outcome is a keyword pass over its reply: a guide, not a measurement.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { git } from "../../lib/git.ts";
 import { readJsonOr } from "../../lib/json.ts";
 import { jsonLines, type Entry } from "../../lib/jsonl.ts";
-import { touch } from "../../lib/sources.ts";
+import { later, touch } from "../../lib/sources.ts";
 import { list } from "../../lib/transcripts.ts";
+import { activity } from "../activity.ts";
 import type { Routes } from "../server.ts";
 import { scopeOf, traceProject, type Scope } from "./scope.ts";
 
@@ -80,7 +81,7 @@ function parse(f: string): { holds: Hold[]; fails: Fail[] } {
 let parsed = new Map<string, { at: number; holds: Hold[]; fails: Fail[] }>();
 
 /** The Stop-hook holds, newest first, and the hook errors of the scope's window and project. */
-function scan({ ms, project }: Scope): { holds: Hold[]; fails: Fail[] } {
+export function scan({ ms, project }: Scope): { holds: Hold[]; fails: Fail[] } {
   touch("transcripts");
   const since = Date.now() - ms;
   const files = list().map((t) => ({ f: t.path, at: t.at })).filter((x) => x.at >= since);
@@ -99,7 +100,7 @@ const byKind = (holds: Hold[]) => [...Map.groupBy(holds, (h) => `${h.hook}\0${h.
 });
 
 /** Errors by cause, most first, each with its fix. */
-const byCause = (fails: Fail[]) => [...Map.groupBy(fails, (f) => f.cause).entries()].map(([cause, xs]) => ({
+export const byCause = (fails: Fail[]) => [...Map.groupBy(fails, (f) => f.cause).entries()].map(([cause, xs]) => ({
   cause, fix: xs[0].fix, n: xs.length, sessions: new Set(xs.map((x) => x.sid)).size,
   hooks: uniq(xs.map((x) => x.hook)), events: uniq(xs.map((x) => x.event)), last: xs.map((x) => x.t).sort().at(-1)!,
 })).sort((a, b) => b.n - a.n);
@@ -134,8 +135,14 @@ function commits({ ms }: Scope, files: string[]) {
   });
 }
 
+/** The Langfuse call counts of the hooks and the verify gate's denials in the scope. Langfuse reads take minutes cold: a build answers null until the read ends. */
+const calls = (sc: Scope) => later(`hooks:calls:${sc.days}:${sc.project ?? ""}`, ["langfuse"], async () => {
+  const { langfuse, hooks, denials } = await activity(sc.days, sc.project);
+  return { langfuse, hooks, denials };
+}, null);
+
 export const routes: Routes = {
-  "GET /api/hooks": (_req, _params, url) => {
+  "GET /api/hooks": async (_req, _params, url) => {
     const sc = scopeOf(url);
     if (sc instanceof Response) return sc;
     const { holds, fails } = scan(sc), all = inventory(), log = commits(sc, uniq(all.map((h) => h.file)));
@@ -143,7 +150,7 @@ export const routes: Routes = {
       const c = log.find((x) => x.files.includes(h.file));
       return { ...h, holds: holds.filter((x) => x.event === h.event && x.hook === h.name).length, changed: c ? { hash: c.hash, t: c.t, subject: c.subject } : null };
     });
-    return Response.json({ days: sc.days, holds, byHook: byKind(holds), errors: byCause(fails), hooks });
+    return Response.json({ days: sc.days, holds, byHook: byKind(holds), errors: byCause(fails), hooks, calls: await calls(sc) });
   },
   "GET /api/hooks/:event/:name": (_req, { event, name }, url) => {
     const sc = scopeOf(url);

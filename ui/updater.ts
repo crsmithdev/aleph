@@ -51,7 +51,7 @@ export const KEYED = new Set([
   "/api/factory", "/api/status", "/api/flow", "/api/automation", "/api/issues", "/api/issues/:id", "/api/jobs", "/api/jobs/:id",
   "/api/sessions", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
   "/api/memory", "/api/memory/log", "/api/memory/processes", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key", "/api/context",
-  "/api/hooks", "/api/hooks/:event/:name",
+  "/api/hooks", "/api/hooks/:event/:name", "/api/attention/facts",
 ]);
 
 /** The key of a request: its path and its non-empty query parameters, sorted. */
@@ -200,6 +200,11 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
       const m = markOf(s);
       return m ? { answer: s.answer, ...m } : { answer: s.answer };
+    },
+    /** The oldest mark among the keys that start with `prefix`, or null: a served-over answer or a failed build, as a key's own answer would carry it. */
+    mark(prefix: string): Mark | null {
+      const marks = [...slots].filter(([k]) => k.startsWith(prefix)).flatMap(([, s]) => markOf(s) ?? []);
+      return marks.sort((a, b) => a.since.localeCompare(b.since))[0] ?? null;
     },
     /** `source` changed: after `SETTLE_MS` of quiet, build the kept keys that read it. After an action every key's
      * next request waits for its build: the page that acted reads the result of its own action. */

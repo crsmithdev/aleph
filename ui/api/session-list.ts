@@ -34,6 +34,13 @@ export async function windowTraces(days: number, project: string | null): Promis
 
 const LIMIT = 100, MAX = 2000;
 
+// Prompts the factory's workers start with, and prompts of scripts that call the model with no person.
+const FACTORY = /^(You (are|take|read) |# Merge origin|Task: |## Code-change method)/;
+const SCRIPT = /^(Below (are|is) |This is one month|Each item is |These are monthly|- reply with only|Answer from your|Quote the line|Reply with |<agent-message|<task-notification|\[From the bridge)/;
+
+/** Who ran a session: a factory job (it has a ledger name or a worker's prompt), a script (a script's prompt, or none), else the person. */
+const whoRan = (label: string | undefined, prompt: string) => (label?.startsWith("issue.") || FACTORY.test(prompt) ? "factory" : SCRIPT.test(prompt) || !prompt ? "headless" : "you");
+
 /**
  * The first `limit` sessions of `traces` that ended before `before`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0.
  * The window's traces hold no input, so only these sessions have their `firstPrompt` read.
@@ -68,7 +75,10 @@ export async function sessionRows(traces: Session[], limit: number, before: stri
   }).filter((x) => before === null || ms(x.row.last) < Date.parse(before))
     .sort((a, b) => ms(b.row.last) - ms(a.row.last)).slice(0, limit);
   const lf = need();
-  return Promise.all(rows.map(async ({ ts, row }) => ({ ...row, firstPrompt: clip(text(await firstTyped(lf, ts)), 160) })));
+  return Promise.all(rows.map(async ({ ts, row }) => {
+    const firstPrompt = clip(text(await firstTyped(lf, ts)), 160);
+    return { ...row, firstPrompt, who: whoRan(row.label, firstPrompt) };
+  }));
 }
 
 /** The sessions of a scope for the Agents view: newest last turn first, `limit` of them before the `before` time, and `next`, the `before` of the next page. A bad page or a Langfuse failure throws its message. */

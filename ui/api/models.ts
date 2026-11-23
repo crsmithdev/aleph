@@ -5,7 +5,7 @@ import { fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
 
 /** The models whose backend cannot take a call now: the local server when /health fails, OpenRouter's with no key. */
-const downModels = async (): Promise<string[]> => {
+export const downModels = async (): Promise<string[]> => {
   const names = Object.keys(MODELS);
   const up = await Promise.all(names.map(backendUp));
   return names.filter((_, i) => !up[i]);

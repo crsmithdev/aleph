@@ -18,6 +18,7 @@ import { issueFacts } from "./factory-status.ts";
 import { decideIntake } from "./intake-decision.ts";
 import { issueDecision, refDone, type IssueDecision, type IssueFacts } from "./issue-decision.ts";
 import { decideStart, type Route, type StartDecision } from "./start-decision.ts";
+import { readModels } from "../routing/models.ts";
 import { sandboxRepos } from "./gpu.ts";
 import { mainRed } from "./tables.ts";
 
@@ -78,7 +79,7 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   }
 
   /** The decision of intake for `item` of `doc`, its repo's list. */
-  const intake = (repo: Repo, item: issues.Issue, doc: issues.Doc) => decideIntake(repo, item, { doc, done, red: redOf(repo) });
+  const intake = (repo: Repo, item: issues.Issue, doc: issues.Doc) => decideIntake(repo, item, { doc, done, red: redOf(repo), off: !readModels().intake.enabled });
 
   /** Each issue of the sandbox repos, in list order, that intake lets in. */
   const intakeCandidates = (): { repo: Repo; item: issues.Issue }[] => sandboxRepos().flatMap((repo) => {

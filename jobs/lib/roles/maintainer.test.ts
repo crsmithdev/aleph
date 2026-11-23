@@ -9,6 +9,7 @@ import { allRuns } from "../records/record.ts";
 import { serializeFrontmatter } from "../../../lib/frontmatter.ts";
 import type { Draft } from "../../../vault/lib/ops.ts";
 import { compileDay, draft, related } from "./maintainer.ts";
+import { setModel } from "../routing/models.ts";
 
 const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_VAULT", "ALEPH_HANDOFFS_DIR", "ALEPH_MAINTAINER_CMD", "ALEPH_JUDGE", "FAKE_DIR", "FAKE_RECALL", "ALEPH_RECALL_UNLOGGED"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -145,4 +146,17 @@ test("related reads the Related section as the Memory page writes it, and as bod
   expect(related("\n**Claim.** x\n\n## Related\n[[a]]\n")).toBe("[[a]]");
   expect(related("\n**Claim.** x\n\n## Related\n\n- [[a]]\n- [[b]]\n")).toBe("- [[a]]\n- [[b]]");
   expect(related("\n**Claim.** x\n")).toBe("");
+});
+
+test("an off maintainer opens no run, and marks the day so the next pass compiles it", async () => {
+  reply([note("Keep The Digest")]);
+  setModel("maintainer", { enabled: false });
+  const r = await compileDay(root, DAY, false);
+  expect(r.skipped).toBe("the maintainer is off");
+  expect(notes()).toHaveLength(0);
+  expect(compiledDays(root)).toEqual([]);
+  expect(retryDays(root)).toEqual([DAY]);
+  setModel("maintainer", { enabled: true });
+  expect((await compileDay(root, DAY, false)).notes).toHaveLength(1);
+  expect(retryDays(root)).toEqual([]);
 });

@@ -103,8 +103,6 @@ export const loadLimit = () => cap("loadLimit", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
 
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
-/** The tick's daily monitor step; tests turn it off, as a tick there must not start the reader. */
-export const monitorOn = () => process.env.ALEPH_MONITOR !== "off";
 /** The local hour from which the tick's monitor step may run: the `monitorHour` setting, 0 by default. */
 export const monitorHour = (): number => getJson<number>("settings", "monitorHour", 0);
 /** Stores the monitor hour. Throws on a value that is not a whole number from 0 to 23. */

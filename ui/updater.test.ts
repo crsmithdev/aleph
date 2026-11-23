@@ -103,6 +103,21 @@ test("a Sessions key not asked for in 10 min answers at once with its last answe
   expect(f.log).toEqual(["/api/sessions", "/api/sessions"]);
 });
 
+test("mark gives the mark of a key by its prefix, and null for none", async () => {
+  const f = fake(), u = createUpdater(f);
+  f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };
+  await u.get("/api/sessions");
+  expect(u.mark("/api/sessions")).toBeNull();
+  const built = new Date(f.now()).toISOString();
+  f.tick(KEEP_MS);
+  const release = f.hold();
+  await u.poll();
+  await u.get("/api/sessions"); // dirty and not kept: served over the held rebuild, with a note
+  expect(u.mark("/api/sessions")).toEqual({ error: "a rebuild runs; this is the last answer", since: built });
+  expect(u.mark("/api/hooks")).toBeNull();
+  release();
+});
+
 test("a Sessions key with no answer in memory gets its saved answer at once after a restart, and signals when the rebuild ends", async () => {
   const f = fake(), file = join(dir, "sessions-restart.json");
   f.world["/api/sessions"] = { body: 1, sources: ["langfuse"] };

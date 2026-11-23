@@ -27,8 +27,8 @@ const speed = (window: string): any => ({
 const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday: 1, liveRuns: 0, liveCap: 5 } };
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
-  jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
-  agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
+  jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null, null, new URLSearchParams("view=timing")) },
+  agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), new URLSearchParams(`window=${w}`)) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
 // Status and Agents load /api/factory, then the /api/flow of the window in their `more`: the request is the flow one.
@@ -140,6 +140,6 @@ test("scope wire keeps the window and the project in storage and in the address;
 });
 
 test("the Automation page asks for the chosen window and project, and the Status page's answer for its asks", () => {
-  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?window=day&project=alpha", "/api/memory/processes"]);
+  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?window=day&project=alpha"]);
 });
 

@@ -74,3 +74,14 @@ test("a dispatch pass leaves the intake of an issue to plan to the intake queue,
   await runDispatch({ intake: (_r, id) => { calls.push(`fac-${id}`); }, director: () => {} });
   expect(calls).toEqual([`fac-${plan}`]);
 });
+
+test("decideIntake: an off intake leaves an open unsorted issue and an issue to plan at none, and a closed one at its own reason", () => {
+  const open = add(), plan = add({ plan: true }), closed = add();
+  change(closed, (i) => issues.setStatus(i, "done"));
+  const repo = loadRegistry().fac, doc = readList({ key: "fac" })!;
+  const got = (n: number) => decideIntake(repo, issues.find(doc, n)!, { doc, done: () => false, red: null, off: true });
+  expect(got(open)).toEqual({ kind: "none", why: "intake is off" });
+  expect(got(plan)).toEqual({ kind: "none", why: "intake is off" });
+  expect(got(closed).why).toBe("the item is done");
+  expect(decideIntake(repo, issues.find(doc, open)!, { doc, done: () => false, red: null }).kind).toBe("take-in");
+});

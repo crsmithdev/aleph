@@ -31,16 +31,16 @@ function find(html: string, sel: string): Found[] {
   new HTMLRewriter().on(sel, { element(el) { out.push({ tag: el.tagName, attrs: Object.fromEntries(el.attributes), text: "" }); }, text(t) { out.at(-1)!.text += t.text.replace(/&(lt|gt|quot|#39|amp);/g, (m) => ENTITIES[m]); } }).transform(html);
   return out;
 }
-/** The rows of the tables in `html`, the head row first, each as the text of its cells. */
-function table(html: string): string[][] {
-  const rows: string[][] = [];
-  new HTMLRewriter().on("tr", { element() { rows.push([]); } }).on("th, td", { element() { rows.at(-1)!.push(""); }, text(t) { const r = rows.at(-1)!; r[r.length - 1] += t.text; } }).transform(html);
-  return rows;
-}
 /** The visible text of `html`. */
 const text = (html: string) => html.replace(/<[^>]*>/g, " ");
-/** The buttons of a rule form's `field` choice under `scope`: each one's value, whether it is pressed, and its label. */
-const choices = (html: string, field: string, scope = "") => find(html, `${scope} [data-field="${field}"] button`).map((b) => [b.attrs["data-value"], b.attrs["aria-pressed"] === "true", b.text]);
+
+/** The log answer of `entries`, as the page reads it. */
+const logOf = (entries: any[], total = entries.length) => ({ now: new Date(NOW).toISOString(), log: { entries, total } });
+/** The options of a rule's `field` select in its inspector: value, whether picked, label. */
+const picks = (html: string, reason: string, field: string) => find(html, `template[data-inspect="${reason}"] select[name="${field}"] option`).map((o) => [o.attrs.value, "selected" in o.attrs, o.text]);
+/** The page of `rs` on the Rules view. */
+const rulesOf = (rs: any[], d: any = data()) => gates.renderRules({ ...d, rules: rs });
+const view = (id: string, d: any = data()) => gates.renderGates(d, new URLSearchParams(`view=${id}`));
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -96,6 +96,7 @@ test("the body of /api/automation has every section, one rule per Ask reason wit
   const d: any = await body();
   expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "caps", "held", "log", "metrics", "monitor", "now", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
+  expect(d.log.total).toBe(d.log.entries.length);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) { expect(r.mode).not.toBe(""); expect(r.mode).toBe(ASK_REASONS[r.reason].always); }
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
@@ -152,30 +153,31 @@ test("a hold writes its held event, and the log shows it with the file and the j
   // The registry of this test has no code: the page gets the codes with the body.
   setCodes({ aleph: "a" });
   expect(contentText(e)).toBe("file: ui/views/issues.js: job.1372");
-  const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
+  const h = gates.renderLog(logOf([e]));
   // An issue key names no repo, so the log shows its shown form and links nothing.
-  expect(table(h)[1].slice(1, 5)).toEqual(["i1420", "file: ui/views/issues.js: j1372", "held", "gate"]);
-  expect(find(h, "td a")).toEqual([]);
-  expect(find(h, "td.wide")[0].attrs.title).toBe("file: ui/views/issues.js: job.1372");
+  expect(find(h, ".lrow .main").map((x) => x.text)).toEqual(["i1420file: ui/views/issues.js: j1372"]);
+  expect(find(h, ".lrow .c").map((x) => x.text)).toEqual(["held", "gate"]);
+  expect(find(h, ".lrow a")).toEqual([]);
+  expect(find(h, ".lrow .t")[0].attrs.title).toBe("file: ui/views/issues.js: job.1372");
 });
 
 test("renderLog links an issue key to its page when the entry carries its project", () => {
   const e = { time: "2026-11-14T10:00:00Z", subject: "rule", action: "reran", object: "issue.1420", detail: "after issue.1372", project: "aleph" };
-  const links = (h: string) => find(h, "td a").map((a) => a.attrs.href);
-  expect(links(gates.renderLog({ log: { entries: [e] } }))).toEqual(["#/issues/aleph/1420"]);
-  expect(links(gates.renderLog({ log: { entries: [{ ...e, object: "job.7", object_target: "issue.1420" }] } }))).toEqual(["#/issues/aleph/1420"]);
+  const links = (h: string) => find(h, ".lrow a").map((a) => a.attrs.href);
+  expect(links(gates.renderLog(logOf([e])))).toEqual(["#/issues/aleph/1420"]);
+  expect(links(gates.renderLog(logOf([{ ...e, object: "job.7", object_target: "issue.1420" }])))).toEqual(["#/issues/aleph/1420"]);
 });
 
-test("a director decision shows its action, and its long detail only behind the row's button", () => {
+test("a director decision shows its action, and its long detail in the row's title and the inspector", () => {
   const note = `Director: landed over the reviewer hold. ${"word ".repeat(60)}`.trim();
   logEvent({ subject: "director", action: "landed", object: "r-12", detail: `over review: ${note}` });
   const e = log().find((x) => x.object === "r-12")!;
   expect(line(e)).toBe(`director | r-12 | landed | over review: ${note}`);
-  const h = gates.renderLog({ log: { entries: [e] } });
-  expect(find(h, "td.wide")[0].attrs.title).toBe(`over review: ${note}`);
-  expect(find(h, "td.wide .clamp").map((x) => x.text)).toEqual([`over review: ${note}`]);
-  expect(find(h, "td.wide button").map((x) => x.text)).toEqual(["Show more"]);
-  expect(table(h)[1][3]).toBe("landed");
+  const h = gates.renderLog(logOf([e]));
+  expect(find(h, ".lrow .t")[0].attrs.title).toBe(`over review: ${note}`);
+  expect(find(h, ".clamp, .clamp-btn")).toEqual([]);
+  expect(find(h, ".lrow .c")[0].text).toBe("landed");
+  expect(find(h, ".ins p.quiet").map((x) => x.text)).toEqual([`over review: ${note}`]);
 });
 
 test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and refuses a request without the UI header", async () => {
@@ -191,10 +193,9 @@ test("rules() gives each reason row its timeout minutes and no-answer action, an
   const row = (reason: string) => rules().find((x) => x.reason === reason)!;
   expect(row("held-path").timeout).toBeUndefined();
   expect(row("core-change").timeout).toBeUndefined();
-  const held = gates.renderRules({ rules: [row("held-path")] });
-  expect(find(held, '[data-field="wait"]')).toEqual([]);
-  expect(table(held)[1][4]).toBe("Keep waiting");
-  expect(find(gates.renderRules({ rules: [row("question")] }), '[data-field="wait"]')).toHaveLength(1);
+  // The No answer setting shows only in the inspector, and only for a timed reason.
+  expect(find(rulesOf([row("held-path")]), '.ins [data-field="wait"]')).toEqual([]);
+  expect(find(rulesOf([row("question")]), '.ins [data-field="wait"]')).toHaveLength(1);
   expect([row("question").timeout, row("question").noAnswer]).toEqual([20, "drop"]);
   expect([row("no-commit").timeout, row("no-commit").noAnswer]).toEqual([0, "pick"]);
   expect(row("held-path").timeout).toBeUndefined();
@@ -216,54 +217,58 @@ const data = () => ({
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { issues: 2, hours: 3 } },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, projects: [] })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
-  log: { days: 7, max: 200, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
-  processes: { steps: [], decay: { stale: [] } },
+  log: { days: 7, max: 200, total: 2, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
 });
 
-test("the view draws the sections in order, a closed gate, and an Edit row with only Director and the reason's mode", () => {
+test("the Rules view is the facts line and a list with a row and an inspector for each Ask reason; each offers Director, its mode and User", () => {
   const h = gates.renderGates(data());
-  const sections = ["Schedules", "Controls", "Rules", "Held Paths", "Log"];
-  expect(find(h, "h2").map((x) => x.text).filter((t) => sections.includes(t))).toEqual(sections);
-  expect(find(h, "h2").map((x) => x.text)).not.toContain("Waiting for the User");
-  expect(find(h, "#gates-waiting")).toEqual([]);
-  // The three metric tiles; no Gates now state cards.
-  expect(find(h, 'section[aria-label="Metrics"] .tile .k').map((x) => x.text)).toEqual(["Automation rate", "Gate catches", "Held time"]);
-  expect(find(h, ".gtile, .gt-head")).toEqual([]);
-  expect(find(h, ".tile b").map((x) => x.text)).toEqual(["75% / 4", "6 / 2", "3.0h / 2"]);
+  expect(find(h, "h1").map((x) => x.text)).toEqual(["Automation"]);
+  expect(find(h, ".ph button[data-view]").map((x) => x.text)).toEqual(["Rules", "Limits", "Log"]);
+  expect(find(h, ".factline span").map((x) => x.text.trim())).toEqual(["75% automatic", "6 sent back", "2 fixed", "3h 00m held"]);
+  expect(find(gates.renderRules({ ...data(), metrics: { ...data().metrics, held: { issues: 2, hours: 20626 } } }), ".factline span")[3].text.trim()).toBe("859d 10h held");
+  expect(find(h, ".tile, .tiles, table")).toEqual([]);
+  expect(find(h, ".lrow")).toHaveLength(Object.keys(ASK_REASONS).length);
+  expect(find(h, ".lhead .h").map((x) => x.text)).toEqual(["Fired", "Decided", "Decides"]);
   expect(text(h)).not.toContain("Gates now");
+  for (const [reason, r] of Object.entries(ASK_REASONS)) expect(picks(h, reason, "decide").map((o) => o[0])).toEqual(["", ...(r.always ? [r.always] : []), "user"]);
+  expect(picks(h, "rescue", "decide").filter((o) => o[1])).toEqual([["resolve", true, "Take the pick"]]);
+  // The memory jobs moved to Memory.
+  expect(find(h, "#memory-jobs")).toEqual([]);
+});
+
+test("the Limits view holds the caps, the schedules and the held paths, with no scope control; the Log view is a list with its By filter", () => {
+  const h = view("limits");
+  expect(find(h, "h2").map((x) => x.text)).toEqual(["Caps", "Schedules", "Held Paths"]);
   expect(find(h, '[data-cap="day"], [data-cap="awaiting"]')).toEqual([]);
-  expect(text(h)).not.toContain("Edit caps");
-  for (const [reason, r] of Object.entries(ASK_REASONS)) {
-    const modes = find(h, `form[data-rule="${reason}"] [data-field="decide"] button`).map((b) => b.attrs["data-value"]);
-    // Each reason offers Director, its mode and User.
-    expect(modes).toEqual(["", ...(r.always ? [r.always] : []), "user"]);
-  }
-  expect(text(h)).not.toContain("The director decides first");
-  expect(choices(h, "decide", 'form[data-rule="rescue"]').filter((c) => c[1])).toEqual([["resolve", true, "Take the pick"]]);
-  expect(find(h, "td.acts")).toHaveLength(Object.keys(ASK_REASONS).length);
-  expect(find(h, "code.chip")).toEqual([]);
+  expect(find(h, "header.ph select[name=project]")).toEqual([]);
+  expect(find(h, ".pair > section").map((x) => x.attrs.id)).toEqual(["gates-caps", "gates-schedules"]);
+  expect(find(h, "form[data-cap]")).toHaveLength(7);
+  expect(find(h, "form[data-schedule]")).toHaveLength(1);
+  const l = view("log");
+  expect(find(l, ".lcard select[name='by'] option").map((x) => x.text)).toEqual(["All", ...Object.keys(gates.BY)]);
+  expect(find(l, ".lrow")).toHaveLength(2);
+  expect(find(l, "header.ph select[name=project]")).toHaveLength(1);
+});
+
+test("the held paths are setting rows: Every repo, then each repo with its globs, and empty() with none", () => {
   const card = gates.renderHeld(data());
-  expect(find(card, ".held, .chip")).toEqual([]);
-  // Each path is its own line, a bare code element; no line holds two, and both scope labels sit in one list.
-  expect(find(card, "dd > div").map((x) => x.text)).toEqual([...SECURITY_PATHS, "src/auth/**"]);
-  expect(find(card, "dd > div > code").map((x) => x.text)).toEqual([...SECURITY_PATHS, "src/auth/**"]);
-  expect(find(card, "dl dt").map((x) => x.text)).toEqual(["Every repo", "r"]);
-  expect(find(card, "dl")).toHaveLength(1);
-  const bare = gates.renderHeld({ ...data(), repoHeld: [] });
-  expect(find(bare, "dt").map((x) => x.text)).toEqual(["Every repo"]);
-  expect(find(bare, ".empty")).toEqual([]);
+  expect(find(card, ".srow .sl").map((x) => x.text)).toEqual(["Every repo", "r"]);
+  expect(find(card, ".held-paths code").map((x) => x.text)).toEqual([...SECURITY_PATHS, "src/auth/**"]);
+  expect(find(card, ".held-paths")).toHaveLength(2);
+  expect(find(card, "dl, .chip, .held")).toEqual([]);
+  expect(find(gates.renderHeld({ ...data(), repoHeld: [] }), ".srow .sl").map((x) => x.text)).toEqual(["Every repo"]);
   expect(find(gates.renderHeld({ ...data(), held: [], repoHeld: [] }), ".empty").map((x) => x.text)).toEqual(["No data"]);
+  expect(find(card, '[title*="then these paths wait for the user"]')).toHaveLength(1);
 });
 
 test("each hint and note of the page is at most four words, and the longer text is a title", () => {
-  const h = gates.renderGates(data());
+  const h = view("limits") + gates.renderGates(data());
   const shown = find(h, ".hint, .note").map((x) => x.text);
-  expect(shown.length).toBeGreaterThan(8);
+  expect(shown.length).toBeGreaterThan(7);
   for (const t of shown) expect(t.trim().split(/\s+/).length).toBeLessThanOrEqual(4);
-  expect(h).not.toContain("The security paths and a repo's held paths wait for the user");
   expect(h).not.toContain("Live jobs against the cap:");
   expect(find(h, '[title^="Director: the director decides"]').length).toBeGreaterThan(0);
 });
@@ -274,12 +279,12 @@ test("a cap set by its environment variable keeps its use in the hint, marks env
   expect(find(h, '[data-cap="live"]')[0].attrs.title).toContain("ALEPH_LIVE_CAP is set: an edit has no effect while that variable is set.");
 });
 
-test("a rule form's Cancel and Save are act buttons, Save the one primary submit, and Decided By counts show with thousands", () => {
-  const row = { ...rules().find((x) => x.reason === "held-path")!, decided: { rule: 1200, director: 1, chris: 0 } };
-  const h = gates.renderRules({ rules: [row] });
-  expect(find(h, "form.rule-form button[data-cancel]").map((b) => [b.attrs.class, b.attrs.type, b.text])).toEqual([["act", "button", "Cancel"]]);
-  expect(find(h, 'form.rule-form button.primary[type="submit"]').map((b) => [b.attrs.class, b.text])).toEqual([["act primary", "Save"]]);
-  expect(find(h, ".split").map((x) => x.text)).toEqual(["1,200 rule · 1 director · 0 user"]);
+test("each rule setting has a Save of its own, and Decided counts show with thousands", () => {
+  const row = { ...rules().find((x) => x.reason === "question")!, decided: { rule: 1200, director: 1, chris: 0 } };
+  const h = rulesOf([row]);
+  expect(find(h, '.ins form[data-rule="question"]').map((f) => f.attrs["data-field"])).toEqual(["decide", "wait"]);
+  expect(find(h, '.ins form button[type="submit"]').map((b) => [b.attrs.class, b.text])).toEqual([["act", "Save"], ["act", "Save"]]);
+  expect(find(h, ".lrow .rowbar .meter")[0].attrs["aria-label"]).toBe("1,200 rule · 1 director");
 });
 
 test("a Monitor report with an error shows Could not load, and the message only in the Technical details fold", () => {
@@ -324,54 +329,51 @@ test("gate catches are the builds a check or the reviewer sent back in the 7 day
   expect(metrics([], [], NOW, records).catches).toEqual({ fired: 3, fixed: 2 });
 });
 
-test("the log filter keeps one actor's entries", () => {
-  const h = gates.renderLog(data(), "human");
-  expect(find(h, '.seg [aria-pressed="true"]').map((x) => x.text)).toEqual(["human"]);
-  expect(find(h, ".fchip")).toEqual([]);
-  expect(find(h, 'td a[href="#rules"]').map((x) => x.text)).toEqual(["rescue"]);
-  expect(table(h).slice(1).map((r) => r.slice(1, 5))).toEqual([["rescue", "set to resolve", "changed", "human"]]);
-  expect(find(h, "td.wide")[0].attrs.title).toBe("set to resolve");
-  expect(text(gates.renderLog(data(), "rule"))).not.toContain("set to resolve");
+test("the log draws each entry shows its own detail", () => {
+  const h = gates.renderLog(data());
+  expect(find(h, ".lcard select[name='by'] option").filter((x) => "selected" in x.attrs).map((x) => x.text)).toEqual(["All"]);
+  expect(find(h, ".lrow .main").map((x) => x.text)).toEqual(["r-5rescue", "rescueset to resolve"]);
+  expect(find(h, ".lrow .t").map((x) => x.attrs.title)).toEqual(["rescue", "set to resolve"]);
 });
 
 test("the By filter is over the five actors", () => {
   expect(Object.keys(gates.BY)).toEqual(["human", "rule", "director", "firefighter", "gate"]);
 });
 
-// Each row: the case, one log entry, and the cell it renders with that cell's text; no row shows a badge or "undefined".
-test.each<[string, Record<string, unknown>, string, string]>([
-  ["a missing action is miss()", { subject: "rule", object: "x-1" }, 'td > span[title="no action"]', "–"],
-  ["a missing object is miss()", { subject: "rule", action: "reran" }, 'td > span[title="no object"]', "–"],
-  ["Times goes through count()", { subject: "gate", object: "x-1", action: "held", times: 1200 }, "td.num", "1,200"],
-  ["no times is 1", { subject: "gate", object: "x-1", action: "held" }, "td.num", "1"],
-  ["the actor is a chip", { subject: "director", object: "x-1", action: "a" }, "td > .chip", "director"],
-])("renderLog: %s", (_, entry, cell, shown) => {
-  const h = gates.renderLog({ log: { entries: [{ time: new Date(NOW).toISOString(), ...entry }] } } as any);
-  expect(find(h, cell).map((x) => x.text)).toEqual([shown]);
+test("a log entry with no action or object shows an empty cell and no undefined; the actor is a chip", () => {
+  const h = gates.renderLog(logOf([{ time: new Date(NOW).toISOString(), subject: "director" }, { time: new Date(NOW).toISOString(), subject: "rule", object: "x-1", action: "reran" }]));
+  expect(find(h, ".lrow .c").map((x) => x.text)).toEqual(["", "director", "reran", "rule"]);
+  expect(find(h, ".lrow .c .chip").map((x) => x.text)).toEqual(["director", "rule"]);
   expect(find(h, ".badge")).toEqual([]);
   expect(h).not.toContain("undefined");
 });
 
-test("renderLog heads the columns time first, then id, title, action, subject and number", () => {
-  const h = gates.renderLog(data());
-  expect(table(h)[0]).toEqual(["Logged", "Object", "Detail", "Action", "Subject", "Times"]);
-  expect(find(h, "th.num").map((x) => x.text)).toEqual(["Times"]);
-  expect(table(h)).toHaveLength(3);
-  const kind = (c: Found) => (c.attrs.class?.includes("wide") ? "wide" : c.attrs.class?.includes("num") ? "num" : "cell");
-  expect(find(h, "tbody td").map(kind)).toEqual(["cell", "cell", "wide", "cell", "cell", "num", "cell", "cell", "wide", "cell", "cell", "num"]);
+test("a gate run shows its count and span in the inspector; an entry that ran once shows no Times", () => {
+  const t = new Date(NOW).toISOString();
+  const h = gates.renderLog(logOf([{ time: t, subject: "gate", object: "x-1", action: "held", times: 1200, first: new Date(NOW - 60_000).toISOString() }, { time: t, subject: "gate", object: "x-2", action: "held" }]));
+  const [first, second] = find(h, "template").map((x) => x.attrs["data-inspect"]);
+  expect([first, second].every(Boolean)).toBe(true);
+  expect(find(h, ".ins dt").map((x) => x.text)).toContain("Times");
+  expect(find(h, ".ins dd").map((x) => x.text)).toContain("1,200");
+  expect(find(h, 'template[data-inspect$="/1"] dt').map((x) => x.text)).not.toContain("Times");
 });
 
-test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
+test("renderLog groups the entries by day, with the Action and By heads", () => {
+  const h = gates.renderLog(data());
+  expect(find(h, ".lhead .h").map((x) => x.text)).toEqual(["Action", "By"]);
+  expect(find(h, ".lhead .sub-head").map((x) => x.text)).toEqual([day(ago(1), new Date(NOW))]);
+  expect(find(h, ".lrow .lead").map((x) => x.text)).toHaveLength(2);
+});
+
+test("renderLog names the rows shown against the total, after the last group", () => {
   const e = (n: number): any => ({ time: new Date(NOW - n * 1000).toISOString(), subject: "rule", object: "x-1", action: "reran", detail: `t${n}` });
   const entries = Array.from({ length: 120 }, (_, i) => e(i));
-  entries[0] = { ...entries[0], subject: "gate", times: 3, first: entries[1].time };
-  const h = gates.renderLog({ log: { entries } } as any);
-  expect(table(h).length - 1).toBe(50);
-  expect(text(h)).toContain("1–50 of 120");
-  expect(find(h, ".pager button").map((x) => x.text)).toEqual(["Next 50"]);
-  expect(table(h)[1][5]).toBe("3");
-  expect(text(h)).not.toContain("×3");
+  expect(find(gates.renderLog(logOf(entries, 300)), ".lmore").map((x) => x.text)).toEqual(["120 of 300"]);
+  expect(find(gates.renderLog(logOf(entries)), ".lmore")).toEqual([]);
+  expect(find(gates.renderLog(logOf(entries, 300)), ".pager")).toEqual([]);
 });
+
+
 
 test("log collapses a run of identical gate events into one with times, first and last time", () => {
   // A hold is the gate's event on an issue.
@@ -396,12 +398,9 @@ test("POST /api/automation/caps refuses bad values with 422, and leaves the file
   expect((await (await postCaps({})).json()).live).toBe(9);
 });
 
-test("the Gates page says the user, never you, your or Chris, in its visible text", () => {
-  const d = data();
-  const h = gates.renderGates({ ...d, asks: [] });
-  expect(find(h, ".empty").map((x) => x.text)).toContain("No data");
-  expect(find(h, '[title*="then these paths wait for the user"]')).toHaveLength(1);
-  expect(text(h)).not.toMatch(/\b(you|your|Chris)\b/i);
+test("the Automation page says the user, never you, your or Chris, in its visible text", () => {
+  for (const id of ["rules", "limits", "log"]) expect(text(view(id)).replace(/\s+/g, " ")).not.toMatch(/\b(you|your|Chris)\b/i);
+  expect(find(view("limits"), '[title*="then these paths wait for the user"]')).toHaveLength(1);
 });
 
 test("a cap post writes the live cap only, ignores the old day cap, and leaves the caps it does not name", async () => {
@@ -444,22 +443,22 @@ test("the Caps section holds a form each for the two caps, with use against limi
   expect(find(h, 'input[name="fixRounds"]')[0].attrs.min).toBe("0");
   expect(find(h, '[data-cap="live"] .hint, [data-cap="run"] .hint').map((x) => x.text)).toEqual(["5 of 5", "2 of 3"]);
   expect(h).not.toContain("day");
-  expect(find(gates.renderGates(data()), "#gates-caps h2").map((x) => x.text)).toEqual(["Controls"]);
+  expect(find(view("limits"), "#gates-caps h2").map((x) => x.text)).toEqual(["Caps"]);
 });
 
 test("the cap row and the rule hints say job and issue, with no goal and no Run cap", () => {
-  const h = gates.renderGates(data());
-  expect(find(h, "#gates-caps label").map((x) => x.text)).toContain("Job cap");
-  const caps = find(h, "#gates-caps [title]").map((x) => x.attrs.title).join(" ");
+  const l = view("limits"), r = gates.renderGates(data());
+  expect(find(l, "#gates-caps label").map((x) => x.text)).toContain("Job cap");
+  const caps = find(l, "#gates-caps [title]").map((x) => x.attrs.title).join(" ");
   expect(caps).toContain("Live jobs now, of the cap");
   expect(caps).toContain("The most starts any one issue made in the last hour");
-  const rules = find(h, "#rules td.wide").map((x) => `${x.text} ${x.attrs.title}`).join(" ");
+  const rules = [...find(r, ".lrow .lead"), ...find(r, ".lrow .t")].map((x) => `${x.text} ${x.attrs.title ?? ""}`).join(" ");
   expect(rules).toContain("Jobs with no commit");
   expect(rules).toContain("The last 3 jobs of an issue ended with nothing committed.");
   expect(rules).toContain("An issue started 3 times in one hour.");
   expect(rules).toContain("A sub-issue of an issue was dropped and no other sub-issue is open.");
-  expect(h).not.toContain("Run cap");
-  expect(h.replace(/<[^>]*>/g, "")).not.toMatch(/goal/i);
+  expect(l + r).not.toContain("Run cap");
+  expect((l + r).replace(/<[^>]*>/g, "")).not.toMatch(/goal/i);
 });
 
 test("the view is Automation at #/automation in the Factory group; #/gates redirects; the By filter is buttons, not links", () => {
@@ -468,25 +467,23 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
   expect(gates.view.group).toBe("factory");
   const h = gates.renderGates(data());
   expect(find(h, "h1").map((x) => x.text)).toEqual(["Automation"]);
-  expect(find(h, '[href^="#/automation?by="]')).toEqual([]);
+  expect(find(view("log"), '[href^="#/automation?by="]')).toEqual([]);
   expect(h).not.toContain("#/gates");
   expect(gates.redirect("#/gates")).toBe("#/automation");
   expect(gates.redirect("#/gates?by=director")).toBe("#/automation?by=director");
   expect(gates.redirect("#/automation")).toBeNull();
 });
 
-test("the Automation page has no explaining aside; the controls panel holds the cap forms and no Pause button, before Held paths, each full width", () => {
+test("the Automation page has no explaining aside and no Pause button; the caps come before the held paths", () => {
   for (const paused of [false, true]) {
     const h = gates.renderGates({ ...data(), factory: { ...data().factory, paused } });
     expect(find(h, "header.ph [data-act]")).toEqual([]);
     expect(find(h, 'header.ph select[name="project"], header.ph [data-name="window"]').map((x) => x.tag)).toEqual(["select", "div"]);
-    expect(find(h, '[data-act="pause"], [data-act="resume"]')).toEqual([]);
-    expect(find(h, "#gates-caps [data-cap]").map((x) => x.attrs["data-cap"])).toEqual(expect.arrayContaining(["live", "run"]));
-    expect(h).not.toContain("gates-two");
-    // Schedules with Controls.
-    expect(find(h, ".pair")).toHaveLength(1);
-    expect(find(h, ".pair > section").map((x) => x.attrs.id)).toEqual(["gates-schedules", "gates-caps"]);
-    const ids = find(h, "section[id]").map((x) => x.attrs.id);
+    const l = view("limits", { ...data(), factory: { ...data().factory, paused } });
+    expect(find(l, '[data-act="pause"], [data-act="resume"]')).toEqual([]);
+    expect(find(l, "#gates-caps [data-cap]").map((x) => x.attrs["data-cap"])).toEqual(expect.arrayContaining(["live", "run"]));
+    expect(l).not.toContain("gates-two");
+    const ids = find(l, "section[id]").map((x) => x.attrs.id);
     expect(ids.indexOf("gates-caps")).toBeLessThan(ids.indexOf("gates-held"));
   }
   const h = gates.renderGates(data());
@@ -500,41 +497,39 @@ test("rules() credits a rule's answer to decided.rule, and not an Ask that went 
   expect(row.decided).toEqual({ rule: 1, director: 0, chris: 0 });
 });
 
-test("rules() has one row per Ask reason; renderRules is one table with a row per rule", () => {
+test("rules() has one row per Ask reason; renderRules is one list with a row per rule", () => {
   const r = rules().map((x) => x.reason);
   expect(r).toEqual(Object.keys(ASK_REASONS));
   for (const k of ["question", "held-path"]) expect(r).toContain(k);
-  const h = gates.renderRules({ rules: rules() });
-  expect(find(h, "table")).toHaveLength(1);
-  expect(find(h, "td.acts")).toHaveLength(r.length);
+  const h = rulesOf(rules());
+  expect(find(h, "table")).toEqual([]);
+  expect(find(h, ".lrow").map((x) => x.attrs["data-key"])).toEqual(r);
 });
 
-test("a rule row names the reason in its title cell, ends in a small Edit button, and its form follows the table", () => {
-  const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "held-path") });
-  const [title] = find(h, "td.wide");
-  expect(title.attrs.title).toStartWith("held-path");
-  expect(title.text).not.toBe("");
-  expect(table(h)[1].at(-1)).toBe("Edit");
-  expect(find(h, 'td.acts button.act.small[data-edit-rule="held-path"]').map((x) => x.text)).toEqual(["Edit"]);
-  expect(find(h, "table, form.rule-form").map((x) => x.tag)).toEqual(["table", "form"]);
+test("a rule row names the ask, shows its line as the title, and leaves out No answer", () => {
+  const h = rulesOf(rules().filter((x) => x.reason === "held-path"));
+  expect(find(h, ".lrow .lead")[0].text).not.toBe("");
+  expect(find(h, ".lrow .t")[0].attrs.title).toBe(find(h, ".lrow .t")[0].text);
+  expect(find(h, ".lrow .c").map((x) => x.text)).toEqual(["", "", "director"]);
+  expect(text(h)).not.toContain("Keep waiting");
+  expect(find(h, ".lhead .h").map((x) => x.text)).not.toContain("If No Answer");
 });
 
 test("a stored firefighter grant for held-path is dead: rules() shows no grant and Decides offers Director, Approve and User", () => {
   putJson("settings", "always", { "held-path": { action: "firefighter", at: ago(5) } });
   const row: any = rules().find((x) => x.reason === "held-path")!;
   expect(row.granted).toBeNull();
-  const h = gates.renderRules({ rules: [row] });
+  const h = rulesOf([row]);
   expect(h).not.toContain("always.json grants");
   expect(h).not.toContain("firefighter");
-  expect(choices(h, "decide")).toEqual([["", true, "Director"], ["approve", false, "Approve"], ["user", false, "User"]]);
+  expect(picks(h, "held-path", "decide")).toEqual([["", true, "Director"], ["approve", false, "Approve"], ["user", false, "User"]]);
 });
 
 test("a reason granted user shows User in Decides", () => {
   putJson("settings", "always", { "held-path": { action: "user", at: ago(5) } });
-  const all = rules();
-  const held = gates.renderRules({ rules: all.filter((x) => x.reason === "held-path") });
-  expect(table(held)[1][3]).toBe("User");
-  expect(choices(held, "decide").filter((c) => c[1])).toEqual([["user", true, "User"]]);
+  const held = rulesOf(rules().filter((x) => x.reason === "held-path"));
+  expect(find(held, ".lrow .c")[2].text).toBe("User");
+  expect(picks(held, "held-path", "decide").filter((o) => o[1])).toEqual([["user", true, "User"]]);
 });
 
 test("a grant of reason:project is listed in that reason's row with its project, and not as the row's own grant", () => {
@@ -545,13 +540,13 @@ test("a grant of reason:project is listed in that reason's row with its project,
   expect((rules().find((x) => x.reason === "review-held") as any).projects).toEqual([]);
 });
 
-test("a grant that is neither the reason's mode nor user still shows pressed in Decides", () => {
+test("a grant that is neither the reason's mode nor user still shows picked in Decides", () => {
   putJson("settings", "always", { "intake-failed": { action: "discontinue", at: ago(5) } });
-  const h = gates.renderRules({ rules: rules().filter((x) => x.reason === "intake-failed") });
-  expect(choices(h, "decide").map((c) => c.slice(0, 2))).toEqual([["", false], ["continue", false], ["discontinue", true], ["user", false]]);
+  const h = rulesOf(rules().filter((x) => x.reason === "intake-failed"));
+  expect(picks(h, "intake-failed", "decide").map((o) => o.slice(0, 2))).toEqual([["", false], ["continue", false], ["discontinue", true], ["user", false]]);
 });
 
-test("rules() counts each reason's Asks in the window by who decided them and what followed; renderRules shows the counts", () => {
+test("rules() counts each reason's Asks in the window by who decided them and what followed; the list shows the counts", () => {
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
   const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
   const rec = (n: number, asks: any[]) => asks.map((a) => ({ issue: `issue.${n}`, ...a }));
@@ -567,18 +562,16 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.fired).toBe(5);
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
-  const h = gates.renderRules({ rules: [row] });
-  expect(table(h)[0]).toEqual(["Ask", "Fired", "Decided By", "Decides", "If No Answer", ""]);
-  expect(find(h, "th.num").map((x) => x.text)).toEqual(["Fired"]);
+  const h = rulesOf([row]);
+  expect(find(h, ".lhead .h").map((x) => x.text)).toEqual(["Fired", "Decided", "Decides"]);
   for (const t of ["If Auto Cannot", "Ask me", "Manual"]) expect(text(h)).not.toContain(t);
-  expect(find(h, "[colspan], .note")).toEqual([]);
-  expect(table(h)[0].filter((t) => /[()/]/.test(t))).toEqual([]);
-  expect(table(h)[1][1]).toBe("5");
-  expect(find(h, ".split").map((x) => x.text)).toEqual(["2 rule · 1 director · 1 user"]);
+  expect(find(h, ".lrow .c")[0].text).toBe("5");
+  expect(find(h, ".lrow .rowbar .meter")[0].attrs["aria-label"]).toBe("2 rule · 1 director · 1 user");
+  expect(find(h, ".ins dd").map((x) => x.text)).toContain("1 of 5");
   expect(find(h, ".meter i").map((x) => [x.attrs.class, x.attrs.style])).toEqual([["c-rule", "width:50.0%"], ["c-dir", "width:25.0%"], ["c-user", "width:25.0%"]]);
 });
 
-test("the Monitor panel says the monitor has not run with no report, and holds the newest report with the findings inside the part that expands", async () => {
+test("the Monitor card says the monitor has not run with no report, and holds the newest report's findings and reader text, with a Close link", async () => {
   const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
   expect((await body()).monitor).toBeNull();
   expect(find(gates.renderMonitor(await body()), ".empty").map((x) => x.text)).toEqual(["No data"]);
@@ -587,22 +580,32 @@ test("the Monitor panel says the monitor has not run with no report, and holds t
   try {
     const d: any = await body();
     expect(d.monitor).toMatchObject({ day: "2026-11-03", findings: ["FIRST-ONE", "SECOND-ONE"], text: "READER-TEXT" });
-    const h = gates.renderMonitor(d), [sum] = find(h, "summary").map((x) => x.text);
-    for (const x of [day("2026-11-03T00:00"), "2 findings", "FIRST-ONE"]) expect(sum).toContain(x);
-    expect(sum).not.toContain("SECOND-ONE");
-    expect(find(h, "details li").map((x) => x.text)).toEqual(["FIRST-ONE", "SECOND-ONE"]);
-    expect(find(h, "details pre").map((x) => x.text)).toEqual(["READER-TEXT"]);
+    const h = gates.renderMonitor(d);
+    expect(find(h, "h2").map((x) => x.text)).toEqual([`Monitor, ${day("2026-11-03T00:00")}`]);
+    expect(find(h, ".sh .count").map((x) => x.text)).toEqual(["2"]);
+    expect(find(h, "li").map((x) => x.text)).toEqual(["FIRST-ONE", "SECOND-ONE"]);
+    expect(find(h, "pre").map((x) => x.text)).toEqual(["READER-TEXT"]);
+    expect(find(h, "a.act").map((x) => [x.text, x.attrs.href])).toEqual([["Close", "#/automation"]]);
   } finally {
     rmSync(dir, { recursive: true });
   }
 });
 
-test("the Monitor summary shows the report's day as a local day, and 1 finding for one finding", () => {
+test("the Rules view opens the monitor report in place only with monitor in the address", async () => {
+  const d = { ...data(), monitor: { day: "2026-11-03", findings: ["F"], text: "", error: null } };
+  expect(find(gates.renderGates(d), "#monitor")).toEqual([]);
+  const open = gates.renderGates(d, new URLSearchParams("monitor=1"));
+  expect(find(open, "#monitor")).toHaveLength(1);
+  expect(find(open, ".lrow")).toHaveLength(Object.keys(ASK_REASONS).length);
+  expect(find(view("log", d), "#monitor")).toEqual([]);
+});
+
+test("the Monitor title shows the report's day as a local day", () => {
   const tz = process.env.TZ;
   process.env.TZ = "America/Los_Angeles";
   try {
     const h = gates.renderMonitor({ monitor: { day: "2026-11-03", findings: ["ONLY"], text: "", error: null } });
-    expect(find(h, "summary")[0].text).toContain(`${day("2026-11-03T00:00")}: 1 finding.`);
+    expect(find(h, "h2")[0].text).toBe(`Monitor, ${day("2026-11-03T00:00")}`);
   } finally {
     // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
     process.env.TZ = tz ?? "UTC";
@@ -610,15 +613,13 @@ test("the Monitor summary shows the report's day as a local day, and 1 finding f
   }
 });
 
-test("the Monitor draws **text** as bold in the summary and the list, and escapes other HTML in a finding", async () => {
+test("the Monitor draws **text** as bold in the list, and escapes other HTML in a finding", async () => {
   const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
   mkdirSync(dir, { recursive: true });
   writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "", findings: ["**x** <i>y</i>", "**z**"] }));
   try {
-    const h = gates.renderMonitor(await body()), [sum] = find(h, "summary").map((x) => x.text);
+    const h = gates.renderMonitor(await body());
     // The finding's own tags show as text: the page draws no <i>.
-    expect(sum).toContain("First: x <i>y</i>");
-    expect(find(h, "summary b").map((x) => x.text)).toEqual(["x"]);
     expect(find(h, "li").map((x) => x.text)).toEqual(["x <i>y</i>", "z"]);
     expect(find(h, "li b").map((x) => x.text)).toEqual(["x", "z"]);
     expect(find(h, "i")).toEqual([]);
@@ -662,11 +663,11 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(find(t, 'form[data-schedule="monitor"] .hint').map((x) => x.text)).toEqual([`7 findings · ${when(ago(50))}`]);
 });
 
-test("renderNow shows a dash, not undefined or NaN, with no rate and no held time", () => {
+test("the facts line shows a dash, not undefined or NaN, with no rate and no held time", () => {
   const d = data();
-  const bare = gates.renderNow({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
+  const bare = gates.renderRules({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
   expect(bare).not.toMatch(/undefined|NaN/);
-  expect(find(bare, ".tile b")[0].text).toBe("–");
+  expect(find(bare, ".factline b").map((x) => x.text)).toEqual(["–", "6", "2", "–"]);
 });
 
 test("GET /api/automation takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
@@ -695,23 +696,24 @@ test("GET /api/automation takes window and project: the log and the metrics keep
   expect((await get("?window=year")).status).toBe(400);
 });
 
-test("every seg group on the Automation page has an accessible name, rule toggles included", () => {
-  const h = gates.renderGates(data());
-  const groups = find(h, ".seg").map((x) => x.attrs["aria-label"]);
-  expect(groups.length).toBeGreaterThan(2);
-  for (const g of groups) expect(g).toMatch(/./);
-  expect(groups.some((g) => g.startsWith("Who decides "))).toBe(true);
+test("every seg group on the Automation page has an accessible name", () => {
+  for (const id of ["rules", "limits", "log"]) {
+    const groups = find(view(id), ".seg").map((x) => x.attrs["aria-label"]);
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) expect(g).toMatch(/./);
+  }
+  expect(find(view("log"), ".seg").map((x) => x.attrs["aria-label"])).toContain("Views");
 });
 
-test("the Held time card reads hours() and the Automation rate reads pct()", () => {
+test("the facts line reads dur() and pct()", () => {
   const d = data();
   const h = gates.renderGates({ ...d, metrics: { ...d.metrics, held: { issues: 2, hours: 3513.1 }, rate: { auto: 1, total: 8, percent: 12.5 } } });
-  expect(find(h, ".tile b").map((x) => x.text)).toEqual([`${pct(12.5)} / 8`, "6 / 2", "3513h / 2"]);
+  expect(find(h, ".factline b").map((x) => x.text)).toEqual([pct(12.5), "6", "2", "146d 09h"]);
 });
 
-test("Monitor, Schedules, Rules and Log are each a card that keeps its id", async () => {
-  const d = { ...(await body()), rules: [], log: { entries: [] } } as any;
-  const h = { monitor: gates.renderMonitor(d), "gates-schedules": gates.renderSchedules(d), rules: gates.renderRules(d), "gates-log": gates.renderLog(d) };
+test("Monitor, Schedules, Caps and Held Paths are each a card that keeps its id", async () => {
+  const d = { ...(await body()), factory: data().factory } as any;
+  const h = { monitor: gates.renderMonitor(d), "gates-schedules": gates.renderSchedules(d), "gates-caps": gates.renderCaps(d), "gates-held": gates.renderHeld(d) };
   for (const [id, html] of Object.entries(h)) expect(find(html, "section")[0].attrs).toMatchObject({ class: "card", id });
   const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
   mkdirSync(dir, { recursive: true });
@@ -723,12 +725,11 @@ test("Monitor, Schedules, Rules and Log are each a card that keeps its id", asyn
   }
 });
 
-test("Schedules, Rules and Log show empty() with no rows; the Log pages at 50", () => {
+test("Schedules, Rules and Log show empty() with no rows", () => {
   const empty = (h: string) => find(h, ".empty").map((x) => x.text);
-  expect(empty(gates.renderLog({ log: { entries: [] } } as any))).toEqual(["No data"]);
-  expect(find(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ time: new Date(NOW - i * 1000).toISOString(), subject: "rule", object: "x-1", action: "reran", detail: `t${i}` })) } } as any), ".pager")[0].text).toContain("50 of 51");
+  expect(empty(gates.renderLog(logOf([])))).toEqual(["No data"]);
   expect(empty(gates.renderSchedules({ schedules: [] }))).toEqual(["No data"]);
-  expect(empty(gates.renderRules({ rules: [] }))).toEqual(["No data"]);
+  expect(empty(rulesOf([]))).toEqual(["No data"]);
 });
 
 test("POST /api/automation/schedules writes a drop-in that keeps the boot and startup triggers, reloads systemd and restarts the timer; a bad interval or name is 422", async () => {
@@ -753,37 +754,29 @@ test("POST /api/automation/schedules stores the monitor's hour, which the next G
   expect(await hour()).toBe(9);
 });
 
-test("the Automation page names the held backend and its reason, and no line when none is held", () => {
-  const held = gates.renderGates({ ...data(), backend: { via: "OpenRouter", why: "probe failed" } });
-  expect(find(held, "#gates-backend").map((x) => x.text)).toEqual(["Waiting for OpenRouter: probe failed"]);
-  expect(find(gates.renderGates({ ...data(), backend: null }), "#gates-backend")).toEqual([]);
+test("the Automation page draws no backend line: the attention row of /api/attention carries it", () => {
+  expect(find(gates.renderGates({ ...data(), backend: { via: "OpenRouter", why: "probe failed" } }), "#gates-backend")).toEqual([]);
 });
 
-test("a non-land reason shows its timeout in the largest whole unit with its action, and its Edit row opens on the matching choice", () => {
-  const row = (reason: string, timeout: number, noAnswer: string): any => ({ reason, ...reasonText(reason), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout, noAnswer });
-  const h = gates.renderRules({ rules: [row("question", 120, "pick")] });
-  expect(table(h)[1][4]).toBe("After 2 h: take the pick");
-  expect(find(h, "form.rule-form")[0].attrs).toMatchObject({ "data-was-wait": "120", "data-was-then": "pick" });
-  expect(choices(h, "wait")).toEqual([["wait", false, "Keep waiting"], ["pick", true, "Take the pick"], ["drop", false, "Drop"]]);
-  expect(find(h, 'form.rule-form input[name="n"]')[0].attrs).toMatchObject({ type: "number", value: "2" });
-  expect(find(h, "form.rule-form option[selected]").map((x) => [x.attrs.value, x.text])).toEqual([["h", "hours"]]);
-  expect(choices(h, "decide")).toEqual([["", true, "Director"], ["user", false, "User"]]);
-  expect(choices(gates.renderRules({ rules: [row("question", 45, "drop")] }), "wait").filter((c) => c[1])).toEqual([["drop", true, "Drop"]]);
-  const off = gates.renderRules({ rules: [row("question", 0, "pick")] });
-  expect(table(off)[1][4]).toBe("Keep waiting");
-  expect(choices(off, "wait").filter((c) => c[1])).toEqual([["wait", true, "Keep waiting"]]);
-  expect(find(off, 'form.rule-form input[name="n"]')[0].attrs).toHaveProperty("disabled");
+test("a timed reason's inspector opens on its timeout in the largest whole unit and its action", () => {
+  const row = (reason: string, timeout: number, noAnswer: string): any => ({ reason, ...reasonText(reason), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout, noAnswer, projects: [] });
+  const h = rulesOf([row("question", 120, "pick")]);
+  expect(picks(h, "question", "wait")).toEqual([["wait", false, "Keep waiting"], ["pick", true, "Take the pick"], ["drop", false, "Drop"]]);
+  expect(find(h, '.ins input[name="n"]')[0].attrs).toMatchObject({ type: "number", value: "2" });
+  expect(find(h, ".ins option[selected]").map((x) => [x.attrs.value, x.text])).toContainEqual(["h", "hours"]);
+  expect(picks(h, "question", "decide")).toEqual([["", true, "Director"], ["user", false, "User"]]);
+  expect(picks(rulesOf([row("question", 45, "drop")]), "question", "wait").filter((o) => o[1])).toEqual([["drop", true, "Drop"]]);
+  const off = rulesOf([row("question", 0, "pick")]);
+  expect(picks(off, "question", "wait").filter((o) => o[1])).toEqual([["wait", true, "Keep waiting"]]);
+  expect(find(off, '.ins input[name="n"]')[0].attrs).toHaveProperty("disabled");
 });
 
-test("Save posts a timeout with the action and minutes when the If No Answer choice changes, and none when it does not", () => {
-  const form = (was: { wait: string; then: string }, pressed: string, n: string, unit: string): any => ({
-    dataset: { rule: "question", wasDecide: "", wasWait: was.wait, wasThen: was.then },
-    elements: { n: { value: n }, unit: { value: unit } },
-    querySelector: (q: string) => (q.includes('data-field="wait"') ? { dataset: { value: pressed } } : { dataset: { value: "" } }),
-  });
-  const url = "/api/automation/rules/question/timeout";
-  expect(gates.rulePosts(form({ wait: "0", then: "wait" }, "drop", "2", "h"))).toEqual([[url, { minutes: 120, then: "drop" }]]);
-  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "drop", "2", "h"))).toEqual([[url, { minutes: 120, then: "drop" }]]);
-  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "wait", "2", "h"))).toEqual([[url, { minutes: 0 }]]);
-  expect(gates.rulePosts(form({ wait: "120", then: "pick" }, "pick", "2", "h"))).toEqual([]);
+test("a rule setting posts its one field: Decides grants or revokes, No answer sets the timeout", () => {
+  const form = (field: string, picked: string, n = "2", unit = "h"): any => ({ dataset: { rule: "question", field }, elements: { decide: { value: picked }, wait: { value: picked }, n: { value: n }, unit: { value: unit } } });
+  const url = (what: string) => `/api/automation/rules/question/${what}`;
+  expect(gates.ruleSave(form("decide", "user"))).toEqual([url("grant"), { action: "user" }, "rule"]);
+  expect(gates.ruleSave(form("decide", ""))).toEqual([url("revoke"), undefined, "rule"]);
+  expect(gates.ruleSave(form("wait", "drop"))).toEqual([url("timeout"), { minutes: 120, then: "drop" }, "rule"]);
+  expect(gates.ruleSave(form("wait", "pick", "45", "min"))).toEqual([url("timeout"), { minutes: 45, then: "pick" }, "rule"]);
+  expect(gates.ruleSave(form("wait", "wait"))).toEqual([url("timeout"), { minutes: 0 }, "rule"]);
 });

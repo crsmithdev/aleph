@@ -101,6 +101,18 @@ test("the window read asks for core traces, and a session's firstPrompt comes fr
   } finally { TRACES.length -= 2; }
 });
 
+test("a session row says who ran it: the person, a factory worker or a script", async () => {
+  TRACES.push(
+    trace("t7", "s7", "aleph", iso(8), { input: "You are a worker on issue a1" }),
+    trace("t8", "s8", "aleph", iso(8), { input: "Reply with ok" }),
+  );
+  try {
+    const d: any = await listSessions(WEEK);
+    const who = (id: string) => d.sessions.find((s: any) => s.id === id).who;
+    expect([who("s1"), who("s7"), who("s8")]).toEqual(["you", "factory", "headless"]);
+  } finally { TRACES.length -= 2; }
+});
+
 test("the sessions list pages newest first by ?limit= and ?before=, and says whether Langfuse held more pages", async () => {
   const page = async (p: { limit?: number; before?: string }) => listSessions(WEEK, p) as Promise<any>;
   const all = await page({});

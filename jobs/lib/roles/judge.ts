@@ -11,6 +11,7 @@
  * docs/adr/0003-verify-gate-judges-substance.md "Jev screen".
  */
 import { judgeChoice, nouls, type Noul } from "../../../lib/jev.ts";
+import { readModels } from "../routing/models.ts";
 import { oneShot } from "./one-shot.ts";
 import { errText } from "../../../lib/errtext.ts";
 
@@ -61,6 +62,8 @@ async function jevScreen(finalMessage: string, timeoutMs: number): Promise<{ pCl
 }
 
 export async function judge(digestText: string, finalMessage: string, budgetMs = 35_000): Promise<JudgeResult> {
+  // No verdict is a pass for the Stop gate (fail-open), so an off judge never turns a pass into a fail.
+  if (!readModels().judge.enabled) return { verdict: null, error: "the judge is off", ms: 0 };
   const started = Date.now();
   const left = () => started + budgetMs - Date.now();
   let screened: JudgeResult["jev"];

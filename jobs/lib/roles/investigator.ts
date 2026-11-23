@@ -126,6 +126,7 @@ const count = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /** `aleph investigate <subject>`: one run on the subject, its reply in result.json. Null when a run on it is live. */
 export async function investigate(subject: string): Promise<{ run: string; reason: string } | null> {
+  if (!readModels().investigator.enabled) throw new Error("the investigator is off");
   await endLost("investigator", (run) => lockOf(run.name), "its reply");
   const c = caseOf(subject);
   if (!c) throw new Error(`no issue or job ${subject}`);

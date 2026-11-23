@@ -9,13 +9,13 @@ const data = () => ({
   activity: { langfuse: "ok", projects: ["aleph", "oth"], tools: [{ name: "Bash", calls: 100, errors: 10, lastAt: "2026-11-01T00:00:00Z" }, { name: "Monitor", calls: 10, errors: 5 }, { name: "Rare", calls: 2, errors: 2 }, { name: "Read", calls: 50, errors: 0 }], hooks: [{ name: "vault-recall", calls: 9, errors: 0, lastAt: "2026-11-01T00:00:00Z" }], denials: { total: 1, recent: [{ at: "2026-11-01T00:00:00Z", reason: "no <run>" }] } },
   skills: { projects: ["aleph"], skills: [{ name: "aleph:handoff", uses: 8, errors: 6, sessionIds: ["s2"] }], unused: ["tidy"] },
   sessions: { projects: ["aleph", "oth"], sessions: [
-    { id: "s1", project: "aleph", firstPrompt: "cheap one", turns: 1, cost: 1, start: "2026-11-01T00:00:00Z", last: "2026-11-01T01:00:00Z", taskTypes: [] },
-    { id: "s2", project: "oth", firstPrompt: "dear one", turns: 3, cost: 9, start: "2026-10-31T00:00:00Z", last: "2026-10-31T01:00:00Z", taskTypes: ["debug"] },
+    { id: "s1", project: "aleph", firstPrompt: "cheap one", turns: 1, cost: 1, start: "2026-11-01T00:00:00Z", last: "2026-11-01T01:00:00Z", taskTypes: [], who: "you" },
+    { id: "s2", project: "oth", firstPrompt: "dear one", turns: 3, cost: 9, start: "2026-10-31T00:00:00Z", last: "2026-10-31T01:00:00Z", taskTypes: ["debug"], who: "factory" },
+    { id: "s3", project: "aleph", firstPrompt: "", turns: 1, cost: 2, start: "2026-10-30T00:00:00Z", last: "2026-10-30T01:00:00Z", taskTypes: [], who: "headless" },
   ] },
   toolSessions: { Bash: ["s1", "s2"], Monitor: ["s1"] },
 });
 const opts = (q = "") => v.options(new URLSearchParams(q));
-const ids = (q: string) => v.shownSessions(data(), opts(q)).map((s: any) => s.id);
 
 describe("the Sessions page", () => {
   test("the view replaces the three old addresses and keeps their window and project", () => {
@@ -35,117 +35,95 @@ describe("the Sessions page", () => {
     expect(v.redirect("#/sessions")).toBeNull();
   });
 
-  test("the failing tiles rank by rate and leave out a tool with under five calls", () => {
+  test("the failing table ranks by rate and leaves out a tool with under five calls", () => {
     expect(v.failing(data()).map((r: any) => [r.name, Math.round(r.rate * 100)])).toEqual([["aleph:handoff", 75], ["Monitor", 50], ["Bash", 10]]);
   });
 
-  test("a tool or skill narrows the sessions; none shows all, largest cost first", () => {
-    expect(ids("")).toEqual(["s2", "s1"]);
-    expect(ids("pick=tool:Monitor")).toEqual(["s1"]);
-    expect(ids("pick=skill:aleph:handoff")).toEqual(["s2"]);
-    expect(ids("pick=tool:Read")).toEqual([]);
-    expect(ids("q=cheap")).toEqual(["s1"]);
-    expect(ids("sort=last&dir=asc")).toEqual(["s2", "s1"]);
-  });
-
-  test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
+  test("the List view opens on Yours, with the cost split by who ran the session and no hook cards", () => {
     const h = v.renderSessions(data(), opts());
-    expect(h).toContain('<header class="ph"><h1>Sessions</h1><div class="aside"><div class="fbar">');
-    for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'title="s1" href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
-    expect(h).not.toContain("no <run>");
-    expect(h).toContain('<th class="num">Errors</th><th class="num">Last Call</th>');
-    expect(h).toContain("<th>Denied</th><th>Reason</th>");
-    expect(h).toContain('data-tile="tool:Bash"');
-    const heads = (h.match(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g) ?? []).map((x: string) => x.replace(/<[^>]*>/g, ""));
-    const at = heads.indexOf("Session");
-    expect(heads.slice(at, at + 2)).toEqual(["Session", "First Prompt"]);
-    expect(heads.slice(at + 6, at + 8)).toEqual(["Started", "Last Turn"]);
-    expect(h).toContain(`<td class="time">${when("2026-10-31T00:00:00Z")}</td><td class="time">${when("2026-10-31T01:00:00Z")}</td>`);
-    const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</div>", h.indexOf('aria-label="Skills"')));
-    expect(skills).not.toContain("days");
-    for (const s of ["<h2>Verify-Gate Denials</h2>", 'aria-label="Verify-gate denials"', '<button type="button" data-sort="prompt">First Prompt<']) expect(h).toContain(s);
+    expect(h).toContain('<p class="factline"><span><b class="num">$12.00</b> this week</span> <span><b class="num">$1.00</b> yours</span> <span><b class="num">$9.00</b> factory</span> <span><b class="num">$2.00</b> headless</span></p>');
+    expect(h).toContain('data-name="who"><button type="button" data-value="" aria-pressed="false">All</button><button type="button" data-value="yours" aria-pressed="true">');
+    expect(h).toContain('<li class="lrow" tabindex="0" data-key="s1"');
+    expect(h).not.toContain('data-key="s2"');
+    expect(h).toContain('title="s1" href="#/sessions/s1"');
+    const own = data();
+    own.sessions.sessions[1].who = "you";
+    expect(v.renderSessions(own, opts())).toContain('<span class="t" title="dear one">dear one</span><span class="chip">oth</span>');
+    expect(h).not.toContain('<span class="chip">aleph</span>');
+    for (const s of ["Hooks", "Verify-Gate", "vault-recall", "Failing Most"]) expect(h).not.toContain(s);
   });
 
-  test("a hook's name and a session's prompt are wide cells with their text as the title; extra kinds are a chip, not a quiet span", () => {
+  test("a group draws its first 50 rows and says how many are left", () => {
     const d = data();
-    d.sessions.sessions[1].taskTypes = ["debug", "plan", "review"];
+    d.sessions.sessions = Array.from({ length: 52 }, (_, i) => ({ ...d.sessions.sessions[0], id: `n${i}`, who: "you" }));
     const h = v.renderSessions(d, opts());
-    expect(h).toContain('<td class="wide" title="vault-recall">vault-recall</td>');
-    expect(h).toContain('<td class="wide" title="dear one">dear one</td>');
-    expect(h).toContain('<td class="wide" title="no &lt;run&gt;">no &lt;run&gt;</td>');
-    expect(h).toContain('<td title="debug, plan, review">');
-    expect(h).toContain('<span class="chip" title="+1">+1</span>');
-    expect(h).not.toContain('class="quiet"');
+    expect(h.match(/<li class="lrow"/g)).toHaveLength(50);
+    expect(h).toContain("50 of 52");
   });
 
-  test("the total sits in the Sessions card's lede, and the counts say one error, not 1 errors", () => {
+  test("the day count and the project reach the head of both views", () => {
+    for (const view of ["", "view=tools"]) {
+      const h = v.renderSessions(data(), opts("days=30"), new URLSearchParams(view));
+      expect(h).toContain('name="project"');
+      expect(h).toContain('data-name="days"');
+      expect(h).toContain('data-value="30" aria-pressed="true"');
+    }
+    expect(v.renderSessions(data(), opts(), new URLSearchParams("view=tools"))).toContain('data-view="tools" aria-pressed="true"');
+  });
+
+  test("the Tools & Skills view opens with a figure band, then the ranked tools and skills and the failing table", () => {
+    const h = v.renderSessions(data(), opts(), new URLSearchParams("view=tools"));
+    expect(h).toContain('<section class="band" aria-label="Figures">');
+    for (const s of ["Tool Errors", "Bash Errors", "Skill Errors", "Unused Skills", "10%", "59%", "17 of 162 calls", "75%", "6 of 8 uses"]) expect(h).toContain(s);
+    for (const s of ["aleph:handoff", 'href="#/skills/tidy"', "<h2>Failing Most</h2>", "5 uses or more", '<th class="num">Rate</th>']) expect(h).toContain(s);
+    expect(h).not.toContain("<h2>Hooks</h2>");
+    expect(h).not.toContain('data-tile=');
+    expect(h).not.toContain('class="factline"');
+  });
+
+  test("the counts say one error, not 1 errors, and keep their thousands separator", () => {
     const d = data();
-    const h = v.renderSessions(d, opts());
-    expect(h).toContain('<p class="lede">$10.00 recorded across these sessions.</p>');
     d.skills.skills[0].errors = 1;
-    expect(v.renderSessions(d, opts())).toContain(">1 error</span>");
-  });
-
-  test("the lede totals only the sessions the card shows, and the counts keep their thousands separator", () => {
-    expect(v.renderSessions(data(), opts("pick=tool:Monitor"))).toContain('<p class="lede">$1.00 recorded across these sessions.</p>');
-    const d = data();
     d.activity.tools[0].calls = 12345;
     d.activity.tools[0].errors = 1500;
-    const h = v.renderSessions(d, opts());
-    for (const s of ["12,407 calls", "1,507 errors", "of 12,345 calls", ">1,500 errors</span>"]) expect(h).toContain(s);
+    const h = v.renderSessions(d, opts(), new URLSearchParams("view=tools"));
+    for (const s of [">1 error</span>", "12,407 calls", "1,507 of 12,407 calls", "1,507 errors", ">1,500 errors</span>"]) expect(h).toContain(s);
   });
 
-  test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
-    const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
-    expect(h).toContain("<h2 id=\"h-ag-sess\">Sessions That Used aleph:handoff</h2>");
-    expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
-    // The way back sits in the card's aside, not in a row, so it is a plain button and not kind small.
-    expect(h).toContain('<button class="act" type="button" data-tile="">Show all sessions</button>');
-    expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
-  });
-
-  test("the cards use the design parts: a fold of unused skills, a legend key, a link button", () => {
-    const h = v.renderSessions(data(), opts("pick=skill:x"));
+  test("the cards use the design parts: a fold of unused skills, a legend key", () => {
+    const h = v.renderSessions(data(), opts(), new URLSearchParams("view=tools"));
     const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</section>", h.indexOf('aria-label="Skills"')));
     expect(skills).toContain('href="#/skills/tidy"');
-    expect(skills).not.toContain('class="unused"');
     expect(skills).not.toContain("<h3");
-    expect(h).toContain('<a class="act" href="#/skills/x">Open the skill</a>');
-    expect(h).not.toContain("red part");
     expect(h).toContain('<ul class="legend"><li>162 calls</li><li><i class="c-err"></i>17 errors</li></ul>');
   });
 
-  test("the search box sits outside the Sessions card, which redraws whole in #ag-sessions", () => {
-    const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
-    const box = h.slice(h.indexOf('<div id="ag-sessions">'), h.indexOf("</section>", h.indexOf('<div id="ag-sessions">')));
-    expect(box).toStartWith('<div id="ag-sessions"><section class="card" id="ag-sess" aria-label="Sessions">');
-    expect(box).toContain("Show all sessions");
-    expect(box).not.toContain('data-ui="ag-search"');
-    expect(h.indexOf('data-ui="ag-search"')).toBeLessThan(h.indexOf('<div id="ag-sessions">'));
-  });
-
   test("a Langfuse failure puts the reason in Technical details, not as a raw Langfuse failed line", () => {
-    const h = v.renderSessions({ ...data(), activity: { langfuse: "error", error: "timeout", tools: [] } }, opts());
+    const h = v.renderSessions({ ...data(), activity: { langfuse: "error", error: "timeout", tools: [] } }, opts(), new URLSearchParams("view=tools"));
     expect(h).not.toContain("Langfuse failed:");
     expect(h).toContain("The tools did not load.");
     expect(h).toContain("<pre>timeout</pre>");
     expect(h).not.toContain("Check that");
   });
 
-  test("a window past the pages the fetch reads says the counts are of part of it; one inside them says nothing", () => {
+  test("a window past the pages the fetch reads says the counts are of part of it on both views; one inside them says nothing", () => {
     const d = data();
-    expect(v.renderSessions({ ...d, partial: true }, opts())).toContain("cover only part of the window");
-    expect(v.renderSessions(d, opts())).not.toContain("cover only part of the window");
+    for (const view of ["", "view=tools"]) {
+      expect(v.renderSessions({ ...d, partial: true }, opts(), new URLSearchParams(view))).toContain("cover only part of the window");
+      expect(v.renderSessions(d, opts(), new URLSearchParams(view))).not.toContain("cover only part of the window");
+    }
   });
 
   test("a failed part says so and the others still show", () => {
-    const off = v.renderSessions({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
+    const bad = { ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } };
+    const off = v.renderSessions(bad, opts(), new URLSearchParams("view=tools"));
     expect(off).toContain("Langfuse off");
     expect(off).not.toMatch(/(Skills|Sessions) failed:/);
     expect(off).toContain("The skills did not load.");
     expect(off).toContain("<pre>boom</pre>");
-    expect(off).toContain("The sessions did not load.");
-    expect(off).toContain("<pre>down</pre>");
-    expect(v.renderSessions({ ...data(), skills: { error: "boom" } }, opts())).toContain("dear one");
+    const list = v.renderSessions(bad, opts());
+    expect(list).toContain("The sessions did not load.");
+    expect(list).toContain("<pre>down</pre>");
+    expect(v.renderSessions({ ...data(), skills: { error: "boom" } }, opts())).toContain("cheap one");
   });
 });

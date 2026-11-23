@@ -13,7 +13,7 @@ import { CLASSES, classify } from "../flow/classes.ts";
 import { buckets } from "../../lib/windows.ts";
 import { activeEnd } from "../../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { cardDur, cardList, statusCards, usageCard } from "../views/lib/flow-parts.js";
+import { cardDur, cardList, statusCards } from "../views/lib/flow-parts.js";
 // @ts-ignore plain JS shared with the page
 import { statCard } from "../views/lib/html.js";
 // @ts-ignore plain JS shared with the page
@@ -191,7 +191,9 @@ test("figures: before the filer is named, a filed event counts by the issue's so
 
 test("the Usage card shows used over pace, with the percent off this machine in its title", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
-  const card = (usage: object) => usageCard({ now: "2026-11-01T08:00:00Z", usage: { ...u, ...usage } });
+  const d = { figures: { lost: null, hours: null, leadP50: null, leadP90: null, asks: 0, landed: null, firstPass: null } };
+  const card = (usage: object) => statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [], usage: { ...u, ...usage } }, d, {})
+    .split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Usage"))!;
   const h = card({ off: 12 });
   expect(h).toContain("<b>40%<em> / 14%</em></b>");
   expect(h).toContain('<span class="q"><span>used</span><span class="m"> / pace</span></span>');

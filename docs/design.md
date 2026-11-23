@@ -218,7 +218,7 @@ A current item (the sidebar link, the contents entry) has an inset 2px `--ink` b
 
 ### The dock bridge
 
-The dock widgets in `aleph-tools` read these. Each points at a base token, so one block serves both themes.
+The dock widgets in `aleph-tools` read these. The dock lives in `#dock-host` in the sidebar (Layout, Dock), so the widgets mount there and the panel anchors move with `--dock-pop-*`. Each points at a base token, so one block serves both themes.
 
 | Token | Value | Role |
 |---|---|---|
@@ -233,6 +233,7 @@ The dock widgets in `aleph-tools` read these. Each points at a base token, so on
 | `--dock-font` | `--sans` | a dock widget's text font |
 | `--dock-code` | `--mono` | a dock widget's code font |
 | `--dock-z` | `--z-overlay` | a dock widget's stacking order |
+| `--dock-pop-position`, `--dock-pop-left`, `--dock-pop-right`, `--dock-pop-bottom` | set on `.dock` in `ui/app.css`: `fixed`, the sidebar's width plus `--sp-8`, `auto`, `--sp-16` | where a dock panel opens |
 
 ### Palettes
 
@@ -362,31 +363,36 @@ Each section below has the same parts, in this order:
 
 #### Page head
 
-The page head is the first part of a page. It shows the title, a count and the controls of the page.
+The page head is the first part of a page. It shows the title, the view tabs, a count and the controls of the page.
 
 **Use:** once at the top of each page. **Not for:** a section title; use the card.
 
 | Helper | Reference |
 |---|---|
-| `pageHead(title, { count, aside })`; `crumb(back, parts)`; `scope().bar({ after })` | `ui/views/jobs.js` |
+| `pageViews({ title, path, query, views })` in `ui/views/lib/page.js`; `pageHead(title, { count, aside, after })`; `crumb(back, parts)`; `scope().bar({ after })` | `ui/views/design.js` |
 
 | # | Part | Holds | Optional | Style |
 |---|---|---|---|---|
 | 1 | Crumb | The path to the page | yes; detail pages only | `--mono` `--fs-sm`, `--muted`; a link is `--ink` on hover |
 | 2 | Title | The name of the page | | `--display` `--fs-xl`, `--ink` |
-| 3 | Count | The number of items on the page | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
-| 4 | Controls | The Project select, the window, then the controls of the page | yes | `--fs-xs`, `--muted`; at the right; wraps |
+| 3 | View tabs | One button for each view of the page, in a segmented control, after the title | yes; a page of one view has none | a `seg()`; the current view has `aria-pressed` |
+| 4 | Count | The number of items on the page | yes | `--num` `--fs-sm` `--fw-mid`, `--muted` |
+| 5 | Controls | The Project select and the window, then the controls of the page | yes; only on a view that the window or project changes | `--fs-xs`, `--muted`; at the right; wraps |
 
 - On a detail page, put `crumb()` above the head.
-- On a list page, make the controls with `scope().bar()` and put them in `aside`. The bar starts with the Project select and the window. Give the controls of the page to the bar as `after`.
+- On a page of views, call `pageViews()` in `render`. Each view is `{ id, label, scope, draw }`; `draw()` gives its HTML. The page shows the head, its attention rows, then the current view.
+- The current view is the `view` of the address (`#/issues?view=flow`). The first view is the default and leaves no `view` in the address. A tab click sets it and draws the page again, with no reload.
+- Order the views as: the things the page lists, then their analysis, then the log or the settings. At most three. The first tab names the things (`Roles`, `Notes`); where that is the page's own name, it reads `List`.
+- The controls of the head are `scope().bar()`: the Project select and the window first, then `after` for the controls of the page. `pageViews()` draws it.
+- Set `scope: true` on a view that the window or the project changes. The head shows the control on that view only.
 - A detail page has no Project select.
 - Keep the project and the window in the address: call `scope().wire(root)` in `mount`.
 - **Exception: the Status page.** Its head has no title and no count. It reads `<time> <status sentence>`, both in the tone of `verdict()`, with the window and Pause or Resume at the right. The time is muted (`--muted`) and never takes the status tone; only the sentence does. Keep it: the Status head is the factory's status at a glance, and a title would push that sentence down.
 
 | Do | Don't |
 |---|---|
-| `pageHead("Jobs", { count: 128, aside: scope().bar() })` | `<h1>Jobs (128)</h1>` |
-| Project, window, then the controls of the page | a control of the page before the Project select |
+| `pageViews({ title: "Issues", path: "/issues", query, views })` | a tab row that a view builds itself |
+| the window control on the view it changes | a window control that does nothing |
 
 #### Card
 
@@ -592,6 +598,184 @@ The contents are a list of links to the sections of a long page, in a rail that 
 | `toc([["gates-log", "Log"]], body)` and `card("Log", …, { id: "gates-log" })` | a list of links written by hand at the top of the page |
 | `<a href="#gates-log">` | `<a href="#/automation#gates-log">`, which the router reads as a route |
 
+### Page
+
+A page answers one question for the first screen: what is wrong, then what the page lists. Its parts come in one order, and a part that has nothing to show is not drawn.
+
+#### Page grammar
+
+1. **Page head:** the title in the display face, the view tabs beside it, the scope control at the right. The scope control shows only on a view it changes.
+2. **Attention rows:** none, or one for each problem.
+3. **Facts line** (list view) or **figure band** (analysis view).
+4. **List view:** one list surface with a search, filters of one control type and the rows. The inspector sits at the right and stays in view. Under 1100px it goes below the list.
+5. **Analysis view:** chart panels 2 across in `.pair`, then the tables behind them.
+
+- The page named X opens on the list of X. Anything wrong shows at the top with no scroll (Principle 3).
+- A page has at most three views, in this order: the things, the analysis, then the log or the settings.
+- A row hides its defaults: no `medium`, no `aleph`, no zero. A column that shows only a default goes.
+- A row carries its evidence: a run strip, an outcome bar or a rate against its baseline (Row bars).
+- Do not open a page with metric cards. A list view has the facts line. An analysis view has the figure band.
+
+#### Attention rows
+
+An attention row is one problem of a page: its tone, one line and the action that removes it.
+
+**Use:** under the page head, one row for each problem. **Not for:** an Ask that waits for Chris; use an ask card. **Not for:** a number to watch; use the facts line or a metric card.
+
+| Helper | Reference |
+|---|---|
+| `attention(rows)` and `rowsOf(path)` in `ui/views/lib/page.js` and `ui/views/lib/attention.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Bar | The tone | | `--error` or `--need`, 3px at the left, on `--surface` with `--card-lift` |
+| 2 | Dot | The tone again | | `event-dot` |
+| 3 | Line | What is wrong, with its number | | `--ink`; wraps |
+| 4 | Action | The link that removes the problem | yes | `linkButton()`, at the right |
+
+- Each page's rows come from `GET /api/attention`, by the page's route: `{ "/hooks": [{ tone, text, act }] }`. The sidebar dot reads the same answer, so the dot and the rows never differ. Do not compute a row in a view.
+- A row exists only while its problem does. Draw nothing for none.
+- `tone` is `error` for a fault and `need` for something that waits. An `error` row has `role="alert"`; a `need` row has `role="status"`.
+- Write the line in at most 12 words: the thing, then its number. Name the action in one word.
+- The server builds each source from a fact it already holds. A source never calls `/api/issues`, `/api/jobs` or `/api/sessions`.
+
+| Do | Don't |
+|---|---|
+| `151 hook errors, 72 from a moved hook file` | `Some errors happened` |
+| one row for each problem | one row that joins two problems |
+
+#### Facts line
+
+The facts line is the figures of a list view in one line of text.
+
+**Use:** under the attention rows of a list view. **Not for:** an analysis view; use the figure band.
+
+| Helper | Reference |
+|---|---|
+| `factsLine([[figure, words]])` in `ui/views/lib/page.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Figure | A number or amount, in `--fw-strong` and `--ink` | | `--num` |
+| 2 | Words | What it counts | | `--ink-2` |
+
+- Give at most 4 figures. The helper throws on a fifth.
+- Split the figures with a dot. A figure and its words stay on one line.
+- Put the word after the figure: `3 running`, not `running: 3`.
+
+| Do | Don't |
+|---|---|
+| `3 running · 12 runs today · $4.10 today` | a row of metric cards above a list |
+
+#### Figure band
+
+The figure band is the headline figures of an analysis view, each with what it compares with.
+
+**Use:** at the top of an analysis view. **Not for:** a list view; use the facts line.
+
+| Helper | Reference |
+|---|---|
+| `figureBand([{ k, v, cmp, trend, title }])` in `ui/views/lib/page.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Key | What the figure is | | `--fs-xs`, `--muted` |
+| 2 | Value | The figure | | `--metric` `--fs-2xl`, `--ink` |
+| 3 | Comparison | What it compares with: the baseline, the last week or the limit | | `--fs-xs`, `--muted`; `good` is `--good`, `warn` is `--need` |
+
+- Give at most 4 figures. A figure has a comparison: a figure with none is not a headline.
+- One surface holds the band; hairlines split the figures.
+- Set `title` to the definition, as a metric card does.
+
+| Do | Don't |
+|---|---|
+| `Cost $41` with `$38 last week` | a figure with no comparison |
+
+#### List surface
+
+The list surface is one card that holds a search, the filters and the rows of a list, with the inspector of the selected row at its right.
+
+**Use:** for the things a page lists, when a row has more to tell than its columns. **Not for:** a table of numbers to compare; use `dataTable()`.
+
+| Helper | Reference |
+|---|---|
+| `browse({ id, label, search, hint, filters, groups, cap })` in `ui/views/lib/browse.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Search | A search box | | `searchBox()` |
+| 2 | Filters | Segmented controls, each led by All; a select past 3 options | yes | `filterBar()` |
+| 3 | Group head | The group name and its count, then its column names | | `sub-head`, `--num` `--muted` |
+| 4 | Row | A lead (an id), a main cell (the title and its chips), then the cells | | `--fs-sm`; a `--rule-2` line above |
+| 5 | Selected row | The row the inspector shows | | `--sunk`, a `--run` bar at the left |
+| 6 | More line | How many of how many matches draw | yes | `--fs-xs`, `--muted` |
+| 7 | Inspector | The selected row's detail (Inspector) | | a card at the right |
+
+- Every group's rows share one grid, so the columns line up across groups. `heads` names the cell columns; a group with fewer columns leaves its last ones empty.
+- A row is `{ key, lead, main, cells, text, data, inspect }`. `text` is what the search matches. `data` holds the values the filters match. `inspect` is HTML, or a function that gives it: a row that is not drawn builds its inspector when a search brings it up.
+- A group holds every row. The search and the filters match them all, and the group draws the first `cap` matches, with an "N of M" line counted against the matches. `browse({ cap })` limits all groups together, as the log of days needs. A `more` line is a note after the rows.
+- A filter with more than 3 options is a select: its segments would run past a phone's width.
+- A click or Enter or Space on a row selects it. A link, a button or a control in the row does not.
+- The inspector stays in view as the page scrolls. Under 1100px it goes below the list. Under 720px a row wraps: the main cell first, the cells after it at the right.
+- Start a filter on an option with `value` (`{ name: "who", options: ["yours", "factory"], value: "yours" }`). The reader's own pick wins after it.
+- The search, the filters and the selected row stay through a redraw: `browse()` holds them. The filters and the selected row stay through a reload, kept under `browse.<id>`.
+- When a search or a filter leaves no row, the list shows `empty("No match")`. A group with no rows shows `empty()`.
+- Show a row's defaults as nothing: no `medium`, no `aleph`, no zero.
+- Group the rows by what the reader scans for (state, kind, day). Put the groups the reader needs first.
+
+| Do | Don't |
+|---|---|
+| one grid for every group | a table for each group |
+| `inspect` holds the detail | a detail page for a glance |
+
+#### Inspector
+
+The inspector is the detail of the selected row of a list surface.
+
+**Use:** inside a list surface. **Not for:** a page of its own; the detail pages stay behind Open page.
+
+| Helper | Reference |
+|---|---|
+| `inspector({ id, title, status, rows, body, href })` in `ui/views/lib/browse.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Head | The id and Open page | | `.inspect-head` |
+| 2 | Title | The item's title | | `h3` |
+| 3 | Status | The state, the priority and the labels | yes | `statusRow()` |
+| 4 | Facts | The item's facts | | `facts()`; an empty value leaves its fact out |
+| 5 | Body | A strip, a table or a form, under a `subHead()` | yes | |
+
+- A table in the inspector keeps its height: its scroll box does not shrink in the card.
+- Put a setting in the inspector as a `setting()` row; its Save shows after a change.
+- The inspector has no card inside it.
+
+#### Row bars
+
+A row bar is the evidence of a row in one cell: a bar of shares, a rate against its baseline, a strip of runs or a span on a log scale.
+
+**Use:** in a cell of a list row, where a row's own numbers would repeat the bar. **Not for:** a share of one whole beside its number; use a meter.
+
+| Helper | Reference |
+|---|---|
+| `rowBar(parts, label)`, `rateBar(rate, baseline)`, `runStrip(runs, most, { full, label })`, `logMeter(p50, p90, { lo, hi, label })` in `ui/views/lib/bars.js` | `ui/views/design.js` |
+
+| # | Part | Holds | Optional | Style |
+|---|---|---|---|---|
+| 1 | Bar | The shares, the rate or the runs | | `--bar-h` high on `--sunk`; 120px for a row bar, 64px for a rate bar, 14em for a strip |
+| 2 | Mark | The baseline of a rate, or the p90 of a span | yes | `--ink`, 2px |
+| 3 | Rate | The rate, after its bar | yes; a rate bar only | `--num` |
+
+- Put the figures in the tooltip (`label`), not beside the bar.
+- A rate under its baseline takes the `--need` tone.
+- A segment of a strip is one run: its width is its seconds, its tone is `tone(state)`. A running run draws in `--run`. Under a strip at full width, put a `legendHtml()` of its tones.
+- Use a log scale (`logMeter`) when the values run from seconds to days: a linear bar would show only the longest.
+- Draw no bar for a row with nothing to show.
+
+| Do | Don't |
+|---|---|
+| `rateBar(0.62, 0.8)` | a rate in a cell with no baseline |
+
 ### Data
 
 #### Metric card
@@ -716,7 +900,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 |---|---|---|---|---|
 | 1 | Box | The chart | | the card box |
 | 2 | Title | `<measure> by <dimension>`, from the frame | | the card title |
-| 3 | Form control | The forms of the chart | | a segmented control in the aside |
+| 3 | Form menu | The forms of the chart, in one menu | | a `selectBox()` in the aside |
 | 4 | Legend | One item for each series | yes | `--fs-xs`; at the top |
 | 5 | Plot | The series | | labels `--chart`, 12px times `--chart-scale`, `--chart-weight`, `--ink`; lines `--rule`; 200px high minimum |
 
@@ -733,6 +917,7 @@ A chart panel is a card that draws a chart from a frame (`ui/views/lib/chart.js`
 - When there is no data, the panel shows `empty()`. A frame has no empty line, hint or note of its own.
 - A linked row is also a link in a list under the chart, for the keyboard. The list shows when a link has focus.
 - When the data did not rebuild, give `error` and `since`. The panel tells how old the data is.
+- Pick the form with the one menu in the aside. Do not draw a button for each form.
 - Put two or three panels side by side in `.trio`, which has three columns. With two panels, give one the class `wide`: `panelOf(key, frame, "wide")`. Under 1100px, they stack.
 - Put four panels of equal width in one row in `.quad`. In `.quad`, each panel's form control sits under its title. Under 1100px, they stack.
 - For a chart that is one part of a card, such as a side of a split card, call `panelOf(key, frame, "", { bare: true })`. A bare chart has no card, no title and no form control: it opens in the frame's `form`, and its plot is 160px high minimum. Put its title in `subHead()` above it, unless the card's title names it.
@@ -1439,6 +1624,7 @@ A settings list is a group of rows. Each row holds one setting: its label, its c
 | 4 | Hint | The format or the effect | yes | `--fs-xs`, `--muted`, under the control |
 
 - Give the setting that needs a Save button `save: "Save"`. The row is then a form of its own, and the view wires `submit` on the attributes it gives in `attrs`, for example `' data-schedule="suite"'`. A row with no `save` is a `div`: the control applies on `change`.
+- The Save button shows only after the control changes (`markDirty()` in `ui/views/lib/html.js`). The router runs it after each draw. A setting that is saved shows no button.
 - Pass the same `id` to `setting()` and to the control, so the label names the control.
 - Write a hint in at most four words, counting a number as a word. Put the rest in a `title` on the row, through `attrs`.
 - Put the settings of one page in one list, or one list per card. Do not put a control or a Save button in a table cell. The one exception is the Model column of the Roles table on the Agents page: its `selectBox()` applies on `change`, with the on/off box of Small, Medium and Large beside it.
@@ -1560,12 +1746,15 @@ An empty state shows that there is nothing, that data loads, or that the data di
 | Part | Rule |
 |---|---|
 | Sidebar | `#nav`, 208px open, 48px when collapsed (`.shell.collapsed`); at 720px and narrower, a sticky bar at the top: one row, the links scroll sideways, and the current link scrolls into view |
+| Dock | `#dock-host.dock` at the foot of the sidebar, below the collapse button: the aleph-tools buttons in a wrapping row when open, one column when collapsed. At 720px and narrower, a fixed row at the bottom right. A panel is `fixed`: it opens beside the sidebar at the foot of the viewport (above the row at 720px and narrower). See the dock bridge |
+| Attention dot | An entry gets a tone dot at the right of its link while its page has an attention row (Page, Attention rows). `/api/attention` gives the rows; the dot reads the same rows as the page and changes with them. A collapsed sidebar puts the dot on the icon |
 | Status entry | Its label and icon take the tone of the status sentence from `/api/status`: `alert` is `--error`, `warning` and `ask` are `--need`, `fine` is `--ink`, white on the dark theme |
 | Page | `.page`: 2400px max, `28px 24px 64px` padding, `20px 16px 48px` at 720px |
 | Browser | `::selection` is `--sel`; scrollbars are thin, `--rule` on transparent |
 | Grid | `.tiles` holds metric cards; `.pair` holds two cards side by side, stacked under two cards of width; `.trio` holds two or three chart panels; `.quad` holds four in one row; `.browse` is a list with its detail beside it, one column under 1100px |
 
-- **List page:** page head, metric cards, then cards.
+- **List page:** the page grammar (Page, Page grammar): page head, attention rows, facts line, then one list surface.
+- **Analysis page:** the page grammar: page head, attention rows, figure band, charts 2 across, then tables.
 - **Detail page:** crumb, page head, status row, KPI strip, then detail panels.
 - **Long page:** page head, then `toc()` around the rest (Structure, Contents).
 
@@ -1601,7 +1790,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | `path`, `title` | the route and the page title |
 | `group`, `order`, `icon`, `nav` | the place in the sidebar; `icon` is a Font Awesome name; `nav: false` leaves the page out |
 | `api` | the URL of the data |
-| `render(data, params, query)` | the HTML of one `<div class="page">` |
+| `render(data, params, query)` | the HTML of one `<div class="page">`; a page of views calls `pageViews()` (Page head) |
 | `mount(root, data, query)` | the wiring, after each render |
 | `refresh`, `live` | seconds between reloads; `live: true` also redraws on a pushed change |
 
@@ -1625,7 +1814,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | Time column names differ | Tables | follow-up |
 | Dates with no time: `Oct 28` vs `10/28` | `ui/views/issues.js`, `ui/views/memory.js` | Chris's decision |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | Memory Jobs in `ui/views/lib/processes.js`; the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
 | Parts of the Status page written by hand, with no helper: the feed's rows (`div.event-row`, `div.event-brief`) | `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
@@ -1637,10 +1826,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The Herald card keeps a visible `--rule` border and a pulse ring; the pulse draws on that border | `.herald-card` in `ui/app.css` | follow-up |
 | The chart's gridline opacity (0.5) and stacked-area opacity (0.6) are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
 | The colour probe's `#000` is a literal: it only detects a colour the canvas rejects, and nothing shows it | `ui/views/design.js` | allowed |
-| The Memory rows are hand `li.mrow` and `tr.mrow`: each takes the selection attributes (`tabindex`, `data-id`, `aria-selected`), which `row()` and `cell()` cannot, and a cell with markup is a hand `<td>`, the time one a `td.time` | `noteRow()`, `ruleRow()`, `eventRow()`, `cardRow()` in `ui/views/memory.js` | follow-up |
-| The Memory Source cell is a hand `td.mono` with a link to the memory's page: a rule, a skill or a note has a title, not an ID, so `idLink()` does not fit | `ruleRow()` in `ui/views/memory.js` | allowed |
-| The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `renderMemory()` in `ui/views/memory.js` | follow-up |
-| The Memory inspector's buttons carry `data-mact` and a handler of their own, not the router's `act`: a write reads the Why field and the open memory, and a form submits to the same handler | `act()`, `write()` in `ui/views/memory.js` | allowed |
+| The Memory page head has a Window control that does nothing: the memory API takes no window, and `scope().bar()` always draws one | `view.render` in `ui/views/memory.js` | follow-up |
 | A success rate under a hand-picked line (`WARN_RATE`) tones its cell `warn` by hand | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | The Roles table's rows are hand `<tr>`s, its group rows hand `tr.grp`s and its sub-rows hand `tr.sub-row`s | `roles()` in `ui/views/factory-agents.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
@@ -1649,11 +1835,11 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 | The timeline's lane, bars, waits and marks are hand spans: no helper for a bar on a time axis. `panel()` writes its aside as a hand `span.quiet` | `renderTimeline()`, `panel()` in `ui/views/lib/timeline.js` | follow-up |
 | The chart's list of links for the keyboard is a hand `ul.sr`: no helper for a visually hidden list | `panel()` in `ui/views/lib/chart.js` | follow-up |
 | The Issue page's Fields panel is a hand `dp-panel`, and its blocked line a hand `dp-blocked`: `panel()` needs a heading, and `blockersHtml()` writes only the items | `renderIssue()` in `ui/views/issues.js` | follow-up |
-| A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js`, and the Memory editor in `ui/views/memory.js` | follow-up |
+| A textarea and a checkbox are written by hand: no helper | `ui/views/issues.js` | follow-up |
 | The Job page's Waits-on block is a hand `dp-blocked`, as on the Issue page: `blockersHtml()` writes only the items | `renderJob()` in `ui/views/jobs.js` | follow-up |
 | Quiet labels inside a line are hand `span.quiet`: the Next line, the check name after a failed test, the `logs:` label of a run's log buttons, a run's job ID in its event, the Work lane's head. `note()` makes a whole line, not a label | `renderJob()`, `logButtons()`, `jobEvent()`, `jobSegments()` in `ui/views/jobs.js` | follow-up |
 | A transcript's steps are hand `div.step`: no helper for a tool call with its input and result | `renderTranscript()` in `ui/views/jobs.js` | follow-up |
-| Parts of the Automation page written by hand, with no helper: the `dl.held-paths` list that sets each scope's label beside one `code` line per held path, and the log content cell with its clamp button | `renderHeld()`, `renderLog()` in `ui/views/gates.js` | follow-up |
+| Parts of the Automation page written by hand, with no helper: the `span.held-paths` run of `code` paths in a setting row: no helper for a list of paths | `renderHeld()` in `ui/views/gates.js` | follow-up |
 
 ## Appendix
 
@@ -1673,7 +1859,7 @@ A page is a view module in `ui/views/`. The router reads its `view` object (the 
 |---|---|
 | `ui/views/lib/format.js`, `ui/views/lib/html.js` (31) | the helpers |
 | `ui/activity.ts` (3), `ui/views/issues.js` (3) | date arithmetic, not display |
-| `ui/views/session.js` (2), `ui/views/lib/timeline.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
+| `ui/views/session.js` (2), `ui/views/lib/timeline.js` (1), `ui/views/lib/bars.js` (1), `ui/views/memory.js` (1) | percent widths for CSS |
 | `ui/api/skills.ts` | a server log line |
 | `ui/views/design.js` (1) | a contrast ratio, `toFixed(2)` |
 

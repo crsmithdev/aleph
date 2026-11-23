@@ -9,7 +9,8 @@ import { ASK_REASONS, grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsCh
 import { specVersion } from "../../../lib/issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
-import { directorStep } from "../transitions/factory.ts";
+import { directIfNew, directorStep } from "../transitions/factory.ts";
+import { setModel } from "../routing/models.ts";
 import { takeOnTimeout } from "../transitions/tick.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { setPaused } from "../gates/pause.ts";
@@ -485,4 +486,19 @@ test("an answer whose after names a parked issue is refused: the Ask stays open 
   expect(d.outcome).toBe("escalated");
   expect(issues.afterOf(item(1))).toEqual([]);
   expect(asked(1)!.situation).toContain("issue.2 is parked");
+});
+
+test("an off director opens no run and starts none, and the Ask waits with Chris", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  reply([{ do: "answer", option: "A", note: "page A" }]);
+  setModel("director", { enabled: false });
+  expect(await direct()).toEqual([]);
+  expect(directIfNew(() => { throw new Error("started"); })).toBe(false);
+  expect(calls()).toBe(0);
+  expect(asked(1)).not.toBeNull();
+  setModel("director", { enabled: true });
+  let started = false;
+  expect(directIfNew(() => { started = true; })).toBe(true);
+  expect(started).toBe(true);
+  expect(await direct()).toHaveLength(1);
 });

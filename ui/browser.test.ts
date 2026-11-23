@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test as bunTest } from "bun:test";
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
 import { dock, root } from "./dock.ts";
 import { annotationsFile } from "../lib/paths.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./browser.testkit.ts";
@@ -13,10 +12,6 @@ const test = (name: string, fn: () => unknown, timeout?: number) => bunTest(name
 const dockTest = (name: string, fn: () => unknown, timeout?: number) => (dock ? test : bunTest.skip)(name, fn, timeout);
 /** `shelf note <verb> ...` of aleph-tools on the notes file of this run. */
 const shelfNote = ([verb, ...rest]: string[]) => Bun.spawnSync([process.execPath, join(root, "shelf.ts"), "note", verb, "--file", annotationsFile(), ...rest], { env: process.env, stdout: "pipe", stderr: "pipe" });
-
-/** Log one director answer whose detail is a long note of `word` repeated, into the rig database at `db`. */
-const logTo = (db: string, time: string, word: string) =>
-  new Database(db).query("INSERT INTO events (time, subject, action, object, detail) VALUES (?, ?, ?, ?, ?)").run(time, "director", "answered", "issue.1", word.repeat(60));
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   let rig: Rig, page: Page, env: Record<string, string>;
@@ -60,18 +55,17 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/issues");
     const before = page.errors.length;
     await page.ev('void (location.hash = "#/jobs/%zz")');
-    await page.when('!document.querySelector("#view .contents") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+    await page.when('!document.querySelector("#view .browse") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
     expect(page.errors.slice(before)).toEqual([]);
     // A view's handlers do not outlive it. go() can return while #view still shows the page before, so wait for the new view's own markup.
-    await page.go("#/factory/jobs");
+    await page.go("#/factory/jobs?view=timing");
     await page.when('document.querySelector("#view #perf") && typeof document.querySelector("#view").onclick === "function"');
-    expect(await page.ev('typeof document.querySelector("#view").oninput')).toBe("function");
     await page.go("#/issues");
-    await page.when('document.querySelector("#view #inv-filters")');
+    await page.when('document.querySelector("#view .browse")');
     expect(await page.ev('[document.querySelector("#view").onclick, document.querySelector("#view").onchange]')).toEqual([null, null]);
     expect(await page.ev('document.querySelector("#view").oninput')).toBeNull();
-    await click('#inv-filters .seg button[data-value="done"]');
-    await page.when('location.hash === "#/issues?status=done"');
+    await click('.ph button[data-view="flow"]');
+    await page.when('location.hash === "#/issues?view=flow"');
     // A failed first load shows one line and no hint.
     await page.ev('(() => { const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/issues") ? Promise.reject(new Error("down")) : f(u, o); })()');
     await page.go("#/issues");
@@ -96,106 +90,71 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors).toEqual([]);
   }, 30_000);
 
-  test("Issues: a filter, a sort and the search change the table in place", async () => {
+  test("Issues: a filter and the search change the list in place, and a click selects a row", async () => {
     await page.go("#/issues");
-    const rows = () => page.ev<number>('document.querySelectorAll("#issues-table tbody tr").length');
+    const rows = () => page.ev<number>('document.querySelectorAll(".lrows .lrow:not([hidden])").length');
     const all = await rows();
     expect(all).toBeGreaterThan(1);
-    const titles = () => page.ev<string>('[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|")');
-    const first = await titles();
-    await click("#issues-table th:first-child button[data-sort]");
-    await page.when(`[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|") !== ${JSON.stringify(first)}`);
-    await page.go("#/issues");
+    // The row's own project is a filter option: choosing one leaves fewer rows, All brings them back.
+    const kind = '.lcard .seg[data-name="kind"] button';
+    await click(`${kind}:not([data-value=""])`);
+    await page.when('document.querySelectorAll(".lrows .lrow:not([hidden])").length <= ' + all);
+    await click(`${kind}[data-value=""]`);
     const search = 'document.querySelector("#view input[type=search]")';
     await page.ev(`(() => { const i = ${search}; i.value = "zzzz-no-such-issue"; i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
-    await page.when('document.querySelectorAll("#issues-table tbody tr").length < ' + all);
+    await page.when('document.querySelectorAll(".lrows .lrow:not([hidden])").length === 0');
+    expect(await page.ev('!!document.querySelector("[data-nomatch]")')).toBe(true);
+    await page.ev(`(() => { const i = ${search}; i.value = ""; i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    await page.when('document.querySelectorAll(".lrows .lrow:not([hidden])").length === ' + all);
+    const key = await page.ev<string>('(() => { const r = [...document.querySelectorAll(".lrow")].at(-1); r.click(); return r.dataset.key; })()');
+    expect(await page.ev(`document.querySelector('.lrow[data-key="${key}"]').getAttribute("aria-current")`)).toBe("true");
   }, 30_000);
 
   test("Memory: a row opens in the inspector", async () => {
     await page.go("#/memory");
-    await page.when('document.querySelectorAll("#mem-results .mrow").length > 0');
-    const all = await page.ev<number>('document.querySelectorAll("#mem-results .mrow").length');
+    await page.when('document.querySelectorAll("#view .lrow:not([hidden])").length > 1');
+    const title = 'document.querySelector("#view .ins h3").textContent';
+    const first = await page.ev<string>(title);
     // A focused row opens on Enter, as on a click, and keeps focus.
-    await page.ev('(() => { const r = document.querySelector("#mem-results .mrow"); r.focus(); r.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); })()');
-    await page.when('document.querySelector("#mem-results .mrow[aria-selected=true]")');
-    await page.when('document.querySelector("#mem-inspector h3")');
-    expect(await page.ev('document.activeElement === document.querySelector("#mem-results .mrow[aria-selected=true]")')).toBe(true);
-    await page.ev('document.querySelector("#mem-results .mrow").click()');
-    await page.when('document.querySelector("#mem-results .mrow[aria-selected=true]")');
-    await page.when('document.querySelector("#mem-inspector h3")');
-    expect(all).toBeGreaterThan(0);
-    // A search that answers after the reader has left: it lands on another page, which it must not touch.
-    await page.ev(`(() => {
-      const f = window.fetch, gate = new Promise((r) => { window.__release = r; });
-      window.fetch = (u, o) => {
-        if (!String(u).startsWith("/api/memory/search")) return f(u, o);
-        window.__pending = true;
-        return gate.then(() => f(u, o)).then((res) => { window.__answered = true; return res; });
-      };
-      const i = document.querySelector("[data-ui=mem-search]");
-      i.value = "";  // the empty query: still the query after the reader leaves, so only the route check drops the answer
-      i.dispatchEvent(new Event("input", { bubbles: true }));
-    })()`);
-    await page.when("window.__pending");
-    await page.ev('location.hash = "#/issues"');
-    await page.when('document.querySelector("#view h1")?.textContent === "Issues"');
-    await page.ev("window.__release()");
-    await page.when("window.__answered");
-    await page.ev("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"); // the dropped answer's handlers have run
+    await page.ev('(() => { const r = document.querySelectorAll("#view .lrow:not([hidden])")[1]; r.focus(); r.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); })()');
+    await page.when(`document.querySelectorAll("#view .lrow:not([hidden])")[1].getAttribute("aria-current") === "true" && ${title} !== ${JSON.stringify(first)}`);
+    expect(await page.ev('document.activeElement === document.querySelectorAll("#view .lrow:not([hidden])")[1]')).toBe(true);
+    await page.ev('document.querySelector("#view .lrow").click()');
+    await page.when(`${title} === ${JSON.stringify(first)}`);
     expect(page.errors).toEqual([]);
-    expect(await page.ev<string>('document.querySelector("#view h1")?.textContent')).toBe("Issues");
   }, 30_000);
 
-  test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
-    const own = await startRig((env) => { const at = new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString(); logTo(env.ALEPH_DB, at, "word "); });
+  test("Automation: Enter on a rule row opens its inspector, and a redraw keeps the row selected", async () => {
+    const own = await startRig();
     try {
       const pg = await own.open("#/automation");
-      const btn = "#gates-log .clamp-btn";
-      await pg.when(`document.querySelector("${btn}")`);
-      await pg.ev('document.querySelector("#gates-log").scrollIntoView()');
-      for (let i = 0; i < 80 && !(await pg.ev<boolean>(`document.activeElement?.matches("${btn}")`)); i++) await pg.key("Tab");
-      const state = () => pg.ev<[string, boolean]>(`[document.activeElement.getAttribute("aria-expanded"), document.activeElement.previousElementSibling.classList.contains("clamp")]`);
-      expect(await state()).toEqual(["false", true]);
-      await pg.key("Enter");
-      expect(await state()).toEqual(["true", false]);
-      await pg.key("Enter");
-      expect(await state()).toEqual(["false", true]);
+      await pg.when('document.querySelectorAll("#view .lrow").length > 1');
+      await pg.ev('(() => { const r = document.querySelectorAll("#view .lrow")[1]; r.focus(); r.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })); })()');
+      await pg.when('document.querySelectorAll("#view .lrow")[1].getAttribute("aria-current") === "true"');
+      const title = () => pg.ev<string>('document.querySelector("#view .ins h3").textContent');
+      const was = await title();
+      await pg.ev('import("/views/lib/router.js").then((m) => m.redraw(true))');
+      await pg.when('document.querySelectorAll("#view .lrow")[1]?.getAttribute("aria-current") === "true"');
+      expect(await title()).toBe(was);
+      expect(pg.errors).toEqual([]);
     } finally { own.stop(); }
   }, 60_000);
 
-  test("Automation: a redraw keeps focus on an open clamp button and keeps its text open, with a new row above it", async () => {
-    let dir = "", at = 0;
-    const own = await startRig((env) => { dir = env.ALEPH_DB; at = statSync(env.ALEPH_FACTORY_DIR).mtimeMs; logTo(dir, new Date(at).toISOString(), "word "); });
+  test("Automation: a cap save draws the Limits view again with the saved cap", async () => {
+    const own = await startRig();
     try {
-      const pg = await own.open("#/automation");
-      const btn = "#gates-log .clamp-btn";
-      await pg.when(`document.querySelector("${btn}")`);
-      await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); })()`);
-      // A newer row with its own note lands above the open one; the redraw must keep focus and the open text on the row it was on.
-      // Wait for the second row, not for a new element above the first: the morph may reuse the old button for the new top row.
-      logTo(dir, new Date(at + 1000).toISOString(), "other ");
-      await pg.ev('document.dispatchEvent(new Event("visibilitychange"))');
-      await pg.when(`document.querySelectorAll("${btn}").length === 2`);
-      expect(await pg.ev<unknown[]>(`(() => { const b = document.activeElement; return [b.matches("${btn}"), b.previousElementSibling.textContent.startsWith("word"), b.getAttribute("aria-expanded"), b.previousElementSibling.classList.contains("clamp"), b.textContent]; })()`)).toEqual([true, true, "true", false, "Show less"]);
-    } finally { own.stop(); }
-  }, 60_000);
-
-  test("Automation: a cap save keeps the Monitor fold open through the redraw", async () => {
-    const own = await startRig((env) => { const dir = join(env.ALEPH_FACTORY_DIR, "monitor"); mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "2026-11-03.json"), JSON.stringify({ day: "2026-11-03", table: { today: { stages: [], holds: [] }, trailing: { stages: [], holds: [] } }, text: "READER-TEXT", findings: ["FIRST-ONE"] })); });
-    try {
-      const pg = await own.open("#/automation");
-      await pg.when('document.querySelector("#monitor details") && document.querySelector("form[data-cap=live]")');
+      const pg = await own.open("#/automation?view=limits");
+      await pg.when('document.querySelector("form[data-cap=live]")');
       await pg.ev(`(() => {
-        const d = document.querySelector("#monitor details"), f = document.querySelector("form[data-cap=live]");
-        d.open = true;
-        d.old = true;
+        const f = document.querySelector("form[data-cap=live]");
         window.want = Number(f.elements.live.value) + 1;
         f.elements.live.value = String(window.want);
+        f.dispatchEvent(new Event("input", { bubbles: true }));
         f.requestSubmit();
       })()`);
       // The hint shows the saved cap only once the page is drawn again, which a failed save never does.
       await pg.when('document.querySelector("form[data-cap=live] .hint").textContent.endsWith(" of " + window.want)');
-      expect(await pg.ev("[document.querySelector(\"#monitor details\").open, document.querySelector(\"#monitor details\").old]")).toEqual([true, true]);
+      expect(pg.errors).toEqual([]);
     } finally { own.stop(); }
   }, 60_000);
 
@@ -306,8 +265,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("the Memory search and each segmented button fill --ctl-h, and a status dot is a pill", async () => {
     await page.go("#/memory");
-    await page.when('document.querySelector("#view .msearch input[type=search]")');
-    expect(await page.ev('getComputedStyle(document.querySelector("#view .msearch input[type=search]")).height')).toBe(await page.ev('getComputedStyle(document.documentElement).getPropertyValue("--ctl-h").trim()'));
+    await page.when('document.querySelector("#view .lcard input[type=search]")');
+    expect(await page.ev('getComputedStyle(document.querySelector("#view .lcard input[type=search]")).height')).toBe(await page.ev('getComputedStyle(document.documentElement).getPropertyValue("--ctl-h").trim()'));
     expect(await page.ev('getComputedStyle(document.documentElement).getPropertyValue("--ctl-h").trim()')).toBe("28px");
     await page.go("#/issues");
     await page.when('document.querySelector("#view .seg button")');
@@ -323,10 +282,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a hovered select takes the --ink-2 border, and the others keep --rule", async () => {
-    // The fixture has no transcripts, so /api/hooks answers with one hold: the log draws its filter bar only with a hold.
+    // The fixture has no transcripts, so a hook's page gets one hold: the log draws its filter bar only with a hold.
     const hold = { t: "2026-11-20T10:00:00.000Z", sid: "aaaaaaaa", project: "demo", hook: "gate", event: "Stop", kind: "judged", who: "interactive", out: "caught", why: "x" };
-    await page.ev(`(() => { window.__f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/hooks") ? Promise.resolve(Response.json({ days: 7, holds: [${JSON.stringify(hold)}], byHook: [], errors: [], hooks: [] })) : window.__f(u, o); })()`);
-    await page.go("#/hooks");
+    await page.ev(`(() => { window.__f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/hooks") ? Promise.resolve(Response.json({ event: "Stop", name: "gate", matcher: "", file: "hooks/gate.ts", command: "bun hooks/gate.ts", mode: "", timeout: 10, workers: "runs", source: [], holds: [${JSON.stringify(hold)}], byKind: [], errors: [] })) : window.__f(u, o); })()`);
+    await page.go("#/hooks/Stop/gate");
     await page.when('document.querySelectorAll("#holds .fbar select").length > 1');
     const token = (name: string) => page.ev<string>(`(() => { const e = document.createElement("i"); e.style.color = "var(${name})"; document.body.append(e); const c = getComputedStyle(e).color; e.remove(); return c; })()`);
     const border = (n: number) => page.ev<string>(`getComputedStyle(document.querySelectorAll("#holds .fbar select")[${n}]).borderTopColor`);
@@ -385,7 +344,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     // The contents: one link per group and per specimen, each to an id on the page; a click scrolls, keeps the route and marks its entry.
     expect(await page.ev(`(() => { const nav = document.querySelector(".toc"), ids = [...nav.querySelectorAll("a")].map((a) => a.getAttribute("href").slice(1)), want = document.querySelectorAll("h2.design-h, .design-spec[id]");
       return { n: ids.length === want.length, ok: ids.every((i) => document.getElementById(i)), groups: [...nav.querySelectorAll("li:not(.sub) a")].map((a) => a.textContent) }; })()`)).toEqual({
-      n: true, ok: true, groups: ["Every component", "Foundations", "Content", "Structure", "Data", "Lists of items", "Labels", "Actions", "Text", "Controls", "States"] });
+      n: true, ok: true, groups: ["Every component", "Foundations", "Content", "Structure", "Page", "Data", "Lists of items", "Labels", "Actions", "Text", "Controls", "States"] });
     await page.ev('document.querySelector(".toc a[href=\'#design-table\']").click()');
     await page.when('document.querySelector(".toc a[aria-current]")?.textContent === "Table"');
     expect(await hash()).toMatch(/^#\/design/);
@@ -399,11 +358,50 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(page.errors).toEqual([]);
   }, 30_000);
 
+  test("Design: the list surface selects by click and key, filters, says No match, and keeps its state through a morph; Save shows after a change", async () => {
+    await page.go("#/design");
+    await page.when('document.querySelector("[data-browse=design] .lrow")');
+    const state = () => page.ev<any>(`(() => { const b = document.querySelector("[data-browse=design]"); return {
+      rows: [...b.querySelectorAll(".lrow")].map((r) => r.dataset.key + (r.getAttribute("aria-current") === "true" ? "*" : "")).join(" "),
+      none: !!b.querySelector("[data-nomatch]") }; })()`);
+    // The filter starts on Yours: the factory row is not drawn; the first drawn row is selected.
+    expect((await state()).rows).toBe("a1706* a1700");
+    await click('[data-browse=design] .lrow[data-key="a1700"]');
+    expect((await state()).rows).toBe("a1706 a1700*");
+    await page.ev('document.querySelector("[data-browse=design] .lrow[data-key=a1706]").focus()');
+    await page.key("Enter");
+    expect((await state()).rows).toBe("a1706* a1700");
+    // A group draws its first match only; a search reaches the rows it does not draw.
+    await page.ev(`(() => { const q = document.querySelector("[data-browse=design] input[type=search]"); q.value = "a1698"; q.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    expect((await state()).rows).toBe("a1698");
+    await page.ev(`(() => { const q = document.querySelector("[data-browse=design] input[type=search]"); q.value = ""; q.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    expect(await page.ev('document.querySelector("[data-browse=design] .lmore").textContent')).toBe("1 of 3");
+    await page.ev(`(() => { const q = document.querySelector("[data-browse=design] input[type=search]"); q.value = "zzzz"; q.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    expect((await state()).none).toBe(true);
+    // A redraw by the router's morph draws the list as the reader left it.
+    await page.ev(`(async () => { const { Idiomorph } = await import("/vendor/idiomorph.js"), { browse } = await import("/views/lib/browse.js");
+      const row = (k) => ({ key: k, lead: k, main: k, cells: [], text: k, data: { who: "yours" }, inspect: "<p>" + k + "</p>" });
+      Idiomorph.morph(document.querySelector("[data-browse=design]").parentElement, browse({ id: "design", label: "Issues", search: "Search", filters: [{ label: "Who", name: "who", options: ["yours", "factory"], value: "yours" }], groups: [{ title: "G", count: "1", heads: [], rows: [row("a1706")] }] }), { morphStyle: "innerHTML", ignoreActiveValue: true }); })()`);
+    expect((await state()).none).toBe(true);
+    expect(await page.ev('document.querySelector("[data-browse=design] input[type=search]").value')).toBe("zzzz");
+    // Save of a setting row shows only after its control changes.
+    await page.go("#/design");
+    await page.when('document.querySelector("#design-settings .srow")');
+    const save = `getComputedStyle(document.querySelector("#design-settings .srow:first-child .sctl > button[type=submit]")).display`;
+    expect(await page.ev(save)).toBe("none");
+    await page.ev(`(() => { const i = document.querySelector("#design-settings .srow:first-child input"); i.value = "45min"; i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+    expect(await page.ev(save)).not.toBe("none");
+    // One menu picks the chart's form, and the panel draws again in it.
+    expect(await page.ev('document.querySelectorAll("aleph-chart[key=\'design/time\'] select[data-form]").length + " " + document.querySelectorAll("aleph-chart[key=\'design/time\'] .seg").length')).toBe("1 0");
+    await page.ev(`(() => { const m = document.querySelector("aleph-chart[key='design/time'] select[data-form]"); m.value = "lines"; m.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    expect(await page.ev('document.querySelector("aleph-chart[key=\'design/time\'] select[data-form]").value')).toBe("lines");
+  }, 30_000);
+
   test("at 390 px a metric value stays one line and a segmented control stays one row or scrolls inside itself", async () => {
     await page.width(390);
     for (const route of ["#/", "#/issues", "#/jobs", "#/agents"]) {
       await page.go(route);
-      await page.when('document.querySelector("#view .tile b, #view .empty, #view h2")');
+      await page.when('document.querySelector("#view .tile b, #view .empty, #view h2, #view .views")');
       const r = await page.ev<any>(`(() => ({
         tall: [...document.querySelectorAll(".tile b")].filter((b) => b.getBoundingClientRect().height >= 1.5 * parseFloat(getComputedStyle(b).fontSize)).map((b) => b.textContent),
         seg: [...document.querySelectorAll(".seg")].filter((s) => new Set([...s.querySelectorAll("button")].map((b) => b.offsetTop)).size > 1 && !(s.scrollWidth > s.clientWidth && /auto|scroll/.test(getComputedStyle(s).overflowX))).length,
@@ -428,7 +426,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("at 390 px each text cut by an ellipsis has its full text in a title, on itself or on an ancestor", async () => {
     await page.go("#/");
-    const hrefs = ["#/design", "#/issues/demo/21", "#/memory?tab=health", "#/memory?tab=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
+    const hrefs = ["#/design", "#/issues/demo/21", "#/memory?view=health", "#/memory?view=log", ...await page.ev<string[]>('[...document.querySelectorAll("#nav li a")].map((a) => a.getAttribute("href"))')];
     await page.width(390);
     const cut = `[...document.querySelectorAll("#view *")].filter((e) => getComputedStyle(e).textOverflow === "ellipsis" && e.scrollWidth > e.clientWidth).filter((e) => { const t = e.innerText.replace(/\\s+/g, " ").trim(); for (let a = e; a && a.id !== "view"; a = a.parentElement) if (typeof a.title === "string" && a.title.replace(/\\s+/g, " ").includes(t)) return false; return true; }).map((e) => e.className + ": " + e.textContent.trim().slice(0, 40))`;
     for (const href of hrefs) {
@@ -532,7 +530,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a change in the factory folder reloads a live page that used to poll", async () => {
     // The page fetches /api/factory again only on a change: its quiet timer waits a minute.
     const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/factory")).length';
-    await page.go("#/factory/agents");
+    await page.go("#/factory/agents?view=usage");
     await page.when('document.querySelector("#view aleph-chart")');
     const n = await page.ev<number>(loads);
     writeFileSync(join(env.ALEPH_FACTORY_DIR, "nudge.json"), "{}");
@@ -589,7 +587,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
         return rf(u, o).then((r) => { r.clone().arrayBuffer().finally(() => { window.ended++; }); return r; });
       };
     })()`);
-    await page.go("#/factory/agents");
+    await page.go("#/factory/agents?view=usage");
     await page.when('document.querySelector("#view aleph-chart")');
     await page.when("window.opens !== null && window.started > window.opens && window.ended === window.started");
     await page.ev(`(() => { const i = document.createElement("input"); i.id = "probe"; document.body.append(i); i.focus(); })()`);
@@ -1139,10 +1137,10 @@ describe.skipIf(!chromeUsable)("Status page", () => {
 
 describe.skipIf(!chromeUsable)("Automation redraw", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/automation"); }, 150_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open("#/automation?view=limits"); }, 150_000);
   afterAll(() => rig?.stop());
 
-  const ready = () => page.when('document.querySelector("#view .ph select")');
+  const ready = () => page.when('document.querySelector("#view .ph h1")');
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected", async () => {
@@ -1153,19 +1151,10 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("after two redraws one click on a rule's Edit button, marked before them, opens its row once", async () => {
-    await ready();
-    await page.ev('window.edit = document.querySelector("#view button[data-edit-rule]")');
-    await redraws();
-    await page.ev("window.edit.click()");
-    expect(await page.ev(`[window.edit.isConnected, window.edit.getAttribute("aria-expanded"),
-      document.querySelector('#view form.rule-form[data-rule="' + CSS.escape(window.edit.dataset.editRule) + '"]').hidden,
-      document.querySelector('#view form.rule-form[data-rule="' + CSS.escape(window.edit.dataset.editRule) + '"]').closest("td")]`)).toEqual([true, "true", false, null]);
-    expect(page.errors).toEqual([]);
-  }, 60_000);
 
   test("the page head keeps its controls at the right, past the title", async () => {
     await page.go("#/automation");
+    await page.when('document.querySelector("#view .ph .aside")');
     await ready();
     const [[phL, phR], [asideL, asideR], [, h1R]] = await page.ev<[number, number][]>(
       `[".ph", ".ph .aside", ".ph h1"].map((s) => { const b = document.querySelector("#view " + s).getBoundingClientRect(); return [b.left, b.right]; })`);
@@ -1184,7 +1173,7 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
   test("a redraw keeps a marked element connected on Jobs and on Agents", async () => {
-    for (const [hash, sel] of [["#/factory/jobs", "#perf"], ["#/factory/agents", "#capacity"]]) {
+    for (const [hash, sel] of [["#/factory/jobs?view=timing", "#perf"], ["#/factory/agents?view=usage", ".views"]]) {
       await page.go(hash);
       await page.when(`document.querySelector("#view ${sel} aleph-chart")`);
       await page.ev(`window.mark = document.querySelector("#view ${sel}"); window.mark.old = 1`);
@@ -1195,7 +1184,7 @@ describe.skipIf(!chromeUsable)("Factory Jobs and Agents redraw", () => {
   }, 60_000);
 
   test("after two redraws one click on a stage tile, marked before them, runs its handler once and shows the stage in the address", async () => {
-    await page.go("#/factory/jobs");
+    await page.go("#/factory/jobs?view=timing");
     await page.when('document.querySelector("#view button[data-tile=queue]")');
     await page.ev('window.tile = document.querySelector("#view button[data-tile=queue]")');
     await redraws();
@@ -1216,26 +1205,24 @@ describe.skipIf(!chromeUsable)("Sessions redraw", () => {
 
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
   // Langfuse is off in the rig, so the sessions come from a fetch that answers with two of them.
-  const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at });
+  const sessions = `(() => { const f = window.fetch, at = "2026-11-15T10:00:00Z", s = (id, cost) => ({ id, label: id, firstPrompt: "prompt " + id, project: "p", taskTypes: [], turns: 1, cost, start: at, last: at, who: "you" });
     window.fetch = (u, o) => String(u).startsWith("/api/sessions") ? Promise.resolve(new Response(JSON.stringify({ sessions: { sessions: [s("aaa", 1), s("bbb", 2)], projects: [] }, activity: { langfuse: "ok", tools: [], hooks: [] }, skills: { skills: [] } }), { headers: { "content-type": "application/json" } })) : f(u, o); })()`;
 
   test("a redraw keeps a marked element connected on Sessions", async () => {
     await page.go("#/sessions");
-    await page.when('document.querySelector("#view #ag-live")');
-    await page.ev('window.mark = document.querySelector("#view #ag-live"); window.mark.old = 1');
+    await page.when('document.querySelector("#view .browse")');
+    await page.ev('window.mark = document.querySelector("#view .browse"); window.mark.old = 1');
     await redraws();
-    expect(await page.ev('[document.querySelector("#view #ag-live") === window.mark, window.mark.isConnected]')).toEqual([true, true]);
+    expect(await page.ev('[document.querySelector("#view .browse") === window.mark, window.mark.isConnected]')).toEqual([true, true]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("after two redraws one click on a sort header runs its handler once and the search box keeps its typed text", async () => {
+  test("after two redraws the search box keeps its typed text, and a search hides the rows it leaves out", async () => {
     await page.go("#/sessions");
-    await page.when('document.querySelector("#view button[data-sort=turns]") && document.querySelector("#view [data-ui=ag-search]")');
-    await page.ev('document.querySelector("#view [data-ui=ag-search]").focus(); document.execCommand("insertText", false, "pro")');
+    await page.when('document.querySelector("#view [data-ui=browse-sessions]")');
+    await page.ev('document.querySelector("#view [data-ui=browse-sessions]").focus(); document.execCommand("insertText", false, "bbb")');
     await redraws();
-    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view button[data-sort=turns]").click()');
-    await page.when('location.hash.includes("sort=turns")');
-    expect(await page.ev('[window.n, document.querySelector("#view [data-ui=ag-search]").value, document.activeElement === document.querySelector("#view [data-ui=ag-search]")]')).toEqual([1, "pro", true]);
+    expect(await page.ev('[document.querySelector("#view [data-ui=browse-sessions]").value, document.activeElement === document.querySelector("#view [data-ui=browse-sessions]"), [...document.querySelectorAll("#view .lrow:not([hidden])")].map((r) => r.dataset.key)]')).toEqual(["bbb", true, ["bbb"]]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 });
@@ -1247,21 +1234,23 @@ describe.skipIf(!chromeUsable)("Memory and Skill redraw", () => {
 
   const redraws = async () => { for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())'); };
 
+  const filter = '#view .lcard select[name=type]', search = '#view .lcard input[type=search]';
+
   test("a redraw keeps a marked element connected on Memory and the search box keeps its typed text", async () => {
-    await page.when('document.querySelector("#view #mem-kind .seg button") && document.querySelector("#view [data-ui=mem-search]")');
-    await page.ev('window.mark = document.querySelector("#view #mem-kind"); window.mark.old = 1; document.querySelector("#view [data-ui=mem-search]").focus(); document.execCommand("insertText", false, "zz")');
+    await page.when(`document.querySelector("${filter}") && document.querySelector("${search}")`);
+    await page.ev(`window.mark = document.querySelector("${filter}"); window.mark.old = 1; document.querySelector("${search}").focus(); document.execCommand("insertText", false, "zz")`);
     await redraws();
-    expect(await page.ev('[document.querySelector("#view #mem-kind") === window.mark, window.mark.isConnected, document.querySelector("#view [data-ui=mem-search]").value, document.activeElement === document.querySelector("#view [data-ui=mem-search]")]')).toEqual([true, true, "zz", true]);
+    expect(await page.ev(`[document.querySelector("${filter}") === window.mark, window.mark.isConnected, document.querySelector("${search}").value, document.activeElement === document.querySelector("${search}")]`)).toEqual([true, true, "zz", true]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("after two redraws one click on a kind runs its handler once", async () => {
+  test("after two redraws one change of the type selects it alone", async () => {
     await page.go("#/memory");
-    await page.when('document.querySelector("#view #mem-kind .seg button")');
-    await page.ev('window.board = document.querySelector("#view #mem-kind")');
+    await page.when(`document.querySelector("${filter}")`);
+    await page.ev(`window.board = document.querySelector("${filter}")`);
     await redraws();
-    await page.ev('window.n = 0; const r = history.replaceState.bind(history); history.replaceState = (...a) => { window.n++; return r(...a); }; document.querySelector("#view #mem-kind .seg button[data-value=semantic]").click()');
-    expect(await page.ev('[window.n, document.querySelector("#view #mem-kind") === window.board]')).toEqual([1, true]);
+    await page.ev(`(() => { const s = document.querySelector("${filter}"); s.value = "procedural"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    expect(await page.ev(`[document.querySelector("${filter}") === window.board, document.querySelector("${filter}").value, JSON.parse(localStorage.getItem("aleph.browse.memory")).f.type]`)).toEqual([true, "procedural", "procedural"]);
     expect(page.errors).toEqual([]);
   }, 60_000);
 });

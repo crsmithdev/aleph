@@ -1,16 +1,16 @@
-// The Health tab and the Needs-you strip of the Memory page. `m` is /api/memory with `processes` (/api/memory/processes)
+// The Health view and the Needs-you strip of the Memory page. `m` is /api/memory with `steps` and `decay` (/api/memory/processes)
 // and `rows` (/api/memory/log). Offered: the recall hook or `aleph memory recall` returned the note to an agent.
 // Offer dates start when the recall log does, so a note written before the first one may be unused or unrecorded.
 import { noteHref } from "../../../lib/naming.ts";
-import { quantile } from "../../../lib/windows.ts";
-import { count, day, localMs, pct, plural, when } from "./format.js";
-import { barList, barRow, card, dataTable, empty, esc, facts, heads, list, note, statCard, subHead, tag, tiles } from "./html.js";
+import { count, day, localMs, plural, when } from "./format.js";
+import { barList, barRow, card, cell, chip, dataTable, empty, esc, facts, heads, meter, miss, row, subHead, tag } from "./html.js";
+import { figureBand } from "./page.js";
+import { panelOf } from "./chart.js";
 
 const DAY = 86_400_000;
 export const link = (title) => `<a href="${noteHref(title)}">${esc(title)}</a>`;
 export const shortDay = (s) => (s ? day(localMs(String(s).slice(0, 10))) : "");
-const age = (s, now = Date.now()) => Math.floor((now - localMs(String(s).slice(0, 10))) / DAY);
-const tab = (t) => `#/memory?tab=${t}`;
+const tab = (t) => `#/memory?view=${t}`;
 /** Whether recall offered note `n` in the 7 days before `now`. */
 export const offered = (n, now = Date.now()) => !!n.read && now - localMs(n.read) <= 7 * DAY;
 /** The local day of a log row: a recall's `at` is a day, a write's an ISO time. */
@@ -48,87 +48,65 @@ export function needs(m, now = Date.now()) {
   return items.length ? `<div class="mstrip" role="status"><b>Needs you</b>${items.join("")}</div>` : "";
 }
 
+/** The share of its budget at which a start context needs Chris, as `ui/api/attention.ts` has it. */
+const FULL = 0.95;
+const B = (n) => `${count(n)} B`;
 
-function offerCard(ms, rows) {
-  if (!ms) return card("Offer Quality", empty());
-  const sizes = rows.filter((r) => r.kind === "recall").map((r) => r.titles.length).sort((a, b) => a - b);
-  return card("Offer Quality", `<p><strong>${count(ms.unoffered_reads)}</strong> reads of a note nobody offered</p>` + facts([
-    ["Recalls", count(ms.recalls)],
-    ["Empty", `${count(ms.empty)} of ${count(ms.recalls)} (${pct(ms.empty_share * 100)})`],
-    ["Reformulated", `${count(ms.reformulated)} turns`],
-    ["Hook runs", `${count(ms.hook.runs)}: ${count(ms.hook.zero_candidates)} with no candidate, ${count(ms.hook.capped)} over 100`],
-    ["Notes per offer", sizes.length ? `p50 ${count(quantile(sizes, 0.5))}, p95 ${count(quantile(sizes, 0.95))}, n=${count(sizes.length)}` : ""],
-  ]), { aside: `${count(ms.days)} days` });
-}
-
-const emptyCard = (ms) => card("Empty Recalls", ms?.missed.length
-  ? dataTable(heads(["Query", "When"]), ms.missed.map((x) => `<tr><td class="wide" title="${esc(x.query)}">${esc(x.query)}</td><td class="time">${esc(when(x.at))}</td></tr>`).join(""))
-  : empty());
-
-/** The notes by when recall last offered them, and the never-offered ones, oldest written first. */
-function notOffered(notes, now = Date.now()) {
-  if (!notes.length) return card("Not Offered in 7 Days", empty());
-  const week = notes.filter((n) => offered(n, now)).length, never = notes.filter((n) => !n.read);
-  const first = notes.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
-  const bars = barList([["Offered, 7 days", week], ["Earlier", notes.length - week - never.length], ["Never", never.length]].map(([k, v]) => barRow(esc(k), (v / notes.length) * 100, count(v))).join(""));
-  const oldest = [...never].sort((a, b) => a.updated.localeCompare(b.updated)), top = oldest.slice(0, 8);
-  const rows = top.map((n) => `<tr><td class="wide" title="${esc(n.title)}">${link(n.title)}</td><td>${esc(n.kind)}</td><td class="num">${n.updated ? `${count(age(n.updated, now))} d` : "–"}</td><td>${n.updated < first ? "review" : ""}</td></tr>`).join("");
-  const more = oldest.length > top.length ? `<p class="hint"><a href="#/memory?fresh=never">${count(oldest.length - top.length)} more in Notes</a></p>` : "";
-  return card("Not Offered in 7 Days", bars + (top.length ? dataTable(heads(["Note", "Kind", "Written", "Check"], ["Written"]), rows) + more : ""), { count: count(notes.length - week) });
-}
-
-/** What the start context of `scope` holds by part, the core lines it cut, and the kept ones to trim first. */
-function startCard(m, scope = "aleph") {
-  const all = Object.entries(m.start ?? {}), s = m.start?.[scope];
-  if (!s) return card("Start Context", empty());
-  const B = (n) => `${count(n)} B`, share = (n) => pct((n / s.bytes) * 100);
-  const bars = barList(all.map(([k, x]) => barRow(esc(k), (x.bytes / x.budget) * 100, `${B(x.bytes)} / ${B(x.budget)}`)).join(""));
-  const kept = s.core.filter((c) => c.kept), sum = (cs) => cs.reduce((n, c) => n + c.bytes, 0);
-  const globals = kept.filter((c) => c.scope === "global"), own = kept.filter((c) => c.scope !== "global");
-  const parts = [["MEMORY.md", s.memory], [`Global core lines · ${globals.length}`, sum(globals)], [`${scope[0].toUpperCase()}${scope.slice(1)} core lines · ${own.length}`, sum(own)], ["Tags and pointer", s.bytes - s.memory - sum(kept)]];
-  const sent = dataTable(heads(["Part", "Bytes", "Share"], ["Bytes", "Share"]), parts.map(([k, n]) => `<tr><td>${esc(k)}</td><td class="num">${B(n)}</td><td class="num">${share(n)}</td></tr>`).join("") +
-    `<tr><td><strong>Total sent</strong></td><td class="num"><strong>${B(s.bytes)}</strong></td><td class="num">${B(s.budget - s.bytes)} left</td></tr>`);
-  const byTitle = new Map((m.notes ?? []).map((n) => [n.title, n]));
-  const cut = s.core.filter((c) => !c.kept), offers = (c) => (byTitle.get(c.title)?.history ?? []).slice(-8).reduce((a, b) => a + b, 0);
-  const cutRows = cut.map((c) => `<tr><td class="wide" title="${esc(c.title)}">${link(c.title)}</td><td class="num">${B(c.bytes)}</td><td class="time">${esc(byTitle.get(c.title)?.updated ?? "")}</td></tr>`).join("");
-  const trim = [...kept].sort((a, b) => offers(a) - offers(b) || String(byTitle.get(a.title)?.updated).localeCompare(String(byTitle.get(b.title)?.updated))).slice(0, 5);
-  const trimRows = trim.map((c) => `<tr><td class="wide" title="${esc(c.title)}">${link(c.title)}</td><td class="num">${count(offers(c))}</td><td class="time">${esc(shortDay(byTitle.get(c.title)?.read) || "never")}</td><td class="time">${esc(byTitle.get(c.title)?.updated ?? "")}</td><td class="num">${B(c.bytes)}</td></tr>`).join("");
-  return card("Start Context", bars + subHead(`What the ${scope} agent receives`) + sent +
-    (cut.length ? subHead(`Cut lines, ${cut.length}`) + dataTable(heads(["Core line", "Bytes", "Updated"], ["Bytes"]), cutRows) : "") +
-    (trim.length ? subHead("Trim first: fewest offers, then oldest") + dataTable(heads(["Core line", "Offers, 8 days", "Last offered", "Updated", "Bytes"], ["Offers, 8 days", "Bytes"]), trimRows) : ""), { aside: esc(scope) });
-}
-
-/** How to clear each lint rule; another rule shows its first finding's detail. */
+/** How to clear each lint rule; another rule shows no fix. */
 const FIX = {
   stale: "re-check the note, then update its date", "relative-date": "replace “today” with the date",
   template: "add a claim, an as-of marker or a section", dangling: "fix or remove the link", untracked: "put it through aleph memory write",
 };
 
-/** Lint by rule, largest first, with how to fix each; then the notes past their re-check window, most overdue first. */
-function lintCard(lint, stale) {
-  const by = Map.groupBy([...lint.refuse.map((f) => ({ ...f, refused: true })), ...lint.warn], (f) => f.rule);
-  const rules = [...by].sort((a, b) => b[1].length - a[1].length);
-  const total = lint.refuse.length + lint.warn.length;
-  const rows = rules.map(([rule, fs]) => `<tr><td><code>${esc(rule)}</code>${fs.some((f) => f.refused) ? " (refused)" : ""}</td><td class="num">${count(fs.length)}</td><td class="wide" title="${esc(FIX[rule] ?? fs[0].detail)}">${esc(FIX[rule] ?? fs[0].detail)}</td></tr>`).join("");
-  const top = stale.slice(0, 6), most = Math.max(1, ...top.map((s) => s.over));
-  const late = top.length ? subHead("Stale notes, most overdue first") + barList(top.map((s) => barRow(link(s.note), (s.over / most) * 100, `+${count(s.over)} d of ${count(s.window)}`)).join("")) +
-    (stale.length > top.length ? note(`${stale.length - top.length} more`) : "") : "";
-  return card("Lint", (total ? dataTable(heads(["Rule", "Findings", "Fix"], ["Findings"]), rows + `<tr><td><strong>Total</strong></td><td class="num"><strong>${count(total)}</strong></td><td></td></tr>`) : empty()) + late, { count: count(total) });
+/** The frame of note writes and recalls per local day over the last `n` days, oldest first. An episode page is no note write: a regeneration writes thousands in a day. */
+export function flowFrame(rows, now = Date.now(), n = 14) {
+  const per = (keep) => Map.groupBy(rows.filter(keep), (r) => dayOf(r.at));
+  const writes = per((r) => r.kind === "write" && !isEpisode(r)), recalls = per((r) => r.kind === "recall");
+  return {
+    measure: { name: "Writes and Recalls", unit: "count", agg: "sum" }, over: { kind: "time", window: "month" },
+    by: { keys: [{ key: "writes", name: "writes" }, { key: "recalls", name: "recalls" }] },
+    rows: Array.from({ length: n }, (_, i) => daysBack(n - 1 - i, now)).map((d) => ({ at: localMs(d), writes: writes.get(d)?.length ?? 0, recalls: recalls.get(d)?.length ?? 0 })),
+  };
 }
 
-/** The Health tab's body: tiles, then offers, then the start context and lint. */
+/** The lint findings by rule, most first: `{ rule, n, refused, notes }`. */
+const rulesOf = (lint) => [...Map.groupBy([...lint.refuse.map((f) => ({ ...f, refused: true })), ...lint.warn], (f) => f.rule)]
+  .map(([rule, fs]) => ({ rule, n: fs.length, refused: fs.some((f) => f.refused), notes: [...new Set(fs.map((f) => f.note))], detail: fs[0].detail }))
+  .sort((a, b) => b.n - a.n);
+
+const noteLink = (title) => `<td class="wide" title="${esc(title)}">${link(title)}</td>`;
+const scopeChip = (s) => (s && s !== "aleph" ? chip(s) : "");
+
+/** The memory steps of the tick: a result of "ok" is quiet, a failure is a badge with its detail, another result shows its detail. */
+const jobsCard = (steps) => card("Memory Jobs", dataTable(heads(["Job", "Runs", "Last", "Next", "Result"]), steps.map((x) => row([
+  `<td title="${esc(x.does)}">${esc(x.name)}</td>`, cell(x.runs), `<td class="time">${x.last ? esc(when(x.last)) : miss("Never run")}</td>`, `<td class="time">${x.next ? esc(when(x.next)) : miss("Not scheduled")}</td>`,
+  !x.result ? `<td>${miss("No result")}</td>` : x.result === "ok" ? `<td class="quiet">ok</td>` : x.result.startsWith("failed") ? `<td>${tag("failed", "error", x.detail ?? undefined)}</td>` : cell(x.detail ?? x.result, { wide: true, title: x.result }),
+])).join("")), { count: count(steps.length) });
+
+/** The Health view: the figure band, the charts 2 across, the memory jobs, then the lint fixes and the stale notes. The flow chart's frame is set in mount. */
 export function renderHealth(m, now = Date.now()) {
-  const notes = m.notes ?? [], ms = m.misses, rows = m.rows ?? [], lint = m.lint ?? { refuse: [], warn: [] };
-  const used = notes.filter((n) => offered(n, now)).length, never = notes.filter((n) => !n.read).length;
-  const s = m.start?.aleph, w = writeWeeks(rows, now);
-  const tileRow = tiles("Health", [
-    statCard({ k: "Offered, 7 days", v: count(used), v2: count(notes.length), q: ["offered", "notes"] }),
-    statCard({ k: "Never offered", v: count(never) }),
-    statCard({ k: "Unoffered reads", v: count(ms?.unoffered_reads), note: "7 days" }),
-    statCard({ k: "Start context", v: count(s?.cut), v2: count(s?.core.length), q: ["cut", "core lines"] }),
-    statCard({ k: "Lint findings", v: count(lint.refuse.length + lint.warn.length), note: `${count(lint.refuse.length)} refused` }),
-    statCard({ k: "Writes, 7 days", v: count(w.week), note: `median week ${count(w.median)}` }),
-  ].join(""));
-  return list(tileRow + `<div class="pair">${offerCard(ms, rows)}${emptyCard(ms)}</div>` +
-    `<div class="pair">${notOffered(notes, now)}${lintCard(lint, m.processes?.decay.stale ?? [])}</div>${startCard(m)}`);
+  const notes = m.notes ?? [], ms = m.misses, s = m.start.aleph, stale = m.decay?.stale ?? [], w = writeWeeks(m.rows ?? [], now);
+  const used = notes.filter((n) => offered(n, now)).length, never = notes.filter((n) => !n.read).length, rules = rulesOf(m.lint);
+  const found = rules.reduce((n, r) => n + r.n, 0), refused = m.lint.refuse.length;
+  const figs = figureBand([
+    { k: "Start Context", v: B(s.bytes), cmp: `${B(s.budget - s.bytes)} left of ${B(s.budget)}`, trend: s.bytes >= FULL * s.budget ? "warn" : "good" },
+    { k: "Offered, 7 Days", v: count(used), cmp: `of ${count(notes.length)} notes` },
+    { k: "Lint", v: count(found), cmp: `${count(refused)} refused`, trend: refused ? "warn" : "good" },
+    { k: "Writes, 7 Days", v: count(w.week), cmp: `median week ${count(w.median)}` },
+  ]);
+
+  const offers = notes.length ? barList([["Offered, 7 days", used], ["Earlier", notes.length - used - never], ["Never", never]].map(([k, v]) => barRow(esc(k), (v / notes.length) * 100, count(v))).join("")) : empty();
+  const quality = ms ? facts([["Recalls", `${count(ms.recalls)} in ${count(ms.days)} days`], ["Empty", count(ms.empty)], ["Reformulated", count(ms.reformulated)], ["Unoffered reads", count(ms.unoffered_reads)]]) : "";
+  const start = barList(Object.entries(m.start).map(([k, x]) => barRow(esc(k), 0, `${B(x.bytes)} / ${B(x.budget)}`, { bar: meter((x.bytes / x.budget) * 100, `${k} ${B(x.bytes)} of ${B(x.budget)}`, { mark: FULL * 100 }) })).join("")) +
+    subHead("Largest Core Lines") + dataTable(heads(["Core line", "Scope", "Bytes"], ["Bytes"]), [...s.core].sort((a, b) => b.bytes - a.bytes).slice(0, 5).map((c) => row([noteLink(c.title), `<td>${scopeChip(c.scope)}</td>`, cell(B(c.bytes), { num: true })])).join(""));
+  const most = Math.max(1, ...rules.map((r) => r.n));
+  const lint = rules.length ? barList(rules.map((r) => barRow(`<code>${esc(r.rule)}</code>${r.refused ? ` ${tag("refused", "error")}` : ""}`, 0, count(r.n), { bar: meter([{ pct: (r.n / most) * 100, cls: r.refused ? "c-err" : "" }], `${r.rule} ${r.n}`) })).join("")) : empty();
+  const fixes = rules.length ? dataTable(heads(["Rule", "Fix", "Notes"]), rules.map((r) => row([`<td><code>${esc(r.rule)}</code></td>`, cell(FIX[r.rule] ?? r.detail, { wide: true }), cell(r.notes.join(", "), { wide: true, title: r.notes.join("\n") })])).join("")) : empty();
+  const late = stale.slice(0, 8), lates = late.length ? dataTable(heads(["Note", "Window", "Over"], ["Window", "Over"]), late.map((x) => row([
+    `<td class="wide" title="${esc(x.detail)}">${link(x.note)}</td>`, cell(`${count(x.window)} d`, { num: true }), cell(`+${count(x.over)} d`, { num: true }),
+  ])).join("")) : empty();
+
+  return `${figs}<div class="pair">${panelOf("memory/flow", flowFrame(m.rows ?? [], now))}${card("Offers", offers + quality, { aside: `of ${count(notes.length)} notes` })}</div>` +
+    `<div class="pair">${card("Start Context", start, { aside: `line at ${Math.round(FULL * 100)}%` })}${card("Lint by Rule", lint, { count: count(found) })}</div>` +
+    `${jobsCard(m.steps)}<div class="pair">${card("Lint Fixes", fixes, { count: count(rules.length) })}${card("Stale Notes", lates, { count: count(stale.length), aside: stale.length > late.length ? `${count(late.length)} most late` : "" })}</div>`;
 }

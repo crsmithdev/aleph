@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { getRun, allRuns } from "./lib/records/record.ts";
 import { seed, type Seed } from "./job.testkit.ts";
 import { readSection, type Section } from "./lib/records/run-files.ts";
+import { setModelsRow } from "./lib/infra/settings.ts";
 import { unitAlive } from "./lib/infra/process.ts";
 import { projectOf, writeRepos } from "../tests/projects.testkit.ts";
 import { renderItem } from "../lib/issue-file.ts";
@@ -135,8 +136,6 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_LIVE_CAP: "5",
     // A run's end and `aleph issue` dispatch in production; the dispatch tests turn it on.
     ALEPH_DISPATCH: "off",
-    // Nor does a tick start the monitor's reader; monitor.test.ts runs it with a fake.
-    ALEPH_MONITOR: "off",
     // The tick takes in no issue unless a test sets a cap and a fake command.
     ALEPH_INTAKE_CAP: "0",
     // Nor does it start a director run on an Ask: no test reaches the live director.
@@ -353,6 +352,8 @@ export function setup(): void {
   jobsDir = join(base, "jobs");
   // The test process reads and seeds the rows the units write.
   process.env.ALEPH_DB = join(base, "aleph.db");
+  // No tick starts the monitor's reader; monitor.test.ts runs it with a fake.
+  setModelsRow({ monitor: { enabled: false } });
   jobsEnv = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobsDir;
   fakeLog = join(base, "fake");

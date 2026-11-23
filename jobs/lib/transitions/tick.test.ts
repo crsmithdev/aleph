@@ -26,6 +26,7 @@ import { memory, use } from "../../../lib/langfuse.ts";
 import { due, maintainStep, readTick, runTick, sweep, takeOnTimeout, type SweepPorts, type TickPorts } from "./tick.ts";
 import { ciStep } from "../gates/ci.ts";
 import { newItems, writeRepos } from "../../../tests/projects.testkit.ts";
+import { setModel } from "../routing/models.ts";
 import { keepEnv } from "../../../tests/env.testkit.ts";
 
 keepEnv();
@@ -305,8 +306,8 @@ test("a tick records the time and result of each due step in its tick row and ke
   const kept = { "suite tk1": { last: "2026-11-04T10:00:00.000Z", result: "green" }, monitor: { last: "2026-11-04T03:00:00.000Z", result: "2 findings" } };
   for (const [k, v] of Object.entries(kept)) setTick(k, v);
   // The monitor writes its own key when it runs: here it does not.
-  process.env.ALEPH_MONITOR = "off";
-  try { await runTick(NOW, quiet()); } finally { delete process.env.ALEPH_MONITOR; }
+  setModel("monitor", { enabled: false });
+  try { await runTick(NOW, quiet()); } finally { setModel("monitor", { enabled: true }); }
   const ran = tickRows();
   const at = new Date(NOW).toISOString();
   for (const k of ["ci", "sweep", "hold", "smoke", "retention", "firefighter", "timeout"]) {

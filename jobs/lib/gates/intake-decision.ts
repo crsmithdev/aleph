@@ -11,8 +11,8 @@ import * as issues from "../../../lib/issue-file.ts";
 import { pendingWaits } from "./issue-decision.ts";
 import type { Repo } from "../records/ledger.ts";
 
-/** `doc`: the item's list; `red`: the line of the repo's baseline when it is red, else null. */
-interface IntakeFacts { doc: issues.Doc; done: (ref: string) => boolean; red: string | null }
+/** `doc`: the item's list; `red`: the line of the repo's baseline when it is red, else null; `off`: the intake switch is off. */
+interface IntakeFacts { doc: issues.Doc; done: (ref: string) => boolean; red: string | null; off?: boolean }
 
 /** `why` names the state that stops intake, or what intake does. */
 interface IntakeDecision { kind: "plan" | "take-in" | "none"; why: string }
@@ -23,6 +23,8 @@ export function decideIntake(repo: Repo, item: issues.Issue, f: IntakeFacts): In
   if (issues.status(item) !== "open") return none(`the item is ${issues.status(item)}`);
   // An Ask, a part, the tracker, or, unless it is to plan, parts, taken in or a spec.
   if (isSorted(f.doc, item, repo)) return none("sorted");
+  // An off intake leaves the issue open and unsorted: it waits in the queue until the switch is on.
+  if (f.off) return none("intake is off");
   if (!planSet(item)) return { kind: "take-in", why: "not sorted" };
   if (f.red) return none(f.red);
   const ids = pendingWaits(afterOf(item), f.done);

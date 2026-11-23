@@ -67,7 +67,7 @@ const dailyDue = (s: State, now: number): boolean => !s.daily || now - Date.pars
 
 /** Whether the tick should start `aleph housekeep`: not paused, not running, and the daily review is due, or a main moved and the last run started an hour ago. */
 export function housekeepDue(now: number): boolean {
-  if (paused() || held(LOCK)) return false;
+  if (paused() || !readModels().housekeeper.enabled || held(LOCK)) return false;
   const s = readState();
   return dailyDue(s, now) || ((!s.last || now - Date.parse(s.last) >= HOUR) && moved(s, Object.values(loadRegistry())).length > 0);
 }
@@ -255,6 +255,8 @@ export async function review(b: Batch, now: number, seconds = HOUR / 1000): Prom
  * Null when another housekeeper holds the lock.
  */
 export async function housekeep(now: number): Promise<Outcome[] | null> {
+  // Off, it leaves the state as it is, so the parked issues and the moved mains wait for the next run after the switch is on.
+  if (!readModels().housekeeper.enabled) return [];
   await endLost("housekeeper", () => LOCK, "its reply");
   const release = await lock(LOCK, 0);
   if (!release) return null;

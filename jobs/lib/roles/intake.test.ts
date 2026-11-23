@@ -18,6 +18,7 @@ import { factoryRepos } from "../../../tests/git.testkit.ts";
 import { readEvents } from "../../../lib/layout.ts";
 import { decider } from "../gates/decider.ts";
 import { keepEnv } from "../../../tests/env.testkit.ts";
+import { setModel } from "../routing/models.ts";
 
 keepEnv();
 
@@ -543,4 +544,16 @@ test("the prompt's 'Commits on main since' heading and window come from created,
   expect(prompt(repo, item("2020-01-02T03:04:05.000Z"))).toContain("# Commits on main since 2020-01-02T03:04:05.000Z\n\n" + sh(repo.path, "git", "log", "--oneline", "--no-decorate", "-n", "50", "origin/main") + "\n");
   const after = new Date((+sh(repo.path, "git", "log", "-1", "--format=%ct", "--all") + 1) * 1000).toISOString();
   expect(prompt(repo, item(after))).toContain(`# Commits on main since ${after}\n\n(none)\n`);
+});
+
+test("an off intake opens no run and leaves the issue open and unsorted, until it is on", async () => {
+  reset([{ title: "a", body: "VERDICT:build" }]);
+  setModel("intake", { enabled: false });
+  try {
+    expect((await run()).counts).toEqual({});
+    expect(calls()).toHaveLength(0);
+    expect(allRuns().filter((e) => e.run.role === "intake")).toHaveLength(0);
+    expect(isSorted(readList(repo)!, item(1), repo)).toBe(false);
+  } finally { setModel("intake", { enabled: true }); }
+  expect((await run()).counts.build).toBe(1);
 });

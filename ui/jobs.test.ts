@@ -11,7 +11,6 @@ import { withEnv } from "./server.testkit.ts";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
-import * as jt from "./views/lib/jobs-table.js";
 import { seed } from "../jobs/job.testkit.ts";
 import { conn } from "../lib/db.ts";
 import { logTo } from "../jobs/lib/records/run-files.ts";
@@ -187,7 +186,7 @@ describe("GET /api/jobs", () => {
     expect((await (await get(`/api/jobs?window=month&before=${encodeURIComponent(ago(5))}`)).json())).toEqual({ jobs: [expect.objectContaining({ id: K["fac-2#1"] })], next: null });
     for (const q of ["limit=0", "limit=x", "before=soon"]) expect((await get(`/api/jobs?${q}`)).status).toBe(400);
   });
-  test("each row names its actor from its kind, for the page's Role filter", async () => {
+  test("each row names its actor from its kind", async () => {
     run("", { role: "intake", job: "oth-5", name: "oth-5", repo: "oth", state: "failed", started: ago(1) });
     run("", { role: "build", job: "oth-6", name: "oth-6", repo: "oth", state: "failed", started: ago(1) });
     run("", { role: "director", job: "oth-7", name: "oth-7", repo: "oth", state: "failed", started: ago(1) });
@@ -195,23 +194,7 @@ describe("GET /api/jobs", () => {
       const rows = (await (await get("/api/jobs?project=oth")).json()).jobs;
       const actor = (id: string) => rows.find((j: any) => j.id === id).actor;
       expect([actor(K["oth-5#1"]), actor(K["oth-6#1"]), actor(K["oth-7#1"])]).toEqual(["intake", "worker", "director"]);
-      expect(jt.renderJobsTable(rows, { role: "director" })).toContain(K["oth-7#1"]);
-      expect(jt.renderJobsTable(rows, { role: "director" })).not.toContain(K["oth-6#1"]);
-      expect(jt.renderJobsTable(rows)).toContain(`<tr class="rowlink" data-annotate="${K["oth-5#1"]}">`);
     }
-  });
-  test("the Role filter offers the six actors and no old role", () => {
-    const h = jt.renderFilters({});
-    const role = h.slice(h.indexOf('data-name="role"'));
-    expect([...role.matchAll(/data-value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "worker", "reviewer", "intake", "director", "monitor"]);
-    expect(h).not.toContain('value="triage"');
-    expect(h).not.toContain('value="planner"');
-  });
-  test("the Runs filter shows ?unusable=1 as Failed and its absence as All", () => {
-    const group = (h: string) => h.slice(h.indexOf('data-name="unusable"'), h.indexOf("</div>", h.indexOf('data-name="unusable"')));
-    const pressed = (h: string) => Object.fromEntries([...group(h).matchAll(/data-value="([^"]*)" aria-pressed="(\w+)"/g)].map((m) => [m[1], m[2]]));
-    expect(pressed(jt.renderFilters({ unusable: "1" }))).toEqual({ "": "false", "1": "true" });
-    expect(pressed(jt.renderFilters({}))).toEqual({ "": "true", "1": "false" });
   });
   test("judge runs are not jobs", async () => {
     const id = run("", { role: "judge", name: "judge", started: ago(1) });
@@ -455,10 +438,6 @@ describe("render", () => {
     expect(h).toContain('<p><code>a.test.ts</code> s &gt; &lt;one&gt; <span class="quiet">tests</span></p><pre class="trailers">Error: boom\n  at a.test.ts:3</pre>');
     expect(h).toContain("22 more failed tests of tests not recorded.");
   });
-  test("a job with no end and no cost shows the missing Took and Cost of span() and money()", () => {
-    const row = jt.renderJobsTable([{ ...job, started: ago(5), ended: null, cost: null }]).split('<tr class="rowlink"')[1];
-    expect(row).toContain('<td class="num"></td><td class="num">$0.00</td><td class="time">');
-  });
   test("a failed count is badCount's cell, and no cell of the checks table holds a button", () => {
     const tests = { ran: 5, passed: 3, failed: 2, skipped: 0, failures: [] };
     const h = v.renderJob({ ...job, runs: [{ id: "1", job: "fac-9#1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), logs: [{ name: "checks.log", size: 9 }] }], checks: [{ name: "tests", ok: false, seconds: 3, tests }] });
@@ -474,21 +453,11 @@ describe("render", () => {
     expect(h).toContain("look: 5m 00s");
     expect(h).not.toContain("about");
   });
-  test("the Jobs table and the Job checks table head their duration column Took", () => {
+  test("the Job checks table heads its duration column Took", () => {
     const heads = (h: string) => [...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim());
-    const list = heads(jt.renderJobsTable([{ ...job, started: ago(5), ended: ago(4) }]));
-    expect(list).toContain("Took");
-    expect(list).not.toContain("Time");
     const checks = heads(v.renderJob({ ...job, checks: [{ name: "tests", ok: true, seconds: 9 }] }));
     expect(checks).toContain("Took");
     expect(checks).not.toContain("Time");
-  });
-  test("the Jobs table puts Id and Title first and Started last, and each row opens with the job id link", () => {
-    const h = jt.renderJobsTable([{ ...job, started: ago(5), ended: ago(4) }]);
-    expect([...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim())).toEqual(["Id", "Title", "State", "Project", "Model", "Took", "Cost", "Started"]);
-    const row = h.split('<tr class="rowlink"').slice(1)[0];
-    expect(/^[^>]*><td><a class="idl"[^>]*>[^<]*<\/a><\/td><td class="wide"[^>]*><a[^>]*>[^<]*<\/a><\/td><td>/.test(row)).toBe(true);
-    expect(/<td class="time">[^<]*<\/td><\/tr>/.test(row)).toBe(true);
   });
   test("the Job page of a sub-issue says sub-issue, and its work lane counts jobs", () => {
     const parent = { id: "fac-9", href: "#/issues/fac/9", n: 1, of: 2, next: { id: "fac-10", href: "#/jobs/fac-10" } };

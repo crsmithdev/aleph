@@ -8,7 +8,7 @@ import { scope } from "./address.js";
 // @ts-ignore the module is plain JS, shared with the page
 import { plural } from "./format.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { clamp, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortOf, sortRows } from "./html.js";
+import { clamp, markDirty, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, nextSort, pageOf, pageRows, sortOf, sortRows } from "./html.js";
 // @ts-ignore the module is plain JS, shared with the page
 import * as lib from "./html.js";
 
@@ -427,4 +427,13 @@ test("statCard title puts a definition in the tooltip, after the value", () => {
 test("setting stack puts the label over the control at any width", () => {
   expect(lib.setting("Core line", "<input>")).toContain('<div class="srow">');
   expect(lib.setting("Core line", "<input>", { stack: true, save: "Save" })).toContain('<form class="srow stack">');
+});
+
+test("markDirty shows Save on a setting row whose control differs from its saved value, and on no other", () => {
+  const control = (c: object) => ({ tagName: "INPUT", type: "text", value: "1", defaultValue: "1", ...c });
+  const rowOf = (...controls: object[]) => { const on = { v: false }; return { on, classList: { toggle: (_: string, v: boolean) => { on.v = v; } }, querySelectorAll: () => controls }; };
+  const same = rowOf(control({})), typed = rowOf(control({ value: "2" })), box = rowOf(control({ type: "checkbox", checked: true, defaultChecked: false })),
+    select = rowOf({ tagName: "SELECT", options: [{ selected: true, defaultSelected: false }, { selected: false, defaultSelected: true }] });
+  markDirty({ querySelectorAll: () => [same, typed, box, select] });
+  expect([same, typed, box, select].map((r) => r.on.v)).toEqual([false, true, true, true]);
 });

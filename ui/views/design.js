@@ -12,6 +12,9 @@ import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.j
 import { askCard } from "./lib/ask-cards.js";
 import { eventRow, findingsList } from "./lib/feed.js";
 import { needs } from "./lib/memory-health.js";
+import { attention, factsLine, figureBand, viewTabs } from "./lib/page.js";
+import { browse, inspector } from "./lib/browse.js";
+import { logMeter, rateBar, rowBar, runStrip } from "./lib/bars.js";
 
 const DAY = 864e5, T0 = new Date(2026, 10, 3).getTime();
 /** The Memory page's numbers with every Needs-you item over its threshold. */
@@ -126,6 +129,17 @@ const FEED = [
   { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
 ];
 
+const BROWSE = [["Today", [["a1706", "Show the cost of each run on its job page", "landed", 4.12, "3h ago", "yours"], ["a1705", "Fail CI on a new hard-coded colour in ui/", "running", 1.37, "1h ago", "factory"]]],
+  ["Earlier", [["a1700", "Give each component in design.md a live render, a title long enough to be cut at the end of the line", "landed", 9.1, "2d ago", "yours"], ["a1699", "Show the p90 on the flow chart", "landed", 2.2, "3d ago", "yours"], ["a1698", "Move the sidebar dock", "landed", 1.4, "4d ago", "yours"]]]];
+const browseRow = ([id, title, state, cost, ago, who]) => ({
+  key: id, lead: idLink(id, "#/design"), main: `<span class="t" title="${title}">${title}</span>${badge(state)}`, cells: [money(cost), ago], text: `${id} ${title}`, data: { who },
+  inspect: inspector({ id, title, status: statusRow(badge(state), "", ""), rows: [["Cost", money(cost)], ["Last", ago]], href: "#/design",
+    body: `${subHead("Runs")}${dataTable(heads(["Stage", "Took"], ["Took"]), trow([cell("build"), cell(dur(574), { num: true })]))}${settings("Land", [setting("Land after", inputBox("minutes", "0", { id: `design-land-${id}`, type: "number", attrs: ' min="0"' }), { id: `design-land-${id}`, save: "Save" })])}` }),
+});
+const BROWSE_GROUPS = BROWSE.map(([title, rs], i) => ({ title, count: String(rs.length), heads: ["Cost", "Last"], rows: rs.map(browseRow), ...(i ? { cap: 1 } : {}) }));
+const VIEWS = [{ id: "list", label: "List" }, { id: "flow", label: "Flow" }];
+const RUNS = [{ secs: 540, cls: "done", tip: "build done 9m 00s" }, { secs: 120, cls: "error", tip: "checks error 2m 00s" }, { secs: 300, cls: "run", tip: "build running 5m 00s" }];
+
 const COLOURS = [["surfaces", "Surfaces and text", /^--(bg|surface|sunk|raised|ink|ink-2|muted|rule|rule-2|on-fill|sel)$/],
   ["tones", "Tones", /^--(run|done|need|error|good|hot|add|del|focus|approve|decide|unstick|quiet)(-bg|-ring)?$/],
   ["data", "Data colours", /^--(series|chart|seg|fill)-/]];
@@ -168,7 +182,7 @@ function renderDesign(d) {
       empty() + error("Could not load the agents.") + loadingLine("Jobs")) +
 
     group("Structure") +
-    spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() })) +
+    spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() }) + pageHead("Issues", { after: viewTabs(VIEWS, "list") }), "The second head has view tabs; the first view is the default.") +
     spec("detail-panel", "Detail panel", panel("design-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>") + panel("design-mark", "Investigation", `<div class="dp-body"><p>An agent's findings for Chris, marked.</p></div>`, "11/19 22:41 · opus", "dp-marked")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +
     spec("status-row", "Status row", statusRow(badge("running"), priorityBadge("high"), chips(["ui", "design"])), "Built by statusRow().") +
@@ -182,6 +196,16 @@ function renderDesign(d) {
     spec("nav-current", "Current page in the sidebar (mock)", `<div class="design-row navmocks">${NAV_VARIANTS.map((t, i) => `<figure>${navMock(i + 1)}<figcaption>${i + 1}. ${t}</figcaption></figure>`).join("")}</div>`,
       "Five ways to mark the current link, each a copy of the sidebar with Jobs current. The live sidebar is unchanged.", "") +
     spec("facts", "Fact list", facts([["Started", "11/10 08:45"], ["Took", dur(574)], ["Model", "opus"], ["Cost", "$4.12"], ["Branch", "<code>feature/design-page</code>"]])) +
+
+    group("Page") +
+    spec("page", "Page grammar", `<div class="views">${pageHead("Hooks", { after: viewTabs([{ id: "list", label: "List" }, { id: "holds", label: "Holds" }, { id: "errors", label: "Errors" }], "list") })}${attention([{ tone: "error", text: "151 hook errors, 72 from a moved hook file", act: { label: "Errors", href: "#/design" } }])}${factsLine([["24", "hooks"], ["3", "hold"]])}</div>`, "Head with tabs, attention row, then the facts line.", "Page grammar") +
+    spec("attention", "Attention rows", attention([{ tone: "error", text: "OpenRouter: API Error: 402 Insufficient credits", act: { label: "Add credits", href: "#/design" } }, { tone: "need", text: "Start context 5,950 B of 6,000 B" }])) +
+    spec("facts-line", "Facts line", factsLine([["3", "running"], ["12", "runs today"], [money(4.1), "today"], ["28", "landed this week"]])) +
+    spec("figure-band", "Figure band", figureBand([{ k: "Cost", v: "$41", cmp: "$38 last week", trend: "warn" }, { k: "Success", v: "92%", cmp: "86% baseline", trend: "good" }, { k: "p50", v: "6m 40s", cmp: "5m 10s last week" }])) +
+    spec("browse", "List surface", browse({ id: "design", label: "Issues", search: "Search ids and titles", filters: [{ label: "Who", name: "who", options: ["yours", "factory"], value: "yours" }], groups: BROWSE_GROUPS }), "Click a row, press Enter on it, type in the search or press a filter. Starts on Yours.") +
+    spec("inspector", "Inspector", `<aside class="card ins" aria-label="Inspector">${browseRow(BROWSE[0][1][0]).inspect}</aside>`) +
+    spec("row-bars", "Row bars", row(rowBar([{ pct: 50, cls: "c-rule" }, { pct: 30, cls: "c-dir" }, { pct: 10, cls: "c-user" }], "5 rule, 3 director, 1 Chris"), rateBar(0.62, 0.8), rateBar(0.93, 0.8), logMeter(400, 5400, { hi: 86400, label: "p50 6m 40s, p90 1h 30m" })) +
+      runStrip(RUNS, 960, { full: true, label: "3 runs, 16m 00s" }) + legendHtml([["done", "t-land"], ["returned", "t-bad"], ["running", "t-build"]]), "A row bar, two rate bars (below and above the baseline), a log-scale meter, then a run strip.") +
 
     group("Data") +
     spec("metric", "Metric card", tiles("Metric cards",

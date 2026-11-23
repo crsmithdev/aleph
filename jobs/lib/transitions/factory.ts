@@ -20,6 +20,7 @@ import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as Di
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { gates, stallLines } from "../gates/factory-status.ts";
 import { paused } from "../gates/pause.ts";
+import { readModels } from "../routing/models.ts";
 import { sandboxRepos } from "../gates/gpu.ts";
 import { redMains } from "../gates/tables.ts";
 
@@ -55,7 +56,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
  * Returns whether it started the director.
  */
 export function directIfNew(start: () => void = directorDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): boolean {
-  if (paused()) return false;
+  if (paused() || !readModels().director.enabled) return false;
   if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !holdsWork(runs, "director", subjectOfCase(c)))) return false;
   start();
   return true;

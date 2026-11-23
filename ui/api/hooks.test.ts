@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { memory, use } from "../../lib/langfuse.ts";
 import { routes } from "./hooks.ts";
 import { withEnv } from "../server.testkit.ts";
 
@@ -27,7 +28,7 @@ const terminal = { entrypoint: "cli", cwd: "/home/u/repo" }, worker = { entrypoi
 beforeAll(() => {
   setSystemTime(NOW);
   base = mkdtempSync(join(tmpdir(), "aleph-ui-hooks-"));
-  restore = withEnv({ ALEPH_CLAUDE_PROJECTS: base });
+  restore = withEnv({ ALEPH_CLAUDE_PROJECTS: base, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" });
   transcript("-home-u-repo", "s-term", [
     holdBy("verify gate", "Verify gate: The final message cites commit abc123 and no run shows it.", HOUR_AGO, terminal),
     { type: "assistant", timestamp: HOUR_AGO, ...terminal, message: { content: [{ type: "text", text: "I need to correct one claim: the commit is not on main." }] } },
@@ -95,4 +96,14 @@ test("a window that is not hour, day, week or month is a 400", async () => {
 test("a project that holds none of the transcripts has no holds and no errors", async () => {
   const r = await get("GET /api/hooks", {}, "?project=aleph"), one = await get("GET /api/hooks/:event/:name", { event: "Stop", name: "verify gate" }, "?project=aleph");
   expect([r.holds, r.errors, r.hooks.filter((h: any) => h.holds), one.holds]).toEqual([[], [], [], []]);
+});
+
+test("calls are the hooks' Langfuse counts and the verify gate's denials, and with no Langfuse its state", async () => {
+  expect((await get("GET /api/hooks")).calls).toEqual({ langfuse: "off", hooks: [], denials: { total: 0, recent: [] } });
+  const span = (metadata: object, output = "") => ({ id: `s${Math.random()}`, traceId: "t", type: "SPAN", name: "verify-gate", level: "DEFAULT", startTime: HOUR_AGO, metadata, output });
+  use(memory({ traces: [], observations: [span({ verdict: "deny" }, "deny: nothing was run"), span({ verdict: "pass" })] }));
+  try {
+    const { hooks, denials } = (await get("GET /api/hooks")).calls;
+    expect([hooks.map((h: any) => [h.name, h.calls]), denials]).toEqual([[["verify-gate", 2]], { total: 1, recent: [{ at: HOUR_AGO, reason: "nothing was run" }] }]);
+  } finally { use(null); }
 });

@@ -66,8 +66,9 @@ export function cardList(s, d, { performance }) {
 /** The Status scorecard's five cards as HTML. */
 export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
 
-/** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. `link` is `{href}` or `{key, on}`. */
-function usageProps(s, link = { href: "#/factory/agents" }) {
+/** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. */
+function usageProps(s) {
+  const link = { href: "#/factory/agents" };
   const cur = s.usage?.now, off = s.usage?.off, stale = s.usage?.stale;
   if (!cur) return { k: "Usage", v: "–", ...link };
   const gone = weekGone(cur.seven_day_resets_at, s.now);
@@ -75,5 +76,4 @@ function usageProps(s, link = { href: "#/factory/agents" }) {
   const shown = gone === null ? { note: stale ? "stale" : "live" } : { v2: pct(gone), q: ["used", "pace"] };
   return { k: "Usage", v: pct(cur.seven_day), ...shown, title, ...link };
 }
-export const usageCard = (s, link) => statCard(usageProps(s, link));
 

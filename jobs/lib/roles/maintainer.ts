@@ -106,8 +106,12 @@ export interface Pass {
   settle?: (error?: string) => void;
 }
 
-/** Run one maintainer pass under the maintainer lock. The report gets `run`, `error` or `skipped`. */
+/** The `skipped` text of a pass the switch stopped. */
+export const OFF = "the maintainer is off";
+
+/** Run one maintainer pass under the maintainer lock. The report gets `run`, `error` or `skipped`. An off maintainer runs none: the queues of the passes keep their work until it is on. */
 export async function pass(report: { run?: string; error?: string; skipped?: string }, p: Pass): Promise<void> {
+  if (!readModels().maintainer.enabled) { report.skipped = OFF; return; }
   await endLost("maintainer", () => "maintainer", "a reply");
   const release = await lock("maintainer", 0);
   if (!release) { report.skipped = "another maintainer holds the lock"; return; }
@@ -165,5 +169,7 @@ export async function compileDay(root: string, day: string, dry: boolean): Promi
       markRetry(root, day, !!error);
     },
   });
+  // A day the switch skipped is marked as a failed one, so the next pass after the switch is on compiles it again.
+  if (report.skipped === OFF && !dry) markRetry(root, day, true);
   return report;
 }

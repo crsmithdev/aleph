@@ -45,7 +45,7 @@ export function wireScope(root) {
     goQuery({ [e.target.name]: e.target.value });
   });
   const select = ph.querySelector?.('select[name="project"]');
-  if (select) projectKeysOnce().then((keys) => { if (keys.length) select.innerHTML = projectOptions(select.value); });
+  if (select) projectKeysOnce().then((keys) => { if (keys.length) select.innerHTML = projectOptions(select.value, (select.dataset.more ?? "").split(" ").filter(Boolean)); });
 }
 const OPTIONS = FACTORY.map((w) => ({ value: w, label: w[0].toUpperCase() + w.slice(1) }));
 const isWindow = (w) => FACTORY.includes(w);
@@ -66,7 +66,7 @@ export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects").then((r
 });
 /**
  * The options of the Project select: All and aleph, then the other onboarded repos, then the other repos with an open issue,
- * each with its count of open issues, once /api/projects has answered. A project of `more` or `cur` that the registry does not hold goes last, with no count.
+ * each with its count of open issues, once /api/projects has answered. A project of `more` or `cur` goes among the rest, though it has no open issue; one that the registry does not hold goes last, with no count.
  */
 function projectOptions(cur, more = []) {
   const item = (value, label) => `<option value="${esc(value)}"${value === cur ? " selected" : ""}>${esc(label)}</option>`;
@@ -75,7 +75,7 @@ function projectOptions(cur, more = []) {
   const total = keys.reduce((n, k) => n + projects[k].issues, 0);
   const groups = [
     rest.filter((k) => projects[k].onboarded).map(named),
-    [...rest.filter((k) => !projects[k].onboarded && (projects[k].issues > 0 || k === cur)).map(named),
+    [...rest.filter((k) => !projects[k].onboarded && (projects[k].issues > 0 || k === cur || more.includes(k))).map(named),
       ...[...new Set([...more, cur])].filter((k) => k && !projects[k]).sort().map((k) => item(k, k))],
   ].filter((g) => g.length);
   return [item("", keys.length ? `All Projects (${total})` : "All Projects"), ...(projects.aleph ? [named("aleph")] : []), ...groups.map((g) => `<hr>${g.join("")}`)].join("");
@@ -98,7 +98,7 @@ export function scope(q = typeof location === "undefined" ? new URLSearchParams(
     window,
     url: (path) => (project ? `${path}${path.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}` : path),
     bar: (o = {}) => filterBar([
-      { html: `<select name="project" aria-label="Project">${projectOptions(o.project ?? project, o.more)}</select>` },
+      { html: `<select name="project" aria-label="Project"${o.more?.length ? ` data-more="${esc(o.more.join(" "))}"` : ""}>${projectOptions(o.project ?? project, o.more)}</select>` },
       { label: "Window", bare: true, name: o.name ?? "window", value: o.value ?? window, options: o.options ?? OPTIONS },
       ...(o.after ? [{ html: o.after }] : []),
     ]),

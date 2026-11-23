@@ -380,6 +380,16 @@ export const setting = (label, control, { id, hint = "", save = "", attrs = "", 
   const cls = stack ? "srow stack" : "srow";
   return save ? `<form class="${cls}"${attrs}>${body}</form>` : `<div class="${cls}"${attrs}>${body}</div>`;
 };
+const changed = (c) => (c.type === "checkbox" || c.type === "radio" ? c.checked !== c.defaultChecked : c.tagName === "SELECT" ? [...c.options].some((o) => o.selected !== o.defaultSelected) : c.value !== c.defaultValue);
+/** Show Save on each setting row of `root` whose control differs from its saved value, and hide it on the others (CSS: `.srow:not(.dirty)`). The router calls it after each draw, since a morph drops the class. */
+export const markDirty = (root) => {
+  for (const r of root.querySelectorAll(".settings .srow")) r.classList.toggle("dirty", [...r.querySelectorAll(".sctl input, .sctl select, .sctl textarea")].some(changed));
+};
+if (typeof document !== "undefined") {
+  const mark = (e) => { const box = e.target.closest?.(".settings .srow")?.closest(".settings"); if (box) markDirty(box); };
+  document.addEventListener("input", mark);
+  document.addEventListener("change", mark);
+}
 /** The rows of `setting()`, one group under a name. The settings of a page live here, not in table cells. */
 export const settings = (label, rows) => `<div class="settings" role="group" aria-label="${esc(label)}">${rows.join("")}</div>`;
 /** A value and its editor in one place: the container's `.editing` class shows the editor and hides the value. */

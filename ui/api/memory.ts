@@ -52,7 +52,7 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 const misses = (): Promise<Misses | null> => later("memory:misses", ["usage"], runMisses, null);
 /** The vault's notes, or none when it has no VAULT.md, read once until a file in the vault changes or the UI writes: a page
  * that wrote reads its write even when the watcher's event comes after its request. */
-const vaultNotes = async (root: string): Promise<Note[]> => (isVault(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
+export const vaultNotes = async (root: string): Promise<Note[]> => (isVault(root) ? await once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root)) : []);
 /** The output of `aleph memory misses`: each recall that found no note. */
 type Misses = { missed: { at: string; query: string }[] };
 async function runMisses(): Promise<Misses | null> {
@@ -88,7 +88,7 @@ function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: stri
  * the start context with its newline; `kept` is false for the lines startContext() cut, the oldest. `memory` is the
  * bytes of MEMORY.md as sent.
  */
-function start(root: string, all: Note[]) {
+export function start(root: string, all: Note[]) {
   const memory = Buffer.byteLength(all.find((n) => n.rel === "MEMORY.md")?.text.trim() ?? "");
   return Object.fromEntries(["aleph", "global"].map((scope) => {
     const { text, cut } = startContext(root, all, scope);
@@ -96,6 +96,13 @@ function start(root: string, all: Note[]) {
     const core = notes.map((n, i) => ({ title: n.title, core: String(n.fm.core).trim(), scope: scopeOf(n), bytes: Buffer.byteLength(`- ${String(n.fm.core).trim()} [[${n.title}]]\n`), kept: i < keep }));
     return [scope, { core, bytes: Buffer.byteLength(text), budget: START_BUDGET, cut, memory }];
   }));
+}
+
+/** The vault's lint findings: the refusals and the warnings, with the dates that read relative. */
+export function lintOf(root: string, all: Note[]) {
+  const lint = lintVault(all, { tracked: trackedFiles(root, "wiki") });
+  lint.warn.push(...relativeDates(all));
+  return lint;
 }
 
 async function overview(url: URL): Promise<Response> {
@@ -106,8 +113,7 @@ async function overview(url: URL): Promise<Response> {
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
-  const lint = lintVault(all, { tracked: trackedFiles(root, "wiki") });
-  lint.warn.push(...relativeDates(all));
+  const lint = lintOf(root, all);
   const mine = (f: { note: string }) => !project || names.has(f.note);
   const body: Record<string, unknown> = {
     project,

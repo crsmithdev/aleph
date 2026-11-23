@@ -5,11 +5,12 @@ import { join } from "node:path";
 import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts";
 import { monitorPanel, reportFile, reportLine, type Report } from "../learning/monitor-table.ts";
 import { allRuns } from "../records/record.ts";
+import { setModel } from "../routing/models.ts";
 import { setPaused } from "../gates/pause.ts";
 import { setTick, tickRows } from "../gates/tables.ts";
 import { writeMonitorHour } from "../infra/settings.ts";
 
-const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "ALEPH_MONITOR", "FAKE_DIR"] as const;
+const KEYS = ["ALEPH_DB", "ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_ITEMS", "ALEPH_VAULT", "ALEPH_MONITOR_CMD", "FAKE_DIR"] as const;
 const GIT = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base = "", saved: Record<string, string | undefined> = {};
 
@@ -32,7 +33,6 @@ beforeEach(() => {
     ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_JOBS_DIR: join(base, "runs"), ALEPH_DB: join(base, "aleph.db"),
     ALEPH_ITEMS: join(base, "issues"), ALEPH_VAULT: join(base, "vault"), ALEPH_MONITOR_CMD: join(base, "fake"), FAKE_DIR: base,
   });
-  delete process.env.ALEPH_MONITOR;
 });
 
 afterEach(() => {
@@ -98,8 +98,8 @@ test("a reader that fails leaves a report with the table and the error, and the 
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader: exited 1: no output");
 });
 
-test("ALEPH_MONITOR=off keeps the tick's step from running", async () => {
-  process.env.ALEPH_MONITOR = "off";
+test("a monitor switched off keeps the tick's step from running", async () => {
+  setModel("monitor", { enabled: false });
   expect(await monitorStep(now)).toBeNull();
   expect(allRuns()).toHaveLength(0);
 });

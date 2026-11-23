@@ -83,3 +83,10 @@ test("a run with no reply ends with the failure as its reason and writes no resu
   const [inv] = investigations("issue.1");
   expect([inv.state, inv.result]).toEqual(["done", undefined]);
 });
+
+test("an off investigator opens no run and says so", async () => {
+  fresh([{ title: "Refuse a core write" }]);
+  setModel("investigator", { enabled: false });
+  await expect(investigate("issue.1")).rejects.toThrow("the investigator is off");
+  expect(runs()).toHaveLength(0);
+});

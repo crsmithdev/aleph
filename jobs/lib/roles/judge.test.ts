@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { judge } from "./judge.ts";
+import { setModel } from "../routing/models.ts";
 import { judgeChoice, setJudgeChoice } from "../../../lib/jev.ts";
 
 let dir: string;
@@ -87,4 +88,14 @@ test("a judge that outlasts its budget returns no verdict and tries claude once"
     expect(r.ms).toBeLessThan(2000);
     expect(readFileSync(join(dir, "runs"), "utf8")).toBe("x\n");
   } finally { process.env.ALEPH_JUDGE_CMD = saved; }
+});
+
+test("an off judge gives no verdict, asks neither Jev nor Haiku, and so passes the Stop gate", async () => {
+  setModel("judge", { enabled: false });
+  try {
+    reply = jev(0.3);
+    expect(await judge("TURN: EDIT a.ts\nFINAL MESSAGE: tests pass", "tests pass")).toEqual({ verdict: null, error: "the judge is off", ms: 0 });
+    expect(asked).toEqual([]);
+    expect(existsSync(join(dir, "haiku-ran"))).toBe(false);
+  } finally { setModel("judge", { enabled: true }); }
 });

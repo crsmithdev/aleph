@@ -57,10 +57,12 @@ test("a day axis labels the first point of each day, and a frame of one row per 
   expect(axis(time)).toEqual(["Oct 27", "Oct 28"]);
 });
 
-test("the panel has a form control for its group, or the empty line under its title", () => {
+test("the panel has one form menu for its group, or the empty line under its title", () => {
   const h = panel(time, "lines");
-  expect(h.match(/data-form="(\w+)"/g)).toEqual(FORMS.time.map((x: any) => `data-form="${x.key}"`));
-  expect(h).toContain('data-form="lines" aria-label="Lines" title="Lines" aria-pressed="true"');
+  expect(h.match(/<select /g)).toHaveLength(1);
+  expect(h.match(/<option value="(\w+)"/g)).toEqual(FORMS.time.map((x: any) => `<option value="${x.key}"`));
+  expect(h).toContain('<option value="lines" selected>Lines</option>');
+  expect(h).not.toContain("aria-pressed");
   const none = panel({ ...time, rows: [] }, "area");
   expect(none).toContain("<h2>Agents Live by Role</h2>");
   expect(none).toContain('<div class="empty"><p>No data</p></div>');

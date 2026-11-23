@@ -40,6 +40,8 @@ test("POST /api/models writes an entry's model or enable to the models setting",
   expect(getJson<any>("settings", "models", {}).review).toEqual({ enabled: true, model: "gpt-oss-20b" });
   expect(((await post({ name: "review", model: "haiku" }).then((r) => r.json())) as any).models.review.model).toBe("haiku");
   expect(((await post({ name: "small", enabled: false }).then((r) => r.json())) as any).models.small).toEqual({ enabled: false, model: "haiku" });
+  expect(((await post({ name: "director", enabled: false }).then((r) => r.json())) as any).models.director.enabled).toBe(false);
+  expect(((await post({ name: "director", enabled: true }).then((r) => r.json())) as any).models.director.enabled).toBe(true);
 });
 
 test("a missing header gives 403; a bad name, a model the entry does not offer, and gpt-oss-20b while /health is down give 422; the models setting stays", async () => {
@@ -50,7 +52,7 @@ test("a missing header gives 403; a bad name, a model the entry does not offer, 
   expect((await post({ name: "merge", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "intake", model: "nonexistent" })).status).toBe(422);
   expect((await post({ name: "small", model: "sonnet" })).status).toBe(422);
-  expect((await post({ name: "judge", enabled: false })).status).toBe(422);
+  expect((await post({ name: "review", enabled: false })).status).toBe(422);
   healthy = false;
   expect((await post({ name: "judge", model: "gpt-oss-20b" })).status).toBe(422);
   expect(getJson("settings", "models", {})).toEqual(kept);
