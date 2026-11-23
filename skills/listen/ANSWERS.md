@@ -32,3 +32,14 @@ The note lives in a scope file. In the commands below, `<scope>` is `<item-id>` 
 5. **Resolve** with `shelf note resolve <scope> <note-id>`.
 
 Done when the commit is on main, its body names the note and the send, and the note is resolved.
+
+## Questions
+
+A question is a send whose second line is `ask: <question>`, then the note as Markdown with its `- id:`. The user
+asked it in the note editor, which shows the thread and waits for your reply.
+
+1. Read what the question needs: the note, its replies, the code it names. Change nothing.
+2. Reply with `shelf note reply <scope> <note-id> "<answer>"`, in at most three short sentences. When the answer is
+   a change, reply `proposal: <the change>` instead: the editor shows Approve and Discard on it, and each comes back
+   as an answer.
+3. Go back to `wait`. A question gets no commit, and the note stays open.
