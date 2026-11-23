@@ -515,7 +515,7 @@ async function dispatch(e) {
     await postJson(b.dataset.path, body);
     if (box?.dataset.id) keepReason(box.dataset.repo, box.dataset.id, "");
   } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
-  const row = b.closest("article.issue-row");
+  const row = b.closest("article.issue-row, article.alert");
   if (row?.dataset.ask) record(row.dataset.ask);
   row?.remove();
   page.reload();

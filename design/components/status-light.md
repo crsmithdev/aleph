@@ -4,7 +4,7 @@ A status light shows whether one thing is up: a dot and a word.
 
 - Use: for the state of a service or a backend, inside a metric card or a row.
 - Not for: the state of a job or an issue; use a badge.
-- Not for: a log row; use a feed row.
+- Not for: a log row; use a table row.
 
 ## Helper
 

@@ -1,8 +1,5 @@
 import { setCodes } from "../../../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
-// @ts-ignore now.js is plain JS, shared with the page
-import { renderHerald } from "../now.js";
-import { heraldOf, row, withFactory } from "../../now.testkit.ts";
 // @ts-ignore the module is plain JS, shared with the page
 import { scope } from "./address.js";
 // @ts-ignore the module is plain JS, shared with the page
@@ -93,23 +90,6 @@ test("recordState and restoreState bring back open details, a shown diff and typ
   expect(after.details[1].querySelectorAll()[0].value).toBe("typed");
   expect(after.panels[0].hidden).toBe(false);
   expect(after.panels[0].innerHTML).toBe("<pre>+x</pre>");
-});
-
-test("a Herald group open before a newer event for its subject is open after it, and no localStorage key is written", () => {
-  const g = globalThis as any, writes: string[] = [];
-  g.localStorage = { getItem: () => null, setItem: (k: string) => void writes.push(k) };
-  const ev = (at: string, n: number) => (row({ at, by: "gate", subject: "aleph-77", action: "done", on: [`aleph-77#${n}`] }));
-  const herald = (events: any[]) => renderHerald({ ...withFactory({}), now: "2026-11-09T12:00:00Z", asks: [], errored: [], herald: heraldOf(events) });
-  const old = [ev("2026-11-10T10:00:00Z", 1), ev("2026-11-10T10:01:00Z", 2)];
-  const before = fakeRoot(herald(old));
-  before.details[0].open = true;
-  const state = recordState(before);
-  const after = fakeRoot(herald([...old, ev("2026-11-10T11:00:00Z", 3)]));
-  expect(after.details[0].summary.textContent).not.toBe(before.details[0].summary.textContent);
-  restoreState(after, state);
-  expect(after.details[0].open).toBe(true);
-  expect(writes).toEqual([]);
-  delete g.localStorage;
 });
 
 test("restoreState ignores state for elements the new HTML no longer has", () => {

@@ -57,7 +57,7 @@ test("the @container exception of the breakpoint-literal rule lists exactly the 
   expect(widths(row)).toEqual([420, 560]);
 });
 
-test("the ask dot, the prose, a selected row, a warn button, an indented list, a tile's second figure and a Herald row take their look from the tokens", () => {
+test("the ask dot, the prose, a selected row, a warn button, an indented list and a tile's second figure take their look from the tokens", () => {
   const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   // The declarations of each rule whose selector list names `sel`, the last one winning.
   const rule = (sel: string) => Object.fromEntries([...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => m[1].split(",").map((s) => s.trim()).includes(sel))
@@ -77,7 +77,6 @@ test("the ask dot, the prose, a selected row, a warn button, an indented list, a
     [".chat .msg ul", "padding-left", "var(--indent-list)"],
     [".chat .msg ol", "padding-left", "var(--indent-list)"],
     [".tile b em", "font", "var(--fw-strong) .62em/1 var(--metric)"],
-    [".event-row", "border-left", "3px solid var(--stripe, var(--rule))"],
   ];
   expect(looks.map(([sel, prop]) => [sel, prop, rule(sel)[prop]])).toEqual(looks);
   expect(css.match(/:root\s*\{[^}]*\}/)![0]).toContain("--indent-list: 18px;");

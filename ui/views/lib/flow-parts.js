@@ -1,7 +1,7 @@
 // What the Status pages share: formats, the /api/flow load, tiles and the Usage card.
 import { get } from "./router.js";
 import { scope } from "./address.js";
-import { cardPct, count, xLabel, day, dur, hourLabel, pct, plural, when } from "./format.js";
+import { cardPct, count, xLabel, day, dur, hourLabel, hours, pct, plural, when } from "./format.js";
 import { cardTrend, statCard } from "./html.js";
 import { BUCKETS } from "../../../lib/windows.ts";
 
@@ -48,23 +48,30 @@ export function windowTrend(d, figure, value, o) {
   return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
-/** The props of the five cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow for the window with `baseline`, or null while it loads. */
-export function cardList(s, d, { performance }) {
+/**
+ * The props of the cards of the Status scorecard: the page draws each as a `statCard`, herdr as a line. `d` is /api/flow
+ * for the window with `baseline`, or null while it loads. `memory` is /api/memory, null while it loads; with none, as
+ * herdr reads none, there is no Memory card.
+ */
+export function cardList(s, d, { memory } = {}) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? d.figures : null, loading = !d, failed = d?.error ?? "";
-  const issues = new Set(s.errored.filter((j) => j.item).map((j) => `${j.repo}/${j.item.id}`)); // the issues with an errored job
-  const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
-  const eff = (lost) => (lost == null ? null : 1 - lost), ended = f ? (f.landed ?? 0) + f.dropped : 0; // ended: the issues landed or dropped
+  const running = new Set(s.running.filter((j) => j.item).map((j) => `${j.repo}/${j.item.id}`)); // the issues with a live job
+  const eff = (lost) => (lost == null ? null : 1 - lost);
+  const start = memory?.start?.aleph;
   return [
-    { k: "Efficiency", loading, failed, ...(f ? { v: cardPct(eff(f.lost)), v2: cardPct(ended ? (f.landed ?? 0) / ended : null) } : {}), q: ["efficient", "landed"], trend: f && base ? cardTrend(eff(f.lost), eff(base.lost), eff(prev?.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) : "" },
-    { k: "Completion", loading, failed, ...(f ? { v: cardDur(f.leadP50), v2: cardDur(f.leadP90) } : {}), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance },
-    { k: "Issues", loading, failed, ...(f ? { v: count(d.open?.open), v2: [count(f.landed), count(issues.size)] } : {}), q: ["active", "landed", "errored"] },
-    { k: "Jobs", v: count(s.factory.liveRuns), v2: [count(s.queued.length), count(s.errored.length)], q: ["running", "queued", "error"], href: "#/factory/jobs" },
+    { k: "Working", v: count(running.size), v2: [count(waitingOf(s).length), count(s.errored.length)], q: ["running", "waiting", "error"], href: "#motion" },
+    { k: "Efficiency", loading, failed, ...(f ? { v: cardPct(eff(f.lost)), v2: hours(f.hours) } : {}), q: ["efficient", "lost"], href: "#efficiency", trend: f && base ? cardTrend(eff(f.lost), eff(base.lost), eff(prev?.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) : "" },
+    { k: "Lead Time", loading, failed, ...(f ? { v: cardDur(f.leadP50), v2: cardDur(f.leadP90) } : {}), q: ["p50", "p90"], href: "#flow", trend: f && base ? cardTrend(f.leadP50, base.leadP50, prev?.leadP50, { basis, kind: "relative", lowerIsGood: true, format: cardDur }) : "" },
     usageProps(s),
+    ...(memory === undefined ? [] : [{ k: "Memory", loading: memory === null, failed: memory?.error ?? "", ...(start ? { v: pct((start.bytes / start.budget) * 100) } : {}), note: "start context", href: "#memory" }]),
   ];
 }
-/** The Status scorecard's five cards as HTML. */
-export const statusCards = (s, d, links) => cardList(s, d, links).map((c) => statCard(c)).join("");
+/** The Status scorecard's cards as HTML. */
+export const statusCards = (s, d, o) => cardList(s, d, o).map((c) => statCard(c)).join("");
+
+/** The queued issues that wait: every one but those whose own job is open, which run or are in error. */
+export const waitingOf = (s) => s.queued.filter((q) => q.kind !== "job");
 
 /** The props of the Usage card: the 7-day value over the week gone as its pace, or a note with no reset time. */
 function usageProps(s) {

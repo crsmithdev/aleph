@@ -4,7 +4,7 @@ import { setCodes } from "../../lib/naming.ts";
 import * as view from "./now.js";
 import { attend } from "../asks.ts";
 import { held, job, state } from "../fixtures/status-state.ts";
-import { asksOf, heraldOf, issue, row, withAttn, withFactory } from "../now.testkit.ts";
+import { asksOf, issue, withAttn, withFactory } from "../now.testkit.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { pageHead } from "./lib/html.js";
 import { labelOf, verdict } from "../../lib/status-words.ts";
@@ -61,7 +61,7 @@ test("the page and the status sentence show a health line's issue id in its shor
 test("errored and failed jobs are one alert that links to their cards", () => {
   const errored = [job({ name: "aleph-1", state: "failed" }), job({ name: "aleph-2", state: "failed" })];
   const h = view.renderLede({ ...calmState, errored });
-  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-error">Jobs are unhealthy</a>.</span>');
+  expect(h).toBe('<span class="say error">Alert: <a href="#problems">Jobs are unhealthy</a>.</span>');
 });
 
 test("a red main or CI of a repo other than aleph is a warning, not an alert", () => {
@@ -85,11 +85,11 @@ test("the sentence says at most three parts, the most serious first", () => {
 test("what asks for you leads the status sentence, in the warning colour", () => {
   const asks = (n: number) => ({ asks: Array.from({ length: n }, () => ({})) });
   const raw = (top: object, o: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } });
-  expect(raw(asks(1))).toBe('<span class="say warning"><a href="#awaiting">Attention is needed</a>.</span>');
+  expect(raw(asks(1))).toBe('<span class="say warning"><a href="#problems">Attention is needed</a>.</span>');
   expect(raw(asks(1))).not.toMatch(/\byour?\b/i);
   expect(raw(asks(2))).toBe(raw(asks(1)));
   expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is fine.</span>');
-  expect(raw(asks(1), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">The build is failing on main</a>; <a href="#awaiting">attention is needed</a>.');
+  expect(raw(asks(1), { health: [mainRed] })).toContain('say error">Alert: <a href="#problems">The build is failing on main</a>; <a href="#problems">attention is needed</a>.');
 });
 
 test("a paused factory does not say everything is fine", () => {
@@ -113,8 +113,8 @@ test("a full suite over its budget is a warning part, not an alert and not a car
   expect(said({ health: [slow] })).toBe("Everything is fine; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [slow] } })).toContain('class="say warning"');
   expect(said({ health: [mainRed, slow] })).toBe("Alert: The build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
-  // The one error card is the fixture's failed job: the warning adds none.
-  expect(view.view.render(withFactory({ health: [slow] })).match(/data-kind="error"/g)).toHaveLength(1);
+  // The one Error alert is the fixture's failed job: the warning adds none.
+  expect(view.renderProblems(withFactory({ health: [slow] })).match(/ask-kind">Error:/g)).toHaveLength(1);
 });
 
 test("the page has no banner and the status line holds the alert", () => {
@@ -195,12 +195,12 @@ test("a dead factory tick says the alert, in red", () => {
   expect(said({ paused: true, nextTick: null })).toBe("Alert: The factory tick has stopped; the factory is paused.");
 });
 
-test("the status-line links point at anchors in the rendered Alerts section", () => {
+test("the status-line links point at the Problems card", () => {
   const errored = [job({ name: "aleph-1", state: "failed" })];
   const lede = view.renderLede({ ...calmState, errored, asks: [{}] });
   const alerts = withAttn({ ...calmState, errored, asks: [{ id: "a1", at: "2026-11-01T00:00:00Z", text: "x" }] });
   const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
-  expect(ids).toContain("jobs-error");
+  expect(ids).toContain("problems");
   for (const id of ids) expect(alerts).toContain(`id="${id}"`);
 });
 
@@ -210,39 +210,4 @@ test("one mapping gives each status sentence its Herald label, on the page too",
   expect(labelOf("alert", "Alert: The build is failing on main")).toBe("Alert");
   expect(labelOf("fine", "Everything is fine")).toBe("Fine");
   expect(verdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
-});
-
-const at = (m: number) => `2026-10-27T17:${String(m).padStart(2, "0")}:00Z`;
-/** The state at minute `m` with a live tick, so its own status is the fine one or the paused one, and the Herald rows of `events`. */
-const at_ = (m: number, paused = false, events: object[] = []) => ({ ...calmState, now: at(m), factory: { ...calmState.factory, nextTick: "2026-10-27T18:59:00Z", paused }, herald: heraldOf(events) });
-/** A status event at minute `m` with its detail `<tone>: <text>`. */
-const status = (m: number, detail: string) => row({ at: at(m), by: "gate", subject: "status", action: "status", note: detail });
-/** The text of each status row of the feed. */
-const statusRows = (h: string) => [...h.matchAll(/<div data-key="status[^"]*"[^]*?class="event-title" title="([^"]*)"/g)].map((m) => m[1]);
-
-test("a status text change after the first render draws no status-only row; a status event in the stream's rows draws one row with its text", () => {
-  const paused = "The factory is paused.";
-  view.renderHerald(at_(10));
-  expect(view.renderHerald(at_(20, true))).not.toContain('data-key="status');
-  expect(statusRows(view.renderHerald(at_(20, true, [status(15, `warning: ${paused}`)])))).toEqual([paused]);
-});
-
-test("a kept word filters the Herald's event rows, keeps the running rows, and puts its chip in the aside", () => {
-  const ev = (n: number, word: string) => ({ key: `row ${n}`, at: at(n), by: "gate", word, id: [], text: [`row ${n}`], more: 0, lines: [] });
-  const s = { ...at_(30, true), runningIssues: [{ id: "aleph-3", title: "Three", stage: "implement", at: at(2) }], running: [] };
-  s.herald.rows = [ev(21, "landed"), ev(22, "failed"), ev(23, "landed")];
-  const store: Record<string, string> = {};
-  (globalThis as any).localStorage = { getItem: (k: string) => store[k] ?? null, setItem: (k: string, x: string) => { store[k] = x; } };
-  try {
-    const all = view.renderHerald(s);
-    expect(all.match(/data-key="row/g)).toHaveLength(3);
-    expect(all).not.toContain("ref-x");
-    store["aleph.herald.word"] = JSON.stringify("landed");
-    const h = view.renderHerald(s);
-    expect([...h.matchAll(/data-key="(row \d+)"/g)].map((m) => m[1])).toEqual(["row 23", "row 21"]);
-    expect(h).toContain('data-job="aleph-3"');
-    expect(h.match(/<span class="aside">([^]*?)<\/span><\/div>/)![1]).toMatch(/landed <button type="button" class="ref-x" aria-label="Clear">×<\/button>/);
-  } finally {
-    delete (globalThis as any).localStorage;
-  }
 });

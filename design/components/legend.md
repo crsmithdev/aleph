@@ -9,7 +9,7 @@ A legend gives the colour of each series in a chart that is not a chart panel.
 
 | Helper | Reference |
 |---|---|
-| `legendHtml([[label, cls, attrs]])` | `ui/views/lib/timeline.js`; `renderPipeline()` in `ui/views/now.js` |
+| `legendHtml([[label, cls]])` | `ui/views/lib/timeline.js`; `renderEfficiency()` in `ui/views/now.js` |
 
 ## Parts
 
@@ -21,7 +21,6 @@ A legend gives the colour of each series in a chart that is not a chart panel.
 ## Rules
 
 - Set `cls` to a timeline class: `t-build`, `t-bad`, `t-land`, `t-aux`, `t-wait`, `t-chris`, `t-made` or `t-done`; to an outcome class, `seg-landed` to `seg-dropped`; or, under a bare chart with no legend of its own, to the `c-*` class of each key's colour. With no `cls`, the item has no swatch.
-- Give `attrs` to make an item a button, such as `data-inspect` for the Herald's Inspector. The item underlines on hover.
 - Put the legend in the aside of the panel that holds the chart, or under a bare chart.
 
 ## Do and don't

@@ -98,10 +98,10 @@ export function verdict(s: Facts, stale = false): Verdict {
   if (s.errored.length) alerts.add(JOBS_UNHEALTHY);
   // Last, so it sorts after the factory's alerts.
   if (s.flow?.error) alerts.add(FLOW_FAILED);
-  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === JOBS_UNHEALTHY ? "#jobs-error" : t === FLOW_FAILED ? "" : "#awaiting" }));
+  const said: Part[] = [...alerts].sort((a, b) => rank(a) - rank(b)).map((t) => ({ text: t, href: t === FLOW_FAILED ? "" : "#problems" }));
   // An Ask still with the director does not need the user yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
-  if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#awaiting" });
+  if (asks.length) said.push({ text: alerts.size || f.paused || stale ? ASK : lead(ASK), href: "#problems" });
   if (f.paused && alerts.size) said.push({ text: PAUSED, href: "" });
   // The words of the Automation page (ui/views/gates.js).
   if (f.backend) said.push({ text: `waiting for ${f.backend.via}: ${f.backend.why}`, href: "" });

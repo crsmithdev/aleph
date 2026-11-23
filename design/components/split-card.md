@@ -9,7 +9,7 @@ A split card puts a main part and a side part in one card, split 3 : 1 by a rule
 
 | Helper | Reference |
 |---|---|
-| `splitCard(title, main, side, { aside, id, label })`; `sideStats([{ k, v, note, state, title }])` | `renderPipeline()` in `ui/views/now.js` |
+| `splitCard(title, main, side, { aside, id, label })`; `sideStats([{ k, v, note, state, title }])` | `renderMemory()` in `ui/views/now.js` |
 
 ## Parts
 

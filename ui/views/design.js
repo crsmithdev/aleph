@@ -5,12 +5,12 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { freshness, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { freshness, iconHead, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
-import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
-import { askCard } from "./lib/ask-cards.js";
-import { eventRow, findingsList } from "./lib/feed.js";
+import { detailPanel, panel, renderKpis, renderLanes, renderTimeline } from "./lib/timeline.js";
+import { alertCard, askAlert, askCard } from "./lib/ask-cards.js";
+import { findingsList } from "./lib/feed.js";
 import { needs } from "./lib/memory-health.js";
 import { attention, factsLine, figureBand, viewTabs } from "./lib/page.js";
 import { browse, inspector } from "./lib/browse.js";
@@ -126,11 +126,6 @@ const ASK = {
   situation: "Two tables show a day with no time two ways: Oct 28 and 10/28.",
   actions: [{ label: "Oct 28", act: "design", path: "/api/design-act", primary: true }, { label: "10/28", act: "design", path: "/api/design-act" }, { label: "Deny", act: "design", path: "/api/design-act", input: { name: "reason" } }],
 };
-const FEED = [
-  { key: "design 1", at: "2026-11-10T16:58:00Z", by: "job.1", word: "landed", id: [{ id: "i1700", to: "#/design" }], text: ["Show the time of a day with no time"], more: 0, lines: [] },
-  { key: "design 2", at: "2026-11-10T16:40:00Z", by: "job.2", word: "returned", id: [{ id: "i1701", to: "#/design" }], text: ["checks failed"], more: 0, lines: [] },
-];
-
 const BROWSE = [["Today", [["a1706", "Show the cost of each run on its job page", "landed", 4.12, "3h ago", "yours"], ["a1705", "Fail CI on a new hard-coded colour in ui/", "running", 1.37, "1h ago", "factory"]]],
   ["Earlier", [["a1700", "Give each component in design.md a live render, a title long enough to be cut at the end of the line", "landed", 9.1, "2d ago", "yours"], ["a1699", "Show the p90 on the flow chart", "landed", 2.2, "3d ago", "yours"], ["a1698", "Move the sidebar dock", "landed", 1.4, "4d ago", "yours"]]]];
 const browseRow = ([id, title, state, cost, ago, who]) => ({
@@ -229,6 +224,7 @@ function renderDesign(d) {
     spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: fold button, id, title, state, priority, project, labels, numbers, then time.") +
     spec("row-cell", "Row and cell", dataTable(heads(["Role", "Title", "Runs"], ["Runs"]), trow([cell("Worker"), cell("A title that takes the spare width, with its text as its title", { wide: true }), cell("1,234", { num: true })]) +
       trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
+    spec("table-icon", "Table, icon heads", dataTable(iconHead("clock", "Time") + heads(["Event", "Issue"]) + iconHead("stopwatch", "Took"), `<tr><td class="time lead">16:58</td><td>landed</td><td>${idLink("a1700", "#/design")}</td><td class="num">${dur(574)}</td></tr>`, { fit: true }), "", "table") +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty(), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("design/time", FRAMES.time)}${panelOf("design/category", FRAMES.category)}${panelOf("design/cost", FRAMES.cost)}</div>`,
@@ -237,17 +233,19 @@ function renderDesign(d) {
     spec("meter", "Meter", row(meter(64, "64%"), meter([{ pct: 50, cls: "c-use" }, { pct: 20 }], "50% and 20%"), meter(30, "30% with a mark at 70%", { mark: 70 })) +
       barList(barRow("Worker", 80, money(31.2), { top: true }) + barRow("Triage", 35, money(13.65)) + barRow("Reviewer", 12, money(4.7)))) +
     spec("legend", "Legend", legendHtml([["build", "t-build"], ["bad", "t-bad"], ["land", "t-land"], ["wait", "t-wait"], ["awaiting the user", "t-chris"]]) +
-      legendHtml([["landed 35h", "seg-landed", 'data-inspect="class" data-target="landed"'], ["reran 20h", "seg-reran", 'data-inspect="class" data-target="reran"']])) +
+      legendHtml([["landed 35h", "seg-landed"], ["reran 20h", "seg-reran"]])) +
     spec("split-card", "Split card", splitCard("Pipeline", dataTable(heads(["Stage", "Runs", "p90"], ["Runs", "p90"]), `<tr><td>Intake</td><td class="num">256</td><td class="num">2m 00s</td></tr><tr><td>Land</td><td class="num">314</td><td class="num">3m 26s</td></tr>`, { fit: true }),
-      sideStats([{ k: "Filed", v: count(540) }, { k: "Landed", v: count(295), state: "landed" }, { k: "Open", v: count(12), note: "+6", title: "12 open issues, 6 parked issues" }, { k: "Errored", v: count(1), note: "now", state: "failed" }]), { aside: legendHtml([["landed 35h", "seg-landed"], ["reran 20h", "seg-reran"]]) }) +
+      sideStats([{ k: "Filed", v: count(540) }, { k: "Landed", v: count(295), state: "landed" }, { k: "Open", v: count(12), note: "+6", title: "12 open issues, 6 parked issues" }, { k: "Errored", v: count(1), note: "now", state: "failed" }])) +
       splitCard("Issues", panelOf("design/bare", FRAMES.time, "", { bare: true }), subHead("Median Time by Phase") + panelOf("design/capped", FRAMES.capped, "", { bare: true }) +
         legendHtml([["Intake", "c-s6"], ["Queue", "c-s4"], ["Implement", "c-run"], ["Land", "c-done"]])),
       "Side stats on the right of one; a bare chart on each side of the other, the right one capped at 30 minutes.") +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
+    spec("lanes", "Lanes", card("Issues in Motion", renderLanes(TIMELINE[0].rows, H(8, 10), H(9, 30))), "On a linear axis, from the first run to now, inside a card.") +
 
     group("Lists of items") +
     spec("ask", "Ask card", askCard(ASK, NOW)) +
-    spec("feed", "Feed row", FEED.map(eventRow).join("")) +
+    spec("ask-alert", "Ask card, alert", `<div class="alerts">${askAlert(ASK, NOW)}${alertCard({ card: "unstick", kind: "Alert", title: "The factory tick has stopped" })}${alertCard({ card: "need", kind: "Memory", title: "aleph start context", detail: "5,800 / 6,000 B", side: "97%" })}</div>`,
+      "An Ask, a factory alert and a memory alert, as the Problems card shows them.", "ask-card") +
     spec("findings", "Findings list", findingsList(["Two jobs ran over the cap at `09:12`.", "No check failed."])) +
     spec("needs", "Needs-you strip", needs(NEEDS)) +
 

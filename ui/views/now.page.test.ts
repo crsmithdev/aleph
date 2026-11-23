@@ -5,211 +5,167 @@ import * as view from "./now.js";
 import { empty, error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
-import { full, heraldOf, row, section } from "../now.testkit.ts";
+import { full } from "../now.testkit.ts";
 
 afterEach(() => setCodes({}));
 
+const NOW = "2026-11-01T08:00:00Z";
 const WEEK = {
-  window: "week", done: 7, kinds: { land: { count: 9 } },
-  phases: { lead: { count: 7, p50: 1570, p90: 16560, hist: [], worst: 20000 } },
-  buckets: [{ at: "2026-10-27T00:00:00", lead: 1000 }, { at: "2026-10-28T00:00:00", lead: null }],
-  issues: { landed: 7, firstPass: 0.91, fixRounds: 0 }, lost: { hours: 6, share: 0.38 },
+  window: "week", done: 7,
+  phases: { intake: { count: 3, p50: 60, p90: 120 }, queue: { count: 4, p50: 300, p90: 900 }, implement: { count: 7, p50: 600, p90: 1800 }, land: { count: 7, p50: 30, p90: 90 } },
+  buckets: [{ at: "2026-10-31T00:00:00Z" }, { at: "2026-11-01T00:00:00Z" }],
+  times: [{ filed: "2026-10-31T01:00:00Z", lead: 3600, outcome: "landed" }, { filed: "2026-10-31T23:00:00Z", lead: 7200, outcome: "landed" }, { filed: "2026-10-31T02:00:00Z", lead: 60, outcome: "dropped" }],
+  issues: { landed: 7, firstPass: 0.91 },
   classes: [
-    { key: "landed", lost: false, hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "returned", lost: false, hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
-    { key: "failed", lost: true, hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
-    { key: "reran", lost: true, hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
+    { key: "landed", lost: false, hours: 8, causes: [{ name: "First run", hours: 8 }] },
+    { key: "failed", lost: true, hours: 2, causes: [{ name: "Issue had landed", hours: 2 }] },
+    { key: "reran", lost: true, hours: 4, causes: [{ name: "Issue had landed", hours: 1 }, { name: "No commit", hours: 3 }] },
     { key: "dropped", lost: true, hours: 0, causes: [] },
   ],
-  figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, asks: null, landed: 7, dropped: 3 },
-  filed: { followups: 5, all: 12 }, dropped: 3, open: { open: 4, parked: 2 }, failures: [],
+  stages: { rows: [{ stage: "build", runs: 20, unusable: 4, items: 9 }, { stage: "land", runs: 9, unusable: 1, items: 9 }, { stage: "monitor", runs: 3, unusable: 3, items: 0 }] },
+  figures: { lost: 0.38, hours: 6, kept: 10, leadP50: 1570, leadP90: 16560, landed: 7, dropped: 3, filed: 12 },
+  open: { open: 4, parked: 2 }, asks: { count: 5, manual: 2 },
 };
-
-const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, dropped: 1 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, dropped: 1 }, basis: "the previous 7 days" };
-const withBase = (d: any, asks = { count: 4, manual: 1 }) => ({ ...d, asks, figures: { ...d.figures, asks: asks.count }, baseline: BASE });
-
+const BASE = { prev: { lost: 0.3, leadP50: 1200 }, base: { lost: 0.25, leadP50: 1200 }, basis: "the previous 7 days" };
 const USAGE = { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
+const notes = [{ read: NOW, history: [...Array(29).fill(0), 3] }, { read: null, history: Array(30).fill(0) }];
+const MEMORY = { total: 2, notes, start: { aleph: { bytes: 3000, budget: 6000, core: ["a", "b"] } }, lint: { refuse: [], warn: [] }, misses: { unoffered_reads: 4 }, processes: { decay: { stale: [{ note: "N", over: 31 }] } } };
+const LOG = { total: 51, rows: [{ seq: 9, at: NOW, action: "landed", issue: { id: "a5", to: "#/issues/aleph/5" }, job: { id: "j7", to: "#/jobs/j7" }, title: "Fix it", by: "land", took: 65 }] };
 
-test("a card has no trend without a baseline or with a zero baseline of a count", () => {
-  const h = view.renderTiles({ ...state, usage: USAGE }, WEEK, "week");
-  expect(h).not.toContain('class="tr');
-  const z = view.renderTiles({ ...state, usage: USAGE }, { ...withBase(WEEK), baseline: { ...BASE, base: { ...BASE.base, landed: 0 } } }, "week");
-  expect(z).not.toContain("Previous 5;");
-});
-
-test("the scorecard before the data arrives: a spinner in the three flow cards, a count in Jobs, a dash for usage with no usage", () => {
-  const h = view.renderTiles({ ...state, usage: undefined }, null);
-  expect(h.match(/<i class="spin" role="status"/g)?.length).toBe(3);
-  expect(h.match(/<b>–/g)?.length).toBe(1);
-  expect(h).not.toContain('class="tr');
-});
-
-test("the Jobs card shows live runs, queued and errored with no trend, and there is no Asks card", () => {
-  const s = { ...state, usage: USAGE, factory: { ...state.factory, liveRuns: 3 }, queued: [{}, {}, {}, {}, {}] };
-  const h = view.renderTiles(s, { ...WEEK, baseline: BASE }, "week");
-  expect(h).not.toContain("Asks");
-  expect(h).toContain("<b>3<em> / 5</em><em> / 1</em></b>");
-  expect(h).toContain('<span>running</span><span class="m"> / queued</span><span class="m"> / error</span>');
-  expect(h).toContain('class="tr');
-  expect(h.split('class="tile sc"').find((t: string) => t.includes(">Jobs<"))).not.toContain('class="tr');
-  expect(view.renderTiles({ ...s, queued: [] }, null, "week")).toContain("<b>3<em> / 0</em><em> / 1</em></b>");
-});
-
-test("the Efficiency card shows efficiency, then the landed share, and trends on efficiency in points", () => {
-  const d = { ...WEEK, figures: { ...WEEK.figures, lost: 0.22, landed: 3, dropped: 1 }, baseline: BASE };
-  const h = view.renderTiles({ ...state, usage: undefined }, d);
-  expect(h).toContain("<b>78%<em> / 75%</em></b>");
-  expect(h).toContain("baseline 75%, the previous 7 days (change in percentage points)");
-});
-
-test("the scorecard is the tiles section Scorecard, with an Issues card", () => {
-  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
-  const at = page.indexOf('<section class="tiles" id="scorecard" aria-label="Scorecard">');
-  expect(at).toBeGreaterThan(-1);
-  expect(page.slice(at, page.indexOf('class="rail"'))).toContain('<span class="k">Issues</span>');
-});
-
-test("the Status page puts Pipeline and Issues in the main column and the Herald in the rail beside it", () => {
-  const monitor = { day: "2026-11-04", findings: ["one"], stages: [], holds: [] };
-  const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
-  const at = ['id="scorecard"', 'class="rail"', 'class="rail-main"', 'id="pipeline"', 'id="issues"', 'id="herald"'].map((x) => page.indexOf(x));
-  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
-});
-
-/** Memory data with a cut core line, a refused note, 11 unoffered reads and a note 31 days late; CALM has none over its threshold. */
-const BUSY = { lint: { refuse: [{ rule: "schema", note: "N", detail: "d" }], warn: [] }, start: { aleph: { cut: 1 } }, misses: { unoffered_reads: 11 }, processes: { decay: { stale: [{ note: "N", over: 31, window: 30 }] } } };
-const CALM = { lint: { refuse: [], warn: [] }, start: { aleph: { cut: 0 } }, misses: { unoffered_reads: 10 }, processes: { decay: { stale: [{ note: "N", over: 30, window: 30 }] } } };
-
-/** The Status data after the view's `more`, with each request in `urls`: /api/flow answered by `body`, the memory ones by CALM. */
-async function more(body: unknown, q = new URLSearchParams()) {
-  const was = globalThis.fetch, urls: string[] = [];
-  const answer = (u: string) => (u.startsWith("/api/flow") ? body : u === "/api/memory/processes" ? CALM.processes : CALM);
-  globalThis.fetch = (async (u: string) => { urls.push(u); return { ok: true, json: async () => answer(u) }; }) as any;
-  try { return { urls, s: await view.view.more({ ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, q) }; } finally { globalThis.fetch = was; }
-}
-
-test("more fetches the week with its baseline, and the page fills the scorecard and the Pipeline from it", async () => {
-  const { urls, s } = await more({ ...WEEK, baseline: BASE });
-  expect(urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes"]);
-  const page = view.view.render(s, {}, new URLSearchParams());
-  expect(page).toContain("<b>62%<em> / 70%</em></b>");
-  expect(page).toContain('class="seg-landed"');
-  expect(page).not.toContain("Loading the pipeline");
-});
-
-test("an ask keeps its action buttons on the page", () => {
-  const page = view.view.render(full);
-  expect(page).toContain('data-act="pause"');
-  expect(section(page, "needs")).toMatch(/data-act="/);
-});
-
-test("the sidebar links and the routes exist", async () => {
-  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
-    const m = await import(`./${f}.js`);
-    expect(m.view.path).toBe(path);
-    expect(m.redirect(old)).toBe(`#${path}`);
-    expect(m.redirect(`#${path}`)).toBeNull();
-  }
-});
-
-test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs in that order", async () => {
-  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs"].map((f) => import(`./${f}.js`)));
-  const sorted = views.map((m) => m.view).sort((a, b) => a.order - b.order);
-  expect(sorted.map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs"]);
-});
-
-test("more loads the window of the address", async () => {
-  expect((await more(WEEK, new URLSearchParams("window=hour"))).urls[0]).toBe("/api/flow?window=hour&baseline=1");
-});
-
-test("the Pipeline loads after the scorecard, then legends Implement's outcome hours, each an Inspector target, and counts the window's issues beside its stages", async () => {
-  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
-  const at = ['id="scorecard"', 'id="pipeline"', 'id="issues"'].map((x) => page.indexOf(x));
-  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
-  expect(page).toContain("Loading the pipeline");
-  const { s } = await more({ ...WEEK, classes: [...WEEK.classes, { key: "idle", lost: false, hours: 0, causes: [] }] }, new URLSearchParams("window=week"));
-  const filled = view.view.render(s, {}, new URLSearchParams("window=week")), h = filled.slice(filled.indexOf('id="pipeline"'), filled.indexOf('id="issues"'));
-  expect(filled).toContain('<section class="card duo" id="pipeline" aria-label="Pipeline"><div class="duo-main"><div class="sh"><h2>Pipeline</h2>');
-  // The legend names each class with hours, as a button to the Inspector; a class with no hours is not drawn.
-  expect([...h.matchAll(/<button type="button" class="lgo" data-inspect="class" data-target="([^"]*)"/g)].map((m) => m[1])).toEqual(["landed", "returned", "failed", "reran"]);
-  expect(h).toContain('<i class="seg-landed"></i>landed 8.0h</button>');
-  expect(h).not.toContain("seg-idle");
-  expect(h).not.toContain("seg-dropped");
-  // The side counts the window: filed, intake, landed, dropped, open with the parked, and the errored jobs now.
-  const side = h.slice(h.indexOf('<dl class="sstats">'), h.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  expect(side).toBe(`Filed 12 Intake 0 Landed 7 Dropped 3 Open 4 +2 Errored ${state.errored.length} now`);
-  expect(h).toContain('<div title="4 open issues, 2 parked issues"><dt>Open</dt>');
-  expect(h).toContain('<b class="done">7</b>');
-});
-
-test("the Status page titles a sub-issue link, with no goal and no Part", () => {
-  const part = { n: 2, m: 3, parent: "Issue 1", href: "#/issues/aleph/1.2" };
-  const page = view.view.render({ ...full, usage: USAGE, errored: full.errored.map((j: any) => ({ ...j, part })) }, {}, new URLSearchParams()) as string;
-  expect(page).toContain('title="Sub-issue 2 of 3 of Issue 1"');
-  expect(page).toContain("Discards the job&#39;s branch; the issue stays open.");
-  const text = page.replace(/<[^>]*>/g, "");
-  expect(text).not.toMatch(/goal/i);
-  expect(text).not.toContain("Part");
-});
+const page = (s: object, q = "") => view.view.render({ ...state, usage: USAGE, now: NOW, ...s }, {}, new URLSearchParams(q)) as string;
+/** The HTML of the card with `id`. */
+const cardOf = (h: string, id: string) => h.match(new RegExp(`<section class="card[^"]*" id="${id}"[^]*?</section>`))![0];
 
 test("the Status view is at / in the Factory group", () => {
   expect(view.view.path).toBe("/");
   expect(view.view.group).toBe("factory");
 });
 
-test("the Status page scorecard is a tiles section with the id scorecard", () => {
-  const page = view.view.render({ ...full, usage: undefined } as any, {}, new URLSearchParams()) as string;
-  expect(page).toContain('<section class="tiles" id="scorecard" aria-label="Scorecard">');
+test("the Factory sidebar lists Status, Automation, Agents, Issues, Jobs in that order", async () => {
+  const views = await Promise.all(["now", "gates", "factory-agents", "issues", "factory-jobs"].map((f) => import(`./${f}.js`)));
+  expect(views.map((m) => m.view).sort((a, b) => a.order - b.order).map((v) => v.title)).toEqual(["Status", "Automation", "Agents", "Issues", "Jobs"]);
 });
 
-test("a failed flow load shows error() in the Pipeline and Issues cards", () => {
-  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams()), bad = view.view.render({ ...state, usage: USAGE, flow: { error: "x" } }, {}, new URLSearchParams());
-  expect(page).not.toContain('role="alert"');
-  expect(bad.slice(bad.indexOf('id="pipeline"'), bad.indexOf('id="issues"'))).toContain(error("x"));
-  expect(bad.slice(bad.indexOf('id="issues"'), bad.indexOf('id="herald"'))).toContain(error("x"));
+test("the page is the scorecard, then the work, the events and Memory in the main column, and Problems, Efficiency and Flow in the rail", () => {
+  const h = page({});
+  const at = ['id="scorecard"', 'class="rail-main"', 'id="motion"', 'id="events"', 'id="memory"', 'class="stack"', 'id="problems"', 'id="efficiency"', 'id="flow"'].map((x) => h.indexOf(x));
+  expect(at.every((i) => i >= 0)).toBe(true);
+  expect([...at].sort((a, b) => a - b)).toEqual(at);
 });
 
-test("an errored job's fold reads Technical details, and its blocker is an idLink", () => {
-  const h = view.renderHerald({ ...full, asks: [], errored: [job({ name: "aleph-30", state: "failed", blocker: { id: "aleph-7", href: "#/issues/aleph/7", title: "Open work" } })] });
-  expect(h).toContain("<summary>Technical details</summary>");
-  expect(h).not.toContain("<summary>Details</summary>");
-  expect(h).toContain('Blocker <a class="idl" href="#/issues/aleph/7">aleph-7</a>: Open work');
+test("the scorecard has Working, Efficiency, Lead Time, Usage and Memory, with a spinner on each card whose data loads", () => {
+  const h = page({}), cards = h.slice(h.indexOf('id="scorecard"'), h.indexOf('class="rail"'));
+  expect([...cards.matchAll(/<span class="k">([^<]+)<\/span>/g)].map((m) => m[1])).toEqual(["Working", "Efficiency", "Lead Time", "Usage", "Memory"]);
+  expect(cards.match(/<i class="spin" role="status"/g)?.length).toBe(3);
 });
 
-test("the Issues card follows Pipeline: loading, error, and two bare charts split by a rule, the active issues and the phases' median times capped at 30 minutes", () => {
-  const draw = (flow: unknown) => view.view.render({ ...state, usage: USAGE, flow } as any, {}, new URLSearchParams()) as string;
-  const slice = (h: string) => h.slice(h.indexOf('id="issues"'), h.indexOf('id="herald"'));
-  expect(slice(draw(undefined))).toContain("Loading the issues");
-  expect(slice(draw({ error: "x" }))).toContain(error("x"));
-  const ok = slice(draw({ ...WEEK, active: [{ at: "2026-10-27T00:00:00", intake: 1, queue: 2, running: 3, landed: 4 }], buckets: [{ at: "2026-10-27T00:00:00", intake: 60, queue: 5000, implement: 600, land: 30 }] }));
-  expect(ok).toMatch(/<div class="duo-main">.*<aleph-chart key="status\/active" bare>.*<div class="duo-side"><h3 class="sub-head">Median Time by Phase<\/h3><aleph-chart key="status\/speed" bare>/);
-  expect(ok).toContain('<li><i class="c-s6"></i>Intake</li><li><i class="c-s4"></i>Queue</li><li><i class="c-run"></i>Implement</li><li><i class="c-done"></i>Land</li>');
-  const f = view.activeFrame({ ...WEEK, active: [] });
-  expect(f.by.keys.map((k: any) => k.key)).toEqual(["intake", "queue", "running", "landed"]);
-  expect(f.form).toBe("area");
-  const sp = view.speedFrame({ ...WEEK, buckets: [{ at: "2026-10-27T00:00:00", intake: 60, queue: null, implement: 600, land: 30, lead: 900 }] });
-  expect(sp).toMatchObject({ form: "columns", cap: 1800, legend: false, rows: [{ at: "2026-10-27T00:00:00", intake: 60, queue: null, implement: 600, land: 30 }] });
-  expect(sp.by.keys.map((k: any) => k.color)).toEqual(f.by.keys.map((k: any) => k.color));
+test("Working counts the issues with a live job, the issues that wait on something but their own job, and the errored jobs", () => {
+  const running = [job({ name: "a1", repo: "aleph", item: { id: 1, title: "x" } }), job({ name: "a1b", repo: "aleph", item: { id: 1, title: "x" } }), job({ name: "a2", repo: "aleph", item: { id: 2, title: "y" } })];
+  const h = page({ running, queued: [{ kind: "file" }, { kind: "after" }, { kind: "job" }], errored: [job({ name: "a3", state: "failed" })] });
+  expect(h).toContain("<b>2<em> / 2</em><em> / 1</em></b>");
 });
 
-test("the Herald shows the rows of issues and of jobs together, with no toggles", () => {
-  const events = [row({ at: "2026-11-15T13:00:00Z", by: "gate", subject: "aleph-5", action: "landed", on: ["aleph-5#1"] }), row({ at: "2026-11-15T13:05:00Z", by: "gate", subject: "housekeeper", action: "running", on: ["job.57"] })];
-  const html = view.renderHerald({ ...state, now: "2026-11-15T14:00:00Z", herald: heraldOf(events) });
-  expect(html).toContain('href="#/issues/aleph/5"');
-  expect(html).toContain('href="#/jobs/job.57"');
-  expect(html).not.toContain('name="show"');
+test("Efficiency and Lead Time read the window's figures and trend them against the baseline; Memory reads the start context", () => {
+  const h = page({ flow: { ...WEEK, baseline: BASE }, memory: MEMORY });
+  expect(h).toContain("<b>62%<em> / 6.0h</em></b>");
+  expect(h).toContain("baseline 75%, the previous 7 days (change in percentage points)");
+  expect(h).toContain("<b>26m<em> / 5h</em></b>");
+  expect(h).toContain('<span class="k">Memory</span></span><b>50%</b>');
 });
 
-test("the Memory panel lists each memory item that waits, linked to the Health tab; the empty mark when none waits; a loading line before the data", async () => {
-  const draw = (memory: unknown) => { const h = view.view.render({ ...state, usage: USAGE, memory } as any, {}, new URLSearchParams()) as string; return h.slice(h.indexOf('id="memory"'), h.indexOf('id="herald"')); };
-  const busy = draw(BUSY), links = [...busy.matchAll(/<a href="[^"]*"/g)].map((x) => x[0]);
-  expect(links).toEqual(Array(4).fill('<a href="#/memory?view=health"'));
-  expect(busy).toContain("1 core line cut");
-  expect(busy).not.toContain(empty());
-  const calm = draw(CALM);
-  expect(calm).toContain(empty());
-  expect(calm).not.toContain("<a ");
-  expect(draw(undefined)).toContain("Loading the memory");
-  expect(draw({ error: "x" })).toContain(error("x"));
-  const { s } = await more(WEEK);
-  expect(s.memory).toEqual(CALM);
+/** The Status data after the view's `more`, with each request in `urls`, each answered from `answers` by its path. */
+async function more(q = "", answers: Record<string, unknown> = {}) {
+  const was = globalThis.fetch, urls: string[] = [];
+  globalThis.fetch = (async (u: string) => { urls.push(u); return { ok: true, json: async () => answers[u.split("?")[0]] ?? {} }; }) as any;
+  try { return { urls, s: await view.view.more({ ...state, usage: USAGE, now: NOW }, new URLSearchParams(q)) }; } finally { globalThis.fetch = was; }
+}
+
+test("more loads the flow and the event log for the address's window, the memory, and the last hour's runs", async () => {
+  expect((await more()).urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes", "/api/jobs?window=hour&limit=500", "/api/log?window=week"]);
+  expect((await more("window=day&kind=landed&q=pager&page=2")).urls.at(-1)).toBe("/api/log?window=day&kind=landed&q=pager&page=2");
+  const { s } = await more("", { "/api/jobs": { jobs: [{ id: "job.1" }] }, "/api/memory": { total: 3 }, "/api/memory/processes": { steps: [] } });
+  expect(s.jobs).toEqual([{ id: "job.1" }]);
+  expect(s.memory).toEqual({ total: 3, processes: { steps: [] } });
+});
+
+test("a failed load shows error() in its own card only", () => {
+  const h = page({ flow: { error: "x" }, memory: { error: "y" }, jobs: { error: "z" }, log: { error: "w" } });
+  expect(cardOf(h, "efficiency")).toContain(error("x"));
+  expect(cardOf(h, "flow")).toContain(error("x"));
+  expect(h.slice(h.indexOf('id="memory"'))).toContain(error("y"));
+  expect(cardOf(h, "motion")).toContain(error("z"));
+  expect(cardOf(h, "events")).toContain(error("w"));
+});
+
+const run = (id: string, issue: string, state: string, started: string, ended: string | null, kind = "build") => ({ id, repo: "aleph", issue, title: `Title ${issue}`, kind, state, started, ended });
+
+test("Issues in Motion draws a lane for each issue with a live run, with its runs of the hour, from the first of them to now", () => {
+  setCodes({ aleph: "a" });
+  const jobs = [run("job.2", "issue.5", "running", "2026-11-01T07:50:00Z", null, "land"), run("job.1", "issue.5", "passed", "2026-11-01T07:30:00Z", "2026-11-01T07:45:00Z"), run("job.3", "issue.6", "landed", "2026-11-01T07:40:00Z", "2026-11-01T07:41:00Z", "land")];
+  const h = cardOf(page({ jobs }), "motion");
+  expect(h.match(/class="dp-row"/g)?.length).toBe(1);
+  expect(h).toContain('href="#/issues/aleph/5">a5</a> Title issue.5');
+  expect(h).toContain('href="#/jobs/job.1"');
+  expect(h).toContain('style="left:0.000%;width:50.000%"');
+  expect(h).toContain('<span class="count">1</span>');
+  expect(cardOf(page({ jobs: [] }), "motion")).toContain(empty());
+  expect(cardOf(page({}), "motion")).toContain("Loading the runs");
+});
+
+test("Waiting groups the issues that wait by their hold, and gives how long the oldest has waited", () => {
+  const ev = { action: "held", detail: "file: ui/a.ts: job.4" };
+  const queued = [{ repo: "aleph", id: 7, title: "One", kind: "file", ev, heldAt: "2026-11-01T07:00:00Z" }, { repo: "aleph", id: 8, title: "Two", kind: "file", ev, heldAt: "2026-11-01T07:30:00Z" }, { repo: "aleph", id: 9, title: "Mine", kind: "job" }];
+  const h = cardOf(page({ jobs: [], queued }), "motion");
+  expect(h).toContain("Waiting");
+  expect(h.match(/<tr>/g)?.length).toBe(2); // the head and one hold
+  expect(h).toContain("ui/a.ts: job.4");
+  expect(h).toContain('<td class="num">1h 00m</td>');
+  expect(h).not.toContain("Mine");
+  expect(cardOf(page({ jobs: [], queued: [] }), "motion")).not.toContain("Waiting");
+});
+
+test("Events is a log of one event a row: its time, word, issue, title, job, by and took, with a filter and a pager", () => {
+  const h = cardOf(page({ log: LOG }, "kind=landed&q=fix"), "events");
+  expect(h).toContain('value="fix"');
+  expect(h).toContain('data-value="landed" aria-pressed="true"');
+  expect(h).toContain('title="Time"');
+  expect(h).toContain('href="#/issues/aleph/5">a5</a>');
+  expect(h).toContain('<td class="num">1m 05s</td>');
+  expect(h).toContain("Next 1");
+  expect(cardOf(page({ log: { total: 0, rows: [] } }), "events")).toContain(empty());
+  expect(cardOf(page({}), "events")).toContain("Loading the events");
+});
+
+test("Memory shows the start context against its budget, the offers per day and the six counts", () => {
+  const h = page({ memory: MEMORY }), m = h.slice(h.indexOf('id="memory"'), h.indexOf('class="stack"'));
+  expect(m).toContain("3,000 / 6,000 B");
+  expect(m).toContain('<aleph-chart key="status/offers" bare>');
+  const side = m.slice(m.indexOf('<dl class="sstats">'), m.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  expect(side).toBe("Notes 2 Offered 1 Never offered 1 Unoffered reads 4 Refused 0 Stale 1 1 late");
+  expect(view.offersFrame(MEMORY, Date.parse(NOW)).rows.map((r: any) => r.offers)).toEqual([0, 0, 0, 0, 0, 0, 3]);
+});
+
+test("Efficiency shows the hours by outcome, the lost hours by cause and the failed runs by stage", () => {
+  const h = cardOf(page({ flow: WEEK }), "efficiency");
+  expect(h).toContain("10h of 16h reached main");
+  expect(h).not.toContain("seg-dropped");
+  expect([...h.matchAll(/<span class="bl">([^<]+)<\/span>/g)].map((m) => m[1]).slice(0, 2)).toEqual(["Issue had landed", "No commit"]);
+  expect(h).toContain("4 of 20");
+  expect(h).not.toContain("3 of 3");
+});
+
+test("Flow shows the window's counts, each phase's p90 with the issues in it now, and the issues landed per bucket", () => {
+  const h = cardOf(page({ flow: WEEK, running: [job({ name: "a1", run: { kind: "land" } })], queued: [{ kind: "file" }] }), "flow");
+  const side = h.slice(h.indexOf('<dl class="sstats">'), h.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  expect(side).toBe("Filed 12 Landed 7 Dropped 3 First Pass 91% Open 4 +2 Asks 5 2 yours");
+  expect(h).toContain("Time by Phase, p90");
+  expect(h).toContain('<aleph-chart key="status/landed" bare>');
+  expect(h).toContain("Landed per Day");
+  expect(view.landedFrame(WEEK).rows.map((r: any) => r.landed)).toEqual([1, 1]);
+});
+
+test("an ask keeps its action buttons on the page, with Pause in the head", () => {
+  const h = view.view.render(full, {}, new URLSearchParams()) as string;
+  expect(h).toContain('data-act="pause"');
+  expect(cardOf(h, "problems")).toMatch(/data-act="/);
 });

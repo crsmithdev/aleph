@@ -133,14 +133,17 @@ test("an Ask still with the director shows its title and fixed text, and no butt
   expect(row).not.toContain("<button");
 });
 
-test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of an errored card", () => {
-  const errored = withAttn({ asks: [], running: [], runningIssues: [], errored: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
-  for (const row of [askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), errored]) {
-    const [before, box] = row.split('<div class="ask-box">');
-    expect(before).not.toContain('class="ih"');
-    const head = box.slice(0, box.indexOf("<details"));
-    for (const c of ['class="idl"', 'class="badge', 'class="num date"', 'class="num dur"']) expect(head).toContain(c);
-  }
+test("the id, priority, date and runtime sit inside the coloured box of an Ask card", () => {
+  const [before, box] = askCard({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z").split('<div class="ask-box">');
+  expect(before).not.toContain('class="ih"');
+  const head = box.slice(0, box.indexOf("<details"));
+  for (const c of ['class="idl"', 'class="badge', 'class="num date"', 'class="num dur"']) expect(head).toContain(c);
+});
+
+test("an errored job's alert holds its id, title, priority and wait inside the coloured box, on one line", () => {
+  const errored = withAttn({ asks: [], running: [], queued: [], errored: [job({ name: "aleph-30", state: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
+  const head = errored.split('<div class="ask-box">')[1].split('<div class="actions')[0];
+  for (const c of ['class="ask-head"', 'class="idl"', 'class="badge', 'class="num"']) expect(head).toContain(c);
 });
 
 const plain = (o: object = {}) => ({ id: "tools-4", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a second input file", situation: "Decide it.", actions: [], ...o });
@@ -182,9 +185,9 @@ test("the reason box is an inputBox() with its attributes and the reason kept by
   for (const a of ['aria-label="Reason to dismiss tools-4"', 'data-repo="tools"', 'data-id="4"', 'data-lead="User denied: "', "hidden", 'maxlength="200"']) expect(input).toContain(a);
 });
 
-test("a decided ask has no card in the Herald while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {
+test("a decided ask has no alert in Problems while a state still lists it, and shows again once a state loaded after the decision drops it and a later one lists it", () => {
   const [a, b] = four(), s = { ...withFactory({}), asks: [a, b], errored: [] };
-  const draw = (state: object, at = 2) => drawAt(at, () => view.renderHerald(state));
+  const draw = (state: object, at = 2) => drawAt(at, () => view.renderProblems(state));
   record(a.id, 1);
   const h = draw(s);
   expect(h).not.toContain(`data-ask="${a.id}"`);

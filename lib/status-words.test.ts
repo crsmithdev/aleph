@@ -36,7 +36,7 @@ test("verdict gives each state its tone, label and sentence", () => {
 
 test("verdict links each alert and Ask part to its card and leaves the others plain", () => {
   const v = verdict(at({ errored: [{}], asks: [{}], usage: { now: { seven_day: 95 } } }));
-  expect(v.parts).toEqual([{ text: "Jobs are unhealthy", href: "#jobs-error" }, { text: "attention is needed", href: "#awaiting" }, { text: "weekly usage is at 95%", href: "" }]);
+  expect(v.parts).toEqual([{ text: "Jobs are unhealthy", href: "#problems" }, { text: "attention is needed", href: "#problems" }, { text: "weekly usage is at 95%", href: "" }]);
 });
 
 test("an out-of-date verdict says so first, as an alert", () => {

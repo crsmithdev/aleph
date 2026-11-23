@@ -589,6 +589,9 @@ export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
   `<div class="tscroll"><table class="tbl${fit ? " fit" : ""}"${id ? ` id="${esc(id)}"` : ""}>${head ? `<thead><tr>${head}</tr></thead>` : ""}<tbody>${rows}</tbody></table></div>`;
 /** Plain header cells from labels; a label in `num` is right-aligned. */
 export const heads = (labels, num = []) => labels.map((l) => `<th${num.includes(l) ? ' class="num"' : ""}>${esc(l)}</th>`).join("");
+/** A column head as an icon with its name in `title`: a stopwatch over a duration, a clock over the time of an event. A duration is a number column. */
+export const iconHead = (icon, label, { el = "th", num = icon === "stopwatch" } = {}) =>
+  `<${el}${num ? ' class="num"' : ""} title="${esc(label)}" aria-label="${esc(label)}"><wa-icon name="${esc(icon)}" aria-hidden="true"></wa-icon></${el}>`;
 /**
  * A 10px bar: `parts` is one share in percent, or segments `{pct, cls}` in percent of the whole bar. `label` (plain text)
  * is the text alternative; with none the bar is hidden from assistive tech, for a bar beside its visible value.
@@ -612,10 +615,10 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 /** The rows of a bar list on one grid, so their bars start and end together. */
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
 /**
- * The HTML legend: one `<li>` per `[label, cls, attrs]`; a `cls` gives the item a swatch that CSS colours; `attrs` (HTML attributes) makes the item a button.
+ * The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours.
  * @design legend
  */
-export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls, attrs]) => { const in_ = `${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}`; return `<li>${attrs ? `<button type="button" class="lgo" ${attrs}>${in_}</button>` : in_}</li>`; }).join("")}</ul>`;
+export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
 const param = (q, k) => (typeof q.get === "function" ? q.get(k) : q[k]);
 /** The page number in the query `q` (URLSearchParams or object): 1 unless `page` is a larger whole number. */
 export function pageOf(q) {

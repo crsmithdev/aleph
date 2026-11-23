@@ -134,8 +134,8 @@ test("GET /api/flow takes a window (default week) and answers JSON", async () =>
 test("the Status cards show the answer's figures and trend them against its baseline", () => {
   // The raw fields disagree with `figures`, so a card that read them would show 90% and 9.0h.
   const d = { classes: [{ hours: 9 }], lost: { share: 0.9, hours: 9 }, asks: { count: 1, manual: 0 }, figures: { lost: 0.2, hours: 2, leadP50: null, leadP90: null, asks: 3, landed: null, firstPass: null }, baseline: { prev: { lost: 0.4 }, base: { lost: 0.4 }, basis: "the previous 7 days" } };
-  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [] }, d, {});
-  expect(h).toContain("<b>80%<em> / –</em></b>");
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [] }, d, {});
+  expect(h).toContain("<b>80%<em> / 2.0h</em></b>");
   expect(h).toContain("baseline 60%, the previous 7 days");
   });
 
@@ -192,7 +192,7 @@ test("figures: before the filer is named, a filed event counts by the issue's so
 test("the Usage card shows used over pace, with the percent off this machine in its title", () => {
   const u = { now: { seven_day: 40, seven_day_resets_at: "2026-11-07T08:00:00Z" } };
   const d = { figures: { lost: null, hours: null, leadP50: null, leadP90: null, asks: 0, landed: null, firstPass: null } };
-  const card = (usage: object) => statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [], usage: { ...u, ...usage } }, d, {})
+  const card = (usage: object) => statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [], usage: { ...u, ...usage } }, d, {})
     .split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Usage"))!;
   const h = card({ off: 12 });
   expect(h).toContain("<b>40%<em> / 14%</em></b>");
@@ -210,10 +210,10 @@ test("cardDur: as dur under 10m, then whole minutes rounded, then whole hours ro
   for (const [s, shown] of cases) expect(cardDur(s)).toBe(shown);
 });
 
-test("the Status Completion card shows its durations through cardDur", () => {
+test("the Status Lead Time card shows its durations through cardDur", () => {
   const d = { figures: { lost: null, hours: null, leadP50: 632, leadP90: 5520, asks: 0, landed: null, firstPass: null } };
-  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [] }, d, {});
-  const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Completion"))!;
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [] }, d, {});
+  const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes("Lead Time"))!;
   expect(card).toContain("<b>11m<em> / 2h</em></b>");
   expect(card).not.toContain("10m 32s");
 });
@@ -783,26 +783,27 @@ test("a bucket's tokens per model are the saved tokens of the agent runs that st
   expect(d.buckets.find((b) => b.at === h(12))!.tokens).toEqual({});
 });
 
-test("the Efficiency card shows efficiency with a trend up as good, then landed over landed plus dropped", () => {
+test("the Efficiency card shows efficiency with a trend up as good, then the hours lost", () => {
   const d = { figures: { lost: 0.22, hours: 6, landed: 3, dropped: 1 }, baseline: { prev: { lost: 0.3 }, base: { lost: 0.3 }, basis: "the previous 7 days" } };
-  const cards = cardList({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [] }, d, {});
+  const cards = cardList({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [] }, d, {});
   const eff = cards.find((c: any) => c.k === "Efficiency");
-  expect([eff.v, eff.v2, eff.q]).toEqual(["78%", "75%", ["efficient", "landed"]]);
+  expect([eff.v, eff.v2, eff.q]).toEqual(["78%", "6.0h", ["efficient", "lost"]]);
   expect(eff.trend).toContain('class="tr good"');
-  expect(cards.map((c: any) => c.k)).toEqual(["Efficiency", "Completion", "Issues", "Jobs", "Usage"]);
+  expect(cards.map((c: any) => c.k)).toEqual(["Working", "Efficiency", "Lead Time", "Usage"]);
+  expect(cardList({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [] }, d, { memory: null }).map((c: any) => c.k)).toEqual(["Working", "Efficiency", "Lead Time", "Usage", "Memory"]);
 });
 
-test("the Status scorecard has five cards, each second value has a qualifier, and none prints undefined", () => {
+test("the Status scorecard has five cards with the memory, each second value has a qualifier, and none prints undefined", () => {
   const d = { asks: { count: 4, manual: 1 }, figures: { lost: 0.3, hours: 6, leadP50: 60, leadP90: 600, asks: 4, landed: 5, dropped: 0 } };
-  const s = { now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, queued: [], errored: [], usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
+  const s = { now: "2026-11-01T08:00:00Z", factory: { liveRuns: 0 }, running: [], queued: [], errored: [], usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
   const none = { figures: { ...d.figures, landed: null, dropped: 0 } };
-  for (const html of [statusCards(s, d, {}), statusCards(s, none, {}), statusCards({ now: s.now, factory: { liveRuns: 0 }, queued: [], errored: [] }, null, {})]) {
+  for (const html of [statusCards(s, d, { memory: null }), statusCards(s, none, { memory: { start: { aleph: { bytes: 1, budget: 2 } } } }), statusCards({ now: s.now, factory: { liveRuns: 0 }, running: [], queued: [], errored: [] }, null, { memory: { error: "x" } })]) {
     expect(html).not.toContain("undefined");
     const cards = html.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/);
     expect(cards.length).toBe(5);
     for (const c of cards) if (c.includes("<em>")) expect(c).toContain('<span class="q">');
   }
-  expect(statusCards(s, none, {})).toContain('<b>70%<em> / –</em></b><span class="q"><span>efficient</span><span class="m"> / landed</span>');
+  expect(statusCards(s, none, {})).toContain('<b>70%<em> / 6.0h</em></b><span class="q"><span>efficient</span><span class="m"> / lost</span>');
 });
 
 test("a stat card with three values draws the third as the second, and its label row names all three", () => {
@@ -811,13 +812,11 @@ test("a stat card with three values draws the third as the second, and its label
   expect(h).toContain('title="Jobs 3 / 5 / 2, running / queued / error"');
 });
 
-test("the Status Jobs card shows running / queued / error, and the Issues card counts an issue with two errored jobs once", () => {
-  const d = { open: { open: 4, parked: 1 }, figures: { lost: null, hours: null, leadP50: null, leadP90: null, asks: 0, landed: 6, firstPass: null } };
+test("the Status Working card counts the issues with a live job once, the issues that wait on another thing, and the errored jobs", () => {
   const job = (id: number) => ({ repo: "aleph", item: { id, title: "T" } });
-  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 3 }, queued: Array(5).fill({}), errored: [job(7), job(7)] }, d, {});
-  const card = (k: string) => h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes(`<span class="k">${k}</span>`))!;
-  expect(card("Jobs")).toContain('<b>3<em> / 5</em><em> / 2</em></b><span class="q"><span>running</span><span class="m"> / queued</span><span class="m"> / error</span></span>');
-  expect(card("Issues")).toContain('<b>4<em> / 6</em><em> / 1</em></b><span class="q"><span>active</span><span class="m"> / landed</span><span class="m"> / errored</span></span>');
+  const h = statusCards({ now: "2026-11-01T08:00:00Z", factory: { liveRuns: 3 }, running: [job(7), job(7), job(8)], queued: [{ kind: "file" }, { kind: "after" }, { kind: "job" }], errored: [job(9)] }, null, {});
+  const card = h.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/).find((c: string) => c.includes('<span class="k">Working</span>'))!;
+  expect(card).toContain('<b>2<em> / 2</em><em> / 1</em></b><span class="q"><span>running</span><span class="m"> / waiting</span><span class="m"> / error</span></span>');
 });
 
 test("speed: a build on an unchanged store spawns one git process and reads the same filing times and titles", () => {

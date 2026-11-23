@@ -158,25 +158,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     } finally { own.stop(); }
   }, 60_000);
 
-  test("Status: a fold opened before the /api/flow load ends stays open through the redraw after it", async () => {
-    await page.go("#/issues");
-    // Hold the first /api/flow answer until the test opens a fold on the page drawn before it.
-    await page.ev(`(() => {
-      const rf = window.fetch;
-      window.fetch = (u, o) => (String(u).startsWith("/api/flow") && !window.release ? new Promise((ok) => { window.release = () => ok(rf(u, o)); }) : rf(u, o));
-    })()`);
-    await page.ev('location.hash = "#/"');
-    const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
-    await page.when(`window.release && ${fold}`);
-    expect(await page.ev('!!document.querySelector("#pipeline .sstats")')).toBe(false);
-    await page.ev(`${fold}.open = true; document.querySelector("#view > *").dataset.mark = "1"`);
-    await page.ev("window.release()");
-    await page.when('document.querySelector("#pipeline .sstats") && !document.querySelector("#view > *").dataset.mark');
-    expect(await page.ev(`${fold}.open`)).toBe(true);
-    await page.ev(`${fold}.open = false`);
-    await page.reload(); // Takes the patched fetch away.
-  }, 30_000);
-
   test("the sidebar collapses, keeps its links, and it and an open fold stay set over a reload, also under the older key", async () => {
     const tip = () => page.ev('[document.querySelector("#collapse").title, document.querySelector("#collapse").getAttribute("aria-label")]');
     const [t0, a0] = await tip();
@@ -197,7 +178,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.ev("localStorage.clear()");
     await click("#collapse");
     await page.when('!document.querySelector(".shell.collapsed")');
-    await page.go("#/");
+    await page.go("#/design");
     await page.when('document.querySelector("#view details[data-keep]")');
     const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
     await page.ev(`${fold}.open = true`);
@@ -441,8 +422,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   /**
    * Opens Status with its reloads in the test's hands. The page's stream is kept as window.es, and window.nudge() sends
    * it a `change` of the keys the last /api/factory answer named, as the server does when it rebuilds them. A fetch of
-   * /api/factory waits for window.gate. A fetch of /api/flow, the last a Status load makes (its `more`), counts in
-   * window.fetched after the load that reads it ends. The page's clock runs window.skew ms ahead.
+   * /api/factory waits for window.gate. Each fetch of a Status load's `more` (/api/flow, /api/memory, /api/memory/processes,
+   * /api/jobs, /api/log) counts in window.fetched after the load that reads it ends. The page's clock runs window.skew ms ahead.
    * The test ends with page.reload(), which takes the patched clock, stream and fetch away.
    */
   const changeRig = async () => {
@@ -455,7 +436,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.nudge = () => window.es.dispatchEvent(new MessageEvent("change", { data: JSON.stringify({ keys: window.keys }) }));
       const rf = window.fetch;
       const keyed = (r) => { window.keys = r.headers.get("x-aleph-keys").split(" "); return r; };
-      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then(keyed) : !["/api/flow", "/api/memory"].some((p) => String(u).startsWith(p)) ? rf(u, o) : rf(u, o).then((r) => {
+      window.fetch = (u, o) => String(u).startsWith("/api/factory") ? (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then(keyed) : !["/api/flow", "/api/memory", "/api/jobs", "/api/log"].some((p) => String(u).startsWith(p)) ? rf(u, o) : rf(u, o).then((r) => {
         const j = r.json.bind(r);
         const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
         r.json = () => j().then((d) => { setTimeout(count); return d; });
@@ -466,12 +447,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
     await page.when(buttons);
-    // The first load draws its buttons before its `more` (/api/flow, /api/memory and /api/memory/processes) ends: wait for those 3 counts, or a change's wait ends on them.
-    await page.when("(window.fetched ?? 0) >= 3");
+    // The first load draws its buttons before its `more` ends: wait for its 5 counts, or a change's wait ends on them.
+    await page.when("(window.fetched ?? 0) >= 5");
     const change = async () => {
       const n = await page.ev("window.fetched ?? 0");
       await page.ev("window.nudge()");
-      await page.when(`(window.fetched ?? 0) >= ${n + 3}`);
+      await page.when(`(window.fetched ?? 0) >= ${n + 5}`);
     };
     return { buttons, change, mark: () => page.ev('document.querySelector("#view > *").dataset.mark = "1"') };
   };
@@ -481,15 +462,6 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await mark();
     await change();
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined();
-    await page.reload();
-  }, 30_000);
-
-  test("what the reader opened comes back after a change", async () => {
-    const { change, mark } = await changeRig();
-    await page.ev('document.querySelector("#view details[data-keep]").open = true');
-    await mark();
-    await change();
-    expect(await page.ev('[document.querySelector("#view details[data-keep]").open, !!document.querySelector("#view > *").dataset.mark]')).toEqual([true, false]);
     await page.reload();
   }, 30_000);
 
@@ -602,7 +574,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched EventSource and fetch away.
   }, 30_000);
 
-  test("Status: a refused action shows the reason on its row, Enter confirms a Deny, and a decided Ask stays off when the Herald draws again", async () => {
+  test("Status: a refused action shows the reason on its row, Enter confirms a Deny, and a decided Ask stays off when Problems draws again", async () => {
     await page.go("#/");
     await page.when(`document.querySelector('#view button.act[data-act="land"], #view button.act[data-act="recheck"]')`);
     await page.ev(`(() => {
@@ -616,7 +588,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('document.querySelector("#view .act-msg").closest("article").isConnected')).toBe(true);
     await page.reload(); // Takes the patched fetch away.
     // Enter in the reason box confirms a Deny, and the card leaves before any reload of the state.
-    await page.when('document.querySelector("#view article.issue-row")');
+    await page.when('document.querySelector("#view #problems")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
     await page.ev(`import("/views/lib/ask-cards.js").then(({ askCard }) => {
       const f = window.fetch;
@@ -637,27 +609,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const posts = await page.ev<[string, string][]>("window.posts");
     expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools-4/drop", { reason: "User denied: not now" }]]);
     await page.reload(); // Takes the patched fetch away.
-    // A decided Ask stays off the Status page when the Herald draws again from its last state.
-    await page.when('document.querySelector("#herald")');
-    // The Herald's last state lists the Ask; a stream event draws it again. After the POST every other fetch hangs.
+    // A decided Ask stays off the Status page when Problems draws again from a state that still lists it.
+    await page.when('document.querySelector("#view #problems")');
+    // The state lists the Ask; its alert's Deny posts at once. After the POST every other fetch hangs.
     await page.ev(`Promise.all([import("/views/now.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, s]) => {
       s.asks = [{ id: "tools-5", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a third input file",
         situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-5/drop", body: {}, input: { name: "reason", lead: "" } }] }];
-      view.render(s, {}, new URLSearchParams());
-      window.beat = () => view.event(document.querySelector("#view"), { seq: 1e9, rows: [] });
+      const root = document.querySelector("#view");
+      window.beat = () => { root.innerHTML = view.render(s, {}, new URLSearchParams()); };
       window.beat();
       const f = window.fetch;
       window.posts = [];
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push(u), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
-      const b = document.querySelector('#herald article[data-ask="tools-5"] button.act[data-act="deny"]');
-      b.click();
-      const inp = b.closest(".choice").querySelector("input.reason");
-      inp.value = "not now";
-      inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      document.querySelector('#problems article[data-ask="tools-5"] button.act[data-act="deny"]').click();
     })`);
     await page.when('window.posts.length && !document.querySelector("#view article[data-ask=\'tools-5\']")');
     await page.ev("window.beat()");
-    expect(await page.ev<number>('document.querySelectorAll("#view article.issue-row[data-ask=\'tools-5\']").length')).toBe(0);
+    expect(await page.ev<number>('document.querySelectorAll("#view article[data-ask=\'tools-5\']").length')).toBe(0);
     await page.reload(); // Takes the patched fetch away.
   }, 60_000);
 
@@ -942,196 +910,50 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     expect(input).toBe(h1);
   });
 
-  test("a redraw keeps a marked element connected, and one click on the status sentence, in the head marked before them, after two redraws jumps to the Herald once", async () => {
+  test("a redraw keeps a marked element connected, and one click on a status sentence link, in the head marked before them, after two redraws scrolls to Problems once", async () => {
     await page.go("#/");
-    await page.when('document.querySelector("#view #herald") && document.querySelector("#view #scorecard")');
-    await page.ev('window.mark = [document.querySelector("#view #scorecard"), document.querySelector("#view .shead")]; window.n = 0; Element.prototype.scrollIntoView = function () { window.n++; }');
+    await page.when('document.querySelector("#view #problems") && document.querySelector("#view #scorecard")');
+    // A sentence with a link: the page's own may be the fine one, which links nowhere.
+    await page.ev('document.querySelector("#view .shead .say").innerHTML = \'<a href="#problems">Jobs are unhealthy</a>\'');
+    await page.ev('window.mark = [document.querySelector("#view #scorecard"), document.querySelector("#view .shead")]; window.n = []; Element.prototype.scrollIntoView = function () { window.n.push(this.id); }');
     for (let i = 0; i < 2; i++) await page.ev('import("/views/lib/router.js").then((m) => m.redraw())');
     expect(await page.ev('[document.querySelector("#view #scorecard") === mark[0], mark[0].isConnected, document.querySelector("#view .shead") === mark[1]]')).toEqual([true, true, true]);
-    await page.ev('mark[1].querySelector(".say").click()');
-    expect(await page.ev("window.n")).toBe(1);
+    await page.ev('document.querySelector("#view .shead .say").innerHTML = \'<a href="#problems">Jobs are unhealthy</a>\'; document.querySelector("#view .shead .say a").click()');
+    expect(await page.ev("window.n")).toEqual(["problems"]);
+    expect(await page.ev("location.hash")).toBe("#/");
     expect(page.errors).toEqual([]);
   }, 60_000);
 
-  test("the Herald's tabs read Events, Active, Inspector, the Active tab shows its pane, and its one list keeps its rows through a redraw", async () => {
+  test("the page does not scroll sideways from 390 to 1600 px, and in one column Problems comes first", async () => {
     await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    // The page's last state gets a running issue, a running job and a queued issue; a stream event draws the Herald again from it. Its `seq` of 0 leaves the state's feed rows for the next test.
-    await page.ev(`import("/views/now.js").then(({ view }) => fetch("/api/factory").then((r) => r.json()).then((s) => {
-      view.render({ ...s, runningIssues: [{ id: "aleph-9", title: "Sort it", href: "#/issues/aleph/9" }], running: [{ id: "job.0", name: "aleph-7", item: { title: "Fix it" } }], queued: [{ repo: "aleph", id: 12, title: "Wait" }] }, {}, new URLSearchParams());
-      window.beat = () => view.event(document.querySelector("#view"), { seq: 0, rows: [] });
-      window.beat();
-    }))`);
-    expect(await page.ev('[...document.querySelectorAll("#herald button[data-tab]")].map((b) => b.textContent)')).toEqual(["Events", "Active", "Inspector"]);
-    await page.ev('document.querySelector("#herald button[data-tab=active]").click()');
-    const listed = () => page.ev('[document.querySelector("#herald section[data-pane=active]").hidden, ...[...document.querySelectorAll("#herald [data-pane=active] a")].map((a) => a.getAttribute("href"))]');
-    const all = [false, "#/issues/aleph/9", "#/issues/aleph/12", "#/jobs/job.0"];
-    expect(await listed()).toEqual(all);
-    await page.ev("window.beat()");
-    expect(await listed()).toEqual(all);
-    expect(page.errors).toEqual([]);
-    // Drop the kept tab, and leave Status, so the next visit draws its own data on the Events tab.
-    await page.ev('localStorage.removeItem("aleph.herald.inspect")');
-    await page.go("#/issues");
-  }, 60_000);
-
-  test("the Herald's alerts show on each of its tabs", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    // The page's last state gets an open Ask; a stream event of `seq` 0 draws the Herald again from it.
-    await page.ev(`import("/views/now.js").then(({ view }) => fetch("/api/factory").then((r) => r.json()).then((s) => {
-      s.asks = [{ id: "tools-6", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Pick a format", situation: "Decide it.", escalated: true, actions: [] }];
-      view.render(s, {}, new URLSearchParams());
-      view.event(document.querySelector("#view"), { seq: 0, rows: [] });
-    }))`);
-    const seen = [];
-    for (const tab of ["events", "active", "inspector"]) {
-      await page.ev(`document.querySelector("#herald button[data-tab=${tab}]").click()`);
-      seen.push(await page.ev(`[document.querySelector("#herald section[data-pane=${tab}]").hidden, document.querySelector("#herald #needs")?.checkVisibility() ?? false]`));
+    await page.when('document.querySelector("#view #events table, #view #events .empty")');
+    const seen: [number, boolean, boolean][] = [];
+    for (const w of [390, 900, 1600]) {
+      await page.width(w);
+      seen.push(await page.ev(`(() => {
+        const top = (id) => document.getElementById(id).getBoundingClientRect().top;
+        return [${w}, document.documentElement.scrollWidth <= innerWidth, top("problems") < top("motion")];
+      })()`));
     }
-    expect(seen).toEqual([[false, true], [false, true], [false, true]]);
-    // The alerts keep their own size: the open pane, not the block above it, takes the card's free height.
-    expect(await page.ev(`(({ flexGrow, minHeight }) => [flexGrow, minHeight])(getComputedStyle(document.querySelector("#herald #needs")))`)).toEqual(["0", "auto"]);
+    expect(seen).toEqual([[390, true, true], [900, true, true], [1600, true, false]]);
     expect(page.errors).toEqual([]);
-    await page.ev('localStorage.removeItem("aleph.herald.inspect")');
-    await page.go("#/issues");
+    await page.width(1200);
   }, 60_000);
 
-  test("when the first of two running jobs ends, a redraw by morph fades a ghost of that job where its row was", async () => {
+  test("a filter click in Events fetches only the log, keeps the kind in the address, and draws its rows", async () => {
     await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    const ghost = await page.ev<string[]>(`Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
-      const root = document.querySelector("#view"), job = (name) => ({ name, started: "2026-11-15T10:00:00Z", item: { title: name } });
-      const draw = (running) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
-      draw([job("first job"), job("second job")]);
-      const moved = view.swap(root);
-      draw([job("second job")]);
-      moved();
-      // The redraw stops only the animations it started: the run dot's breath goes on.
-      return [root.querySelector("#herald .run-now:not([data-job]) .run-title").textContent, ...root.querySelector("#herald .run-now[data-job] .run-dot").getAnimations().filter((a) => a.playState === "running").map((a) => a.animationName)];
-    })`);
-    expect(ghost).toEqual(["first job", "breathe"]);
-    // The morph drew made-up jobs into #view: leave Status, so the next visit draws its own data.
-    await page.go("#/issues");
-  }, 60_000);
-
-  /**
-   * Opens Status and draws the rig once the page's own loads have ended, so that none of them draws over it. A load is
-   * a fetch of /api/factory or /api/flow, and ends when its json is read and the draw that follows it has run. The
-   * first load makes two. The stream's open starts a third, which draws only if its data differs.
-   */
-  const heraldRig = async () => {
-    await page.go("#/issues");
+    await page.when('document.querySelector("#view #events .seg button[data-value=landed]")');
     await page.ev(`(() => {
-      window.loads = { started: 0, ended: 0 };
-      if (window.rigged) return;
-      window.rigged = true;
-      const rf = window.fetch;
-      window.fetch = (u, o) => {
-        if (!/^\\/api\\/(factory|flow)/.test(String(u))) return rf(u, o);
-        const l = window.loads, end = () => { l.ended++; };
-        l.started++;
-        return rf(u, o).then((r) => {
-          const j = r.json.bind(r);
-          r.json = () => j().then((d) => { setTimeout(end); return d; });
-          return r;
-        });
-      };
+      const f = window.fetch;
+      window.got = [];
+      window.fetch = (u, o) => (window.got.push(String(u)), f(u, o));
+      document.querySelector("#view #events .seg button[data-value=landed]").click();
     })()`);
-    await page.go("#/");
-    await page.when("window.loads.started > 2 && window.loads.ended === window.loads.started");
-    await page.ev(drawRig);
-  };
-
-  // The Herald drawn from `rows` (one feed row each, keyed `row <id>`) by morph, as a redraw does; `window.herald(ids)` puts the rows in that order, newest first.
-  const drawRig = `Promise.all([import("/views/now.js"), import("/vendor/idiomorph.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, { Idiomorph }, s]) => {
-    const root = document.querySelector("#view");
-    window.view = view; window.root = root;
-    window.herald = (ids) => Idiomorph.morph(root, view.render({ ...s, runningIssues: [], running: [], herald: { ...s.herald, rows: ids.map((id, i) => ({ key: "row " + id, at: "2026-11-15T10:0" + (9 - i) + ":00Z", by: "gate", word: "filed", id: [], text: ["row " + id], more: 0, lines: [] })) } }, {}, new URLSearchParams()), { morphStyle: "innerHTML" });
-    window.rows = () => Object.fromEntries([...root.querySelectorAll("#herald .herald-feed > [data-key]")].map((r) => [r.dataset.key, r]));
-    window.herald(["a", "b", "c"]);
-  })`;
-
-  test("a redraw by morph that reorders the Herald's feed rows keeps each row's node", async () => {
-    await heraldRig();
-    expect(await page.ev<boolean[]>(`(() => {
-      const before = rows(), moved = view.swap(root);
-      herald(["c", "a", "b"]); moved();
-      const after = rows();
-      return [Object.keys(after).join() === "row c,row a,row b", ...Object.keys(before).map((k) => before[k] === after[k])];
-    })()`)).toEqual([true, true, true, true]);
-  }, 60_000);
-
-  test("a second redraw by swap and morph leaves no animation of the first on any row, and glides each row from where it is", async () => {
-    await heraldRig();
-    // The second redraw comes 60 ms into the first: row d grows and row c glides up.
-    const [count, left, before, after] = await page.ev<number[][]>(`(() => {
-      const first = [], tops = () => Object.values(rows()).map((r) => r.getBoundingClientRect().top);
-      let moved = view.swap(root);
-      herald(["d", "c", "a", "b"]); moved();
-      for (const r of Object.values(rows())) for (const a of r.getAnimations({ subtree: true })) { a.currentTime = 60; first.push(a); }
-      const before = tops();
-      moved = view.swap(root);
-      herald(["d", "c", "a", "b"]); moved();
-      return [[first.length], Object.values(rows()).map((r) => r.getAnimations({ subtree: true }).filter((a) => first.includes(a)).length), before, tops()];
-    })()`);
-    expect(count[0]).toBeGreaterThan(0);
-    expect(left).toEqual([0, 0, 0, 0]);
-    after.forEach((t, i) => expect(t).toBeCloseTo(before[i], 0));
-  }, 60_000);
-
-  test("a feed row that a redraw removes fades out as an exit element with its text", async () => {
-    await heraldRig();
-    const exit = await page.ev<[string, boolean]>(`(() => {
-      const moved = view.swap(root);
-      herald(["a", "c"]); moved();
-      const ghost = [...root.querySelectorAll("#herald > .event-row")].find((r) => r.textContent.includes("row b"));
-      return [ghost?.textContent ?? "", ghost?.getAnimations().some((a) => a.playState === "running" && a.effect.getKeyframes().some((k) => "opacity" in k || "height" in k))];
-    })()`);
-    expect(exit[0]).toContain("row b");
-    expect(exit[1]).toBe(true);
-  }, 60_000);
-
-  test("a Herald feed row has the card background, and clips its content while it grows", async () => {
-    await heraldRig();
-    const [bg, overflow] = await page.ev<string[]>(`(() => {
-      const moved = view.swap(root);
-      herald(["d", "a", "b", "c"]); moved();
-      const row = root.querySelector('#herald [data-key="row d"]');
-      return [getComputedStyle(root.querySelector("#herald .event-row")).backgroundColor, getComputedStyle(row).overflow];
-    })()`);
-    expect(bg).not.toBe("rgba(0, 0, 0, 0)");
-    expect(["clip", "hidden"]).toContain(overflow);
-  }, 60_000);
-
-  test("a click on a feed row's chip word filters the Herald to that word until a click on the chip's X", async () => {
-    await page.go("#/");
-    await page.when('document.querySelector("#view #herald")');
-    // Stream rows in two words; a stream event draws them, as `event` does for a new event.
-    const seen = await page.ev<[string[], string][]>(`Promise.all([import("/views/now.js"), import("/views/lib/feed.js")]).then(([{ view }, { eventRow }]) => {
-      const root = document.querySelector("#view"), out = [];
-      const ev = (id, word) => ({ key: "row " + id, at: "2026-11-15T10:0" + id + ":00Z", by: "gate", word, id: [], text: ["row " + id], more: 0, lines: [] });
-      const rows = [ev(1, "landed"), ev(2, "failed"), ev(3, "landed")];
-      const beat = (seq) => view.event(root, { seq, rows });
-      const look = () => out.push([[...root.querySelectorAll("#herald .herald-feed > [data-key^='row']")].map((r) => r.dataset.key), root.querySelector("#herald .herald-word")?.textContent ?? ""]);
-      const word = (key) => root.querySelector('#herald [data-key="' + key + '"] .event-line > .badge').click();
-      beat(1e9); look();
-      word("row 1"); look();
-      // Every row in the feed has the filter's word, so a row of another word is put in to take the click.
-      root.querySelector("#herald .herald-feed").insertAdjacentHTML("afterbegin", eventRow(ev(2, "failed")).replace("<div", '<div data-key="row x"'));
-      word("row x"); look();
-      beat(1e9 + 1); look();
-      root.querySelector("#herald .herald-word .ref-x").click(); look();
-      return out;
-    })`);
-    expect(seen).toEqual([
-      [["row 3", "row 2", "row 1"], ""],
-      [["row 3", "row 1"], "landed ×"],
-      [["row 2"], "failed ×"],
-      [["row 2"], "failed ×"],
-      [["row 3", "row 2", "row 1"], ""],
-    ]);
-    // The stream rows are made up: leave Status, so the next visit draws its own data.
+    await page.when('document.querySelector("#view #events .seg button[data-value=landed]")?.getAttribute("aria-pressed") === "true"');
+    expect(await page.ev<string[]>("window.got")).toEqual([expect.stringMatching(/^\/api\/log\?.*kind=landed/)]);
+    expect(await page.ev("location.hash")).toContain("kind=landed");
+    expect(page.errors).toEqual([]);
+    await page.reload(); // Takes the patched fetch away.
     await page.go("#/issues");
   }, 60_000);
 });

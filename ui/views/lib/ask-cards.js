@@ -1,7 +1,7 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
 import { actMessages, openDiffs, reasonOf } from "./decisions.js";
 import { clock, dur, span, when } from "./format.js";
-import { actButton, fold, codeText, diffHtml, esc, inputBox, meta, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
+import { actButton, fold, codeText, diffHtml, esc, idLink, inputBox, meta, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
 import { shortText, shortId, jobHref, parseId } from "../../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
@@ -61,9 +61,9 @@ function decisionBody(d, mark, repo) {
 
 const isUrl = (u) => /^https?:\/\//.test(u);
 
-/** One button of an ask row: the request it posts as data attributes; `name` keys the row's message. */
-function actionButton(a, name) {
-  return actButton(a.label, { act: a.act, path: a.path, body: JSON.stringify(a.body ?? {}), ...(a.confirm ? { confirm: "1" } : {}), ...(name ? { name } : {}), label: a.label }, { primary: a.primary });
+/** One button of an ask row: the request it posts as data attributes; `name` keys the row's message, `kind` sizes it. */
+function actionButton(a, name, kind) {
+  return actButton(a.label, { act: a.act, path: a.path, body: JSON.stringify(a.body ?? {}), ...(a.confirm ? { confirm: "1" } : {}), ...(name ? { name } : {}), label: a.label }, { primary: a.primary, kind });
 }
 
 /** The Technical details of an ask card: what the limits moved out, the raw note, the options, the signals, the stat and the review note. Closed until opened. */
@@ -118,4 +118,26 @@ export function askCard(i, now = new Date().toISOString()) {
   const desc = `<p class="situation">${esc(shortText(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to the user with its case text.</span>' : ""}${i.due ? ` <span class="muted">${esc(DUE_VERB[i.dueAction?.split(":")[0]] ?? "Acts")} at ${esc(clock(i.due))} with no answer.</span>` : ""}</p>`;
   return askShell(esc(i.reason), `data-ask="${esc(i.id)}" data-annotate="${esc(shortId(i.id))}" data-card="${esc(i.card)}" data-reason="${esc(i.reason)}"`, key, meta, i.label, shortText(i.headline || i.title, i.repo), i.tag, desc,
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
+}
+
+/**
+ * A compact alert: the head of an Ask card on one line (its dot, kind, title, muted detail, tag and `side`, a wait or a
+ * value), then `acts`, its small buttons. `card` colours it: approve, decide, unstick or need. `title` is HTML. `ask` is
+ * the ID of the Ask it shows, which the router records once it is answered.
+ * @design ask-card
+ */
+export const alertCard = ({ card, kind, title, detail = "", tag = "", side = "", acts = "", ask = "" }) =>
+  `<article class="alert" data-card="${esc(card)}"${ask ? ` data-ask="${esc(ask)}"` : ""}><div class="ask-box"><div class="ask-head"><span class="ask-dot" aria-hidden="true"></span>` +
+  `<span class="t" title="${esc(kind)}: ${title.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()}${detail ? ` ${esc(detail)}` : ""}"><b class="ask-kind">${esc(kind)}:</b> <span class="ask-title">${title}</span>${detail ? ` <span class="pdetail">${esc(detail)}</span>` : ""}</span>` +
+  `${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}${side ? `<span class="num">${esc(side)}</span>` : ""}</div>${acts ? `<div class="actions pacts">${acts}</div>` : ""}</div></article>`;
+
+/** An Ask as a compact alert: its id and headline, how long it has waited, and its buttons but those that need a typed answer (a reason is optional), Always second. Its issue page has the full card. */
+export function askAlert(i, now) {
+  const acts = (i.actions ?? []).filter((a) => !a.input || a.input.name === "reason").map((a) => actionButton(a, i.key?.startsWith("run:") ? i.id : undefined, "small"));
+  if (i.always) {
+    const { reason: own, scope, action, label } = i.always;
+    acts.splice(acts.length ? 1 : 0, 0, actButton(label, { act: "always", reason: own ?? (scope === "project" && i.repo ? `${i.reason}:${i.repo}` : i.reason), action, first: i.actions?.[0]?.act ?? "", label }, { kind: "small always" }));
+  }
+  const id = i.href ? idLink(shortText(i.id, i.repo), i.href) : `<span class="id">${esc(shortText(i.id, i.repo))}</span>`;
+  return alertCard({ ask: i.id, card: i.card, kind: i.label, title: `${id} ${esc(shortText(i.headline || i.title, i.repo))}`, detail: shortText(i.situation ?? i.problem ?? "", i.repo), tag: i.tag, side: i.at ? dur((Date.parse(now) - Date.parse(i.at)) / 1000) : "", acts: acts.join("") + (i.key?.startsWith("run:") ? actMsg(i.id) : "") });
 }

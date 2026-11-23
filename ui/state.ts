@@ -80,15 +80,20 @@ export function heraldReviewed(events: EventRow[], runs: Entry[]): Record<string
 /** The newest HERALD_EVENTS events of the last day at `now` (ms), oldest first, each with its project. */
 export const heraldEvents = (now: number): EventRow[] => withProjects(readEvents(now - 86_400_000).slice(-HERALD_EVENTS));
 
-/** What the Herald's rows name besides the events: the title of each issue they target (a project's list gives it), and the run, attempt and reviewed maps. */
-export function heraldContext(events: EventRow[], runs: Entry[], lists: ReturnType<typeof reader>): HeraldContext {
+/** The title of each issue `events` target, by its target: a project's list gives it. */
+export function titlesOf(events: EventRow[], lists: ReturnType<typeof reader>): Record<string, string> {
   const titles: Record<string, string> = {};
   for (const e of events) {
     const issue = targetOf(e), k = parseKey(issue), p = parseId(issue) ?? (k?.kind === "issue" && e.project ? { repo: e.project, n: k.n, sub: undefined } : null);
     const item = p && !(issue in titles) ? lists.item(p.repo, p.sub === undefined ? p.n : `${p.n}.${p.sub}`) : undefined;
     if (item) titles[issue] = item.title;
   }
-  return { titles, runs: heraldRuns(events, runs), attempts: heraldAttempts(events, runs), reviewed: heraldReviewed(events, runs) };
+  return titles;
+}
+
+/** What the Herald's rows name besides the events: the title of each issue they target, and the run, attempt and reviewed maps. */
+export function heraldContext(events: EventRow[], runs: Entry[], lists: ReturnType<typeof reader>): HeraldContext {
+  return { titles: titlesOf(events, lists), runs: heraldRuns(events, runs), attempts: heraldAttempts(events, runs), reviewed: heraldReviewed(events, runs) };
 }
 
 export interface Job {
@@ -178,6 +183,8 @@ export interface State {
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
     /** The hold event the dispatch stores in the record: the action word and the content the card shows. */
     ev?: Hold;
+    /** When the hold in force began: the time of the issue's newest `held` event, when no start came after it (ADR 0001). */
+    heldAt?: string;
     waits?: { id: string; href: string; state: string | null }[] }[];
   /** Issues in Running: each with its parts nested and "n of m issues". */
   runningIssues: RunningIssue[];
@@ -424,9 +431,9 @@ const awaitingOf = (slots: Slot[], { pickedUp }: Pickups): NewIssue[] =>
 const queuedOf = (slots: Slot[], { pickedUp }: Pickups, { blocker }: Projector, decide: (repo: Repo, item: Issue) => IssueDecision) =>
   byPriority(slots.filter(({ item, st }) => status(item) === "open" && (st === "queued" || st === "held")).map(({ repo, item, id, st, part }) => {
     // The stage already says when an issue is to plan.
-    const w = decide(repo, item);
+    const w = decide(repo, item), hold = eventsOf(issueKey(item.id), "held", "started").at(-1);
     return { item, repo: repo.key, id: item.id, title: item.title, priority: priorityOf(item), stage: st, at: updated(item) ?? created(item) ?? "", since: pickedUp(id), ...(part ? { part } : {}), kind: w.kind,
-      ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
+      ...(w.ev ? { ev: w.ev } : {}), ...(hold?.action === "held" ? { heldAt: hold.time } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
     };
   }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q);
 

@@ -1,18 +1,19 @@
-// The Now view: the factory's front page. Each render function takes the
-// /api/factory object and returns an HTML string. No DOM, so tests can call them.
-// The page's click handler (router.js) runs the buttons `act` makes.
-import { keep, kept, scope } from "./lib/address.js";
+// The Status view: the factory's front page. Each render function takes the /api/factory object, with what `more`
+// adds, and returns an HTML string. No DOM, so tests can call them. The page's click handler (router.js) runs the
+// buttons `act` makes. The layout is page A of docs/mocks/status-redesign: the work, the event log and Memory in the
+// main column; Problems, Efficiency and Flow in the rail.
+import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { ago, cardPct, dur, count, hours, mean, plural, shortModel, when } from "./lib/format.js";
-import { actButton, fold, recordState, restoreState, codeText, facts, tabs, wireTabs, tiles, badge, card, chip, splitCard, sideStats, legendHtml, sectionHead, meter, dataTable, costHtml, empty, error, esc, idLink, loadingLine, miss, pageHead, priorityBadge, repoIdLink, row, cell, heads, subHead, sortHead, sortRows, tag, tone } from "./lib/html.js";
-import { shortText, NAMES, runWord, shortId, jobHref, contentText, shownId, issueHref } from "../../lib/naming.ts";
-import { panelOf, title as chartTitle } from "./lib/chart.js";
-import { feedRow, heraldRow } from "./lib/feed.js";
-import { flowOf, statusCards, usable } from "./lib/flow-parts.js";
-import { actMsg, askCard, askShell, checkFacts, itemId, metaRow, statLines, trailerLine } from "./lib/ask-cards.js";
+import { cardPct, clock, count, dur, hours, pct, plural, when } from "./lib/format.js";
+import { actButton, barList, barRow, card, cell, dataTable, empty, error, esc, filterBar, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
+import { panelOf } from "./lib/chart.js";
+import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
+import { actMsg, alertCard, askAlert, itemId } from "./lib/ask-cards.js";
+import { laneRow, renderLanes, spans } from "./lib/timeline.js";
+import { offered } from "./lib/memory-health.js";
 import { verdict } from "../../lib/status-words.ts";
-import { needItems } from "./lib/memory-health.js";
-import { get } from "./lib/router.js";
+import { get, redraw } from "./lib/router.js";
 
 export const view = {
   path: "/",
@@ -22,332 +23,53 @@ export const view = {
   icon: "gauge-high",
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   live: true,
-  // `s.flow` is /api/flow for the window with its baseline and `s.memory` the Memory page's data, which `more` adds; the page draws without them first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", renderTiles(s, f, w), "scorecard")}<div class="rail"><div class="rail-main">${renderPipeline(f, q, (s.errored ?? []).length)}${renderIssues(f)}${renderMemory(s.memory ?? null)}</div>${renderHerald(s, page)}</div></div>`; },
-  more: async (s, q) => { const [flow, memory] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q)]); return { ...s, flow, memory }; },
+  // `more` adds /api/flow for the window with its baseline, the Memory page's data, the runs of the last hour and a page of the event log; the page draws without them first.
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", statusCards(s, f, { memory: s.memory ?? null }), "scorecard")}<div class="rail"><div class="rail-main">${renderMotion(s)}${renderLog(s.log ?? null, q)}${renderMemory(s.memory ?? null, s.now)}</div><div class="stack">${renderProblems(s, page.stale)}${renderEfficiency(f)}${renderFlow(f, s)}</div></div></div>`; },
+  more: async (s, q) => { const [flow, memory, jobs, log] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q), jobsOf(q), logOf(q)]); return { ...s, flow, memory, jobs, log }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
-    scope(q).wire(root); wireHeraldJump(root); wireInspect(root);
-    // A feed row's chip word filters the feed to its word; the X of the aside's chip clears it.
-    root.onclick = (e) => {
-      const b = e.target.closest?.("#herald .herald-feed .event-line > .badge:first-child, #herald .herald-word .ref-x");
-      if (!b) return;
-      e.preventDefault();
-      keep(WORD, b.matches(".ref-x") ? null : b.textContent);
-      redrawHerald(root);
-    };
-    if (usable(s.flow)) { root.querySelector('aleph-chart[key="status/active"]').frame = activeFrame(s.flow); root.querySelector('aleph-chart[key="status/speed"]').frame = speedFrame(s.flow); }
+    scope(q).wire(root); wireLog(root, s);
+    const f = usable(s.flow), m = s.memory && !s.memory.error ? s.memory : null;
+    if (f) root.querySelector('aleph-chart[key="status/landed"]').frame = landedFrame(f);
+    if (m) root.querySelector('aleph-chart[key="status/offers"]').frame = offersFrame(m, Date.parse(s.now));
   },
-  // The stream sends the Herald's rows when an event is added; the page draws them at once, until a state with a newer or equal `seq` replaces them.
-  event: (root, live) => {
-    page.live = live;
-    redrawHerald(root);
-  },
-  swap: (root) => heraldMotion(root),
 };
 
-/** What the page keeps between draws: the last rendered state, the shell's out-of-date verdict, and the last rows the stream sent (`{ seq, rows }`). `renderHerald` takes it as a parameter. */
-const page = { state: null, stale: false, live: null };
+/** What the page keeps between draws: the last rendered state and the shell's out-of-date verdict. */
+const page = { state: null, stale: false };
 
-/** The Herald drawn again from the last state, with its folds and motion kept. */
-function redrawHerald(root) {
-  const h = root.querySelector("#herald");
-  if (!h || !page.state) return;
-  const saved = recordState(h), moved = heraldMotion(root);
-  h.outerHTML = renderHerald(page.state);
-  restoreState(root.querySelector("#herald"), saved);
-  moved();
-}
-
-const PERFORMANCE = "#/factory/jobs";
-/** A link to another page that keeps the window; week is the default and stays out of the address. */
-const withWindow = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
-
-/** The scorecard: efficiency, completion, issues, jobs, usage. `d` is /api/flow for the window `win` with its baseline, or null while it loads. */
-export function renderTiles(s, d, win = d?.window ?? "week") {
-  return statusCards(s, d, { performance: withWindow(PERFORMANCE, win) });
-}
-
-/** The active-issues frame: per bucket, the issues in each stage (`d.active` of /api/flow), stacked. */
-export const activeFrame = (d) => ({
-  measure: { name: "Active Issues", unit: "count", agg: "max" },
-  over: { kind: "time", window: d.window },
-  by: { name: "Stage", keys: [{ key: "intake", name: NAMES.intake, color: "chart-6" }, { key: "queue", name: "Queued", color: "series-4" }, { key: "running", name: "Running", color: "run" }, { key: "landed", name: "Landed", color: "done" }] },
-  rows: d.active ?? [],
-  form: "area",
-});
-
-/** The legend swatch class of each chart colour the speed chart uses. */
-const SWATCH = { "chart-6": "c-s6", "series-4": "c-s4", run: "c-run", done: "c-done" };
-/** The longest column the speed chart draws, in seconds: a slow bucket is cut there, so it does not flatten the rest. */
-const SPEED_CAP = 1800;
-/** The speed frame: per bucket, the median seconds of each phase that ended in it (`d.buckets` of /api/flow), stacked. The colours are Active Issues'. */
-export const speedFrame = (d) => ({
-  measure: { name: "Median Time", unit: "seconds", agg: "max" },
-  over: { kind: "time", window: d.window },
-  by: { name: "Phase", keys: [{ key: "intake", name: NAMES.intake, color: "chart-6" }, { key: "queue", name: NAMES.queue, color: "series-4" }, { key: "implement", name: NAMES.build, color: "run" }, { key: "land", name: NAMES.land, color: "done" }] },
-  rows: (d.buckets ?? []).map((b) => ({ at: b.at, intake: b.intake, queue: b.queue, implement: b.implement, land: b.land })),
-  form: "columns",
-  cap: SPEED_CAP,
-  legend: false,
-});
-
-/** The Issues card: the active issues over the window on the left, the median time of each phase on the right. `d` is /api/flow for the window, null while it loads, or `{ error }`. */
-function renderIssues(d) {
-  if (!d) return card("Issues", loadingLine("the issues"), { id: "issues" });
-  if (d.error) return card("Issues", error(d.error), { id: "issues" });
-  const speed = speedFrame(d);
-  // The speed chart is a quarter of the card wide, too narrow for the chart's own legend, so the legend is under it.
-  const keys = legendHtml(speed.by.keys.map((k) => [k.name, SWATCH[k.color]]));
-  return splitCard("Issues", panelOf("status/active", activeFrame(d), "", { bare: true }), subHead(chartTitle(speed)) + panelOf("status/speed", speed, "", { bare: true }) + keys, { id: "issues" });
-}
-
-/** /api/memory in the project of `q` with /api/memory/processes as `processes`, as the Memory page combines them; `{ error }` when a load fails. */
-async function memoryOf(q) {
+/** The JSON of `url`, or `{ error }` naming `what` when the load fails. */
+async function load(url, what) {
   try {
-    const [m, processes] = await Promise.all([scope(q).url("/api/memory"), "/api/memory/processes"].map(async (url) => {
-      const res = await get(url);
-      if (!res.ok) throw new Error(`Could not load Memory (${res.status}).`);
-      return res.json();
-    }));
-    return { ...m, processes };
+    const res = await get(url);
+    if (!res.ok) throw new Error(`Could not load ${what} (${res.status}).`);
+    return await res.json();
   } catch (e) { return { error: e.message }; }
 }
 
-/** The Memory card: the memory items that wait for the user, as the Memory page's Needs-you strip lists them. `m` is null while it loads, or `{ error }`. */
-function renderMemory(m) {
-  const box = (body) => card("Memory", body, { id: "memory" });
-  if (!m) return box(loadingLine("the memory"));
-  if (m.error) return box(error(m.error));
-  const items = needItems(m);
-  return box(items.length ? list(items.join("")) : empty());
+/** /api/memory in the project of `q` with /api/memory/processes as `processes`, as the Memory page combines them. */
+async function memoryOf(q) {
+  const [m, processes] = await Promise.all([load(scope(q).url("/api/memory"), "Memory"), load("/api/memory/processes", "Memory")]);
+  return m.error ? m : processes.error ? processes : { ...m, processes };
 }
 
-/** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. Queue is the wait before the first build, not a run. */
-const PIPE = Object.fromEntries(["intake", "queue", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
-/** The tone of a stage's failed share: under 10% none, to 25% need, above that error. */
-const health = (share) => (share < 0.1 ? "" : share <= 0.25 ? "need" : "error");
-/** The Jobs filter of each stage: its stage tile there and the role of its runs. Review and Recheck have no stage tile, so they filter by role alone; a recheck is a worker run. */
-const DRILL = { intake: { stage: "intake", role: "intake" }, queue: { stage: "queue" }, build: { stage: "implement", role: "worker" }, review: { role: "reviewer" }, recheck: { role: "worker" }, land: { stage: "land" } };
-/** The Jobs page for a stage, in the window and project of `q`. */
-const drillHref = (k, q, extra = {}) => {
-  const s = scope(q), out = new URLSearchParams({ ...DRILL[k], ...extra });
-  if (s.window !== "week") out.set("window", s.window);
-  if (s.project) out.set("project", s.project);
-  return `#/factory/jobs?${out}`;
-};
+/** The runs of the last hour in the project of `q`: the lanes of the issues that run now. */
+const jobsOf = async (q) => { const d = await load(scope(q).url("/api/jobs?window=hour&limit=500"), "the runs"); return d.error ? d : d.jobs; };
 
-/** The Pipeline card for the window: a row per stage with its runs per issue, p90 time, failed share and agent hours on one scale, where Implement's bar splits its hours by outcome; the issue counts of the window on the right. `d` is /api/flow for the window, null while it loads, or `{ error }`; `errored` is the errored jobs now. */
-export function renderPipeline(d, q = new URLSearchParams(), errored = 0) {
-  if (!d) return card("Pipeline", loadingLine("the pipeline"), { id: "pipeline" });
-  if (d.error) return card("Pipeline", error(d.error), { id: "pipeline" });
-  const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
-  const queue = d.phases?.queue, { kept, hours: lostH } = d.figures ?? {};
-  const classes = (d.classes ?? []).filter((c) => c.hours > 0);
-  // Implement's hours are its outcome classes', so its bar and the legend add up; the other stages' are runs times minutes.
-  const agentH = (k) => (k === "build" ? kept + (lostH ?? 0) : by.get(k) ? (by.get(k).runs * by.get(k).minutes) / 60 : 0);
-  const most = Math.max(...Object.keys(PIPE).filter((k) => k !== "queue").map(agentH));
-  const go = (k, name, tip) => `<td><button type="button" class="pgo" data-inspect="stage" data-target="${esc(k)}" title="${esc(tip)}">${esc(name)}</button></td>`;
-  const num = (html) => `<td class="num">${html}</td>`, wide = (html = "") => `<td class="wide">${html}</td>`;
-  const bar = (k) => {
-    if (k !== "build") return wide(meter(most ? (agentH(k) / most) * 100 : 0));
-    return wide(meter(classes.map((c) => ({ pct: (c.hours / most) * 100, cls: `seg-${c.key}` })), classes.map((c) => `${c.key} ${hours(c.hours)}`).join(", ")));
-  };
-  const line = ([k, name]) => {
-    if (k === "queue") {
-      const none = miss("A wait has no runs");
-      return row([go(k, name, `Queue: ${plural(queue?.count ?? 0, "wait")}`), num(none), num(queue?.count > 0 ? esc(dur(queue.p90)) : miss("Nothing waited in this window")), num(none), wide(), num(miss("A wait has no agent"))]);
-    }
-    const r = by.get(k);
-    if (!r?.items) return row([go(k, name, `${name}: no runs`), num(miss("Nothing ran in this window")), cell("–", { num: true }), cell("–", { num: true }), wide(), cell("–", { num: true })]);
-    const share = r.runs ? (r.unusable ?? 0) / r.runs : 0, t = health(share);
-    const tip = `${name}: ${plural(r.runs, "run")} on ${plural(r.items, "issue")}${r.unusable ? `, ${count(r.unusable)} failed` : ""}`;
-    const failed = r.unusable ? num(`<a class="pf${t ? ` ${t}` : ""}" href="${esc(drillHref(k, q, { unusable: "1" }))}">${cardPct(share)}</a>`) : cell(cardPct(share), { num: true });
-    return row([go(k, name, tip), cell(mean(r.runs / r.items), { num: true }), cell(dur(r.p90), { num: true }), failed, bar(k), cell(hours(agentH(k)), { num: true })]);
-  };
-  const table = dataTable(heads(["Stage", "Runs / Issue", "p90", "Failed", "", "Agent"], ["Runs / Issue", "p90", "Failed", "Agent"]), Object.entries(PIPE).map(line).join(""));
-  const legend = legendHtml(classes.map((c) => [`${c.key} ${hours(c.hours)}`, `seg-${c.key}`, `data-inspect="class" data-target="${esc(c.key)}" title="${esc(c.text ?? c.key)}"`]));
-  const intake = by.get("intake")?.items ?? 0, open = d.open ?? { open: 0, parked: 0 };
-  const side = sideStats([
-    { k: "Filed", v: count(d.filed?.all ?? 0) },
-    { k: "Intake", v: count(intake) },
-    { k: "Landed", v: count(d.done ?? 0), state: "landed" },
-    { k: "Dropped", v: count(d.dropped ?? 0) },
-    { k: "Open", v: count(open.open), note: open.parked ? `+${count(open.parked)}` : "", title: `${plural(open.open, "open issue")}, ${plural(open.parked, "parked issue")}` },
-    { k: "Errored", v: count(errored), note: "now", state: errored ? "failed" : "" },
-  ]);
-  return splitCard("Pipeline", table, side, { id: "pipeline", aside: legend });
+/** A page of the event log for the window, kind, search and page of `q`. */
+function logOf(q) {
+  const s = scope(q), out = new URLSearchParams({ window: s.window });
+  for (const k of ["kind", "q", "page"]) if (q.get(k)) out.set(k, q.get(k));
+  return load(s.url(`/api/log?${out}`), "the events");
 }
 
-/** A Herald row's element id from its key, so a redraw by morph keeps the row's node and does not reuse it for another row. */
-const rowId = (key) => esc(`h-${key.replace(/\s+/g, "-")}`);
-
-/** The key of the Herald's word filter in keep(): the chip word whose event rows the feed shows, or null for every row. */
-const WORD = "herald.word";
-
-/** A job's ID linked to its page; a job with no ID links its item. */
-const jobLink = (j) => (j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j));
-
-/** The running jobs as rows of the feed's grid under the alerts: the start time, the action word, the ID, the title, a build's size with the breathing dot. Each is keyed by `data-job` so a job that ends leaves the section. A job leaves the state when it ends, so the rows are the state's. */
-function runNow(s) {
-  const row = (id, who, word, title, t, model, size = "") => feedRow({ tone: "run", at: t, cls: " run-now", attrs: ` data-job="${esc(id)}" id="${rowId(`job ${id}`)}"`,
-    body: `<span class="event-line">${tag(word, "run")}${who}<span class="event-title run-title" title="${esc(title)}">${esc(title)}</span>` +
-      `<span class="run-size"${model ? ` title="${esc(model)}"` : ""}><span class="run-dot"></span>${esc(size)}</span></span>` });
-  const rows = s.runningIssues.map((i) => row(i.id, repoIdLink(i.id, i.href), i.stage, i.title, i.at ?? i.since)).concat(s.running.map((j) => {
-    const run = j.run ?? { kind: "build", started: j.started };
-    const size = run.kind === "build" ? j.size : "";
-    return row(j.id ?? j.name, jobLink(j), runWord(run.kind), j.item?.title || j.name, run.started ?? j.started, j.model, size);
-  }));
-  return rows.length ? `<section class="herald-running" aria-label="Running">${rows.join("")}</section>` : "";
-}
-
-/** The Active pane: one list of the running issues, then the queued issues, then the running jobs, each row linked to its page. */
-function active(s) {
-  const rows = [
-    ...s.runningIssues.map((i) => [repoIdLink(i.id, i.href), i.title]),
-    ...(s.queued ?? []).map((q) => { const id = `${q.repo}-${q.id}`; return [repoIdLink(id, issueHref(id)), q.title]; }),
-    ...s.running.map((j) => [jobLink(j), j.item?.title || j.name]),
-  ];
-  return rows.length ? dataTable("", rows.map(([id, title]) => row([`<td>${id}</td>`, cell(title, { wide: true })])).join("")) : empty();
-}
-
-/** The key of the Herald's open tab and Inspector target in keep(): `{ tab, kind, target }`, `kind` "stage" or "class", or "failures" with no target. */
-const INSPECT = "herald.inspect";
-
-/** The Inspector pane: the failed issues of the kept stage, the issues of the kept class, else all failed issues, in `d`, /api/flow for the window; `at` is the kept target. */
-function inspector(d, at) {
-  if (!d) return loadingLine("the issues");
-  if (d.error) return error(d.error);
-  const id = (x) => `<td>${x.href ? repoIdLink(x.issue, x.href) : esc(x.issue)}</td>`;
-  const table = (head, rows) => (rows.length ? dataTable(head, rows.join("")) : empty());
-  // A click on it keeps no target, so the pane goes back to the failures.
-  const back = `<button type="button" class="pgo" data-inspect="failures">Failures</button>`;
-  if (!at.target) {
-    const rows = d.failures.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(PIPE[x.stage]), cell(when(x.at), { num: true })]));
-    return `<div class="inspect-head">${subHead("Failures")}</div>` + table(heads(["Issue", "Title", "Stage", "Failed"], ["Failed"]), rows);
-  }
-  if (at.kind === "stage") {
-    const rows = d.stages.issues[at.target].filter((x) => x.failed).map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(ago(x.failedAt), { num: true })]));
-    return `<div class="inspect-head">${subHead(`${PIPE[at.target]} Failures`)}</div>` + table(heads(["Issue", "Title", "Failed"], ["Failed"]), rows);
-  }
-  const rows = d.classes.find((c) => c.key === at.target).top.map((x) => row([id(x), cell(x.title ?? "", { wide: true }), cell(hours(x.hours), { num: true })]));
-  return `<div class="inspect-head">${subHead(at.target)}${back}</div>` + table(heads(["Issue", "Title", "Hours"], ["Hours"]), rows);
-}
-
-/** Open the Inspector on a click of a Pipeline stage or an Agent Time line, and keep the tab a click opens. */
-function wireInspect(root) {
-  const el = root.querySelector(".page");
-  wireTabs(el, (tab) => keep(INSPECT, { ...kept(INSPECT, {}), tab }));
-  if (el._inspect) return;
-  el._inspect = true;
-  el.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-inspect]");
-    if (!b) return;
-    keep(INSPECT, { tab: "inspector", kind: b.dataset.inspect, target: b.dataset.target });
-    redrawHerald(root);
-  });
-}
-
-/** The Herald panel: its tabs as the head, the alerts under them on every tab, then an Events tab with the rolling event history stream, an Active tab and an Inspector tab. `st` is the state it keeps between draws. */
-export function renderHerald(s, st = page) {
-  // An error is not pinned: the newest event already says it.
-  const asks = undecided(s.asks).map((i) => askCard(i, s.now));
-  const errored = (s.errored ?? []).map(errorRow(s));
-  const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
-
-  const sticky = asks.length + errored.length > 0
-    ? `<section id="needs" class="needs herald-sticky" aria-label="Alerts">` +
-        group("awaiting", asks.length, asks.join(""), list) +
-        group("jobs-error", errored.length, errored.join(""), list) +
-      `</section>`
-    : "";
-
-  // The stream's rows stand in for the state's while they are newer.
-  const word = kept(WORD);
-  const live = st.live && st.live.seq > (s.herald?.seq ?? 0) ? st.live : s.herald;
-  const rows = (live?.rows ?? []).filter((r) => !word || r.word === word).sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
-  const feed = rows.map((r) => heraldRow(r).replace(/^<\w+/, (t) => `${t} data-key="${esc(r.key)}" id="${rowId(r.key)}"`)).join("");
-
-  const at = kept(INSPECT, { tab: "events" });
-  const panes = { events: `${runNow(s)}<div class="herald-feed">${feed}</div>`, active: active(s), inspector: inspector(s.flow, at) };
-  const chipHtml = word ? chip("", { cls: "ref-chip herald-word", html: `${esc(word)} <button type="button" class="ref-x" aria-label="Clear">×</button>` }) : "";
-  return card("", tabs("Herald", [["events", "Events"], ["active", "Active"], ["inspector", "Inspector"]], panes, at.tab, { aside: chipHtml, top: sticky }), { id: "herald", cls: "herald-card", label: "Herald" });
-}
-
-/** The Herald's animated rows: the running jobs and the feed's top rows. */
-const heraldRows = (h) => h.querySelectorAll(".run-now[data-job], .herald-feed > [data-key]");
-const rowKey = (r) => (r.dataset.job ? `job ${r.dataset.job}` : r.dataset.key);
-
-/**
- * Record the Herald's rows before a redraw; the function it returns animates them from there to where the redraw put them.
- * A new feed row grows and holds a tint. A new running row grows and its parts drop in. A running row that ends fades out
- * in place while the new feed rows fade in; a feed row that leaves fades out the same way. Every other row glides to its new place. Nothing moves under reduced motion.
- * The rows' running animations stop once every box is read, so a second redraw measures the row where it is and no old glide is left on it.
- */
-function heraldMotion(root) {
-  const h = root.querySelector("#herald");
-  // A page with no matchMedia (the tests' DOM) has no layout to animate either.
-  if (!h || !globalThis.matchMedia || matchMedia("(prefers-reduced-motion: reduce)").matches) return () => {};
-  // A copy of each row, for a redraw by morph reuses a row's node for another row.
-  const was = new Map([...heraldRows(h)].map((r) => [rowKey(r), { r: r.cloneNode(true), box: r.getBoundingClientRect() }]));
-  // Only once every box is read: a stopped growth moves the rows below it. CSS animations, as the run dot's breath, do not start again once stopped, so they stay.
-  for (const r of heraldRows(h)) for (const a of r.getAnimations({ subtree: true })) if (a.constructor === Animation) a.cancel();
-  return () => {
-    const now = root.querySelector("#herald");
-    if (!now) return;
-    const css = getComputedStyle(now), mid = parseFloat(css.getPropertyValue("--t-mid")), easing = css.getPropertyValue("--ease").trim();
-    const rows = [...heraldRows(now)], keys = new Set(rows.map(rowKey));
-    const gone = [...was].filter(([k]) => !keys.has(k)), ended = gone.filter(([k]) => k.startsWith("job "));
-    // A growing row clips its content, which the shrunk height would cut off.
-    const grow = (r) => r.animate([{ height: "0px", opacity: 0, paddingTop: "0px", paddingBottom: "0px", overflow: "clip" }, { height: `${r.getBoundingClientRect().height}px`, opacity: 1, overflow: "clip" }], { duration: mid, easing });
-    // The new rows start first, at height 0, so the glide below measures the rows from where the growth starts.
-    for (const r of rows.filter((r) => !was.has(rowKey(r)))) {
-      if (r.dataset.job) {
-        grow(r);
-        for (const c of r.children) c.animate([{ transform: "translateY(-8px)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: 260, delay: 60, easing, fill: "backwards" });
-      } else if (ended.length) r.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 80, easing: "ease-out", fill: "backwards" });
-      else {
-        grow(r);
-        r.animate([{ background: "var(--run-bg)" }, { background: "var(--run-bg)", offset: 0.35 }, { background: "var(--surface)" }], { duration: 1500, easing: "ease-out" });
-      }
-    }
-    for (const r of rows) {
-      const old = was.get(rowKey(r)), dy = old ? old.box.top - r.getBoundingClientRect().top : 0;
-      if (Math.abs(dy) > 0.5) r.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: mid, easing });
-    }
-    // A ghost of each row that left fades where the row was; the card is its containing block.
-    const base = now.getBoundingClientRect();
-    for (const [, { r, box }] of gone) {
-      const ghost = r.cloneNode(true);
-      for (const a of ["data-job", "data-key", "id"]) ghost.removeAttribute(a);
-      Object.assign(ghost.style, { position: "absolute", left: `${box.left - base.left - now.clientLeft}px`, top: `${box.top - base.top - now.clientTop}px`, width: `${box.width}px`, margin: "0", pointerEvents: "none" });
-      now.append(ghost);
-      ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: mid, easing: "ease-out" }).finished.then(() => ghost.remove());
-    }
-  };
-}
-
-function wireHeraldJump(root) {
-  // On the head, which a redraw keeps and which `outOfDate` leaves in place; the sentence inside it is drawn again.
-  const head = root.querySelector?.(".shead");
-  if (!head || head._jump) return;
-  head._jump = true;
-  head.addEventListener?.("click", (e) => {
-    if (!e.target.closest?.(".say") || e.target.closest?.("a")) return;
-    const herald = root.querySelector?.("#herald");
-    if (herald) {
-      herald.scrollIntoView?.({ behavior: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth", block: "center" });
-      herald.classList?.add("pulsing");
-      setTimeout(() => herald.classList?.remove("pulsing"), 1200);
-    }
-  });
-}
+// ---- The head ----
 
 /** The page head: the time and the status sentence in the status tone, then the window control with Pause or Resume next to it. It has no title: the head is the factory's status at a glance. */
 function renderStatusLine(s, stale = false, w = "day") {
   const bar = scope().bar({ value: w, after: renderControls(s) });
-  return pageHead("", { head: "shead", after: `<span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}`, aside: bar });
+  return pageHead("", { head: "shead", after: `<span class="asof">${esc(when(s.now))}</span>${renderLede(s, stale)}`, aside: bar });
 }
 
 /** The status sentence of `verdict`, each part a link to its card but the plain ones. */
@@ -357,40 +79,130 @@ export function renderLede(s, stale = false) {
   return `<span class="say ${v.tone === "alert" ? "error" : v.tone === "ask" ? "warning" : v.tone}">${esc(v.head)}${parts}.</span>`;
 }
 
-const list = (html) => `<div class="list">${html}</div>`;
+/** The Pause or Resume button of the page head. */
+export function renderControls(s) {
+  return s.factory.paused ? ctl("resume", "Resume") : ctl("pause", "Pause");
+}
+const ctl = (verb, label) =>
+  actButton(label, { act: verb, path: `/api/factory/${verb}`, ...(verb === "pause" ? { confirm: "1" } : {}), label }, { cls: "warn" });
 
-/** The one folded "Technical details" of an Issues row; `key` keeps it open across refreshes. */
-const more = (key, body) => fold("Technical details", `<div class="body">${body}</div>`, { cls: "more", keep: `more:${key}` });
+// ---- Issues in Motion ----
 
-/** The details of a held or errored job: everything the row's one sentence leaves out. */
-function details(s, j, extra = "") {
-  const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
-    facts([["Started", esc(when(j.started, new Date(s.now)))], ["Phase", esc(j.phase)], ["Cost", j.cost !== undefined && costHtml(j.cost, j.wk)], ["Model", j.model && esc(shortModel(j.model))], ...checkFacts(j)]) +
-    (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(dur(failed(j).seconds))}</p>` : "") +
-    (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
-    trailerLine(j, s.now) +
-    (j.defaults.length ? `<h4>Defaults taken</h4><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "") +
-    (j.followups.length ? `<h4>Follow-ups</h4><ul>${j.followups.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "");
-  return more(j.name, parts);
+/** The lanes of the issues with a live run: each issue's runs of the last hour on one axis from the first of them to now. `jobs` are /api/jobs rows. */
+export function lanesOf(jobs, now) {
+  const by = Map.groupBy(jobs.filter((j) => j.issue), (j) => `${j.repo} ${j.issue}`);
+  const live = [...by.values()].filter((js) => js.some((j) => j.state === "running"));
+  const runs = live.map((js) => spans(js.map((j) => ({ ...j, href: jobHref(j.id) })), now));
+  const from = Math.min(...runs.flat().map((r) => r.start));
+  const rows = runs.sort((a, b) => a[0].start - b[0].start).map((rs) => {
+    const { r } = rs[0], title = esc(r.title);
+    return laneRow({ head: `<span class="t" title="${title}">${idLink(shownId(r.issue, r.repo), issueHref(r.issue, r.repo))} ${title}</span>`, runs: rs });
+  });
+  return { rows, from, count: live.length };
 }
 
-const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
+/** The Issues in Motion card: the lanes, then the issues that wait, by what they wait on. `s.jobs` is null while it loads, or `{ error }`. */
+export function renderMotion(s) {
+  const box = (body, n) => card("Issues in Motion", body + renderWaiting(s), { count: n, id: "motion" });
+  if (!s.jobs) return box(loadingLine("the runs"));
+  if (s.jobs.error) return box(error(s.jobs.error));
+  const now = Date.parse(s.now), l = lanesOf(s.jobs, now);
+  return box(renderLanes(l.rows, l.from, now) || empty(), count(l.count));
+}
 
-/** What a card's line says for a hold: the action word and the event's content, as `busy a1372 → issues.js` or `after a9`. */
-const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
+/** What a hold waits on: the issues an `after` waits for, else the hold's facts. */
+const holdOn = (q) => (q.waits?.length ? q.waits.map((w) => (w.href ? idLink(shortText(w.id, q.repo), w.href) : esc(shortText(w.id, q.repo)))).join(" ") : esc(shortText(factsOf(q.ev ?? {}), q.repo)));
 
+/** The Waiting section: one row per hold, its word, what it waits on, its issues and how long the oldest has waited. Nothing when nothing waits. */
+export function renderWaiting(s) {
+  const waiting = waitingOf(s);
+  if (!waiting.length) return "";
+  const groups = Map.groupBy(waiting, (q) => `${q.kind} ${holdOn(q)}`);
+  const rows = [...groups.values()].map((qs) => {
+    const held = qs.map((q) => Date.parse(q.heldAt ?? "")).filter(Number.isFinite);
+    const issues = qs.map((q) => { const id = `${q.repo}-${q.id}`; return `${repoIdLink(id, issueHref(id))} ${esc(q.title)}`; }).join(" · ");
+    // The cell's text is escaped once already, so the title takes it with the tags cut.
+    return row([`<td>${tag(qs[0].kind, "quiet")}</td>`, `<td>${holdOn(qs[0])}</td>`, `<td class="wide" title="${issues.replace(/<[^>]*>/g, "")}">${issues}</td>`, cell(held.length ? dur((Date.parse(s.now) - Math.min(...held)) / 1000) : "–", { num: true })]);
+  });
+  return sectionHead("Waiting", { count: count(waiting.length), level: 3 }) + dataTable(heads(["Hold", "On", "Issues"]) + iconHead("stopwatch", "Waited"), rows.join(""));
+}
 
-/** The agent line of a held or errored job: a live run exists for it. */
-const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
-/** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Technical details behind it. */
-/** The one Technical details behind an errored row: the blocker, the whole reason, then the job's details. */
-const jobDetails = (s, j) => details(s, j,
-  (j.blocker ? `<p class="quiet q">Blocker ${idLink(j.blocker.id, j.blocker.href)}: ${esc(j.blocker.title)}</p>` : "") +
-  (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
+// ---- Events ----
 
-/** An error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
-const alertCard = (key, meta, title, problem, body = "") =>
-  askShell("error", `data-annotate="${esc(shortId(key))}" data-kind="error" data-card="unstick"`, key, meta, "Error", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
+/** The kinds the log filters by, as `/api/log` names them. */
+const KINDS = [["", "All"], ["problem", "Problems"], ["landed", "Landed"], ["ask", "Asks"], ["hold", "Holds"]];
+
+/** One event of the log: its time, its word, its issue and title, its job, who did it and how long the run took. */
+const logRow = (r) => row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${tag(r.action, r.action === "started" ? "run" : tone(r.action))}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
+  cell(r.title, { wide: true }), `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
+
+/** The log's filter, table and pager: the part that a filter, a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
+function logBody(log, q) {
+  const bar = filterBar([{ label: "Show", bare: true, name: "kind", value: q.get("kind") ?? "", options: KINDS.map(([value, label]) => ({ value, label })) }]);
+  if (!log) return bar + loadingLine("the events");
+  if (log.error) return bar + error(log.error);
+  if (!log.rows.length) return bar + empty();
+  const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Issue", "Title", "Job", "By"]) + iconHead("stopwatch", "Took");
+  return bar + dataTable(head, log.rows.map(logRow).join("")) + pager(Number(q.get("page")) || 1, log.total);
+}
+
+/** The Events card: the search, then the log's filter, table and pager. */
+export const renderLog = (log, q = new URLSearchParams()) =>
+  card("Events", `${searchBox("status-log", q.get("q") ?? "", "Search ids and titles")}<div id="log">${logBody(log, q)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events" });
+
+/** A filter, a search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
+function wireLog(root, s) {
+  const card = root.querySelector("#events");
+  if (!card || card._wired) return;
+  card._wired = true;
+  const go = async (changes) => { setQuery(changes); s.log = await logOf(hashQuery()); redraw(); };
+  let typing;
+  card.addEventListener("click", (e) => {
+    const k = e.target.closest?.(".seg button"), p = e.target.closest?.(".pager button[data-page]");
+    if (k) go({ kind: k.dataset.value, page: "" });
+    if (p) go({ page: p.dataset.page });
+  });
+  card.addEventListener("input", (e) => {
+    if (!e.target.matches?.('input[type="search"]')) return;
+    clearTimeout(typing);
+    typing = setTimeout(() => go({ q: e.target.value.trim(), page: "" }), 200);
+  });
+}
+
+// ---- Memory ----
+
+/** The offers of recall per day over the last 7 days, from each note's 30 days of history. */
+export const offersFrame = (m, now) => {
+  const day = new Date(now);
+  day.setHours(0, 0, 0, 0);
+  const rows = Array.from({ length: 7 }, (_, i) => ({ at: new Date(day.getTime() - (6 - i) * 86_400_000).toISOString(), offers: m.notes.reduce((n, x) => n + (x.history?.[29 - (6 - i)] ?? 0), 0) }));
+  return { measure: { name: "Offers", unit: "count", agg: "sum" }, over: { kind: "time", window: "week" }, by: { name: "Kind", keys: [{ key: "offers", name: "Offers", color: "muted" }] }, rows, form: "columns", legend: false };
+};
+
+/** The Memory card at `now`: the start context against its budget and the offers per day; the six counts of the Memory page on the side. `m` is null while it loads, or `{ error }`. */
+export function renderMemory(m, now) {
+  if (!m) return card("Memory", loadingLine("the memory"), { id: "memory" });
+  if (m.error) return card("Memory", error(m.error), { id: "memory" });
+  const start = barList(Object.entries(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core.length)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= FULL })).join(""));
+  const stale = m.processes.decay.stale, late = stale.filter((x) => x.over > 30).length;
+  const stats = sideStats([
+    { k: "Notes", v: count(m.total) },
+    { k: "Offered", v: count(m.notes.filter((n) => offered(n, Date.parse(now))).length), title: "Notes that recall offered to an agent in 7 days" },
+    { k: "Never offered", v: count(m.notes.filter((n) => !n.read).length), title: "Notes that recall never offered" },
+    { k: "Unoffered reads", v: count(m.misses?.unoffered_reads), title: "Wiki reads in 7 days that no offer preceded" },
+    { k: "Refused", v: count(m.lint.refuse.length), state: m.lint.refuse.length ? "failed" : "", title: "Notes that lint refuses" },
+    { k: "Stale", v: count(stale.length), note: `${count(late)} late`, title: `${count(stale.length)} notes past their re-check date, ${count(late)} by more than 30 days` },
+  ]);
+  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${panelOf("status/offers", offersFrame(m, Date.parse(now)), "", { bare: true })}`, stats, { id: "memory" });
+}
+/** The share of the start budget at which the start context counts as full, as `/api/attention` counts it. */
+const FULL = 0.95;
+
+// ---- Problems ----
+
+/** A job's ID linked to its page; a job with no ID links its item. */
+const jobLink = (j) => (j.id ? idLink(shownId(j.id), jobHref(j.id)) : itemId(j));
+
 /** One plain sentence of what went wrong for an errored job, from its cause; a time box or a stall takes its length from `limit`, in seconds. */
 const errorSentence = (j) => {
   const span = j.limit ? (j.limit % 60 === 0 ? [j.limit / 60, "minute"] : [j.limit, "second"]) : null;
@@ -409,26 +221,98 @@ const errorSentence = (j) => {
     unanswered: "The agent ended without an answer.",
   }[j.cause] ?? (j.state === "failed" ? "The run failed." : "The run stopped.");
 };
-const errorRow = (s) => (j) => {
-  const b = j.blocker;
-  const blocker = b && shortText(b.id, j.repo);
-  const hold = b ? holdLine({ action: "after", detail: b.id }) : errorSentence(j);
-  const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
-  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });
-  const meta = metaRow({ id: repoIdLink(j.name, jobHref(j.id), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
-  const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
-  return alertCard(j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the errored job; nothing starts until ${blocker} lands.` : "Runs the job's checks again; starts no worker.")}${opt(actButton("Drop", { act: "drop", name: j.name, path: job("drop"), confirm: "1", label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
-    agentLine(j) + jobDetails(s, j));
+
+/** An errored job as an alert: what stopped it, and Wait for its blocker or Re-check, then Drop. */
+function errorAlert(j, now) {
+  const b = j.blocker, blocker = b && shortText(b.id, j.repo), path = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
+  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: path("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true, kind: "small" })
+    : actButton("Re-check", { act: "recheck", name: j.name, path: path("recheck"), label: "Re-check" }, { kind: "small" });
+  const drop = actButton("Drop", { act: "drop", name: j.name, path: path("drop"), confirm: "1", label: "Drop" }, { kind: "small" });
+  return alertCard({ card: "unstick", kind: "Error", title: `${jobLink(j)} ${esc(j.item?.title || j.name)}${j.item?.priority ? ` ${priorityBadge(j.item.priority)}` : ""}`, detail: b ? `Waits on ${blocker}: ${b.title}` : errorSentence(j), tag: j.cause ?? j.state, side: dur((Date.parse(now) - Date.parse(j.run?.started ?? j.started)) / 1000), acts: first + drop + actMsg(j.name) });
+}
+
+/** The backend hold as an alert, with the backend's own link when its error names one. */
+function backendAlert(b) {
+  const link = b.why.match(/https?:\/\/\S+/)?.[0];
+  return alertCard({ card: "unstick", kind: "Backend", title: `${esc(b.via)} is down`, detail: b.why, acts: link ? linkButton("Credits", link) : "" });
+}
+
+/** A start context at FULL of its budget as an alert. */
+function memoryAlert(m) {
+  const s = m.start.aleph;
+  return alertCard({ card: "need", kind: "Memory", title: "Start context near its budget", detail: `${count(s.budget - s.bytes)} B left in aleph`, tag: `${count(s.core.length)} lines`, side: pct((s.bytes / s.budget) * 100), acts: linkButton("Memory", "#/memory?view=health") });
+}
+
+/** The Problems card: each thing that needs the user as a compact alert. The factory's alerts, the Asks, the errored jobs, a backend that is down and a full start context. */
+export function renderProblems(s, stale = false) {
+  const m = s.memory && !s.memory.error ? s.memory : null;
+  const alerts = [
+    ...verdict(s, stale).errors.map((l) => alertCard({ card: "unstick", kind: "Alert", title: esc(l.text) })),
+    ...undecided(s.asks).map((i) => askAlert(i, s.now)),
+    ...(s.errored ?? []).map((j) => errorAlert(j, s.now)),
+    ...(s.factory.backend ? [backendAlert(s.factory.backend)] : []),
+    ...(m && m.start.aleph.bytes >= FULL * m.start.aleph.budget ? [memoryAlert(m)] : []),
+  ];
+  return card("Problems", alerts.length ? `<div class="alerts">${alerts.join("")}</div>` : empty(), { count: count(alerts.length), id: "problems" });
+}
+
+// ---- Efficiency and Flow ----
+
+/** The stages the Failed Runs and Time by Phase rows name. */
+const STAGES = ["intake", "build", "review", "recheck", "land"];
+
+/** The lost hours of the window by cause, over every lost class, largest first; the causes past the first four fold into Other. */
+function lostCauses(d) {
+  const by = new Map();
+  for (const c of d.classes.filter((x) => x.lost)) for (const k of c.causes) by.set(k.name, (by.get(k.name) ?? 0) + k.hours);
+  const all = [...by].sort((a, b) => b[1] - a[1]), rest = all.slice(4).reduce((n, [, h]) => n + h, 0);
+  return rest > 0 ? [...all.slice(0, 4), ["Other", rest]] : all;
+}
+
+/** Rows of `[label, value, shown]` as a bar list on the scale of the largest; empty() with none. */
+const bars = (rows) => {
+  const most = Math.max(...rows.map((r) => r[1]));
+  return rows.length ? barList(rows.map(([label, v, shown], i) => barRow(label, (v / most) * 100, shown, { top: i === 0 })).join("")) : empty();
 };
 
-
-/** "10/28 14:05": the time of the state. */
-const renderAsOf = (s) => when(s.now);
-
-/** The Pause or Resume button of the page head. */
-export function renderControls(s) {
-  return s.factory.paused ? ctl("resume", "Resume") : ctl("pause", "Pause");
+/** The Efficiency card: the agent hours of the window by outcome on one bar, then the lost hours by cause and the failed runs by stage. `d` is /api/flow, null while it loads, or `{ error }`. */
+export function renderEfficiency(d) {
+  if (!d) return card("Efficiency", loadingLine("the efficiency"), { id: "efficiency" });
+  if (d.error) return card("Efficiency", error(d.error), { id: "efficiency" });
+  const f = d.figures, classes = d.classes.filter((c) => c.hours > 0), all = f.kept + f.hours;
+  const bar = meter(classes.map((c) => ({ pct: (c.hours / all) * 100, cls: `seg-${c.key}` })), classes.map((c) => `${c.key} ${hours(c.hours)}`).join(", "));
+  const legend = legendHtml(classes.map((c) => [`${c.key} ${hours(c.hours)}`, `seg-${c.key}`]));
+  const lost = bars(lostCauses(d).map(([name, h]) => [esc(name), h, hours(h)]));
+  // The bar is the count of failed runs: Recheck's 9 of 13 is not a rate to read alone.
+  const failed = bars(d.stages.rows.filter((r) => STAGES.includes(r.stage) && r.unusable > 0).sort((a, b) => b.unusable - a.unusable).map((r) => [esc(NAMES[r.stage]), r.unusable, `${count(r.unusable)} of ${count(r.runs)}`]));
+  return card("Efficiency", `${bar}${legend}${subHead("Lost Time by Cause")}${lost}${subHead("Failed Runs by Stage")}${failed}`, { aside: `${hours(f.kept)} of ${hours(all)} reached main`, id: "efficiency" });
 }
-const ctl = (verb, label) =>
-  actButton(label, { act: verb, path: `/api/factory/${verb}`, ...(verb === "pause" ? { confirm: "1" } : {}), label }, { cls: "warn" });
+
+/** The issues landed in each bucket of the window: each landed issue at its filing plus its lead time. */
+export const landedFrame = (d) => {
+  const starts = d.buckets.map((b) => Date.parse(b.at)), ends = d.times.filter((t) => t.outcome === "landed").map((t) => Date.parse(t.filed) + t.lead * 1000);
+  const rows = starts.map((at, i) => ({ at: d.buckets[i].at, landed: ends.filter((t) => t >= at && t < (starts[i + 1] ?? Infinity)).length }));
+  return { measure: { name: "Landed", unit: "count", agg: "sum" }, over: { kind: "time", window: d.window }, by: { name: "Outcome", keys: [{ key: "landed", name: "Landed", color: "done" }] }, rows, form: "columns", legend: false };
+};
+
+/** The phase of a live run: a review and a recheck run inside Implement, as /api/flow counts them. */
+const phaseOf = (kind) => (kind === "intake" || kind === "land" ? kind : "implement");
+
+/** The Flow card: the window's issues in and out, each phase's p90 with the issues in it now, and the issues landed per bucket. `d` is /api/flow, null while it loads, or `{ error }`. */
+export function renderFlow(d, s) {
+  if (!d) return card("Flow", loadingLine("the flow"), { id: "flow" });
+  if (d.error) return card("Flow", error(d.error), { id: "flow" });
+  const f = d.figures, now = { intake: 0, queue: waitingOf(s).length, implement: 0, land: 0 };
+  for (const j of s.running) now[phaseOf(j.run.kind)]++;
+  const keys = Object.keys(now), slow = Math.max(...keys.map((k) => d.phases[k].p90 ?? 0));
+  const phases = barList(keys.map((k) => barRow(`${esc(NAMES[k === "implement" ? "build" : k])} <span class="count">${count(now[k])}</span>`, slow ? ((d.phases[k].p90 ?? 0) / slow) * 100 : 0, d.phases[k].count ? dur(d.phases[k].p90) : "–", { top: d.phases[k].p90 === slow })).join(""));
+  const stats = sideStats([
+    { k: "Filed", v: count(f.filed) }, { k: "Landed", v: count(f.landed), state: "landed" }, { k: "Dropped", v: count(f.dropped) },
+    { k: "First Pass", v: cardPct(d.issues.firstPass), title: "Landed issues whose first run landed" },
+    { k: "Open", v: count(d.open.open), note: d.open.parked ? `+${count(d.open.parked)}` : "", title: `${plural(d.open.open, "open issue")}, ${plural(d.open.parked, "parked issue")}` },
+    { k: "Asks", v: count(d.asks.count), note: `${count(d.asks.manual)} yours`, title: `${count(d.asks.count)} Asks in the window, ${count(d.asks.manual)} answered by the user` },
+  ]);
+  const landed = landedFrame(d);
+  return card("Flow", `${stats}${subHead("Time by Phase, p90")}${phases}${subHead(`Landed per ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`)}${panelOf("status/landed", landed, "", { bare: true })}`, { id: "flow", cls: "flow" });
+}
+

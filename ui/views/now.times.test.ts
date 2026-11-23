@@ -29,21 +29,14 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
 
 const two: any = { ...state, asks: asksOf([awaitingHeld({ name: "job-a" }), awaitingHeld({ name: "job-b" })]) };
 
-test("message and diff text are escaped", () => {
+test("an act message is escaped, and no diff text is drawn", () => {
   actMessages.set("job-a", "<b>x</b>");
   openDiffs.set("job-a", "+<script>alert(1)</script>");
   try {
     const h = withAttn(two);
     expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
-    expect(h).toContain("&lt;script&gt;");
     expect(h).not.toContain("<script>");
   } finally { actMessages.clear(); openDiffs.clear(); }
-});
-
-test("Status times use the state's own now for the year check", () => {
-  const page = withAttn({ ...state, now: "2027-01-05T12:00:00Z", asks: asksOf([awaitingHeld({ name: "aleph-27", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })]) });
-  expect(page).toContain("Started</dt><dd>2026-10-27");
-  expect(page).not.toMatch(/\d\d? ?[AP]M/i);
 });
 
 test("app.css colours the Pause or Resume button from the need tokens", async () => {

@@ -648,14 +648,12 @@ Each row is a place that leaves a rule. The Fix column says what happens to it. 
 |---|---|---|
 | Time column names differ | Tables | follow-up |
 | Cost axis keeps cents (`minInterval: 0`, labels by `money()`) | `ui/views/lib/chart.js` and `costFrame()` in `ui/views/factory-agents.js` | allowed |
-| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | the Status Alerts in `ui/views/now.js`; the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
-| The feed row's tones (`alert`, `warning`, `fine`) are its own, not `tone()` | `eventRow()` in `ui/views/lib/feed.js` | follow-up |
-| Parts of the Status page written by hand, with no helper: the feed's rows (`div.event-row`, `div.event-brief`) | `feedRow()`, `briefRow()` in `ui/views/lib/feed.js` | follow-up |
+| Sections built from `sectionHead()` with no card box: they hold cards, and a card does not sit in a card | the Jobs and Sessions pages, `ui/views/jobs.js` and `ui/views/sessions.js`, no longer have one | allowed |
 | The session page draws only the open tab and a tab click reloads the page: the chat pages 20 turns, the table reads them all. Its status row has no state or priority, only labels: a session has neither | `renderSession()` in `ui/views/session.js` | allowed |
 | A chart outside the chart panel: the session waterfall | `ui/views/session.js` | allowed |
 | Parts of the Ask card written by hand, with no helper: the Recommended mark on a choice (`span.rec-note`), the act message (`span.act-msg`, from `actMsg()`), the Diff stat block (`div.ev.one` over `pre.stat`) and the date and runtime of the meta row (`span.num.date`, `span.num.dur`) | `askChoice()`, `actMsg()`, `askDetails()`, `metaRow()` in `ui/views/lib/ask-cards.js` | follow-up |
 | Shell parts written by hand, with no helper: the sidebar (`#nav`, its mark, the log-out link), the collapse button, the offline banner | `ui/views/lib/router.js`, `ui/index.html` | follow-up |
-| The Herald card keeps a visible `--rule` border and a pulse ring; the pulse draws on that border | `.herald-card` in `ui/app.css` | follow-up |
+| The Status page opens with the scorecard, against `page-no-cards-first`: the user's pick of 11/23 | `render()` in `ui/views/now.js` | allowed |
 | The chart's gridline opacity and stacked-area opacity are literals: no token for an ECharts option | `ui/views/lib/chart.js` | follow-up |
 | A Jobs trend chart's p90 line takes the `hot` tone | `trendFrame()` in `ui/views/factory-jobs.js` | allowed |
 | The Checks, Build Time by Model and Jobs cards of the Jobs page show no count | `renderFactoryJobs()` in `ui/views/factory-jobs.js` | follow-up |

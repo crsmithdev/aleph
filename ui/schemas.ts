@@ -51,6 +51,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   },
   "/api/issues/:id/media/:name": "text",
   "/api/jobs": { jobs: [row], next: "time?" },
+  "/api/log": { rows: [{ seq: "number", at: "time", action: "string", issue: "object?", job: "object?", title: "string?", by: "string?", took: "number?" }], total: "number" },
   "/api/jobs/:id": {
     ...job, "item?": "object?", "ended?": "time", "model?": "string", defaults: "array", followups: "array", runs: [{ id: "string", kind: "string", state: "string", started: "time" }],
     holds: "array", "next?": "object", "rounds?": "number", "spec?": "string", subject: "string", investigations: "array", "*": "any",

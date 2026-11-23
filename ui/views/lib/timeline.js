@@ -1,8 +1,8 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { dur, money, shortModel, when } from "./format.js";
-import { clamp, codeText, legendHtml, esc, sectionHead, tag, tone } from "./html.js";
+import { clock, dur, money, shortModel, when } from "./format.js";
+import { clamp, codeText, iconHead, legendHtml, esc, sectionHead, tag, tone } from "./html.js";
 import { contentText, runWord, wordOf } from "../../../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
@@ -146,26 +146,50 @@ export function renderTimeline(segments) {
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   if (!rows.length) return "";
   const x = compactScale(times);
-  const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
-  const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => [v, `t-${k}`]);
-  // A tick near the end ends at its time, so it stays inside the axis.
-  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > END ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t))}</span>`).join("");
-  const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
-  // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
-  const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
-  const lane = (r) => `<div class="dp-lane">` +
-    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting the user" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
-    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ` tabindex="0"`} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}<span class="sr">${esc(b.tip ?? b.label)}</span></${t}>`; }).join("") +
-    (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
+  const key = legendOf(rows);
+  const lane = (r) => laneHtml(r, x);
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
     return list.length ? `<div class="dp-evs">${list.map((e) => eventHtml(e)).join("")}</div>` : "";
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2>${legendHtml(key)}</div>` +
-    `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Took</span><span class="num">Cost</span></div>` +
+    `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span>${ticksHtml(axisTimes(times, x), x, timeOf)}<span>Result</span><span class="num">Took</span><span class="num">Cost</span></div>` +
     segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg">${sectionHead(s.title, { aside: s.aside && esc(s.aside), level: 3 })}</div>${s.rows.map(row).join("")}`).join("") +
     `</div></section>`;
+}
+
+/** The legend items of the tones `rows` use. */
+const legendOf = (rows) => {
+  const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
+  return Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => [v, `t-${k}`]);
+};
+
+/** The axis labels of `times` on the scale `x`; a tick near the end ends at its time, so it stays inside the axis. */
+const ticksHtml = (times, x, label) => `<div class="dp-ticks">${times.map((t) => `<span${x(t) > END ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(label(t))}</span>`).join("")}</div>`;
+
+/** A row's lane: its waits, bars and marks on the scale `x`, a time in ms to a share of the axis. */
+function laneHtml(r, x) {
+  const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
+  // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
+  const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
+  return `<div class="dp-lane">` +
+    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting the user" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
+    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ` tabindex="0"`} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}<span class="sr">${esc(b.tip ?? b.label)}</span></${t}>`; }).join("") +
+    (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
+}
+
+/**
+ * Lanes in a card: `rows` of `laneRow()` on one linear axis from `from` to `to` (ms), each with its head and how long it
+ * took, under the legend; no result, cost or events. "" for no rows.
+ * @design lanes
+ */
+export function renderLanes(rows, from, to) {
+  if (!rows.length) return "";
+  const x = (t) => Math.min(1, Math.max(0, (t - from) / (to - from)));
+  const ticks = [0, 1, 2, 3, 4].map((i) => from + ((to - from) * i) / 4);
+  const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${laneHtml(r, x)}<span class="num">${esc(r.time)}</span></div></div>`;
+  return `${legendHtml(legendOf(rows))}<div class="dp-scroll lanes"><div class="dp-tl dp-axis"><span></span>${ticksHtml(ticks, x, (t) => clock(new Date(t).toISOString()))}${iconHead("stopwatch", "Took", { el: "span" })}</div>${rows.map(row).join("")}</div>`;
 }
 
 /**

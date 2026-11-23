@@ -8,110 +8,78 @@ import { asksOf, withAttn, issue, full, rows, problem } from "../now.testkit.ts"
 
 afterEach(() => setCodes({}));
 
+const NOW = "2026-10-27T17:00:00Z";
+const calm = { ...state, now: NOW, asks: [], errored: [], factory: { ...state.factory, health: [], paused: false } };
+
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
   const s = { ...full, asks: [], errored: [], factory: { ...full.factory, health: [], paused: false } };
   expect(rows(withAttn(s)).length).toBe(0);
-  expect(view.renderLede(s)).not.toContain("Awaiting");
+  expect(withAttn(s)).toContain('class="empty"');
   expect(view.renderLede(s)).not.toContain("triage");
 });
 
-test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Drop the issue", () => {
-  const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, ask: { reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]), errored: [], issues: [], factory: { ...state.factory, health: [] } };
+test("an Ask is a compact alert: its kind, id and headline on one line, its wait, and its buttons with a reason posted without one", () => {
+  const note = "triage: for the user: Should `ui/x.ts` use A or B?\nA is simpler.";
+  const s = { ...calm, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, at: "2026-10-27T16:00:00Z", ask: { reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]) };
   const [row] = rows(withAttn(s));
-  expect(problem(row)).not.toContain("triage: for Chris");
-  expect(row).toContain('data-label="Approve recommendation"');
-  expect(row).toContain('data-path="/api/issues/aleph-152/decide" data-body="{&quot;recommendation&quot;:true}"');
+  expect(row).toContain('data-label="Approve it"');
   expect(row).toContain('data-label="Drop the issue"');
-  expect(row).toContain('class="reason"');
-  expect(row.match(/<details class="more"/g)?.length).toBe(1);
+  expect(row).not.toContain("<input");
+  expect(row).not.toContain("<details");
+  expect(row).toMatch(/<span class="num">\d+h \d+m<\/span><\/div>/);
+  expect(row).toContain('href="#/issues/aleph/152"');
 });
 
-/** The case text the director writes when it escalates: until then, the row offers no action. */
-const CASE = { situation: "The director sent it to you." };
-const sample = (reason: string): { runs: any[]; issues: any[] } => {
-  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", state: "waiting", ask: { reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[] });
-  const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { reason: o.reason, question: o.question, options: [], why: [], ...CASE } }] });
-  if (["held-path", "review-held"].includes(reason)) return run(reason, reason === "review-held" ? { reviewCall: { call: "waiting", reason: "r" } } : {});
-  if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
-  const q: Record<string, object> = {
-    "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
-    "run-cap": { reason: "run-cap", question: "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it." },
-    "intake-failed": { reason: "intake-failed", question: "Intake failed: the spec: the Oracle is empty" },
-    "part-dropped": { reason: "part-dropped", question: "A sub-issue was dropped." },
-    rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", reason: "question", why: [] } },
-  };
-  return iss(q[reason]);
-};
-
-test("the deny and answer inputs render hidden", () => {
-  for (const reason of ["question"]) {
-    const sm = sample(reason);
-    const row = withAttn({ ...state, errored: [], factory: { ...state.factory, health: [] }, asks: attend(sm).items }).match(/<article [^]*?<\/article>/)![0];
-    const inputs = row.match(/<input [^>]*>/g) ?? [];
-    expect(inputs.length).toBeGreaterThan(0);
-    for (const i of inputs) expect(i).toMatch(/\shidden/);
-  }
+test("an Ask's Always button is the second button, and grants the project's rule by default", () => {
+  const a = { key: "issue:aleph-3", reason: "run-cap", id: "aleph-3", href: "#/issues/aleph/3", repo: "aleph", card: "unstick", label: "Unstick", headline: "H", title: "H", tag: "capped", situation: "s", escalated: true, at: NOW,
+    actions: [{ act: "continue", label: "Run again", path: "/p", body: {}, primary: true }, { act: "discontinue", label: "Drop", path: "/d", body: {} }],
+    always: { label: "Always run again", action: "continue", hint: "h", scope: "project" } };
+  const buttons = rows(withAttn({ ...calm, asks: [a] }))[0].match(/data-label="[^"]+"/g);
+  expect(buttons).toEqual(['data-label="Run again"', 'data-label="Always run again"', 'data-label="Drop"']);
+  expect(withAttn({ ...calm, asks: [a] })).toContain('data-reason="run-cap:aleph"');
 });
 
-/** The one errored card of a state whose only errored job is `j`. */
-const errorCard = (j: object): string => {
-  const s = { ...state, asks: [], errored: [job(j)], factory: { ...state.factory, health: [] } };
-  return withAttn(s).match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
-};
-/** The card's HTML outside its one Details fold, and that fold. */
-const outsideDetails = (card: string): [string, string] => {
-  const [outside, inside] = card.split('<details class="more"');
-  return [outside!, inside ?? ""];
-};
+/** The one errored alert of a state whose only errored job is `j`. */
+const errorCard = (j: object): string => rows(withAttn({ ...calm, errored: [job(j)] }))[0];
 
-test("a failed job's situation line is a sentence of its cause, and its reason sentence moves into Details", () => {
-  const card = errorCard({ name: "aleph-30", state: "failed", cause: "timeout", limit: 2400, reason: "The worker timed out. Last message: hi" });
-  expect(problem(card)).toBe("The worker ran past its 40-minute time box and was stopped.");
-  expect(problem(errorCard({ name: "aleph-31", state: "failed", cause: "stalled", limit: 600, reason: "stalled" }))).toBe("The worker gave no output for 10 minutes and was stopped.");
-  expect(card).not.toContain("Failed with");
-  const [, inside] = outsideDetails(card);
-  expect(inside).toContain("Last message: hi");
+test("an errored job's detail is a sentence of its cause", () => {
+  expect(problem(errorCard({ name: "aleph-30", state: "failed", cause: "timeout", limit: 2400 }))).toBe("The worker ran past its 40-minute time box and was stopped.");
+  expect(problem(errorCard({ name: "aleph-31", state: "failed", cause: "stalled", limit: 600 }))).toBe("The worker gave no output for 10 minutes and was stopped.");
+  expect(problem(errorCard({ name: "aleph-30", state: "failed", cause: "check", checkName: "tests" }))).toBe("The check tests failed.");
+  expect(problem(errorCard({ name: "aleph-30", state: "failed", cause: "no-commit" }))).toBe("The worker made no commit.");
+  expect(problem(errorCard({ name: "aleph-30", state: "failed" }))).toBe("The run failed.");
 });
 
-test("an errored job whose cause is a failed check names that check in its situation line, as the news lines do", () => {
-  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", checkName: "tests", reason: "tests failed" });
-  expect(problem(card)).toBe("The check tests failed.");
-  // No name on the run: the line says a check failed.
-  expect(problem(errorCard({ name: "aleph-31", state: "failed", cause: "check", reason: "a check failed" }))).toBe("A check failed.");
-});
-
-test("every errored card's situation line is a sentence, not the bare state and cause words", () => {
-  const line = (cause?: string) => problem(errorCard({ name: "aleph-30", state: "failed", cause, reason: "worker exited 1" }));
-  expect(line("no-commit")).toBe("The worker made no commit.");
-  expect(line("conflict")).toBe("The branch has a merge conflict with main.");
-  expect(line("other")).toBe("The run failed.");
-  expect(line()).toBe("The run failed.");
-});
-
-test("an errored job with no blocker shows the Re-check hint that says it runs the checks and starts no worker", () => {
-  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed" });
-  expect(card).toContain("Runs the job&#39;s checks again; starts no worker.");
-  expect(card).not.toContain("Runs the job again.");
-});
-
-test("an errored job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
+test("an errored job offers Re-check and Drop; with a blocker, Wait for it first", () => {
   setCodes({ aleph: "a" });
-  const card = errorCard({ name: "aleph-30", state: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },
-    blocker: { id: "aleph-9", title: "Old work", href: "#/issues/aleph/9" } });
-  expect(problem(card)).toBe("after a9");
-  expect(card).not.toContain("Waits on");
-  const [outside, inside] = outsideDetails(card);
-  expect(outside).not.toContain("Old work");
-  expect(inside).toContain("Old work");
+  expect(errorCard({ name: "aleph-30", state: "failed", cause: "check" }).match(/data-label="[^"]+"/g)).toEqual(['data-label="Re-check"', 'data-label="Drop"']);
+  const card = errorCard({ name: "aleph-30", state: "failed", item: { id: 30, title: "T" }, blocker: { id: "aleph-9", title: "Old work", href: "#/issues/aleph/9" } });
+  expect(card.match(/data-label="[^"]+"/g)).toEqual(['data-label="Wait for a9"', 'data-label="Drop"']);
+  expect(problem(card)).toBe("Waits on a9: Old work");
 });
 
-test("an ask and an errored run are one Alerts section, and the errored card has the Ask card structure in the red tone", () => {
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { reason: "question", question: "q", options: [], why: [], situation: "s" } }]), errored: [job({ name: "aleph-30", state: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
-  const h = withAttn(s);
-  expect(h).not.toContain("Errored or failed");
-  const errored = h.match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
-  expect(errored).toContain('<b class="ask-kind">Error:</b>');
-  expect(errored).toContain('data-card="unstick"');
-  expect(errored).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
+test("the factory's alerts, a backend hold and an Ask are alerts in that order", () => {
+  const s = { ...calm, factory: { ...calm.factory, health: [{ text: "health: aleph CI on main failed 2 runs in a row", kind: "alert", key: "red-ci" }], backend: { via: "OpenRouter", why: "API Error: 402 Insufficient credits. Add more at https://openrouter.ai/settings/credits" } },
+    asks: attend({ runs: [], issues: [{ ...issue(7), title: "T", ask: { reason: "no-commit", question: "q", options: [], why: [], situation: "s" } }] }).items };
+  const kinds = rows(withAttn(s)).map((r) => r.match(/<b class="ask-kind">([^<]+):<\/b>/)![1]);
+  expect(kinds).toHaveLength(3);
+  expect([kinds[0], kinds[2]]).toEqual(["Alert", "Backend"]);
+  expect(withAttn(s)).toContain('href="https://openrouter.ai/settings/credits"');
 });
+
+test("a start context at 95% of its budget is an alert that links to Memory's health", () => {
+  const memory = (bytes: number) => ({ start: { aleph: { bytes, budget: 6000, core: Array(40).fill("x") } } });
+  expect(withAttn({ ...calm, memory: memory(5800) })).toContain('<b class="ask-kind">Memory:</b>');
+  expect(withAttn({ ...calm, memory: memory(5800) })).toContain('href="#/memory?view=health"');
+  expect(withAttn({ ...calm, memory: memory(5000) })).not.toContain("Memory:");
+});
+
+test("an Ask alert and a Waiting row show an issue key in the short form of its project", () => {
+  setCodes({ aleph: "a" });
+  const ask = { key: "run:issue.3461", reason: "protected", id: "issue.3461", href: "#/jobs/job.1", repo: "aleph", card: "approve", label: "Approve", headline: "Land issue.3461", situation: "s", at: NOW, actions: [] };
+  const h = withAttn({ ...calm, asks: [ask] });
+  expect(h).toContain('href="#/jobs/job.1">a3461</a> Land a3461');
+  const waiting = view.renderWaiting({ ...calm, queued: [{ repo: "aleph", id: 3462, title: "T", kind: "after", waits: [{ id: "issue.3461", href: "" }] }] });
+  expect(waiting).toContain("<td>a3461</td>");
+});
+

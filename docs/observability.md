@@ -87,6 +87,7 @@ A failed factory post appends one line to the `dispatch` section of `log.txt` in
 | Herald | The last 24 hours of the event log, newest 50 | `ui/state.ts` |
 | Automation page | The event log, minus `by: gate` events (the run's state changes), and the job records | `ui/api/gates.ts` |
 | Status page | The firefighter's events of the last 24 hours | `jobs/lib/gates/factory-status.ts` |
+| `/api/log` | The Status page's event log: the window's events, one a row, by kind and search | `ui/api/log.ts` |
 | `/api/events` | A server-sent stream. Each row added to `events` goes out as an `ev` event, read by `eventsAfter` and not by `readEvents` | `ui/api/events.ts` |
 | The updater | Polls `PRAGMA data_version` of `aleph.db` every 100 ms on its own connection. A new event row changes the source `events`, and the updater rebuilds the keys that read it. The UI's own writes move `data_version` too, because the poll has its own connection. A write with no event (usage, tick, a job row) waits for the quiet refresh timer. `change` names only the keys whose rebuilt answer differs | `ui/updater.ts` |
 | Director | The `director` events of the job records, for its decision list | `readRecord` in `jobs/lib/roles/director.ts` |

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { noteOf } from "../../../lib/issue-file.ts";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
+import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderLanes, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
 import { dur } from "./format.js";
 import { setCodes } from "../../../lib/naming.ts";
@@ -271,4 +271,20 @@ describe("the issue page's tidy-up", () => {
 
 test("fromTo shows mm/dd hh:mm for two times on one day", () => {
   expect(fromTo(new Date(2026, 9, 28, 14, 5), new Date(2026, 9, 28, 15, 7))).toBe("10/28 14:05 to 10/28 15:07");
+});
+
+describe("lanes in a card", () => {
+  const from = Date.parse("2026-11-01T10:00:00Z"), to = Date.parse("2026-11-01T11:00:00Z");
+  const lane = (runs: any[]) => laneRow({ head: "a1 Fix it", runs: spans(runs, to) });
+  test("draw each run on one linear axis from `from` to `to`, with the time it took and no result or cost column", () => {
+    const html = renderLanes([lane([run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:45:00Z"), run("land", "2026-11-01T10:50:00Z", null, { state: "running" })])], from, to);
+    expect(html).toContain('style="left:50.000%;width:25.000%"');
+    expect(html).toContain('style="left:83.333%;width:16.667%"');
+    expect(html).toContain('title="Took"');
+    expect(html).toContain('<span class="num">30m 00s</span>');
+    expect(html).not.toContain("Result");
+  });
+  test("draw nothing with no lanes", () => {
+    expect(renderLanes([], from, to)).toBe("");
+  });
 });

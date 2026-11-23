@@ -9,7 +9,7 @@ A table shows items that have the same columns.
 
 | Helper | Reference |
 |---|---|
-| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`; `pagedTable()`; `badCount(n)` | `ui/views/jobs.js` |
+| `dataTable(head, rows, { fit })`; `heads(labels, num)`, `sortHead()`, `iconHead(icon, label)`; `pagedTable()`; `badCount(n)` | `ui/views/jobs.js`; `renderLog()` in `ui/views/now.js` |
 
 ## Parts
 
@@ -19,6 +19,7 @@ A table shows items that have the same columns.
 | Cell | One value |  | `--fs-sm`, `--ink`; padding `--sp-6` `--sp-12` `--sp-6` 0; rule `--rule-2` below; one line |
 | Title cell `td.wide` | The title of the item |  | takes the spare width, 16ch minimum; ends in an ellipsis |
 | Number cell `td.num` | A number |  | `--num` `--fw-mid` tabular; at the right |
+| Icon head | A clock over the time of an event, a stopwatch over a duration | yes | `wa-icon`, `--muted`; its name in `title` and `aria-label` |
 | Sort arrow | `▲` or `▼` | yes | `--fs-xs` |
 | Row | One item |  | `--sunk` on hover |
 | Row action | One small button in the last column, `td.acts` | yes | right-aligned, one line |
@@ -28,6 +29,7 @@ A table shows items that have the same columns.
 - Put the columns in this order: the row's fold button, id or name, title, state, priority, project, labels, numbers, then time.
 - Give the fold column no name: its header cell is empty. A row with no parts keeps an empty cell there, so the ids line up.
 - In an event log, put the time first. An event log is a table where each row is an event, read in time order.
+- In a narrow table, head the time column with `iconHead("clock", label)` and the duration column with `iconHead("stopwatch", "Took")`. A stopwatch column is a number column.
 - Put each number at the right of the row. Align a number to the right.
 - Name the time column for the time it shows. Format it with `when()`.
 - Make an id with `idLink()` or `repoIdLink()`, a state with `badge()`, and labels with `chips()`.

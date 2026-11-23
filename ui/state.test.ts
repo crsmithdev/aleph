@@ -13,8 +13,8 @@ import { seed, reseed, unseed } from "../jobs/job.testkit.ts";
 import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
-import { state as fixture } from "./fixtures/status-state.ts";
-import { rows, withAttn } from "./now.testkit.ts";
+// @ts-ignore plain JS, shared with the page
+import { askCard } from "./views/lib/ask-cards.js";
 import { setAsk } from "../jobs/lib/asks/ask.ts";
 import { writeRepos } from "../tests/projects.testkit.ts";
 import { logEvent, readEvents } from "../lib/layout.ts";
@@ -181,6 +181,16 @@ describe("an intake run", () => {
   });
 });
 
+describe("a queued issue's hold", () => {
+  test("starts at its newest held event, and a later start ends it", () => {
+    const held = (s: ReturnType<typeof state>) => s.queued.find((q) => q.id === 2)?.heldAt;
+    logEvent({ time: ago(0.5), subject: "gate", action: "held", object: "issue.2", detail: "file: a.ts: job.1" });
+    expect(held(state(now))).toBe(ago(0.5));
+    logEvent({ time: ago(0.25), subject: "gate", action: "started", object: "issue.2" });
+    expect(held(state(now))).toBeUndefined();
+  });
+});
+
 // Returns a function that puts the repo's main back where it is now and drops origin/main, which a test moves.
 function keepMain(repo: string) {
   const head = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
@@ -200,9 +210,8 @@ describe("an issue that acceptance failed twice", () => {
       const a = runAsks(state(now)).find((x) => x.id === "fac-60");
       expect(a).toBeDefined();
       expect(a!.details).toEqual({ note: "held path held/x.ts", stat: " held/x.ts | 1 +", review: { call: "passed" } });
-      // The Now card renders it.
-      const card = rows(withAttn({ ...fixture, errored: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
-      expect(card).toContain("Reviewer: passed");
+      // The Ask card renders it.
+      expect(askCard(a!, now.toISOString())).toContain("Reviewer: passed");
     } finally {
     }
   });
