@@ -499,6 +499,7 @@ test("the Health view opens on a figure band, then the flow chart and the cards,
   expect(find(h, 'section[aria-label="Memory Jobs"] .badge.error').map((b) => [b.attrs.title, b.text])).toEqual([["no route", "failed"]]);
   expect(find(h, 'section[aria-label="Memory Jobs"] td.quiet').map((n) => n.text)).toEqual(["ok"]);
   expect(find(h, 'section[aria-label="Memory Jobs"] td.wide').map((n) => [n.attrs.title, n.text])).toEqual([["dry: 1 fixed", "decay 3"]]);
+  expect(find(h, 'section[aria-label="Memory Jobs"] td.acts button').map((b) => [b.text, b.attrs["data-path"], b.attrs["data-body"]])).toEqual([["Run", "/api/memory/maintain", "{}"], ["Dry run", "/api/memory/maintain", '{&quot;dry&quot;:true}']]);
   expect(words(find(h, 'section[aria-label="Stale Notes"] tbody td'))).toEqual(["N", "30 d", "+12 d"]);
   // Without the slow misses read, the offers card draws its bars alone.
   expect(find(draw({ ...page, misses: undefined }, "view=health"), 'section[aria-label="Offers"] dd')).toEqual([]);

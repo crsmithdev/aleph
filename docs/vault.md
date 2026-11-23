@@ -31,7 +31,7 @@ In a session, the `vault` skill runs these for you.
 | `delete <title> --why <text>` | Removes a note no live note links to; git keeps it |
 | `compile [date]` | Prints a digest of a day's Langfuse turns, handoffs and daily note, and records the day in a file outside git |
 | `misses [--days N]` | Read-only: the recall misses that Langfuse recorded |
-| `maintain [--dry]` | Runs the whole maintainer: the mechanical pass, the compile of yesterday, and the queues ([Maintainer](#maintainer)). `--dry` writes no notes |
+| `maintain [--dry] [--detach]` | Runs the whole maintainer: the mechanical pass, the compile of yesterday, and the queues ([Maintainer](#maintainer)). `--dry` writes no notes; `--detach` starts it in its own unit, as Run and Dry run on the Memory page's Health view do |
 | `precommit` | Refuses the staged commit when it grows a scope's start context past 6,000 bytes; the vault's pre-commit hook runs it |
 
 ## Maintainer

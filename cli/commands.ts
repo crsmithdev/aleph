@@ -36,7 +36,7 @@ import { setPaused } from "../jobs/lib/gates/pause.ts";
 import { maintainAll, runTick } from "../jobs/lib/transitions/tick.ts";
 import { isVault } from "../vault/lib/vault.ts";
 import { vaultDir } from "../lib/paths.ts";
-import { dispatchDetached, investigatorDetached } from "../jobs/lib/transitions/launch.ts";
+import { dispatchDetached, investigatorDetached, maintainerDetached } from "../jobs/lib/transitions/launch.ts";
 import { health } from "../jobs/lib/gates/factory-status.ts";
 import { flakeLines, renderTable, reportLine } from "../jobs/lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "../jobs/lib/roles/monitor.ts";
@@ -377,6 +377,7 @@ async function route(ctx: Ctx, cmd: string | undefined): Promise<void> {
     case "memory": {
       // `maintain` is the whole maintainer: the vault's mechanical pass, and the compile of yesterday. A missing vault falls to the op, which says so.
       if (ctx.command[1] === "maintain" && isVault(resolve(vaultDir()))) {
+        if (ctx.rest.includes("--detach")) { maintainerDetached(ctx.rest.includes("--dry")); ctx.out({ started: "maintain" }); break; }
         const r = await maintainAll(resolve(vaultDir()), ctx.rest.includes("--dry"), Date.now(), { mech: true, compile: true, decay: true, overlap: true, misses: true });
         ctx.out(r);
         if (!r.ok || r.compile?.error || r.recheck?.error || r.dedupe?.error) ctx.code = 1;

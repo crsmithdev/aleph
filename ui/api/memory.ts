@@ -333,6 +333,7 @@ export const routes: Routes = {
   "GET /api/memory/search": (_req, _p, url) => search(url),
   "GET /api/memory/notes/:title": (_req, { title }, url) => note(title, url),
   "GET /api/memory/files/:source/:key": (_req, { source, key }) => file(source, key),
+  "POST /api/memory/maintain": post((b) => aleph(["memory", "maintain", "--detach", ...(b.dry ? ["--dry"] : [])])),
   "POST /api/memory/notes/:title/edit": write(({ title, text }) => rewrite(title, () => text)),
   "POST /api/memory/notes/:title/core": write(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
   "POST /api/memory/notes/:title/alias": write(async ({ title, alias }) => (alias?.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : fail(422, "no alias"))),

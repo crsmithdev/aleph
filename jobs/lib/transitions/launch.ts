@@ -137,6 +137,11 @@ export function housekeeperDetached(): void {
   detached(["housekeep"], join(factoryDir(), "housekeeper.log"));
 }
 
+/** Start `aleph memory maintain` detached, for the user's click: no dispatch gate, because they started it. `dry` writes nothing. */
+export function maintainerDetached(dry: boolean): void {
+  detached(["memory", "maintain", ...(dry ? ["--dry"] : [])], join(factoryDir(), "maintainer.log"));
+}
+
 /** Start `aleph investigate <subject>` detached, for the user's click: no dispatch gate, because they started it. */
 export function investigatorDetached(subject: string): void {
   detached(["investigate", subject], join(factoryDir(), "investigator.log"));

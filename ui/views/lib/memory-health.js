@@ -3,7 +3,7 @@
 // Offer dates start when the recall log does, so a note written before the first one may be unused or unrecorded.
 import { noteHref } from "../../../lib/naming.ts";
 import { count, day, localMs, plural, when } from "./format.js";
-import { barList, barRow, card, cell, chip, dataTable, empty, esc, facts, heads, meter, miss, row, rowAct, subHead, tag } from "./html.js";
+import { actButton, barList, barRow, card, cell, chip, dataTable, empty, esc, facts, heads, meter, miss, row, rowAct, subHead, tag } from "./html.js";
 import { figureBand } from "./page.js";
 import { panelOf } from "./chart.js";
 
@@ -83,10 +83,14 @@ const rulesOf = (lint) => [...Map.groupBy([...lint.refuse.map((f) => ({ ...f, re
 const noteLink = (title) => `<td class="wide" title="${esc(title)}">${link(title)}</td>`;
 const scopeChip = (s) => (s && s !== "aleph" ? chip(s) : "");
 
+/** Run and Dry run of the maintainer: each starts `aleph memory maintain` detached. */
+const RUNS = `<td class="acts">${[["Run", {}], ["Dry run", { dry: true }]].map(([label, body]) => actButton(label, { act: "maintain", label, path: "/api/memory/maintain", body: JSON.stringify(body) }, { kind: "small" })).join("")}</td>`;
+
 /** The memory steps of the tick: a result of "ok" is quiet, a failure is a badge with its detail, another result shows its detail. */
-const jobsCard = (steps) => card("Memory Jobs", dataTable(heads(["Job", "Runs", "Last", "Next", "Result"]), steps.map((x) => row([
+const jobsCard = (steps) => card("Memory Jobs", dataTable(heads(["Job", "Runs", "Last", "Next", "Result", "Action"]), steps.map((x) => row([
   `<td title="${esc(x.does)}">${esc(x.name)}</td>`, cell(x.runs), `<td class="time">${x.last ? esc(when(x.last)) : miss("Never run")}</td>`, `<td class="time">${x.next ? esc(when(x.next)) : miss("Not scheduled")}</td>`,
   !x.result ? `<td>${miss("No result")}</td>` : x.result === "ok" ? `<td class="quiet">ok</td>` : x.result.startsWith("failed") ? `<td>${tag("failed", "error", x.detail ?? undefined)}</td>` : cell(x.detail ?? x.result, { wide: true, title: x.result }),
+  x.name === "maintain" ? RUNS : "<td></td>",
 ])).join("")), { count: count(steps.length) });
 
 /** The Health view: the figure band, the charts 2 across, the memory jobs, then the lint fixes and the stale notes. The flow chart's frame is set in mount. */
