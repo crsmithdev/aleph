@@ -9,20 +9,20 @@
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { readTimeouts, TIMED } from "../../jobs/lib/asks/timeout.ts";
-import { askHistory } from "../asks.ts";
+import { askHistory, type AskSpan } from "../asks.ts";
 import { allHolds, backendHold, stopsStart } from "../../jobs/lib/gates/holds.ts";
 import { sandboxRepos } from "../../jobs/lib/gates/gpu.ts";
 import { baselines, redLine, tickMissed, tickRows } from "../../jobs/lib/gates/tables.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
-import { allJobs } from "../../jobs/lib/records/ledger.ts";
+import { allJobs, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { factsOf, type EventRow } from "../../lib/naming.ts";
+import { issueKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../lib/store.ts";
-import { noteOf } from "../../lib/issue-file.ts";
+import { closed, noteOf } from "../../lib/issue-file.ts";
 import { NOTE } from "../../jobs/lib/roles/recheck.ts";
 import { intervalOf, setTimerInterval, TIMERS } from "../../jobs/lib/infra/systemd.ts";
 
@@ -37,28 +37,25 @@ const DAY = 86_400_000;
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
 type LogEntry = EventRow & { times?: number; first?: string };
-/** Whether an entry is a decision on an Ask that a rule or the director made, not Chris: an `answered` with the bare reason went with no answer. */
-const automatic = (e: LogEntry) => !(e.action === "answered" && !factsOf(e)) && (e.subject === "rule" || (e.subject === "director" && e.action !== "escalated"));
-/** Whether an entry is Chris's answer to an Ask: his rule changes are not. */
-const answer = (e: LogEntry) => e.subject === "human" && e.action !== "changed";
 
 /**
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what the `always` setting grants.
+ * `decided` credits each answered Ask to the actor of the event that answered it; an Ask a gate cleared goes to no one.
  */
-export function rules(entries: LogEntry[] = [], asks = askHistory(), now = Date.now(), ms = LOG_DAYS * DAY) {
+export function rules(asks = askHistory(), now = Date.now(), ms = LOG_DAYS * DAY) {
   const granted = readAlways(), timeouts = readTimeouts();
-  const from = now - ms, SLACK = 60_000;
+  const from = now - ms;
   const recent = asks.filter((a) => Date.parse(a.set) >= from);
+  const builds = record.allRuns().filter(({ run: x }) => x.role === "build");
   return Object.entries(ASK_REASONS).map(([reason, r]) => {
     const g = granted[reason];
     const mine = recent.filter((a) => a.reason === reason);
     const decided = { rule: 0, director: 0, chris: 0 }, outcome = { fixed: 0, none: 0 };
     for (const a of mine) {
       if (!a.cleared) continue;
-      const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
-      const by = entries.find((e) => e.object === a.issue && Date.parse(e.time) >= lo && Date.parse(e.time) <= hi && (automatic(e) || answer(e)));
-      if (by) decided[by.subject === "rule" ? "rule" : by.subject === "human" ? "chris" : "director"]++;
-      outcome[record.allRuns().some(({ run: x }) => x.target === a.issue && x.role === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
+      if (a.by === "rule" || a.by === "director") decided[a.by]++;
+      else if (a.by === "human") decided.chris++;
+      outcome[builds.some(({ run: x }) => x.target === a.issue && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
       reason, ...reasonText(reason), mode: r.always, fired: mine.length, decided, outcome,
@@ -118,12 +115,16 @@ function collapse(entries: LogEntry[]): LogEntry[] {
 /** The log: the gate holds, the Always rules Chris set, the rule, director and firefighter events and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, project?: string): LogEntry[] {
   const holds = collapse(allHolds().flatMap((h) => (h.event ? [h.event] : [])));
-  const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ time: g.at, subject: "human", action: "changed", object: reason, detail: `set to ${g.action}` }));
-  return withProjects([...holds, ...set, ...tickEntries(now - ms), ...noteEntries()])
+  return capped(withProjects([...holds, ...set, ...tickEntries(now - ms), ...noteEntries()])
     .filter((e) => now - Date.parse(e.time) < ms && eventIn(e.object, project, e.project))
-    .sort((a, b) => Date.parse(b.time) - Date.parse(a.time))
-    .filter((e) => (seen[e.subject] = (seen[e.subject] ?? 0) + 1) <= max);
+    .sort((a, b) => Date.parse(b.time) - Date.parse(a.time)), max);
+}
+
+/** The first `max` entries of each actor, in the order given. */
+function capped(entries: LogEntry[], max: number): LogEntry[] {
+  const seen: Record<string, number> = {};
+  return entries.filter((e) => (seen[e.subject] = (seen[e.subject] ?? 0) + 1) <= max);
 }
 
 /**
@@ -161,16 +162,15 @@ function schedules(): { name: string; last: string | null; result: string | null
 }
 
 /**
- * The three metrics over the last LOG_DAYS days. `rate`: of the Asks decided (from every log entry in the window, not the capped log), the share that a Rule or the Director decided
- * and not Chris (his answers; his rule changes do not count), null with none. `catches`: `fired`, the build runs started in the
+ * The three metrics over the last LOG_DAYS days. `rate`: of the Asks raised in the window and answered, the share that Chris did not
+ * answer (a `human` answered event; a rule, the director or a gate clearing it is automatic), null with none. `catches`: `fired`, the build runs started in the
  * window that a check or the reviewer sent back, against `fixed`, those of them that a later build run of the same job fixed:
- * it passed or landed. `held`: the issues held and the hours in a hold, from a hold record to the next `started` record, or to now.
+ * it passed or landed. `held`: the issues held and the hours in a hold, from a hold record to the next `started` record, to the close of the issue, or to now.
  */
-export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), jobs = allJobs(), span = LOG_DAYS * DAY) {
+export function metrics(asks: AskSpan[], holds = allHolds(), now = Date.now(), jobs = allJobs(), span = LOG_DAYS * DAY, closedAt: ReadonlyMap<string, string> = new Map()) {
   const from = now - span;
-  // A decision that applied several actions writes one event each, at one time: it counts once.
-  const auto = new Set(entries.filter(automatic).map((e) => `${e.subject} ${e.object} ${e.time}`)).size;
-  const chris = entries.filter(answer).length;
+  const answered = asks.filter((a) => a.cleared && Date.parse(a.set) >= from);
+  const chris = answered.filter((a) => a.by === "human").length, auto = answered.length - chris;
   const open: Record<string, number> = {}, names = new Set<string>();
   let ms = 0;
   const close = (name: string, end: number) => {
@@ -180,7 +180,10 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
     ms += end - start;
     names.add(name);
   };
-  for (const h of holds) {
+  // A hold record at or after its issue's close is no hold: the issue is done. The close ends an earlier hold.
+  const ends = [...closedAt].map(([name, at]) => ({ at, name, kind: "started", text: "" }));
+  const timeline = [...holds.filter((h) => !closedAt.has(h.name) || h.at < closedAt.get(h.name)!), ...ends].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  for (const h of timeline) {
     if (h.kind === "started") { if (h.name in open) close(h.name, Date.parse(h.at)); }
     else if (stopsStart(h) && !(h.name in open)) open[h.name] = Date.parse(h.at);
   }
@@ -199,21 +202,28 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
   };
 }
 
+/** The close time of each closed issue of every repo, by issue key, as origin/main last fetched has it. */
+function closedIssues(): Map<string, string> {
+  const lists = reader({ fetch: false }), out = new Map<string, string>();
+  for (const repo of Object.keys(loadRegistry())) for (const i of lists.list(repo)?.items ?? []) { const at = closed(i); if (at) out.set(issueKey(i.id), at); }
+  return out;
+}
+
 /** The page's data and the security facts. The asks come from `/api/factory`, which the page also reads. */
 export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
-  const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
+  const jobs = allJobs(), all = log(Date.now(), Infinity, ms, project), entries = capped(all, LOG_MAX);
   const asks = askHistory().filter((a) => inProject(a.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
   const hold = backendHold();
   return {
     now: new Date().toISOString(),
     caps: Object.fromEntries(CAP_KEYS.map((k) => [k, { env: CAP_ENV[k], min: capMin(k), set: capEnvSet(CAP_ENV[k]) }])),
     settings: settingsNow(),
-    metrics: metrics(all, holds, Date.now(), jobs.filter((j) => repoIn(j[0].run.repo, project)), ms),
+    metrics: metrics(asks, holds, Date.now(), jobs.filter((j) => repoIn(j[0].run.repo, project)), ms, closedIssues()),
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     backend: hold ? { via: BACKENDS[hold.via], why: hold.why } : null,
     baseline: baselineGate(),
-    rules: rules(all, asks, Date.now(), ms),
+    rules: rules(asks, Date.now(), ms),
     ...security,
     repoHeld: repoHeld(),
     log: { days: ms / DAY, max: LOG_MAX, total: all.length, entries },

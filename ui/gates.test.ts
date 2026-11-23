@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
 import { CAP_ENV, CAP_KEYS, capMin } from "../jobs/lib/infra/settings.ts";
-import { LOG_MAX, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
+import { gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import { askHistory } from "./asks.ts";
 import { reasonText, type AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./server.testkit.ts";
@@ -296,26 +296,35 @@ test("a Monitor report with an error shows Could not load, and the message only 
   expect(text(h).match(/boom/g)).toHaveLength(1);
 });
 
-const entry = (subject: string, action = "answered", object = "r-1") => ({ time: ago(1), subject, object, action }) as any;
 const rec = (min: number, name: string, kind: string) => ({ at: ago(min), name, kind, text: "t" });
 
-test("the automation rate is the rule and director decisions over those and Chris's answers; his rule changes, a director escalation and a second event of one decision do not count", () => {
-  const e = [entry("rule", "reran"), entry("rule", "reran", "r-2"), entry("director", "reran"), entry("director", "filed"), entry("director", "escalated", "r-3"), entry("human"), entry("human", "changed", "rescue")];
-  expect(metrics(e, []).rate).toEqual({ auto: 3, total: 4, percent: 75 });
+test("the automation rate counts each Ask raised in the 7 days and answered once: Chris's when a human answered it, else automatic", () => {
+  const ask = (by: string, min = 60, cleared = true) => ({ issue: "r-1", reason: "question", set: ago(min), ...(cleared ? { cleared: ago(min - 1), by } : {}) });
+  const asks = [ask("gate"), ask("gate"), ask("rule"), ask("director"), ask("human"), ask("gate", 60, false), ask("gate", 60 * 24 * 9)];
+  expect(metrics(asks, []).rate).toEqual({ auto: 4, total: 5, percent: 80 });
   expect(metrics([], []).rate).toBeNull();
 });
 
-test("the body's automation rate counts every decision in the 7 days, past the log's cap of each actor", async () => {
+test("the body's automation rate counts Asks, not rule or human events", async () => {
   const before = (await body()).metrics.rate ?? { auto: 0, total: 0 };
-  for (let i = 0; i < LOG_MAX; i++) logEvent({ time: ago(5 + i / 100), subject: "rule", action: "reran", object: `r-${i}`, detail: "rescue" });
+  logEvent({ time: ago(7), subject: "gate", action: "question", object: "issue.9001", detail: "question: which" });
+  logEvent({ time: ago(6), subject: "gate", action: "answered", object: "issue.9001", detail: "question" });
+  for (let i = 0; i < 5; i++) logEvent({ time: ago(5 + i / 100), subject: "rule", action: "reran", object: "issue.9001", detail: "rescue" });
+  logEvent({ time: ago(4), subject: "human", action: "done", object: "issue.9001" });
   const after = (await body()).metrics.rate;
-  expect(after.auto - before.auto).toBe(LOG_MAX);
-  expect(after.total - before.total).toBe(LOG_MAX);
+  expect(after.auto - before.auto).toBe(1);
+  expect(after.total - before.total).toBe(1);
 });
 
 test("the held time sums, over the issues, the hours from a hold to the next start, or to now, in the 7 days", () => {
   const h = [rec(300, "a-1", "gate"), rec(120, "a-1", "started"), rec(60, "b-1", "gate"), rec(30, "b-1", "gate"), rec(60 * 24 * 9, "c-1", "gate"), rec(60 * 24 * 8, "c-1", "started")];
   expect(metrics([], h, NOW).held).toEqual({ issues: 2, hours: 4 });
+});
+
+test("a hold ends at the close of its issue, and a hold record after the close is no hold", () => {
+  const h = [rec(240, "d-1", "gate"), rec(120, "e-1", "gate"), rec(60, "e-1", "gate"), rec(60, "f-1", "gate")];
+  const closedAt = new Map([["d-1", ago(180)], ["e-1", ago(90)], ["f-1", ago(120)]]);
+  expect(metrics([], h, NOW, [], undefined, closedAt).held).toEqual({ issues: 2, hours: 1.5 });
 });
 
 test("gate catches are the builds a check or the reviewer sent back in the 7 days, against those a later build of the job passed", () => {
@@ -490,10 +499,9 @@ test("the Automation page has no explaining aside and no Pause button; the caps 
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
 });
 
-test("rules() credits a rule's answer to decided.rule, and not an Ask that went with no answer", () => {
-  const asks = ["issue.1", "issue.2"].map((issue) => ({ issue, reason: "held-path", set: ago(10), cleared: ago(9) }));
-  const answered = (object: string, detail: string) => ({ subject: "rule", action: "answered", object, detail, time: ago(9) }) as never;
-  const row = rules([answered("issue.1", "held-path: approve"), answered("issue.2", "held-path")], asks).find((x) => x.reason === "held-path")!;
+test("rules() credits an Ask to the actor of the event that answered it, and a gate-cleared Ask to no one", () => {
+  const asks = ["rule", "gate"].map((by, i) => ({ issue: `issue.${i + 1}`, reason: "held-path", set: ago(10), cleared: ago(9), by }));
+  const row = rules(asks).find((x) => x.reason === "held-path")!;
   expect(row.decided).toEqual({ rule: 1, director: 0, chris: 0 });
 });
 
@@ -548,17 +556,15 @@ test("a grant that is neither the reason's mode nor user still shows picked in D
 
 test("rules() counts each reason's Asks in the window by who decided them and what followed; the list shows the counts", () => {
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
-  const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
+  const ask = (n: number, by?: string) => ({ set: at(n * 10), ...(by ? { cleared: at(n * 10 + 1), by } : {}), reason: "question" });
   const rec = (n: number, asks: any[]) => asks.map((a) => ({ issue: `issue.${n}`, ...a }));
   // A build that starts after the Ask of issue 1 went is what followed it.
   seed({ role: "build", state: "done", target: "issue.1", started: at(15) });
   const records = [
-    ...rec(1, [ask(1)]), ...rec(2, [ask(2)]), ...rec(3, [ask(3)]), ...rec(4, [ask(4), ask(5, false)]),
-    ...rec(5, [{ ...ask(6), reason: "run-cap" }]),
+    ...rec(1, [ask(1, "rule")]), ...rec(2, [ask(2, "rule")]), ...rec(3, [ask(3, "director")]), ...rec(4, [ask(4, "human"), ask(5)]),
+    ...rec(5, [{ ...ask(6, "rule"), reason: "run-cap" }]),
   ];
-  const e = (n: number, subject: any, object: string, detail?: string): any => ({ time: at(n * 10), subject, object, action: "answered", detail });
-  const entries = [e(1, "rule", "issue.1", "question: resolve"), e(2, "rule", "issue.2", "question: resolve"), e(3, "director", "issue.3", "question: A"), e(4, "human", "issue.4", "Chris: yes")];
-  const row: any = rules(entries, records, NOW + 3600_000).find((x) => x.reason === "question");
+  const row: any = rules(records, NOW + 3600_000).find((x) => x.reason === "question");
   expect(row.fired).toBe(5);
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
@@ -672,22 +678,28 @@ test("the facts line shows a dash, not undefined or NaN, with no rate and no hel
 
 test("GET /api/automation takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
   const m = (min: number) => min * 60 * 24;
-  for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"]] as const) logEvent({ time: ago(min), subject: "rule", action: "reran", object: id, detail: "rescue" });
-  logEvent({ time: ago(60 * 5), subject: "rule", action: "reran", object: "alpha-2", detail: "rescue" });
+  const asked = (min: number, id: string) => {
+    logEvent({ time: ago(min + 1), subject: "gate", action: "question", object: id, detail: "question: which" });
+    logEvent({ time: ago(min), subject: "rule", action: "answered", object: id, detail: "question: pick" });
+  };
+  for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"], [60 * 5, "alpha-2"]] as const) asked(min, id);
+  // The rate counts Asks of issues, each in the repo of its job.
+  seed({ role: "build", repo: "alpha", target: "issue.9101" }); seed({ role: "build", repo: "beta", target: "issue.9102" });
+  asked(30, "issue.9101"); asked(m(3), "issue.9102"); asked(m(10), "issue.9102");
   const get = async (q: string) => { const r = await at(`/api/automation${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
   const items = (d: any) => d.log.entries.map((e: any) => e.object).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
   const week = await get("");
   expect(items(week.d)).toEqual(["alpha-1", "alpha-2", "beta-1"]);
   expect(week.d.metrics.days).toBe(7);
-  expect(week.d.metrics.rate.total).toBe(3);
+  expect(week.d.metrics.rate.total).toBe(2);
   const day = await get("?window=day");
   expect(items(day.d)).toEqual(["alpha-1", "alpha-2"]);
-  expect(day.d.metrics.rate.total).toBe(2);
+  expect(day.d.metrics.rate.total).toBe(1);
   expect(items((await get("?window=hour")).d)).toEqual(["alpha-1"]);
   expect(items((await get("?window=month")).d)).toEqual(["alpha-1", "alpha-2", "beta-1", "beta-2"]);
   const alpha = await get("?project=alpha");
   expect(items(alpha.d)).toEqual(["alpha-1", "alpha-2"]);
-  expect(alpha.d.metrics.rate.total).toBe(2);
+  expect(alpha.d.metrics.rate.total).toBe(1);
   logEvent({ time: ago(30), subject: "rule", action: "reran", object: "alpha-ui-2", detail: "rescue" });
   // The updater watches the database the server started on, not this test's: forget the kept answers so the GET reads the new event.
   updater.reset();

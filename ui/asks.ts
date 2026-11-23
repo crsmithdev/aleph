@@ -245,8 +245,8 @@ export function errorBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: st
   return null;
 }
 
-/** One Ask of an issue: the reason, when it came and, once decided, when it went. From the `question` and `answered` events of the issue. */
-export interface AskSpan { issue: string; reason: string; set: string; cleared?: string }
+/** One Ask of an issue: the reason, when it came and, once decided, when it went and the actor of the `answered` event that cleared it. From the `question` and `answered` events of the issue. */
+export interface AskSpan { issue: string; reason: string; set: string; cleared?: string; by?: string }
 
 /** Every Ask of every issue, oldest first. */
 export function askHistory(): AskSpan[] {
@@ -255,7 +255,7 @@ export function askHistory(): AskSpan[] {
     if (parseKey(e.object)?.kind !== "issue") continue;
     // The gate sets each Ask; whoever answered it, or `rule` when it went with no answer, clears it.
     if (e.subject === "gate" && e.action === "question" && e.detail) { const a = { issue: e.object, reason: askReason(e.detail), set: e.time }; open.set(e.object, a); out.push(a); }
-    else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; open.delete(e.object); } }
+    else if (e.action === "answered") { const a = open.get(e.object); if (a) { a.cleared = e.time; a.by = e.subject; open.delete(e.object); } }
   }
   return out;
 }
