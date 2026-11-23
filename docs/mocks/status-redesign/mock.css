@@ -21,10 +21,8 @@
 .m-need { background: var(--need); }
 .tile .meter { margin: var(--sp-2) 0; }
 
-/* The Now card: the elapsed meter keeps a narrow column; a sub-head carries a count. */
-.now .tbl td:has(> .meter) { width: 16%; min-width: 96px; }
-.sub-count { display: flex; align-items: baseline; gap: var(--sp-8); }
-.sub-count .count, .bhead .count, .barrow .bl .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+/* A count beside a sub-head. */
+.bhead .count, .barrow .bl .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
 .wtitle { color: var(--ink-2); }
 .needs > .sh { margin-bottom: var(--sp-10); }
 .needs { margin: 0; }
@@ -32,6 +30,12 @@
 /* A problem row: what it is in ink, the detail after it muted. */
 .pwhat { color: var(--ink); font-weight: var(--fw-mid); }
 .pdetail { color: var(--muted); }
+/* An alert or an Ask in Problems: a tint and an edge in its tone, its actions under its text. */
+tr.palert td { background: var(--need-bg); }
+tr.palert.t-error td { background: var(--error-bg); }
+tr.palert td:first-child { box-shadow: inset 3px 0 var(--need); }
+tr.palert.t-error td:first-child { box-shadow: inset 3px 0 var(--error); }
+.pacts { display: flex; flex-wrap: wrap; gap: var(--sp-6); margin-top: var(--sp-6); }
 .triage td.acts { white-space: nowrap; }
 
 /* A meter that takes the card's width, over its legend. */
@@ -51,12 +55,6 @@
 .evbar .fbar:last-child { flex: 1 1 200px; }
 .events [data-kind][hidden] { display: none; }
 .card.events .herald-feed { max-height: 520px; }
-
-/* The rail's column: what needs Chris over the events. It takes the place and the height of the live Herald card, and in one column what needs Chris leads the page. */
-.rail > .rail-side { position: sticky; top: var(--sp-16); align-self: stretch; contain: size; min-height: 560px; max-height: calc(100vh - 2 * var(--sp-16)); display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-.rail-side > .needs { flex: none; max-height: 70%; overflow-y: auto; }
-.rail-side > .herald-card { flex: 1; min-height: 0; }
-@media (max-width: 1100px) { .rail > .rail-side { display: contents; } .rail .needs { order: -1; max-height: none; } }
 
 /* The board: a column per stage, split by rules, in one card. */
 .board { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }

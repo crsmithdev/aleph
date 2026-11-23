@@ -755,7 +755,6 @@ main { min-width: 0; }
 .issue-row input.reason { min-width: 200px; }
 .issue-row details.more { flex: 1 1 100%; font-size: var(--fs-sm); }
 .asof { color: var(--muted); margin: 0; }
-.agents { display: grid; gap: var(--sp-16); }
 
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-28); align-items: start; }
 .rail { position: sticky; top: var(--sp-16); }
@@ -995,7 +994,6 @@ table.tbl th .arr { display: inline-block; width: 1em; margin-left: var(--sp-2);
 .editable:not(.editing) .edit-only, .editable.editing .view-only { display: none; }
 .issue-page .title-edit { width: 100%; font: inherit; font-size: var(--fs-lg); }
 .issue-page .body-edit { display: block; width: 100%; }
-.sub-row td:nth-child(2) { padding-left: var(--sp-24); }
 .status-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); margin: 0 0 var(--sp-12); }
 .idp { white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--muted); }
 a.idl { white-space: nowrap; font: var(--fw-mid) var(--fs-xs) var(--mono); color: var(--muted); text-decoration: none; }
@@ -1089,7 +1087,7 @@ pre.stat b { color: var(--need); }
 .side {
   position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
   border-right: 1px solid var(--rule); background: var(--surface); padding: var(--sp-14) var(--sp-12) var(--sp-20);
-  display: flex; flex-direction: column; gap: var(--sp-14);
+  display: flex; flex-direction: column; gap: var(--sp-14); z-index: var(--z-overlay);
 }
 .side .mark { padding: var(--sp-2) var(--sp-8) 0; }
 #nav ul { list-style: none; margin: 0; padding: 0; }
@@ -1107,6 +1105,13 @@ pre.stat b { color: var(--need); }
 #nav a[data-tone="warning"], #nav a[data-tone="ask"] { color: var(--need); }
 #collapse { margin-top: auto; align-self: flex-start; padding: var(--sp-6) var(--sp-8); border: 0; border-radius: var(--r-ctl); background: none; color: var(--muted); font: var(--fw-text) var(--fs-sm)/1.2 var(--mono); cursor: pointer; }
 #collapse:hover { background: var(--sunk); color: var(--ink); }
+/* The dock widgets (aleph-tools) mount here, at the sidebar's foot. Their panels are fixed, so the sidebar's overflow does not clip them: they open beside the sidebar, at the foot of the viewport. */
+.dock {
+  display: flex; flex-wrap: wrap; gap: var(--sp-8);
+  --dock-pop-position: fixed; --dock-pop-left: calc(208px + var(--sp-8)); --dock-pop-right: auto; --dock-pop-bottom: var(--sp-16);
+}
+/* The annotations' Move hint sits beside the sidebar's foot too. Its layer hangs off <body>, not .dock, so its variables go on :root. */
+:root { --dock-hint-left: calc(208px + var(--sp-8)); --dock-hint-right: auto; --dock-hint-bottom: var(--sp-16); }
 /* A collapsed sidebar shows the mark, each link's icon and the expand button. */
 @media (min-width: 721px) {
   .shell.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
@@ -1116,6 +1121,8 @@ pre.stat b { color: var(--need); }
   .shell.collapsed #nav a { justify-content: center; padding: var(--sp-8) 0; width: 36px; }
   .shell.collapsed #nav .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .shell.collapsed #collapse { align-self: center; }
+  .shell.collapsed .dock { flex-direction: column; align-items: center; --dock-pop-left: calc(48px + var(--sp-8)); }
+  :root:has(.shell.collapsed) { --dock-hint-left: calc(48px + var(--sp-8)); }
 }
 /* .card p sets --ink-2 at the same specificity, so the card form is named too. */
 .error p, .card .error p { margin: 0; color: var(--error); }
@@ -1130,13 +1137,16 @@ pre.stat b { color: var(--need); }
 @media (max-width: 720px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .side {
-    position: sticky; z-index: var(--z-sticky); height: auto; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
+    position: sticky; height: auto; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: var(--sp-10);
     border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--sp-6) var(--sp-16); overflow: visible;
   }
   .side .mark { padding: 0; flex: none; }
   /* One row: the links scroll sideways, and the router scrolls the current one into view. */
   #nav { flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   #collapse { display: none; }
+  /* The top bar has no room for the buttons: they are a fixed row at the bottom right, and a panel opens above the row. */
+  .dock { position: fixed; right: var(--sp-8); bottom: var(--sp-8); flex-wrap: nowrap; flex-direction: row-reverse; z-index: var(--dock-z); --dock-pop-left: var(--sp-8); --dock-pop-bottom: calc(var(--sp-8) + 40px + var(--sp-8)); }
+  :root { --dock-hint-left: auto; --dock-hint-right: var(--sp-8); --dock-hint-bottom: calc(var(--sp-8) + 40px + var(--sp-8)); }
   #nav li.head { display: none; }
   #nav ul { display: flex; flex-wrap: nowrap; gap: var(--sp-2); }
   #nav a { white-space: nowrap; padding: var(--sp-4) var(--sp-8); }
@@ -1260,12 +1270,6 @@ form.stack textarea, form.stack input:not([type="checkbox"]), .field textarea, .
 .srow.stack { grid-template-columns: minmax(0, 1fr); }
 .srow.stack .hint { grid-column: 1; }
 .tabs > .seg { margin-bottom: var(--sp-12); }
-.vtabs { display: flex; flex-wrap: wrap; gap: var(--sp-24); border-bottom: 1px solid var(--rule); margin-bottom: var(--sp-16); font-size: var(--fs-sm); }
-.vtabs a { padding: var(--sp-8) var(--sp-4); color: var(--muted); border-bottom: 2px solid transparent; text-decoration: none; margin-bottom: -1px; }
-.vtabs a:hover { color: var(--ink); }
-.vtabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: var(--fw-strong); }
-.memory td details ol { margin: var(--sp-6) 0 0; padding-left: var(--sp-20); white-space: normal; }
-.memory td summary { overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 720px) { .srow { grid-template-columns: minmax(0, 1fr); } .srow .hint { grid-column: 1; } }
 form.stack > button { justify-self: start; }
 .issue-page .edit-only input, .issue-page .edit-only select { min-height: var(--ctl-h); }
@@ -1417,14 +1421,10 @@ button.barrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -
 /* A hook hold's outcome (ui/views/hooks.js), in a meter and its legend. Held up is a pass that cost a turn, so it stays quiet. No effect is --ink: neutral, and 3:1 on --sunk and --surface. */
 .o-caught { background: var(--done); } .o-handoff { background: var(--done); opacity: var(--dim); } .o-held { background: var(--muted); }
 .o-false { background: var(--error); } .o-none { background: var(--need); } .o-dead { background: var(--ink); }
-/* A row's fold chevron (button.fold): a bare muted mark. The Roles table writes an empty span.fold in a row with none, so its Model cells line up. */
+/* A row's fold chevron (button.fold): a bare muted mark. */
 .tbl .fold { display: inline-block; width: var(--sp-16); text-align: center; }
 .tbl button.fold { padding: 0; border: 0; background: none; font: inherit; color: var(--muted); cursor: pointer; }
 .tbl button.fold:hover { color: var(--ink); }
-/* The browser's 4px left margin on a checkbox put the size rows' Model controls right of the role rows' selects. */
-#roles input[type="checkbox"] { margin-left: 0; }
-/* The Output column takes the spare width, so Agent fits its label; its text stays whole. */
-#roles td.out { width: 100%; }
 .c-use { background: var(--run); } .c-err { background: var(--error); }
 .c-s1 { background: var(--series-1); } .c-s2 { background: var(--series-2); } .c-s3 { background: var(--series-3); } .c-s4 { background: var(--series-4); } .c-s5 { background: var(--series-5); }
 .c-s6 { background: var(--chart-6); } .c-s7 { background: var(--chart-7); } .c-s8 { background: var(--muted); }
@@ -1436,39 +1436,22 @@ tr.rowlink td.wide a { color: inherit; text-decoration: none; }
 tr.rowlink td.wide a::after { content: ""; position: absolute; inset: 0; }
 tr.rowlink:hover td.wide a, tr.rowlink td.wide a:focus-visible { text-decoration: underline; }
 tr.rowlink a.idl { position: relative; z-index: var(--z-rowlink); }
-/* The Hooks table's names read as links (ui/views/hooks.js), as well as the row. */
-#inventory tr.rowlink td.wide a { color: var(--run); text-decoration: underline; }
+/* The List view's facts line and outcome legend share a line (ui/views/hooks.js). */
+.hkkey { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-6) var(--sp-14); }
 mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair); }
 .browse { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: var(--gap-in); align-items: start; }
 .ins { position: sticky; top: var(--sp-8); max-height: calc(100vh - 16px); overflow: auto; }
-#mem-inspector { display: flex; flex-direction: column; gap: var(--sp-12); }
 .ins h3 { margin: 0; overflow-wrap: anywhere; }
 .ins ul { margin: 0; padding: 0; list-style: none; }
 .ins li { padding: var(--sp-4) 0; border-top: 1px solid var(--rule-2); overflow-wrap: anywhere; }
 .ins .note { overflow-wrap: anywhere; }
-/* Memory: the search, the type dots, the result rows by type, the inspector's forms and the recall strip. */
-.memory .mdot { display: inline-block; width: var(--dot-m); height: var(--dot-m); border-radius: var(--r-pill); margin-right: var(--sp-6); vertical-align: baseline; background: var(--muted); }
-.mdot.t-semantic { background: var(--run); } .mdot.t-procedural { background: var(--done); } .mdot.t-episodic { background: var(--focus); }
-.mdot.t-working { background: var(--chart-7); } .mdot.t-prospective { background: var(--hot); }
-.mrows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
-.mrows .mrow { padding: var(--sp-10) var(--sp-12); border-top: 1px solid var(--rule-2); cursor: pointer; min-width: 0; }
-.mrows .mrow:first-child { border-top: 0; }
-.mrows .mrow:hover { background: var(--sunk); }
-.mrows .mrow p { margin: var(--sp-4) 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
+/* Memory: the inspector's text and reach box, and the Needs-you strip. */
 .mrow[aria-selected="true"] { background: var(--sunk); box-shadow: inset 2px 0 0 var(--run); }
-tr.mrow { cursor: pointer; }
-tr.mrow:focus-visible { outline-offset: -2px; }
-.mrow .mh { display: flex; justify-content: space-between; gap: var(--sp-8); flex-wrap: wrap; }
-.mrow .mm { font-size: var(--fs-xs); color: var(--muted); }
-.mrow .core { color: var(--run); }
-.mrows.tl { border-left: 2px solid var(--rule); padding-left: var(--sp-12); }
-.mrows.tl .mev { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-10); }
-.mrows .mrow[hidden] { display: none; }
 /* The Needs-you strip: one link per item over its act-threshold, under the tabs of the Memory page. */
 .mstrip { display: flex; flex-wrap: wrap; gap: var(--sp-8) var(--sp-16); align-items: center; padding: var(--sp-10) var(--sp-14); margin: 0 0 var(--gap-in); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-lift); font-size: var(--fs-sm); }
 .mstrip a { color: var(--ink); text-decoration: none; }
 .mstrip a:hover { text-decoration: underline; }
-.ins .mtype { margin: 0; font-size: var(--fs-xs); color: var(--muted); }
+.ins .mtext { margin: 0; overflow-wrap: anywhere; }
 .ins .mreach { margin-top: var(--sp-10); padding: var(--sp-10) var(--sp-12); border-radius: var(--r-ctl); background: var(--sunk); }
 .ins .actions .field { flex: 1; min-width: 140px; }
 .ins textarea { width: 100%; box-sizing: border-box; font-family: var(--mono); font-size: var(--fs-xs); }
@@ -1605,33 +1588,16 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .issue-row > .ih { gap: var(--sp-6); }
 
 /* ---------- Gates page (views/gates.js) ---------- */
-.gates .sh .aside { white-space: normal; }
-.gates .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--need); }
-.gates .srow .hint { color: var(--muted); font-size: var(--fs-xs); }
 .c-rule { background: var(--ink-2); } .c-dir { background: var(--muted); } .c-user { background: var(--need); }
-#rules-table td { white-space: normal; }
-#rules-table td:nth-child(n+4) { white-space: nowrap; }
-#rules-table td.wide { min-width: 22ch; }
-#rules-table td.decided { min-width: 8rem; }
-#rules-table .split { display: block; margin-top: var(--sp-4); font-size: var(--fs-xs); color: var(--muted); white-space: nowrap; }
-.rule-form { display: flex; flex-direction: column; gap: var(--sp-12); margin-top: var(--sp-12); }
-.rule-form[hidden] { display: none; }
-.rule-form .settings { max-width: none; }
-.rule-form input[type="number"] { width: 9ch; }
-.rule-form :is(input, select)[disabled] { opacity: var(--dim); }
-.rule-acts { display: flex; justify-content: flex-end; gap: var(--sp-6); }
+[data-browse="rules"] .ins :is(input, select)[disabled] { opacity: var(--dim); }
 /* A control row is one line: the label, the control, then the hint. */
 #gates-caps .settings { max-width: none; }
 #gates-caps .srow { grid-template-columns: 8rem auto minmax(0, 1fr); padding: var(--sp-6) 0; }
 #gates-caps .srow .hint { grid-column: 3; }
 #gates-caps .srow input[type="number"], #gates-schedules .srow input[type="number"] { width: 9ch; }
 @media (max-width: 720px) { #gates-caps .srow { grid-template-columns: minmax(0, 1fr); } #gates-caps .srow .hint { grid-column: 1; } }
-.held-paths { display: grid; grid-template-columns: max-content 1fr; gap: var(--sp-4) var(--sp-24); margin: var(--sp-8) 0 var(--sp-16); color: var(--ink-2); font-size: var(--fs-sm); }
-.held-paths dt { color: var(--muted); }
-.held-paths dd { margin: 0; }
-.gates table.tbl td.wide { white-space: normal; min-width: 30ch; overflow-wrap: anywhere; }
-/* A log row's note shows only when its button opens it. */
-.gates td.wide .clamp { display: none; }
+#gates-held .settings { max-width: none; }
+.held-paths { display: flex; flex-wrap: wrap; gap: var(--sp-4) var(--sp-8); color: var(--ink-2); font-size: var(--fs-sm); }
 
 /* Ask cards: four kinds; compact shows the title and the buttons, open adds the description, what each button does, and Technical details. */
 .issue-row[data-card] { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-6); padding: 0; border: 0; border-radius: 0; background: none; }
@@ -1674,10 +1640,14 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .design-spec { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-12); margin-bottom: var(--sp-28); }
 .design-spec > h3 { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); margin: 0; }
 .design-spec > .design-specimen { min-width: 0; }
+/* A container, as .rail-main is on the Status page, so the split card's @container rule sees its width. */
+#design-split-card > .design-specimen { container-type: inline-size; }
 /* The doc's section, under its specimen: wide enough for the Parts table. */
 .design-spec > .design-rules { max-width: 72rem; font-size: var(--fs-sm); color: var(--ink-2); border-top: 1px solid var(--rule); padding-top: var(--sp-12); }
 .design-rules ul { margin: 0; padding-left: var(--indent-list); }
 .design-rules table { width: 100%; }
+/* On a phone a long code name may break, so a rules table fits. */
+@media (max-width: 720px) { .design-rules table { overflow-wrap: anywhere; } }
 .design-h { font-family: var(--display); font-size: var(--fs-xl); margin: var(--sp-28) 0 var(--sp-12); }
 .design-row { display: flex; flex-wrap: wrap; gap: var(--sp-12); align-items: center; margin-bottom: var(--sp-12); }
 .design-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-8); }
@@ -1686,7 +1656,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .design-swatch i { grid-row: span 2; display: flex; height: var(--ctl-h); overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-ctl); }
 .design-swatch i b { flex: 1; }
 .design-swatch .quiet { overflow-wrap: anywhere; }
-.design-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); font-size: var(--fs-xs); }
+.design-tok { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); max-width: 100%; font-size: var(--fs-xs); }
 /* Mock: ways to mark the current sidebar link. Each copy repeats the #nav base rules. */
 .navmocks { align-items: flex-start; gap: var(--sp-20); }
 .navmocks figure { margin: 0; }
@@ -1706,6 +1676,93 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .navmock[data-v="5"] a.on { color: var(--ink); }
 .design-row .meter { flex: 1 1 160px; }
 
+/* ---------- page grammar (ui/views/lib/page.js, browse.js, bars.js; docs/design.md, Page) ---------- */
+/* A page of views: one column of blocks. app.css gives a section a bottom margin; here the gap of the column spaces the blocks. */
+.views { display: flex; flex-direction: column; gap: var(--gap-in); min-width: 0; }
+.views > .ph { margin: 0; align-items: center; }
+.views > section { margin: 0; }
+/* Attention rows: one surface per problem, its tone as a bar at the left. */
+.attn { display: flex; flex-direction: column; gap: var(--sp-8); }
+.arow { display: flex; align-items: center; gap: var(--sp-10); padding: var(--sp-8) var(--sp-14); border-radius: var(--r-ctl); background: var(--surface); box-shadow: inset 3px 0 0 var(--c), var(--card-lift); color: var(--ink); }
+.arow.error { --c: var(--error); }
+.arow.need { --c: var(--need); }
+.arow .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* Facts line: figures at text size, split by a dot. */
+.factline { margin: 0; color: var(--ink-2); }
+.factline > span { white-space: nowrap; }
+.factline > span + span::before { content: "\00b7"; margin: 0 var(--sp-8) 0 var(--sp-4); color: var(--muted); }
+.factline b { font-weight: var(--fw-strong); color: var(--ink); }
+/* Figure band: one surface, a figure per cell, split by hairlines. */
+.band { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); border-radius: var(--r-card); background: var(--surface); box-shadow: var(--card-lift); }
+.fig { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-14) var(--sp-18); border-left: 1px solid var(--rule-2); min-width: 0; }
+.fig:first-child { border-left: 0; }
+.fig .k, .fig .cmp { font-size: var(--fs-xs); color: var(--muted); }
+.fig b { font: var(--fw-strong) var(--fs-2xl)/1.1 var(--metric); letter-spacing: var(--ls-display); color: var(--ink); }
+.fig .cmp.good { color: var(--good); }
+.fig .cmp.warn { color: var(--need); }
+/* List surface: the rows of every group on one grid, so the columns line up. A group head or "more" line spans every column. */
+.lcard .fbar { margin: 0; }
+.lrows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) repeat(var(--n), max-content); column-gap: var(--sp-14); }
+.lrows > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; }
+.lrows > .lnone, .lrows > .lmore { display: block; padding: var(--sp-6) var(--sp-8); border-top: 1px solid var(--rule-2); }
+.lrows > .lmore { font-size: var(--fs-xs); color: var(--muted); }
+.lhead { padding: var(--sp-16) var(--sp-8) var(--sp-4); }
+.lhead:first-child { padding-top: var(--sp-4); }
+.lhead .gt { grid-column: 1 / 3; display: flex; align-items: baseline; gap: var(--sp-8); }
+.lhead .sub-head { margin: 0; }
+.lhead .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+.lhead .h { text-align: right; font: var(--fw-strong) var(--fs-xs) var(--sans); color: var(--muted); }
+.lrow { padding: var(--sp-8); border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); cursor: pointer; transition: background-color .15s ease-out; }
+.lrow:hover { background: var(--sunk); }
+.lrow[aria-current="true"] { background: var(--sunk); box-shadow: inset 2px 0 0 var(--run); }
+.lrow:focus-visible { outline-offset: -2px; }
+.lrow .main { display: flex; align-items: baseline; gap: var(--sp-6); min-width: 0; }
+.lrow .main .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.lrow .main .chips, .lrow .main .badge { flex: none; }
+.lrow .c { text-align: right; white-space: nowrap; color: var(--ink-2); font-family: var(--num); font-variant-numeric: tabular-nums; }
+@media (max-width: 720px) {
+  .lrows { display: block; }
+  .lrows > li { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: var(--sp-2) var(--sp-10); }
+  .lrows > .lhead { justify-content: flex-start; }
+  .lrow .main { flex: 1 1 75%; flex-wrap: wrap; row-gap: var(--sp-2); }
+  .lrow .main .t { flex: 1 1 100%; }
+  .lrow .c:empty, .lhead .h { display: none; }
+  .lrow .c { font-size: var(--fs-xs); }
+}
+/* Inspector: the selected row's detail. A table in it keeps its height: a flex column would shrink its scroll box to nothing. */
+.browse .ins { gap: var(--sp-10); }
+.ins .inspect-head { align-items: center; }
+.ins .facts, .ins .status-row { margin: 0; }
+.ins .sub-head { margin: var(--sp-6) 0 0; }
+.ins .tscroll { flex: none; }
+.ins .srow { grid-template-columns: minmax(0, 1fr); }
+.ins .srow .hint { grid-column: 1; }
+/* Setting rows: Save waits for a change (markDirty in html.js). */
+.settings .srow:not(.dirty) .sctl > button[type="submit"] { display: none; }
+/* Row bars: one bar in a cell; the figures are in its tooltip. */
+.rowbar { display: inline-flex; width: 120px; vertical-align: middle; }
+.rowbar .meter { flex: 1; }
+.ratebar { display: inline-flex; align-items: center; gap: var(--sp-6); }
+.ratebar .meter { width: 64px; }
+.ratebar .meter > i.below { background: var(--need); }
+/* Agents: a role row's switch and model select; the select shrinks on a phone. */
+.rolectl { display: inline-flex; align-items: center; gap: var(--sp-6); min-width: 0; }
+.rolectl input[type="checkbox"] { margin: 0; }
+.rolectl select { min-width: 0; }
+.runstrip { display: flex; gap: 1px; width: 14em; height: var(--bar-h); background: var(--sunk); border-radius: var(--r-hair); overflow: hidden; }
+.runstrip.full { width: 100%; }
+.runstrip > i { display: block; flex: none; min-width: 2px; background: var(--c, var(--muted)); }
+.runstrip > i.done { --c: var(--done); }
+.runstrip > i.run { --c: var(--run); }
+.runstrip > i.need { --c: var(--need); }
+.runstrip > i.error { --c: var(--error); }
+.logmeter { display: flex; min-width: 120px; }
+.logmeter .meter { flex: 1; }
+.logmeter .meter > i { background: var(--run); }
+/* Sidebar: a page with attention rows has its tone dot at the right of its link; a collapsed sidebar puts it on the icon. */
+.nav-dot { display: inline-flex; margin-left: auto; }
+#nav a { position: relative; }
+@media (min-width: 721px) { .shell.collapsed #nav .nav-dot { position: absolute; top: var(--sp-4); right: var(--sp-4); } }
 /* Browser surfaces take the palette. */
 ::selection { background: var(--sel); }
 html { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }

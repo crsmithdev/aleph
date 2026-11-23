@@ -71,7 +71,7 @@ An issue with an Ask shows once, as its Ask.
 
 | Page | Order | Active work | Events |
 |---|---|---|---|
-| A · Briefing, `a-briefing.html` | Main column: Problems, Now, Efficiency and Flow, Memory. Rail: Needs You over Events. | A table: stage, issue, model and the elapsed time on a meter. The mark is the stage's median and the end is its p90. Under it, the waiting issues by what they wait on. | The Herald feed in the rail. It stays in view while the main column scrolls. |
+| A · Briefing, `a-briefing.html` | Main column: Problems with the alert and the Asks, Issues in Motion, Waiting, Events, Memory. Rail: Efficiency over Flow. | C's lanes, then a Waiting card of the waiting issues by what they wait on. | C's log table. |
 | B · Board, `b-board.html` | Attention, Pipeline, then Events beside Efficiency and Memory. | A board: a column per stage with the week's median and failed share in its head, and the issues in it now. | The Herald feed in a card. |
 | C · Timeline, `c-timeline.html` | Left: Issues in Motion, Events. Right: Needs You, Problems, Factory, Memory. | Lanes: each issue of the last hour on one time axis, its runs as bars in the tone of their result. | A log table of one event a row: time, event, issue, title, job, by, model, cost, took. |
 
@@ -79,7 +79,7 @@ Where each block sits at 1600 × 1000 px, in px from the top of the page:
 
 | Page | Busy | Quiet |
 |---|---|---|
-| A | Needs You 285 to 776, Problems 285 to 476, Now 500 to 961, Events from 800 | Problems 285 to 540, Now 564 to 654, Events from 285 |
+| A | Problems 285 to 674, lanes 698 to 1239, Waiting 1263 to 1455, Events from 1479 | Problems 285 to 541, lanes 565 to 786, Events from 810 |
 | B | Attention 285 to 600, Pipeline 624 to 1109, Events from 1133 | Attention 285 to 541, Pipeline 565 to 836, Events from 860 |
 | C | Needs You 285 to 810, lanes 285 to 826, Problems 834 to 1026, Events from 850 | Problems 285 to 540, lanes 285 to 506, Events from 530 |
 
@@ -97,15 +97,25 @@ Where each block sits at 1600 × 1000 px, in px from the top of the page:
 C's lanes show an issue that loops: a3418 passed, failed at land and started again, all in 14 minutes. A table row
 hides that. A way to keep it is a second form of the Now card.
 
+## Round 2: Chris's notes on A, 2026-11-23
+
+1. The alert and the Asks are the first rows of Problems, tinted in their tone, with their actions. Needs You is gone. The
+   status lights move to the Problems head.
+2. C's Issues in Motion replaces Now. The waiting issues keep their table in a Waiting card under it.
+3. C's event log replaces the Herald feed, in the main column.
+4. Efficiency and Flow move to the rail. Memory stays at the end of the main column.
+
+The Recommended section is of round 1.
+
 ## New parts
 
 Each needs a place in `docs/design.md` before a build.
 
 - A meter fill in the need tone (`.m-need`): a run past its p90, a budget at 95%.
 - The Problems table: a hand cell of what the problem is and a muted detail (`.pwhat`, `.pdetail`).
-- The rail column that holds Needs You over the Events card (`.rail-side`), and the "Warning: " head of the sentence.
-- A sub-head with a count (`.sub-count`), a row of status lights (`.lights`), and the filter row of the event viewer
-  (`.evbar`).
+- An alert or an Ask as a Problems row: a tint and an edge in its tone, its actions under its text (`.palert`, `.pacts`).
+- The "Warning: " head of the sentence.
+- A row of status lights (`.lights`), and the filter row of the event viewer (`.evbar`).
 - The column charts are hand SVG (`.cols`). A build draws them as `<aleph-chart>` panels.
 - B only: the board (`.board`, `.bcol`, `.bitem`), and a small link button in a table row.
 - C only: the timeline in a card on a list page. `docs/design.md` gives the Timeline to detail pages.
