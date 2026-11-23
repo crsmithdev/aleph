@@ -15,7 +15,7 @@ import { skipFetches } from "../lib/store.ts";
 import { loadDotenv } from "../lib/env.ts";
 import { startPoller } from "./usage.ts";
 import { KEYED, respond, startUpdater, stopUpdater, updater } from "./updater.ts";
-import { uiPort } from "../jobs/lib/infra/settings.ts";
+import { homeUrl, uiPort } from "../jobs/lib/infra/settings.ts";
 import { serverGraph } from "../jobs/lib/infra/ui-graph.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
@@ -178,7 +178,8 @@ if (import.meta.main) {
     process.exit(2);
   }
   const server = await serve(port);
-  // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it.
-  if (String(server.port) === uiPort()) await dock?.announce(`http://127.0.0.1:${server.port}`);
+  // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it. The home name,
+  // because a POST needs the paired cookie and Chris pairs on that host.
+  if (String(server.port) === uiPort()) await dock?.announce(homeUrl().replace(/\/$/, ""));
   console.log(`http://127.0.0.1:${server.port}/`);
 }
