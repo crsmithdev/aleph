@@ -71,7 +71,7 @@ An issue with an Ask shows once, as its Ask.
 
 | Page | Order | Active work | Events |
 |---|---|---|---|
-| A · Briefing, `a-briefing.html` | Main column: Issues in Motion, Events. Rail: Problems with the alert and the Asks, Efficiency, Flow, Memory. In one column Problems leads. | C's lanes, then a Waiting section in the same card: the waiting issues by what they wait on. | C's log table. |
+| A · Briefing, `a-briefing.html` | Main column: Issues in Motion, Events. Rail: Problems with the alert and the Asks, Efficiency, Flow, Memory. In one column Problems leads. | C's lanes of the issues that run now, then a Waiting section in the same card: the waiting issues by what they wait on. | C's log table. |
 | B · Board, `b-board.html` | Attention, Pipeline, then Events beside Efficiency and Memory. | A board: a column per stage with the week's median and failed share in its head, and the issues in it now. | The Herald feed in a card. |
 | C · Timeline, `c-timeline.html` | Left: Issues in Motion, Events. Right: Needs You, Problems, Factory, Memory. | Lanes: each issue of the last hour on one time axis, its runs as bars in the tone of their result. | A log table of one event a row: time, event, issue, title, job, by, model, cost, took. |
 
@@ -111,6 +111,8 @@ Round 3, the same day:
 2. Memory moves to the rail, stacked: the six counts in three columns, then Start Context, then Offers per Day.
 
 Round 4: Problems moves to the top of the rail. At 1100 px and under, the page is one column and Problems leads it.
+
+Round 5: the lanes show only the issues that run now. Idle, the card shows "No data".
 
 The Recommended section is of round 1.
 

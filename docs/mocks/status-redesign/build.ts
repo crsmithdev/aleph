@@ -316,7 +316,7 @@ function eventsLog(v: View) {
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { waiting: true })}${eventsLog(v)}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v)}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true })}${eventsLog(v)}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}${memoryCard({ stacked: true })}</div></div>`;
 
 // ---- B: Board ----
 
@@ -357,8 +357,8 @@ const pageB = (v: View) => `${head(v)}${scorecard(v)}${triage(v)}${board(v)}<div
 
 // ---- C: Timeline ----
 
-/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. */
-function motion(v: View, { waiting = false } = {}) {
+/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. `running` keeps only the issues that run now; `waiting` adds the waiting issues under the lanes. */
+function motion(v: View, { running = false, waiting = false } = {}) {
   const n = 12; // lanes above the fold
   const span = v.busy ? 3_600_000 : v.st.span, from = v.T - span, x = (t: number) => Math.min(100, Math.max(0, ((t - from) / span) * 100));
   const ticks = Array.from({ length: 5 }, (_, i) => from + (i * span) / 4);
@@ -367,7 +367,7 @@ function motion(v: View, { waiting = false } = {}) {
     const runs = js.map((j) => ({ ...j, s: Math.max(from, Date.parse(j.started)), e: j.live ? v.T : Date.parse(j.ended ?? j.started) })).sort((a, b) => a.s - b.s);
     const live = runs.some((r) => r.live), last = runs.at(-1)!;
     return { issue, title: runs[0].title, runs, live, last, end: Math.max(...runs.map((r) => r.e)), cost: runs.reduce((c, r) => c + (r.cost ?? 0), 0) };
-  }).sort((a, b) => Number(b.live) - Number(a.live) || b.end - a.end);
+  }).filter((l) => !running || l.live).sort((a, b) => Number(b.live) - Number(a.live) || b.end - a.end);
   const toneOf = (r: any) => (r.last === "failed" || r.last === "returned" ? "bad" : r.role === "land" ? "land" : r.role === "build" ? "build" : "aux");
   const state = (l: any) => (l.live ? "running" : l.runs.some((r: any) => r.role === "land" && r.last === "landed") ? "landed" : l.last.last === "failed" || l.last.last === "returned" ? l.last.last : l.last.last === "dropped" ? "dropped" : "waiting");
   const lane = (l: any) => {
