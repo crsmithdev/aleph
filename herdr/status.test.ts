@@ -37,6 +37,7 @@ const flow: any = {
   stages: { rows: ["intake", "build", "review", "recheck", "land"].map((stage, i) => ({ stage, runs: 3, items: 2, unusable: i % 2, p90: 300, minutes: 1 })) },
   phases: { intake: { count: 1, p90: 60 }, queue: { count: 2, p90: 90 }, implement: { count: 2, p90: 3600 }, land: { count: 0, p90: null } },
   issues: { firstPass: 0.71 }, open: { open: 4, parked: 6 }, asks: { count: 3, manual: 1 },
+  buckets: [{ at: "2026-10-26T00:00:00" }, { at: "2026-10-27T00:00:00" }], times: [{ outcome: "landed", filed: "2026-10-27T01:00:00", lead: 3600 }],
 };
 const HEADS = ["Scorecard", "Problems", "Issues in Motion", "Efficiency", "Flow", "Memory", "Events"];
 /** The lines between the head `from` and the next head. */
@@ -84,6 +85,16 @@ test("Efficiency, Flow and Memory carry the page's figures", () => {
   expect(section(text, "Efficiency")).toEqual(["8.0h of 10h reached main", "landed 8.0h · failed 2.0h", "Lost Time by Cause", "check 1.5h", "timeout 0.5h", "Failed Runs by Stage", "Implement 1 of 3", "Recheck 1 of 3"]);
   expect(section(text, "Flow")).toEqual(["Filed 9 · Landed 7 · Dropped 1 · First Pass 71% · Open 4 +6 · Asks 3 1 yours", "Time by Phase, p90", "Intake 0 1m 00s", "Queue 2 1m 30s", "Implement 1 1h 00m", "Land 0 –"]);
   expect(section(text, "Memory")).toEqual(["aleph 2 lines 5,900 / 6,000 B", "Notes 3 · Offered 1 · Never offered 2 · Unoffered reads 2 · Refused 0 · Stale 1 1 late"]);
+});
+
+test("the data gives the mod each bar's share of the largest and the series of the two column charts", () => {
+  const p = data(state, flow);
+  expect(p.efficiency.lost.map((r) => r.bar)).toEqual([1, 1 / 3]);
+  expect(p.efficiency.failed.map((r) => r.bar)).toEqual([1, 1]);
+  expect(p.flow.phases.map((r) => r.bar)).toEqual([1 / 60, 1 / 40, 1, 0]);
+  expect([p.flow.per, p.flow.landed]).toEqual(["day", [0, 1]]);
+  expect(p.memory!.start.map((r) => [r.share, r.full])).toEqual([[5900 / 6000, true]]);
+  expect(p.memory!.offers).toHaveLength(7);
 });
 
 test("the scorecard prints the five cards of the page's card list, a three-value card's values and labels each joined by a slash", () => {

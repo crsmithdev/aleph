@@ -14,9 +14,9 @@ import { clip, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { clock, count, dur, hours } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
-import { cardList } from "../ui/views/lib/flow-parts.js";
+import { bucketOf, cardList } from "../ui/views/lib/flow-parts.js";
 // @ts-ignore plain JS, shared with the page
-import { errorSentence, failedRuns, flowStats, FULL, holdsOf, lostCauses, memoryStats, onText, phasesNow } from "../ui/views/now.js";
+import { errorSentence, failedRuns, flowStats, FULL, holdsOf, landedFrame, lostCauses, memoryStats, offersFrame, onText, phasesNow } from "../ui/views/now.js";
 import { errText } from "../lib/errtext.ts";
 
 /** `memory` is /api/memory with /api/memory/processes as `processes`, and `log` the first page of /api/log, as the page reads them. */
@@ -35,6 +35,9 @@ const trend = (html: string) => html.replace(/<[^>]*>/g, "");
 const scorecard = (s: State, d: Flow): { name: string; value: string; trend: string; note: string }[] => cardList(s, d, { memory: s.memory ?? null }).map((c: any) => ({
   name: c.k, value: [c.v, c.v2].flat().filter((x) => x !== undefined).join(" / "), trend: trend(c.trend ?? ""), note: c.q?.join(" / ") ?? c.note ?? "",
 }));
+
+/** Each row with `bar`, its value's share of the largest, as the page's bar lists scale them. */
+const scaled = <T,>(rows: T[], of: (r: T) => number) => { const most = Math.max(...rows.map(of)); return rows.map((r) => ({ ...r, bar: most ? of(r) / most : 0 })); };
 
 /** Side stats as the page draws them: the name, the value and its note. */
 const stats = (xs: { k: string; v: string; note?: string }[]) => xs.map((x) => ({ name: x.k, value: x.v, note: x.note ?? "" }));
@@ -75,18 +78,22 @@ export function data(s: State, d: Flow) {
     },
     efficiency: {
       kept: hours(f.kept), all: hours((f.kept ?? 0) + (f.hours ?? 0)),
-      classes: d.classes.filter((c) => c.hours > 0).map((c) => ({ key: c.key, text: hours(c.hours) })),
-      lost: (lostCauses(d) as [string, number][]).map(([name, h]) => ({ name, text: hours(h) })),
-      failed: (failedRuns(d) as any[]).map((r) => ({ name: NAMES[r.stage], text: `${count(r.unusable)} of ${count(r.runs)}` })),
+      classes: d.classes.filter((c) => c.hours > 0).map((c) => ({ key: c.key, hours: c.hours, text: hours(c.hours) })),
+      lost: scaled((lostCauses(d) as [string, number][]).map(([name, h]) => ({ name, hours: h, text: hours(h) })), (r) => r.hours),
+      failed: scaled((failedRuns(d) as any[]).map((r) => ({ name: NAMES[r.stage], runs: r.unusable as number, text: `${count(r.unusable)} of ${count(r.runs)}` })), (r) => r.runs),
     },
     flow: {
       stats: stats(flowStats(d)),
-      phases: Object.entries(phases).map(([k, n]) => { const ph = d.phases[k as keyof typeof d.phases]; return { name: NAMES[k === "implement" ? "build" : k], now: count(n), p90: ph.count ? dur(ph.p90) : "–" }; }),
+      phases: scaled(Object.entries(phases).map(([k, n]) => { const ph = d.phases[k as keyof typeof d.phases]; return { name: NAMES[k === "implement" ? "build" : k], now: count(n), secs: ph.p90 ?? 0, p90: ph.count ? dur(ph.p90) : "–" }; }), (r) => r.secs),
+      // The issues landed in each bucket of the window, oldest first.
+      per: bucketOf(d), landed: (landedFrame(d).rows as { landed: number }[]).map((r) => r.landed),
     },
-    memory: m && {
-      start: Object.entries(m.start).map(([k, st]: [string, any]) => ({ name: k, lines: count(st.core.length), text: `${count(st.bytes)} / ${count(st.budget)} B` })),
+    memory: m ? {
+      start: Object.entries(m.start).map(([k, st]: [string, any]) => ({ name: k, lines: count(st.core.length), share: st.bytes / st.budget, full: st.bytes >= FULL * st.budget, text: `${count(st.bytes)} / ${count(st.budget)} B` })),
       stats: stats(memoryStats(m, s.now)),
-    },
+      // The offers of recall on each of the last 7 days, oldest first.
+      offers: (offersFrame(m, now).rows as { offers: number }[]).map((r) => r.offers),
+    } : null,
     events: (s.log?.rows ?? []).map((r) => ({ at: clock(r.at), action: r.action, id: r.issue?.id ?? r.job?.id ?? "", title: r.title, by: r.by, took: r.took == null ? "" : dur(r.took) })),
   };
 }
