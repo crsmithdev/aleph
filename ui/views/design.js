@@ -5,7 +5,7 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { freshness, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderTimeline } from "./lib/timeline.js";
@@ -184,6 +184,12 @@ function renderDesign(d) {
       empty() + error("Could not load the agents.") + loadingLine("Jobs"), "", "words-*") +
 
     group("Structure") +
+    spec("freshness", "Freshness", (() => {
+      const ago = (m) => new Date(Date.now() - m * 60_000).toISOString(), at = ago(4), head = (word) => pageHead("Jobs").replace("</header>", `${word}</header>`);
+      return head(freshness("Jobs", [["/api/jobs", { at: ago(0) }]], true)) + head(freshness("Jobs", [["/api/jobs", { at }]], false)) +
+        head(freshness("Jobs", [["/api/jobs", { at, error: "a rebuild runs; this is the last answer", since: at, rebuild: true }]], false)) +
+        head(freshness("Jobs", [["/api/jobs", { at, error: "build worker failed: out of memory", since: at }]], false));
+    })(), "Live, aged, updating, error. Hover a word for its keys.") +
     spec("page-head", "Page head", pageHead("Jobs", { count: 128, aside: scope(new URLSearchParams("project=aleph&window=week")).bar() }) + pageHead("Issues", { after: viewTabs(VIEWS, "list") }), "The second head has view tabs; the first view is the default.") +
     spec("detail-panel", "Detail panel", panel("design-spec", "Spec", `<div class="md">${md("The **spec** of an issue, as Markdown, at most 76 characters wide.")}</div>`, "updated 11/10") + detailPanel("Notes", "2 notes", "<p>An open fold of a detail page.</p>") + panel("design-mark", "Investigation", `<div class="dp-body"><p>An agent's findings for Chris, marked.</p></div>`, "11/19 22:41 · opus", "dp-marked")) +
     spec("kpis", "KPI strip", renderKpis([{ k: "Took", v: dur(574), sub: "build 1" }, { k: "Cost", v: money(4.12), sub: "2 runs" }, { k: "Result", v: "landed", sub: "on main", text: true }])) +

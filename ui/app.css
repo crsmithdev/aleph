@@ -1021,6 +1021,11 @@ table.tbl td.labels { max-width: 24ch; overflow: hidden; text-overflow: ellipsis
 .ph { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-6) var(--sp-12); margin: 0 0 var(--sp-16); }
 .ph h1 { font: var(--fw-text) var(--fs-xl)/1.35 var(--display); letter-spacing: var(--ls-display); margin: 0; }
 .ph .count { font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
+.ph .age { font: var(--fw-mid) var(--fs-xs) var(--num); color: var(--muted); cursor: default; white-space: nowrap; }
+.ph > .age { margin-left: auto; }
+.ph .age.live { color: var(--ink); }
+.ph .age.live::before { content: ""; display: inline-block; width: var(--dot-s); height: var(--dot-s); margin-right: var(--sp-6); border: 1px solid currentColor; border-radius: var(--r-pill); vertical-align: 1px; }
+.ph .age.error { color: var(--error); }
 .ph .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8) var(--sp-12); margin-left: auto; color: var(--muted); font-size: var(--fs-xs); }
 
 /* ---------- filter bar (filterBar): every control 28px high ---------- */
@@ -1090,8 +1095,8 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 pre.stat b { color: var(--need); }
 .ev.one { grid-template-columns: minmax(0, 1fr); }
 .q { margin: var(--sp-10) 0 0; font-size: var(--fs-sm); max-width: 76ch; }
-#offline, #stale, #aged { margin: 0; padding: var(--sp-6) var(--sp-24); background: var(--error-bg); color: var(--error); font-size: var(--fs-sm); text-align: center; }
-#stale .notice, #aged .notice { display: inline; margin: 0; color: inherit; }
+#offline, #stale { margin: 0; padding: var(--sp-6) var(--sp-24); background: var(--error-bg); color: var(--error); font-size: var(--fs-sm); text-align: center; }
+#stale .notice { display: inline; margin: 0; color: inherit; }
 #stale .cmd { margin-left: var(--sp-8); }
 .notice { margin: 0 0 var(--sp-6); color: var(--muted); font-size: var(--fs-sm); }
 .notice.bad { color: var(--error); }

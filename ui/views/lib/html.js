@@ -2,7 +2,7 @@
 // View issues may add to this file but not change what is here (the 2026-11-04 format issue did: a unit follows a number with no space).
 
 import { issueApi, keep, kept } from "./address.js";
-import { count, money, pct, wkText } from "./format.js";
+import { ago, clock, count, markLine, money, pct, wkText } from "./format.js";
 import { noteHref, PRIORITIES, priorityRank, shortId, shortText } from "../../../lib/naming.ts";
 
 export function esc(s) {
@@ -223,6 +223,20 @@ export const tone = (state) => TONES[state] ?? "quiet";
  */
 export const pageHead = (title, { count, aside = "", cls = "", after = "", head = "" } = {}) =>
   `<header class="ph${head ? ` ${head}` : ""}">${title ? `<h1${cls ? ` class="${cls}"` : ""}>${esc(title)}</h1>` : ""}${after}${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
+/**
+ * How fresh the page's data is, one word for the right of the page head: `error` when a key's build failed, `updating`
+ * while a rebuild runs, `live` on a live view with its stream open, else the age of the oldest key. The title gives each
+ * mark's line, then each key with its build time. `keys` is `[key, { at, error, since, rebuild }][]`; "" for no key.
+ * @design freshness
+ */
+export function freshness(title, keys, live, now = Date.now()) {
+  const marks = keys.filter(([, k]) => k.error), failed = marks.some(([, k]) => !k.rebuild);
+  const oldest = keys.map(([, k]) => k.at).filter(Boolean).sort()[0];
+  const word = failed ? "error" : marks.length ? "updating" : live ? "live" : oldest ? ago(oldest, now) : "";
+  if (!word) return "";
+  const tip = [...marks.map(([, k]) => markLine(title, k, now)), ...keys.map(([key, k]) => `${key} ${clock(k.at)}`)].join("\n");
+  return `<span class="age${failed ? " error" : word === "live" ? " live" : ""}" title="${esc(tip)}">${word}</span>`;
+}
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
 export function blockersHtml(waits, repo, id) {

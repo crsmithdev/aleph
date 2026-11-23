@@ -14,8 +14,8 @@ import { Idiomorph } from "../../vendor/idiomorph.js";
 import { setCodes } from "../../../lib/naming.ts";
 import { postJson, parseHash, scope } from "./address.js";
 import { actMessages, drawAt, keepReason, openDiffs, record } from "./decisions.js";
-import { failMessage, markLine } from "./format.js";
-import { arm, cmd, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, markDirty, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
+import { failMessage } from "./format.js";
+import { arm, cmd, freshness, notice, pageHead, say, loadDiff, error, linkButton, esc, loading, markDirty, mountView, recordState, restoreState, wireFolds, restoreFolds } from "./html.js";
 import { rowsOf, setRows, worst } from "./attention.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
@@ -29,8 +29,6 @@ const dot = (rows) => (rows.length ? `<span class="nav-dot" title="${esc(rows.ma
 /** The keys an answer was built from: the server names them in `x-aleph-keys`, split by spaces. */
 export const keysOf = (res) => (res.headers.get("x-aleph-keys") ?? "").split(" ").filter(Boolean);
 
-/** The mark of a key that failed to rebuild or answers stale over a rebuild, `{ error, since }`, or null. */
-export const markOf = (data) => { const error = data?.error ?? data?.stale; return typeof error === "string" && typeof data?.since === "string" ? { error, since: data.since } : null; };
 
 /** The URL of a route's data: `view.api` with its ":params" filled in. */
 const urlOf = ({ view, params, query }) =>
@@ -55,7 +53,7 @@ async function dataOf(route, get) {
 export function loader(env) {
   let stream = ""; // the id of the open stream: the server keeps built the keys a GET asks for with it
   let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, full = false, events = null, heardAt = 0, firstLoad = Promise.resolve(), timer = 0, okAt = 0;
-  const read = new Set(); // the keys the shown view's loads returned
+  const read = new Map(); // the keys the shown view's loads returned: key to `{ at, error, since, rebuild }`, from the answer's headers
 
   const slots = new Map(); // a view's own load by name: the number of its newest call
 
@@ -66,7 +64,8 @@ export function loader(env) {
     if (slot) slots.set(slot, mine);
     const res = await env.fetch(url, stream);
     if (route !== shown || (slot && slots.get(slot) !== mine)) return slot ? null : res;
-    for (const k of keysOf(res)) read.add(k);
+    const h = (name) => res.headers.get(`x-aleph-${name}`) ?? undefined;
+    for (const k of keysOf(res)) read.set(k, { at: h("at"), error: h("error"), since: h("since"), rebuild: h("rebuild") === "1" });
     return res;
   }
 
@@ -136,10 +135,11 @@ export function loader(env) {
     if (pending && !env.focused()) { pending = false; return reload(); }
   }
 
-  /** A `change` names the keys the server rebuilt: reload only a view that read one of them. */
+  /** A `change` names the keys the server rebuilt: reload a live view that read one of them, and any view whose answer
+   * for one of them was marked, so its freshness word leaves `updating` or `error`. */
   function change(keys) {
     env.changed?.(keys);
-    if (shown?.view?.live && keys.some((k) => read.has(k))) return reload();
+    if (shown?.view && keys.some((k) => read.has(k) && (shown.view.live || read.get(k).error))) return reload();
   }
 
   // The stream is open on every page in a visible tab (the sidebar follows the status tone), and only a live view reloads on it: a browser allows few connections to one host.
@@ -188,7 +188,7 @@ export function loader(env) {
     return (firstLoad = route.view ? load(route, true) : Promise.resolve());
   }
 
-  return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read]; }, get stream() { return stream; } };
+  return { get, reload, redraw, blur, change, follow, check, show, get shown() { return shown; }, get keys() { return [...read.keys()]; }, get fresh() { return [...read]; }, get live() { return !!shown?.view?.live && events?.readyState === env.EventSource.OPEN; }, get stream() { return stream; } };
 }
 
 function compile(path) {
@@ -271,9 +271,7 @@ export async function start() {
     if (saved) restoreState($("view"), saved);
     markDirty($("view"));
     swapped?.();
-    const mark = markOf(data);
-    $("aged").hidden = !mark;
-    $("aged").innerHTML = mark ? notice(markLine(view.title, mark), true) : "";
+    paintAge();
     // Keyed <details> keep their open state by data-keep, and that state goes through keep(),
     // one key per fold: it survives a redraw and a reload. A fold the reader never touched
     // has no kept state, and shows its own default.
@@ -306,7 +304,7 @@ export async function start() {
     // The keys of each `change`, for code outside the views: the dock's note tool reloads on /api/annotations.
     // A Sessions key's change carries the Sessions row (its mark), which the facts key does not.
     changed: (keys) => { if (keys.includes("/api/status")) readTone(); if (keys.some((k) => k === "/api/attention/facts" || k.startsWith("/api/sessions"))) readAttention(); dispatchEvent(new CustomEvent("aleph:change", { detail: keys })); },
-    opened: () => { readTone(); readAttention(); },
+    opened: () => { readTone(); readAttention(); paintAge(); },
   });
 
   // The tone of the status sentence, from /api/status, kept for the Status entry of each nav draw.
@@ -377,7 +375,6 @@ export async function start() {
     nav(path);
     // #view outlives its views, so a view's handlers on it must not reach the next one.
     $("view").onclick = $("view").onchange = $("view").onkeydown = $("view").oninput = null;
-    $("aged").hidden = true;
     const m = match(views, path, query);
     if (!m) {
       page.show({ view: null });
@@ -393,6 +390,16 @@ export async function start() {
   }
 
   setInterval(checkOut, 1000);
+
+  /** Put the freshness word last at the right of the shown view's page head, after each draw, stream open and half
+   * minute: in the controls when the head has them, so it wraps with them. */
+  function paintAge() {
+    const ph = $("view").querySelector(".ph"), v = page.shown?.view;
+    if (!ph || !v) return;
+    ph.querySelector(".age")?.remove();
+    (ph.querySelector(":scope > .aside") ?? ph).insertAdjacentHTML("beforeend", freshness(v.title, page.fresh, page.live));
+  }
+  setInterval(paintAge, 30_000);
 
   // In-page anchors (#needs) scroll to their element instead of routing.
   document.addEventListener("click", (e) => {

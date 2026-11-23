@@ -1153,13 +1153,16 @@ describe.skipIf(!chromeUsable)("Automation redraw", () => {
   }, 60_000);
 
 
-  test("the page head keeps its controls at the right, past the title", async () => {
+  test("the page head keeps its controls at the right, past the title, and the freshness word last", async () => {
+    // At a desktop width: on a narrow page the controls and the freshness word wrap under the title.
+    await page.width(1280);
     await page.go("#/automation");
-    await page.when('document.querySelector("#view .ph .aside")');
+    await page.when('document.querySelector("#view .ph .age")');
     await ready();
-    const [[phL, phR], [asideL, asideR], [, h1R]] = await page.ev<[number, number][]>(
-      `[".ph", ".ph .aside", ".ph h1"].map((s) => { const b = document.querySelector("#view " + s).getBoundingClientRect(); return [b.left, b.right]; })`);
+    const [[phL, phR], [asideL, asideR], [, h1R], [, ageR]] = await page.ev<[number, number][]>(
+      `[".ph", ".ph .aside", ".ph h1", ".ph .age"].map((s) => { const b = document.querySelector("#view " + s).getBoundingClientRect(); return [b.left, b.right]; })`);
     expect(Math.abs(asideR - phR)).toBeLessThanOrEqual(1);
+    expect(Math.abs(ageR - asideR)).toBeLessThanOrEqual(1);
     expect(asideL).toBeGreaterThan(h1R);
     expect(phL).toBeLessThan(h1R);
     expect(page.errors).toEqual([]);

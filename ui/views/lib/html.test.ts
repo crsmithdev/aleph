@@ -6,9 +6,9 @@ import { heraldOf, row, withFactory } from "../../now.testkit.ts";
 // @ts-ignore the module is plain JS, shared with the page
 import { scope } from "./address.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { plural } from "./format.js";
+import { clock, plural } from "./format.js";
 // @ts-ignore the module is plain JS, shared with the page
-import { clamp, markDirty, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, pageOf, pageRows, sortRows } from "./html.js";
+import { clamp, freshness, markDirty, moreFold, fold, linkButton, actButton, legendHtml, meter, repoIdLink, badge, priorityBadge, statusRow, chips, seg, idLink, pageHead, pager, sectionHead, card, diffHtml, loadDiff, empty, error, loading, md, mountView, recordState, restoreState, wireFolds, restoreFolds, tone, wireTabs, wireEdit, pageOf, pageRows, sortRows } from "./html.js";
 // @ts-ignore the module is plain JS, shared with the page
 import * as lib from "./html.js";
 
@@ -421,4 +421,18 @@ test("markDirty shows Save on a setting row whose control differs from its saved
     select = rowOf({ tagName: "SELECT", options: [{ selected: true, defaultSelected: false }, { selected: false, defaultSelected: true }] });
   markDirty({ querySelectorAll: () => [same, typed, box, select] });
   expect([same, typed, box, select].map((r) => r.on.v)).toEqual([false, true, true, true]);
+});
+
+test("freshness says error over updating over live over the oldest age, and its title gives the marks then each key", () => {
+  const now = Date.parse("2026-11-09T10:05:00Z"), at = "2026-11-09T10:00:00Z", since = at;
+  const ok = ["a", { at }] as const, old = ["b", { at: "2026-11-09T09:55:00Z" }] as const;
+  const rebuild = ["c", { at, error: "a rebuild runs", since, rebuild: true }] as const, failed = ["d", { at, error: "boom", since }] as const;
+  const word = (keys: unknown[], live = false) => freshness("Jobs", keys, live, now).match(/>([^<]*)</)?.[1];
+  expect(word([ok, old])).toBe("10m ago");
+  expect(word([ok], true)).toBe("live");
+  expect(word([ok, rebuild], true)).toBe("updating");
+  expect(word([ok, rebuild, failed], true)).toBe("error");
+  expect(freshness("Jobs", [ok, failed], false, now)).toContain('class="age error"');
+  expect(freshness("Jobs", [ok, failed], false, now)).toContain(`title="Jobs is 5m 00s old: boom\na ${clock(at)}\nd ${clock(at)}"`);
+  expect(freshness("Jobs", [], false, now)).toBe("");
 });

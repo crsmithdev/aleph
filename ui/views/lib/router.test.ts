@@ -1,6 +1,6 @@
 import { expect, jest, test } from "bun:test";
 // @ts-ignore router.js is plain JS, shared with the page
-import { loader, keysOf, markOf, morph, moved } from "./router.js";
+import { loader, keysOf, morph, moved } from "./router.js";
 // @ts-ignore plain JS, shared with the page
 import { view as issues } from "../issues.js";
 // @ts-ignore plain JS, shared with the page
@@ -12,6 +12,7 @@ import { markLine } from "./format.js";
 
 /** A stream the test sends messages on. */
 class FakeStream {
+  static OPEN = 1;
   static CLOSED = 2;
   static last: FakeStream;
   readyState = 1;
@@ -40,8 +41,8 @@ function page() {
     event: () => {},
     opened: () => { opened++; },
   };
-  const answer = (i: number, body: unknown, keys = "") =>
-    asked[i].done(new Response(JSON.stringify(body), { headers: keys ? { "x-aleph-keys": keys } : {} }));
+  const answer = (i: number, body: unknown, keys = "", headers: Record<string, string> = {}) =>
+    asked[i].done(new Response(JSON.stringify(body), { headers: keys ? { "x-aleph-keys": keys, ...headers } : headers }));
   const route = { view: { title: "Status", api: "/api/factory", live: true }, params: {}, query: new URLSearchParams() };
   return { router: loader(env), asked, drawn, firsts, answer, route, focus: (on: boolean) => { focused = on; }, opened: () => opened };
 }
@@ -141,13 +142,31 @@ test("a reload during a reload makes one more, not two", async () => {
   expect(p.asked.length).toBe(3);
 });
 
-test("keysOf splits the header, and markOf takes only an error or a stale note with its time", () => {
+test("a view that is not live reloads on a change only of a key whose answer was marked", async () => {
+  const p = page(), route = { ...p.route, view: { ...p.route.view, live: false } };
+  const shown = p.router.show(route);
+  p.answer(0, { n: 1 }, "a b", { "x-aleph-error": "a rebuild runs", "x-aleph-since": "2026-11-09T10:00:00Z", "x-aleph-rebuild": "1" });
+  await shown;
+  FakeStream.last.send("change", { keys: ["c"] });
+  expect(p.asked.length).toBe(1);
+  FakeStream.last.send("change", { keys: ["a"] });
+  expect(p.asked.length).toBe(2);
+});
+
+test("keysOf splits the header", () => {
   expect(keysOf(new Response("", { headers: { "x-aleph-keys": "a  b" } }))).toEqual(["a", "b"]);
   expect(keysOf(new Response(""))).toEqual([]);
-  expect(markOf({ error: "boom", since: "2026-11-09T10:00:00Z", rows: [] })).toEqual({ error: "boom", since: "2026-11-09T10:00:00Z" });
-  expect(markOf({ stale: "old", since: "2026-11-09T10:00:00Z" })).toEqual({ error: "old", since: "2026-11-09T10:00:00Z" });
-  expect(markOf({ error: "boom" })).toBeNull();
-  expect(markOf(null)).toBeNull();
+});
+
+test("each key keeps its build time and mark from its answer's headers, and the view is live only while its stream is open", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, { n: 1 }, "a", { "x-aleph-at": "2026-11-09T10:00:00Z", "x-aleph-error": "a rebuild runs", "x-aleph-since": "2026-11-09T10:00:00Z", "x-aleph-rebuild": "1" });
+  await shown;
+  expect(p.router.fresh).toEqual([["a", { at: "2026-11-09T10:00:00Z", error: "a rebuild runs", since: "2026-11-09T10:00:00Z", rebuild: true }]]);
+  expect(p.router.live).toBe(true);
+  FakeStream.last.close();
+  expect(p.router.live).toBe(false);
 });
 
 test("markLine says how old the data is and why", () => {

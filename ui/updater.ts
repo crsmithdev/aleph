@@ -63,8 +63,8 @@ export function keyOf(url: URL): string {
 }
 
 /** A key's answer and, while its last build failed, why and since when (ISO). */
-/** `stale`: the mark is the note of an old answer served over its rebuild, not a failure. */
-interface Got { answer: Answer; error?: string; since?: string; stale?: boolean }
+/** `stale`: the mark is the note of an old answer served over its rebuild, not a failure. `at`: when the answer was built (ISO). */
+interface Got { answer: Answer; at?: string; error?: string; since?: string; stale?: boolean }
 type Mark = { error: string; since: string };
 
 interface Slot { asked: number; answer?: Answer; hash?: bigint | number; sources: Set<string>; error?: string; since?: string; /** When the answer was built, and while an old answer is served over its rebuild, why. */ at?: string; note?: string; /** Changes the answer may lack, and how many of them came before the start of the last build that ended. */ marked: number; built: number; again?: boolean; /** How many requests wait for the key's build: theirs goes before the rebuilds. */ waits: number; /** The open streams of the pages that show the key. */ seen: Set<string>; /** An action since the last build began: the page that acted must read a build, not the old answer (not for Langfuse keys: a build takes minutes). */ hard?: boolean; building?: Promise<void> }
@@ -208,7 +208,7 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
       }
       if (!s.answer) return { answer: { status: 502, body: { error: s.error } } };
       const m = markOf(s);
-      return m ? { answer: s.answer, ...m, ...(m.error === s.note && !s.error ? { stale: true } : {}) } : { answer: s.answer };
+      return m ? { answer: s.answer, at: s.at, ...m, ...(m.error === s.note && !s.error ? { stale: true } : {}) } : { answer: s.answer, at: s.at };
     },
     /** The oldest mark among the keys that start with `prefix`, or null: a served-over answer or a failed build, as a key's own answer would carry it. */
     mark(prefix: string): Mark | null {
@@ -298,14 +298,17 @@ export function createUpdater({ build, now = Date.now, file = () => null, fetch 
 export const updater = createUpdater({ build: workerBuild, file: () => join(dirname(layout().factory), "ui", "keys.json"), fetch: () => fetchStore() });
 onLater((source) => updater.changed(source));
 
-/** The answer of the keyed route at `url`, with `x-aleph-keys` and, on an object body, the mark of a failed build. */
+/** The answer of the keyed route at `url`, with `x-aleph-keys`, its build time as `x-aleph-at`, and the mark of a failed
+ * build or a rebuild (`x-aleph-rebuild: 1`) as headers and, on an object body, in the body. */
 export async function respond(url: URL, stream?: string | null): Promise<Response> {
   const key = keyOf(url), got = await updater.get(key, stream), { answer } = got;
   const headers = new Headers({ "x-aleph-keys": key });
+  if (got.at) headers.set("x-aleph-at", got.at);
   if (got.error) {
     headers.set("x-aleph-error", got.error.replace(/\s+/g, " ").slice(0, 500));
     headers.set("x-aleph-since", got.since!);
   }
+  if (got.stale) headers.set("x-aleph-rebuild", "1");
   if (answer.text) return new Response(String(answer.body), { status: answer.status, headers });
   const marked = got.error && answer.body && typeof answer.body === "object" && !Array.isArray(answer.body);
   // A stale answer is good data: its note goes as `stale`, so a reader that treats `error` as a failed load keeps the data.
