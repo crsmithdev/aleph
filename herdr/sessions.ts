@@ -22,7 +22,9 @@ const TAIL = 256 * 1024; // bytes of a transcript to read
 const TEXT_MAX = 200; // chars of a record's text
 const ESC: Opt = { label: "esc", key: "esc" };
 // A last line that tells the person to act: "say go", or a "Next action:" with one of these verbs after it. "Next action: none." does not match.
-const CLOSER = /\bsay go\b|\bnext action:.*\b(?:say|tell me|pick|name|answer|reply|confirm)\b/i;
+// a last line that waits for the person: "say go", a verb for them after "Next action:", or a line that starts with one.
+// "Tell me when" and "tell me once" wait for a later event, not for the person now
+const CLOSER = /\bsay go\b|\bnext action:.*\b(?:say|tell me(?! (?:when|once)\b)|pick|name|answer|reply|confirm)\b|^\W*(?:say|tell me(?! (?:when|once)\b)|pick|answer|reply|confirm)\b/i;
 const SHELF = "http://127.0.0.1:3020/shelf/items"; // the shelf server's item list
 const SHELF_ID = "\\d{8}-\\d{6}-[a-z0-9]{4}";
 

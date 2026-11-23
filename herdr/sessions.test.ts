@@ -33,15 +33,19 @@ test("a numbered list followed by a closing sentence is plain", () => {
   expect(sort("1. keep\n2. drop\n\nTell me when it is done.")).toEqual({ kind: "plain", text: "Tell me when it is done.", opts: [] });
 });
 
-test("a last line that says go, or follows Next action: with a verb for the person, asks", () => {
+test("a last line that says go, or has a verb for the person after Next action: or first, asks", () => {
   expect(sort("Done.\n\nNext action: say go for step 6.")).toEqual({ kind: "asks", text: "Next action: say go for step 6.", opts: [{ label: "go", send: "go" }] });
   expect(sort("Done.\n\nSay go when ready.").opts).toEqual([{ label: "go", send: "go" }]);
   expect(sort("Done.\n\n**Next action:** tell me what you saw.")).toMatchObject({ kind: "asks", opts: [] });
   expect(sort("Done.\n\nNext action: pick 1, 2 or 3.")).toMatchObject({ kind: "asks", opts: [] });
+  expect(sort("Done.\n\nTell me a number to start.")).toMatchObject({ kind: "asks", opts: [] });
+  expect(sort("Done.\n\n**Pick** one of the three.")).toMatchObject({ kind: "asks", opts: [] });
 });
 
 test("a Next action: line that names no act for the person, and a plain summary, stay plain", () => {
   expect(sort("Done.\n\nNext action: none.").kind).toBe("plain");
+  expect(sort("Done.\n\nNext action: tell me when the suite lands.").kind).toBe("plain");
+  expect(sort("Done.\n\nPicking the first option was right.").kind).toBe("plain");
   expect(sort("Done.\n\nNext action: I will run the suite.").kind).toBe("plain");
   expect(sort("The branch is merged and the tests pass.").kind).toBe("plain");
   expect(sort("Say go when ready.\n\nThe branch is merged.").kind).toBe("plain");
