@@ -6,7 +6,8 @@ import { setPaused } from "../../jobs/lib/gates/pause.ts";
 import { withEnv, withServer, type TestServer } from "../server.testkit.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { closePass, openPass } from "../../lib/sources.ts";
-import { stateBody } from "./now.ts";
+import { forProject, stateBody } from "./now.ts";
+import type { State } from "../state.ts";
 import { writeRepos } from "../../tests/projects.testkit.ts";
 
 let base: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -42,4 +43,12 @@ test("the status tone is the Status page's verdict, and its change is signalled 
 test("the body of all projects is built once per pass: /api/status and /api/factory share it", () => {
   openPass({}, "tone");
   try { expect(stateBody(null)).toBe(stateBody(null)); expect(stateBody("p")).not.toBe(stateBody("p")); } finally { closePass(); }
+});
+
+test("a factory-wide job is in every known project's state, so the page and the sidebar agree", () => {
+  const wide = { id: "job.1", repo: "" }, other = { id: "job.2", repo: "q" };
+  const s = { errored: [wide, other], running: [wide], queued: [], done: [], doneStamps: [], runningIssues: [], asks: [] } as unknown as State;
+  expect(forProject(s, "p").errored.map((j) => j.id)).toEqual(["job.1"]);
+  expect(forProject(s, "p").running.map((j) => j.id)).toEqual(["job.1"]);
+  expect(forProject(s, "nope").errored).toEqual([]);
 });

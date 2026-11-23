@@ -6,10 +6,10 @@ import { once } from "../../lib/sources.ts";
 import { verdict } from "../../lib/status-words.ts";
 import { annotate, currentFit, summaryOff } from "../usage.ts";
 
-/** The state with only `project`'s jobs, issues and asks (none of a factory-wide job); the factory and ticks stay whole. */
+/** The state with `project`'s jobs, issues and asks; a factory-wide job (no repo) is in every known project, as an ask with no repo is. The factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
-  const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => repoIn(x.repo, project));
+  const mine = <T extends { repo?: string }>(a: T[]) => a.filter((x) => (x.repo ? repoIn(x.repo, project) : known(project)));
   const ours = <T extends { id: string }>(a: T[]) => a.filter((x) => inProject(x.id, project));
   return { ...s, errored: mine(s.errored), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)) };
 }
