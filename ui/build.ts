@@ -2,6 +2,7 @@
  * The one seam between the updater and its builds: `build` runs a key's build in the build Worker
  * (ui/build-worker.ts), off the server's event loop. Each Worker builds one key at a time. The keys that read Langfuse
  * go to a second Worker, because a cold Langfuse read takes up to 2 min and the other keys must not wait behind it.
+ * The heavy keys (Hooks and Automation, a month or more of Flow: 3 to 17 s) go to a third, so a 0.1 s key does not wait behind one.
  * A Worker that dies fails its builds and is made again.
  */
 import type { Answer, BuildReply, BuildRequest } from "./build-worker.ts";
@@ -12,7 +13,9 @@ export interface Built { answer: Answer; sources: string[] }
 
 /** The paths whose builds read Langfuse. */
 const LANGFUSE = /^\/api\/(sessions|skills)(\/|\?|$)/;
-const lane = (key: string) => (LANGFUSE.test(key) ? "langfuse" : "records");
+/** The paths whose builds take seconds, not milliseconds (measured 2026-11-22: hooks month 17 s, automation month 3.5 s, flow month 3.1 s). */
+const HEAVY = /^\/api\/(hooks|automation)(\/|\?|$)|^\/api\/flow\?.*window=(month|quarter)/;
+const lane = (key: string) => (LANGFUSE.test(key) ? "langfuse" : HEAVY.test(key) ? "heavy" : "records");
 
 /** A Worker and the ids of the builds it has in hand, so a Worker that dies fails only its own builds. */
 interface Lane { w: Worker; mine: Map<number, { ok: (b: Built) => void; no: (e: Error) => void }> }
