@@ -99,18 +99,18 @@ function head(v: View) {
   return `<header class="ph shead"><span class="asof">${esc(when(v.st.now, new Date(v.T)))}</span>${say}<div class="aside"><div class="fbar"><div class="fg"><select aria-label="Project"><option>All Projects (1)</option></select></div><div class="fg">${win}</div><div class="fg">${actButton("Pause", { act: "pause" }, { cls: "warn" })}</div></div></div></header>`;
 }
 
-/** The scorecard: one card per block of the page, in the page's order. Each card is the headline of its block and links to it. `meters` draws the Usage and Memory meters. */
-function scorecard(v: View, { meters = true } = {}) {
+/** The scorecard: one card per block of the page, in the page's order. Each card is the headline of its block and links to it. `meters` draws the Usage and Memory meters; `needs` draws the Needs You card. */
+function scorecard(v: View, { meters = true, needs = true } = {}) {
   const eff = (lost: number) => 1 - lost, waits = v.needs.length + (v.busy ? 1 : 0);
   const mem = d.memory.start.aleph, memPct = (mem.bytes / mem.budget) * 100;
   return tiles("Scorecard", [
-    statCard({ k: "Needs You", v: count(waits), ...(v.since ? { v2: cardDur((v.T - v.since) / 1000), q: ["waiting", "oldest"] } : { note: "waiting" }), href: "#needs", title: "Asks and alerts that wait for Chris, and how long the oldest has waited" }),
+    needs && statCard({ k: "Needs You", v: count(waits), ...(v.since ? { v2: cardDur((v.T - v.since) / 1000), q: ["waiting", "oldest"] } : { note: "waiting" }), href: "#needs", title: "Asks and alerts that wait for Chris, and how long the oldest has waited" }),
     statCard({ k: "Working", v: count(v.active.length), v2: [count(v.waiting.length), count(0)], q: ["running", "waiting", "error"], href: "#now" }),
     statCard({ k: "Efficiency", v: cardPct(eff(f.lost)), v2: hours(f.hours), q: ["efficient", "lost"], href: "#efficiency", trend: cardTrend(eff(f.lost), eff(base.lost), eff(prev.lost), { basis, kind: "points", lowerIsGood: false, format: cardPct }) }),
     statCard({ k: "Lead Time", v: cardDur(f.leadP50), v2: cardDur(f.leadP90), q: ["p50", "p90"], href: "#flow", trend: cardTrend(f.leadP50, base.leadP50, prev.leadP50, { basis, kind: "relative", lowerIsGood: true, format: cardDur }) }),
     statCard({ k: "Usage", v: pct(v.usage), v2: pct(v.gone), q: ["used", "pace"], href: `${LIVE}#/factory/agents`, extra: meters ? meter(v.usage, `${pct(v.usage)} of the week's quota used, ${pct(v.gone)} of the week gone`, { mark: Math.round(v.gone) }) : "" }),
     statCard({ k: "Memory", v: pct(memPct), note: "start context", href: "#memory", extra: meters ? meter([{ pct: memPct, cls: memPct >= 95 ? "m-need" : "" }], `${count(mem.bytes)} of ${count(mem.budget)} bytes of the aleph start context`) : "" }),
-  ].join(""), "scorecard");
+  ].filter(Boolean).join(""), "scorecard");
 }
 
 /** The status lights of the things aleph runs on: a word for each state, not a colour alone. */
@@ -321,7 +321,7 @@ function eventsLog(v: View, { lean = false } = {}) {
 // ---- A: Briefing ----
 
 /** Chris's notes of 11/23: the alerts and Asks join Problems, C's lanes and log replace Now and the feed, and Problems and the week's figures take the rail. */
-const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { lean: true })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
+const pageA = (v: View) => `${head(v)}${scorecard(v, { meters: false, needs: false })}<div class="rail"><div class="rail-main">${motion(v, { running: true, waiting: true, lean: true })}${eventsLog(v, { lean: true })}${memoryCard()}</div><div class="stack">${problems(v, { alerts: true })}${efficiencyCard()}${flowCard(v)}</div></div>`;
 
 // ---- B: Board ----
 

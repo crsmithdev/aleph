@@ -126,6 +126,8 @@ Round 10: a clock icon heads each Took and Waited column (its name in the title)
 
 Round 11: a duration column (Took, Waited) is headed by a stopwatch, and the event log's Time by a clock.
 
+Round 12: A drops the Needs You card from the scorecard; Problems shows what needs Chris. The scorecard has 5 cards.
+
 The Recommended section is of round 1.
 
 ## New parts
