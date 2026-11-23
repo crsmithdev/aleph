@@ -124,6 +124,8 @@ Round 9: A's Problems holds only cards, each a thing that needs Chris: the alert
 
 Round 10: a clock icon heads each Took and Waited column (its name in the title). The lanes drop the State label. Flow's Time by Phase shows the p90 only. A's Memory card drops the two "7 days" notes and the Maintain light.
 
+Round 11: a duration column (Took, Waited) is headed by a stopwatch, and the event log's Time by a clock.
+
 The Recommended section is of round 1.
 
 ## New parts
