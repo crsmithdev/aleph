@@ -1,0 +1,21 @@
+<!doctype html><head>
+<link rel="icon" href="data:,">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobs · aleph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&amp;family=Work+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/hack-font/3.3.0/web/hack.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/styles/themes/default.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.14.0/dist-cdn/webawesome.loader.js"></script>
+
+<link rel="stylesheet" href="/app.css">
+<style>@media (max-width: 720px) { #dock-host { flex-direction: row-reverse !important; right: 8px !important; bottom: 8px !important; } }</style><style></style><style>
+.age { margin-left: auto; font: var(--fw-mid) var(--fs-xs) var(--num); color: var(--muted); cursor: default; }
+.age.live { color: var(--ink); }
+.age.live::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: var(--sp-6); border-radius: 50%; border: 1px solid currentColor; vertical-align: 1px; }
+.ph .aside + .age { margin-left: 0; }
+.sh .aside .age { margin-left: 0; }
+.mock-tag { position: fixed; right: 12px; bottom: 12px; z-index: 9; padding: 4px 8px; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); color: var(--muted); font: var(--fs-xs) var(--mono); }
+</style></head><body><div class="page" style="max-width:1100px"><p class="notice">A1 live</p><header class="ph"><h1>Jobs</h1><div class="seg" role="group" aria-label="Views" data-default="runs"><button type="button" data-view="runs" aria-pressed="true">Runs</button><button type="button" data-view="timing" aria-pressed="false">Timing</button></div><span class="age live" title="/api/jobs  10:42:30">live</span></header><p class="notice">A2 aged</p><header class="ph"><h1>Jobs</h1><div class="seg" role="group" aria-label="Views" data-default="runs"><button type="button" data-view="runs" aria-pressed="true">Runs</button><button type="button" data-view="timing" aria-pressed="false">Timing</button></div><span class="age" title="/api/jobs  10:38:30">4m</span></header><p class="notice">A3 rebuild runs</p><div id="aged" style="margin-bottom:var(--sp-8)"><p class="notice bad" role="alert">Jobs is 4m 00s old: a rebuild runs; this is the last answer</p></div><header class="ph"><h1>Jobs</h1><div class="seg" role="group" aria-label="Views" data-default="runs"><button type="button" data-view="runs" aria-pressed="true">Runs</button><button type="button" data-view="timing" aria-pressed="false">Timing</button></div><span class="age" title="/api/jobs  10:38:30">4m</span></header><p class="notice">A4 build failed</p><div id="aged" style="margin-bottom:var(--sp-8)"><p class="notice bad" role="alert">Jobs is 12m 00s old: build worker failed: out of memory</p></div><header class="ph"><h1>Jobs</h1><div class="seg" role="group" aria-label="Views" data-default="runs"><button type="button" data-view="runs" aria-pressed="true">Runs</button><button type="button" data-view="timing" aria-pressed="false">Timing</button></div><span class="age" title="/api/jobs  10:30:30">12m</span></header></div></body>
