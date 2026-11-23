@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent notes in the dock</title>
+<style>
+/* The dock's own dark tokens (aleph-tools shelf.ts TOKENS), so the mock draws as the dock does. */
+:root { --bg: #202331; --card: #292D3E; --sunk: #191C28; --ink: #EEF1F8; --ink-2: #BFC7D5; --muted: #9AA2C6; --rule: #2E3245; --accent: #C792EA;
+  --field: #191C28; --agent: #82AAFF; --font: 'Work Sans', system-ui, sans-serif; --code: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
+  --lift: 0 1px 2px rgb(0 0 0 / .35), 0 6px 20px -8px rgb(0 0 0 / .55); }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px 28px 40px; background: #16181F; color: var(--ink); font: 14px/1.45 var(--font); }
+h1 { font: 600 20px var(--font); margin: 0 0 4px; }
+.lede { color: var(--muted); margin: 0 0 20px; max-width: 76ch; }
+.grid { display: grid; grid-template-columns: repeat(4, 300px); gap: 28px; align-items: start; }
+.col h2 { font: 600 14px var(--font); margin: 0 0 2px; }
+.col > p { color: var(--muted); font-size: 12px; margin: 0 0 10px; min-height: 34px; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--lift); padding: 10px; }
+.edit { display: grid; gap: 8px; width: 300px; }
+.edit code, code.sel { color: var(--muted); font: 11px var(--code); overflow-wrap: anywhere; }
+button { font: 13px var(--font); color: var(--ink); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 4px 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips button { border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+textarea { width: 100%; min-height: 70px; padding: 6px; background: var(--field); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px; font: 13px/1.4 var(--font); resize: none; }
+textarea.note { border-color: var(--accent); }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.save { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+/* Agent parts */
+.byline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.who { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--agent); background: color-mix(in srgb, var(--agent) 14%, var(--bg)); }
+.byline .sel { margin-left: auto; }
+.said { margin: 0; }
+.said b { display: block; font-weight: 600; margin-bottom: 2px; }
+.said p { margin: 0; color: var(--ink-2); font-size: 13px; }
+.meta { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.meta code { font: 11px var(--code); color: var(--muted); }
+details.more summary { font-size: 12px; color: var(--muted); cursor: pointer; list-style: none; }
+details.more summary::before { content: "+ "; }
+details.more[open] summary::before { content: "− "; }
+.agentcard { border-left: 3px solid var(--agent); }
+.msg { display: grid; gap: 3px; padding: 8px; border-radius: 8px; background: var(--sunk); }
+.msg .from { font-size: 11px; font-weight: 600; color: var(--agent); }
+.msg.you .from { color: var(--accent); }
+.dim { opacity: .45; }
+/* List row of the dock's notes panel */
+.list { margin-top: 12px; display: grid; gap: 6px; }
+.li { display: grid; grid-template-columns: 22px 1fr; gap: 6px; padding: 6px; border-radius: 6px; background: var(--sunk); font-size: 13px; }
+.li .no { font-weight: 600; color: var(--accent); }
+.li .no.agent { color: var(--agent); }
+.li .by { display: block; color: var(--muted); font-size: 12px; }
+.pinrow { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.pin { width: 22px; height: 22px; border-radius: 11px; border: 2px solid var(--bg); background: var(--accent); color: var(--bg); font: 600 11px/18px var(--font); text-align: center; }
+.pin.agent { background: var(--agent); }
+.pin.ink { background: var(--ink); }
+.k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+</style></head><body>
+<h1>Agent notes in the dock</h1>
+<p class="lede">A refit-design finding on <code class="sel">#/design</code>, opened in the note editor. Each variant marks the note as the agent's and shows the finding as a sentence. The data is the same in all four.</p>
+
+<div class="grid">
+
+<!-- Now -->
+<section class="col"><h2>Now</h2><p>The agent's text sits in your own note box, editable, with your quick actions.</p>
+<div class="card edit">
+  <code>#design-space</code>
+  <div class="chips"><button>Delete</button><button>Move</button><button>Refit</button><button>Explain</button></div>
+  <textarea class="note">finding: dead:motion:tokens
+Delete the unused tokens --t-fast and --t-slow. Delete --t-fast and --t-slow from :root and from the token list of the space specimen.
+locations: ui/app.css:79, ui/views/design.js:358</textarea>
+  <textarea placeholder="Reply"></textarea>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+  <div class="acts"><button>Delete</button><button>Resolve</button><button>Cancel</button><button class="save">Save</button></div>
+</div>
+<div class="pinrow"><span class="pin ink">7</span> pin: ink, as now</div>
+</section>
+
+<!-- A -->
+<section class="col"><h2>A. Byline</h2><p>A byline names the agent. The finding is read-only text. Where it is and why sit under a fold.</p>
+<div class="card edit">
+  <div class="byline"><span class="who">refit-design</span>agent<code class="sel">#design-space</code></div>
+  <div class="said"><b>Two motion tokens are never used</b><p>Nothing reads <code>--t-fast</code> or <code>--t-slow</code>. Delete both.</p></div>
+  <details class="more"><summary>Rule, where</summary><div class="meta"><span>Rule <code>motion</code>: one transition, .15s ease-out.</span><span><code>ui/app.css:79</code> · <code>ui/views/design.js:358</code></span></div></details>
+  <textarea placeholder="Reply"></textarea>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+  <div class="acts"><button>Dismiss</button><button>Resolve</button><button>Cancel</button><button class="save">Save</button></div>
+</div>
+<div class="pinrow"><span class="pin agent">7</span> pin: agent blue</div>
+</section>
+
+<!-- B -->
+<section class="col"><h2>B. Marked card</h2><p>The editor takes a blue edge and a head line. Rule and place stay open, in one muted block.</p>
+<div class="card edit agentcard">
+  <div class="byline"><span class="who">Agent</span>refit-design found</div>
+  <div class="said"><b>Two motion tokens are never used</b><p>Nothing reads <code>--t-fast</code> or <code>--t-slow</code>. Delete both.</p></div>
+  <div class="meta"><span>Rule <code>motion</code></span><span><code>ui/app.css:79</code> · <code>ui/views/design.js:358</code></span></div>
+  <textarea placeholder="Reply"></textarea>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+  <div class="acts"><button>Dismiss</button><button>Resolve</button><button>Cancel</button><button class="save">Save</button></div>
+</div>
+<div class="pinrow"><span class="pin agent">7</span> pin: agent blue</div>
+</section>
+
+<!-- C -->
+<section class="col"><h2>C. Thread</h2><p>The finding is the first message of a thread. Your reply and the agent's answers follow it, each named.</p>
+<div class="card edit">
+  <code>#design-space</code>
+  <div class="msg"><span class="from">refit-design</span><b>Two motion tokens are never used</b><span style="color:var(--ink-2);font-size:13px">Nothing reads <code>--t-fast</code> or <code>--t-slow</code>. Delete both.</span><span class="meta"><span>Rule <code>motion</code> · <code>ui/app.css:79</code></span></span></div>
+  <div class="msg you dim"><span class="from">You</span><span style="font-size:13px">Keep --t-slow for the drawer.</span></div>
+  <textarea placeholder="Reply"></textarea>
+  <div class="acts"><button>Change UI</button><button>Change language</button><button>Exception</button></div>
+  <div class="acts"><button>Dismiss</button><button>Resolve</button><button>Cancel</button><button class="save">Save</button></div>
+</div>
+<div class="pinrow"><span class="pin agent">7</span> pin: agent blue</div>
+</section>
+</div>
+
+<p class="k">The notes list, for the same note</p>
+<div class="grid">
+<div class="list"><div class="li"><span class="no">7</span><span>finding: dead:motion:tokens Delete the unused tokens --t-fast and --t-slow. Delete --t-fast and… <span class="by">by the agent</span></span></div></div>
+<div class="list"><div class="li"><span class="no agent">7</span><span>Two motion tokens are never used <span class="by">refit-design</span></span></div></div>
+<div class="list"><div class="li"><span class="no agent">7</span><span>Two motion tokens are never used <span class="by">refit-design</span></span></div></div>
+<div class="list"><div class="li"><span class="no agent">7</span><span>Two motion tokens are never used <span class="by">refit-design · 1 reply</span></span></div></div>
+</div>
+
+<p class="k">The stored note, for A, B and C</p>
+<pre class="card" style="font:12px/1.5 var(--code);color:var(--ink-2);margin:0;max-width:640px;white-space:pre-wrap">Two motion tokens are never used
+Nothing reads `--t-fast` or `--t-slow`. Delete both.
+rule: motion
+where: ui/app.css:79, ui/views/design.js:358
+finding: dead:motion:tokens</pre>
+</body></html>
