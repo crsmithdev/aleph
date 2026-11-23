@@ -97,6 +97,9 @@ function codePrint(root: string, files: Iterable<string>): string {
   }).join("\n");
 }
 
+/** The address the shelf prints in its links: aleph.home, where a device is paired, so a page opened from a link saves its notes. */
+export const shelfBase = () => homeUrl().replace(/\/$/, "");
+
 /** `warm: false` builds no saved key and polls no usage: a test that does not test them keeps Langfuse out of its process. */
 export async function serve(port: number, { warm = true, pageDir, apiDir, root = join(import.meta.dir, "..") }: { warm?: boolean; pageDir?: string; apiDir?: string; root?: string } = {}) {
   const dir = pageDir ?? import.meta.dir;
@@ -180,6 +183,6 @@ if (import.meta.main) {
   const server = await serve(port);
   // Only the UI's own port names the shelf, so a one-off check server does not take the shelf from it. The home name,
   // because a POST needs the paired cookie and Chris pairs on that host.
-  if (String(server.port) === uiPort()) await dock?.announce(homeUrl().replace(/\/$/, ""));
+  if (String(server.port) === uiPort()) await dock?.announce(shelfBase());
   console.log(`http://127.0.0.1:${server.port}/`);
 }

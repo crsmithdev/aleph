@@ -21,7 +21,7 @@ If the host already has a plain file at `~/.config/systemd/user/aleph-ui.service
 
 ## Access
 
-The server binds `127.0.0.1`. home-proxy serves it on the LAN as `aleph.home`, so any device on the LAN can read it. A POST needs a paired device (`ui/pair.ts`), and the UI answers any other POST with a 401.
+The server binds `127.0.0.1`. home-proxy serves it on the LAN as `aleph.home`, so any device on the LAN can read it. The links that `shelf put` and `shelf url` print point at `ALEPH_HOME_URL` (default `http://aleph.home/`), the origin where a device is paired, so a note saved from a shelf page is not refused. A POST needs a paired device (`ui/pair.ts`), and the UI answers any other POST with a 401.
 
 | Command | Does |
 |---|---|

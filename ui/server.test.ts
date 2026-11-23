@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dock } from "./dock.ts";
+import { shelfBase } from "./server.ts";
 import { deviceCookie, withEnv, withServer, type TestServer } from "./server.testkit.ts";
 import { addDevice, dropDevice } from "./pair.ts";
 import { seed } from "../jobs/job.testkit.ts";
@@ -39,6 +40,15 @@ afterAll(() => {
 // Security: the server must listen on loopback only; home-proxy is what exposes it on the LAN.
 test("binds 127.0.0.1", () => {
   expect(server.hostname).toBe("127.0.0.1");
+});
+
+test("the shelf base is aleph.home without its trailing slash, never 127.0.0.1", () => {
+  const restore = withEnv({ ALEPH_HOME_URL: "http://home.test:8080/" });
+  expect(shelfBase()).toBe("http://home.test:8080");
+  delete process.env.ALEPH_HOME_URL;
+  expect(shelfBase()).toBe("http://aleph.home");
+  expect(shelfBase().startsWith("http://127.0.0.1")).toBe(false);
+  restore();
 });
 
 test("/api/factory?project= keeps only that project's jobs", async () => {
