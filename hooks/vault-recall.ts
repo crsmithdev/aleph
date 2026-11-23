@@ -49,6 +49,7 @@ function writeSeen(root: string, session: string | undefined, seen: Set<string>,
 async function postSpan(input: any, start: number, meta: { candidates: number; asked: number; kept: number; capped: boolean; error?: string }, offered: string[], context: string, askedPaths: string[] = []) {
   await postTurnSpan(input, "vault-recall", start, {
     "langfuse.observation.type": "span",
+    "langfuse.observation.level": meta.error ? "ERROR" : "DEFAULT",
     "langfuse.observation.output": context ? truncate(context) : undefined,
     "langfuse.observation.metadata.candidates": meta.candidates,
     "langfuse.observation.metadata.asked": meta.asked,

@@ -133,6 +133,8 @@ test("the sessions list pages newest first by ?limit= and ?before=, and says whe
   expect(all.next).toBeNull();
   expect(all.partial).toBe(false);
   const first = await page({ limit: 1 });
+  expect(first.total).toEqual(all.total);
+  expect(first.total).toEqual({ sessions: all.sessions.length, cost: all.sessions.reduce((n: number, x: any) => n + x.cost, 0) });
   expect(first.sessions.map((s: any) => s.id)).toEqual([all.sessions[0].id]);
   expect(first.next).toBe(all.sessions[0].last);
   expect((await page({ limit: 1, before: first.next })).sessions.map((s: any) => s.id)).toEqual([all.sessions[1].id]);

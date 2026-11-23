@@ -40,11 +40,11 @@ const IDENTITY = join(import.meta.dir, "..", "identity");
 
 /** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. One read serves every build
  * until the 10 min usage poll: Memory's Langfuse reads are slow, so they do not run on the 30 s Langfuse poll. */
-type Sessions = Awaited<ReturnType<typeof sessionRows>>;
+type Sessions = Awaited<ReturnType<typeof sessionRows>>["sessions"];
 const sessions = (): Promise<Sessions | null> => later("memory:sessions", ["usage"], loadSessions, null);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuse()) return null;
-  try { return await sessionRows((await windowTraces(7, null)).rows, 10); } catch (e) { console.error(`ui/memory-items: no sessions: ${errText(e)}`); return null; }
+  try { return (await sessionRows((await windowTraces(7, null)).rows, 10)).sessions; } catch (e) { console.error(`ui/memory-items: no sessions: ${errText(e)}`); return null; }
 }
 
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };

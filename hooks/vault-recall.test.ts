@@ -186,6 +186,7 @@ test("one failing request loses only its notes, and the span records the error",
   expect(asked.length).toBe(3);
   expect(injected(r.out).split("\n").length).toBe(4);
   expect(meta(spansOf()[0]).error).toBeTruthy();
+  expect(spansOf()[0].attributes.find((a: any) => a.key === "langfuse.observation.level").value.stringValue).toBe("ERROR");
   const failed = questionsOf()[1];
   for (const q of failed) expect(injected(r.out)).not.toContain(q.match(/`(Jev Screen Number \d+)`/)![1] + " (");
 });

@@ -16,6 +16,7 @@ const observations = [
   span(0, "verify-gate", "ta", { verdict: "deny" }, "DEFAULT", "deny: nothing was run"),
   span(0, "verify-gate", "tb", { verdict: "pass" }),
   span(1, "vault-recall", "ta", {}, "ERROR"),
+  span(1, "vault-recall", "tb", { error: "jev 402" }),
 ];
 const rows = { traces: [] as any[], observations };
 const lf = memory(rows);
@@ -38,7 +39,7 @@ describe("activity", () => {
     const a = await activity(7, null, now);
     expect(a.langfuse).toBe("ok");
     expect(a.tools.map((t) => [t.name, t.calls, t.errors])).toEqual([["Bash", 2, 1], ["Edit", 1, 0], ["Read", 1, 0]]);
-    expect(a.hooks.map((h) => [h.name, h.calls, h.errors])).toEqual([["verify-gate", 2, 0], ["vault-recall", 1, 1]]);
+    expect(a.hooks.map((h) => [h.name, h.calls, h.errors])).toEqual([["vault-recall", 2, 2], ["verify-gate", 2, 0]]);
     expect(a.denials).toEqual({ total: 1, recent: [{ at: at(0), reason: "nothing was run" }] });
   });
 

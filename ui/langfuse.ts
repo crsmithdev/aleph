@@ -29,7 +29,8 @@ let reads: Promise<unknown> = Promise.resolve();
 const file = (base: string) => observationsStore().replace(/\.json$/, `.${base.replace(/\W+/g, "-")}.json`);
 const load = (env: string, base: string): Kept | null => {
   const d = readJsonOr<any>(file(base), null);
-  return d?.v === 1 ? { ...d, env, rows: new Map(d.rows.map((o: Observation) => [o.id, o])) } : null;
+  // v2: rows keep `metadata.error`, so a v1 file is read again in full.
+  return d?.v === 2 ? { ...d, env, rows: new Map(d.rows.map((o: Observation) => [o.id, o])) } : null;
 };
 
 /** The observations of [from, to) of the `types`, as `slim` keeps them; inside a build pass, through the kept rows. Langfuse filters on one type per read. */
@@ -58,7 +59,7 @@ export async function recent(lf: Langfuse, from: number, to: number, types: stri
       next.cut = Math.max(next.cut, got.cut);
     }
     kept = next;
-    try { writeJson(file(lf.base), { v: 1, ...next, env: undefined, rows: [...next.rows.values()] }); }
+    try { writeJson(file(lf.base), { v: 2, ...next, env: undefined, rows: [...next.rows.values()] }); }
     catch (e) { console.error(`activity: rows not saved: ${errText(e)}`); }
     return { rows: [...next.rows.values()].filter((o) => Date.parse(o.startTime ?? "") >= from), partial: from < next.cut };
   });

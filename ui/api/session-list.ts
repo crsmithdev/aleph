@@ -44,6 +44,7 @@ const whoRan = (label: string | undefined, prompt: string) => (label?.startsWith
 
 /**
  * The first `limit` sessions of `traces` that ended before `before`, newest last turn first: a factory worker's session has its run's name, and its own ledger cost when Langfuse prices it at 0.
+ * `total` counts every session of `traces`, so a page cut by `limit` still knows the window's count and cost.
  * The window's traces hold no input, so only these sessions have their `firstPrompt` read.
  */
 export async function sessionRows(traces: Session[], limit: number, before: string | null = null) {
@@ -54,7 +55,7 @@ export async function sessionRows(traces: Session[], limit: number, before: stri
   }
   const ledger = jobs();
   const fit = await currentFit();
-  const rows = [...groups].map(([id, ts]) => {
+  const all = [...groups].map(([id, ts]) => {
     ts.sort(byTime);
     const job = ledger.get(id);
     const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
@@ -73,13 +74,15 @@ export async function sessionRows(traces: Session[], limit: number, before: stri
         taskTypes: taskTypes(ts),
       },
     };
-  }).filter((x) => before === null || ms(x.row.last) < Date.parse(before))
+  });
+  const rows = all.filter((x) => before === null || ms(x.row.last) < Date.parse(before))
     .sort((a, b) => ms(b.row.last) - ms(a.row.last)).slice(0, limit);
   const lf = need();
-  return Promise.all(rows.map(async ({ ts, row }) => {
+  const sessions = await Promise.all(rows.map(async ({ ts, row }) => {
     const firstPrompt = clip(text(await firstTyped(lf, ts)), 160);
     return { ...row, firstPrompt, who: whoRan(row.label, firstPrompt) };
   }));
+  return { sessions, total: { sessions: all.length, cost: all.reduce((n, x) => n + x.row.cost, 0) } };
 }
 
 /** The sessions of a scope for the Agents view: newest last turn first, `limit` of them before the `before` time, and `next`, the `before` of the next page. A bad page or a Langfuse failure throws its message. */
@@ -88,7 +91,7 @@ export async function listSessions({ days, project }: Pick<Scope, "days" | "proj
   if (before !== null && Number.isNaN(Date.parse(before))) throw new Error("before must be an ISO time");
   const lf = need();
   const { rows: all, partial } = await windowTraces(days, project);
-  const sessions = await sessionRows(all, limit + 1, before); // one more than the page says whether there is a next
+  const { sessions, total } = await sessionRows(all, limit + 1, before); // one more than the page says whether there is a next
   const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
-  return { base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial };
+  return { base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, total, partial };
 }

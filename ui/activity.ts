@@ -43,12 +43,13 @@ interface Activity {
   partial?: boolean;
 }
 
-const isError = (o: Observation) => o.level === "ERROR";
+// vault-recall wrote its failures only to `metadata.error` before 2026-11-23, at level DEFAULT.
+const isError = (o: Observation) => o.level === "ERROR" || !!o.metadata?.error;
 
 /** The fields of an observation that the counts read. A row holds 2.4 KB of input and output on average (2026-11-10). */
 const slim = (o: Observation): Observation => ({
   id: o.id, traceId: o.traceId, name: o.name, type: o.type, startTime: o.startTime, level: o.level,
-  metadata: { tool: o.metadata?.tool, verdict: o.metadata?.verdict },
+  metadata: { tool: o.metadata?.tool, verdict: o.metadata?.verdict, ...(o.metadata?.error ? { error: true } : {}) },
   ...(o.name === "verify-gate" ? { output: o.output } : {}),
 });
 

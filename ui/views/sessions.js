@@ -87,7 +87,10 @@ function listView(d, o) {
     const rows = by(who).sort(order);
     return { title, count: count(rows.length), heads: ["Turns", "Cost", "Last"], rows: rows.map(sessionRow), cap: SHOWN };
   });
-  return factsLine([[money(sum(all, (s) => s.cost ?? 0)), o.days === "7" ? "this week" : `in ${o.days} days`], [money(cost("you")), "yours"], [money(cost("factory")), "factory"], [money(cost("headless")), "headless"]]) +
+  // A cut list (`next`) holds the newest sessions only: `total` covers the window, and who ran a session is read only for the listed ones.
+  const cut = d.sessions?.next ? d.sessions.total : null;
+  return factsLine([[money(cut ? cut.cost : sum(all, (s) => s.cost ?? 0)), o.days === "7" ? "this week" : `in ${o.days} days`], [money(cost("you")), "yours"], [money(cost("factory")), "factory"], [money(cost("headless")), "headless"]]) +
+    (cut ? notice(`Yours, factory and headless cover the newest ${count(all.length)} of ${count(cut.sessions)} sessions.`) : "") +
     browse({ id: "sessions", label: "Sessions", search: "Search the sessions", filters: [{ label: "Who", name: "who", options: ["yours", "factory", "headless"], value: "yours" }], groups });
 }
 

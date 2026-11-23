@@ -43,6 +43,11 @@ describe("the Sessions page", () => {
     const h = v.renderSessions(data(), opts());
     expect(h).toContain('<p class="factline"><span><b class="num">$12.00</b> this week</span> <span><b class="num">$1.00</b> yours</span> <span><b class="num">$9.00</b> factory</span> <span><b class="num">$2.00</b> headless</span></p>');
     expect(h).toContain('data-name="who"><button type="button" data-value="" aria-pressed="false">All</button><button type="button" data-value="yours" aria-pressed="true">');
+    const cut = { ...data(), sessions: { ...data().sessions, next: "2026-10-30T01:00:00Z", total: { sessions: 9, cost: 20 } } };
+    const c = v.renderSessions(cut, opts());
+    expect(c).toContain('<span><b class="num">$20.00</b> this week</span> <span><b class="num">$1.00</b> yours</span>');
+    expect(c).toContain("Yours, factory and headless cover the newest 3 of 9 sessions.");
+    expect(h).not.toContain("cover the newest");
     expect(h).toContain('<li class="lrow" tabindex="0" data-key="s1"');
     expect(h).not.toContain('data-key="s2"');
     expect(h).toContain('title="s1" href="#/sessions/s1"');
