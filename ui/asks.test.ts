@@ -15,7 +15,7 @@ const run = (reason: string, extra: Partial<Job> = {}): Job => ({
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
   ...(STORE ? { ask: { reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", reason: "question", why: ["w"] };
-const RUN_CAP = "the factory started this issue 3 times in the last hour; it stops starting it until Chris reruns it.";
+const RUN_CAP = "the factory started this issue 3 times in the last hour; it stops starting it until the user reruns it.";
 
 const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] });
 const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues });

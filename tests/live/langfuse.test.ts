@@ -25,7 +25,7 @@ describeLive("live langfuse", () => {
       attributes: attrs({
         "langfuse.trace.name": "live-test",
         "langfuse.session.id": sessionId,
-        "langfuse.user.id": "chris",
+        "langfuse.user.id": "user",
         "langfuse.observation.type": "span",
         "langfuse.trace.tags": ["live-test"],
         "langfuse.environment": "test",

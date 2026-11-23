@@ -474,14 +474,14 @@ function issueKpis(d, segments, now = Date.now()) {
   const lo = Math.min(...times), hi = open ? now : Math.max(...times);
   // Waiting is the time no job ran, on the whole issue, so a sub-issue waiting beside a running sub-issue does not count.
   const all = spans(d.timeline?.runs ?? [], now), waits = times.length ? gaps(all, lo, hi) : [];
-  const waited = waits.reduce((n, w) => n + w.end - w.start, 0), chris = waits.filter((w) => w.chris).reduce((n, w) => n + w.end - w.start, 0);
+  const waited = waits.reduce((n, w) => n + w.end - w.start, 0), user = waits.filter((w) => w.user).reduce((n, w) => n + w.end - w.start, 0);
   const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = parts.filter((g) => g.stage === "done").length;
   const commits = d.commits ?? [];
   return renderKpis([
     parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${shortText(g.id)} ${g.stage}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), text: true, sub: open ? esc(d.derived?.why ?? "") : "" },
     { k: open ? "Open for" : "Elapsed", v: times.length ? esc(dur((hi - lo) / 1000)) : miss("No job or note gave a time"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
-    { k: "Waiting", v: times.length ? esc(dur(waited / 1000)) : miss("No job or note gave a time"), sub: chris ? esc(`${dur(chris / 1000)} for the user's answer`) : "" },
+    { k: "Waiting", v: times.length ? esc(dur(waited / 1000)) : miss("No job or note gave a time"), sub: user ? esc(`${dur(user / 1000)} for the user's answer`) : "" },
     { k: "Cost", v: esc(money(cost)), sub: esc(plural(runs, "job")) },
     { k: "Commits", v: commits.length ? commits.slice(0, 3).map((c) => shaLink(c.hash, c.commitUrl)).join(" ") : miss("No commit on main yet"), text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
   ]);

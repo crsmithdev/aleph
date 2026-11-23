@@ -13,7 +13,7 @@ import { investigations } from "../../jobs/lib/roles/investigator.ts";
 import { view } from "../../jobs/lib/records/job.ts";
 import { git } from "../../lib/git.ts";
 import { landedIndex, repoStages } from "../../jobs/lib/records/status.ts";
-import { askOfItem, awaitsChris, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
+import { askOfItem, awaitsUser, PART_DROPPED, refIn } from "../../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
 import { filed, MEDIA_TYPES, mediaFiles, everyFetched, readList, readLists } from "../../lib/store.ts";
@@ -275,7 +275,7 @@ const addNote = post((b, params) => {
  */
 const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
   const { repo, n, item } = target(params);
-  if (todos.status(item) !== "open" || !awaitsChris(refIn(item))) fail(409, "this issue is not waiting for the user");
+  if (todos.status(item) !== "open" || !awaitsUser(refIn(item))) fail(409, "this issue is not waiting for the user");
   return aleph(["issue", verb, "--", repo.key, String(n), text]);
 });
 

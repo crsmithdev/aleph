@@ -126,7 +126,7 @@ describe("drop", () => {
     seed({ role: "build", name: "b", target: "issue.2", state: "waiting", ask: { ...held, reason: "question" } });
     seed({ role: "build", name: "c", target: "issue.3", state: "waiting", ask: held });
     await drop("a");
-    await drop("b", { reason: `Chris answered the worker's question "which?": B`, answered: true });
+    await drop("b", { reason: `The user answered the worker's question "which?": B`, answered: true });
     await drop("c", { quiet: true });
     expect([answers("issue.1"), answers("issue.2"), answers("issue.3")]).toEqual([
       [["human", "held-path: disapprove"]], [["human", "question: resolve"]], [["rule", "held-path"]],

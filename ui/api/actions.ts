@@ -35,10 +35,10 @@ const action = (verb: "land" | "recheck" | "drop") => post(async (body, { id }) 
 
 const answerAndRerun = post(async (body, { id }) => {
   const { run } = find(id);
-  if (!isWaiting(run.state) || may("chris", "resolve", run.ask)) fail(409, `${id} is ${run.state}, not waiting for an answer`);
+  if (!isWaiting(run.state) || may("user", "resolve", run.ask)) fail(409, `${id} is ${run.state}, not waiting for an answer`);
   const said = typeof body.answer === "string" ? body.answer.trim() : "";
   if (!said) fail(400, "answer is required");
-  return aleph(["drop", "--answered", "--", run.name, `Chris answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
+  return aleph(["drop", "--answered", "--", run.name, `The user answered the worker's question "${run.ask?.question ?? run.question ?? ""}": ${said}`]);
 });
 
 /** Job `id`'s name and its issue as `<repo> <n>`; a 400 for a job with no issue. */
@@ -59,8 +59,8 @@ const cancel = post(async (body, { id }) => {
   const then = body.then, { name, issue } = issueOfJob(id);
   if (!["park", "restart", "drop"].includes(then)) fail(400, "then must be park, restart or drop");
   if (then === "park") await aleph(["issue", "edit", "--status", "parked", "--", ...issue]);
-  if (then === "drop") await aleph(["issue", "drop", "--", ...issue, "Chris cancelled its job"]);
-  return aleph(["drop", "--", name, "Chris cancelled it"]);
+  if (then === "drop") await aleph(["issue", "drop", "--", ...issue, "The user cancelled its job"]);
+  return aleph(["drop", "--", name, "The user cancelled it"]);
 });
 
 /**
@@ -77,7 +77,7 @@ const wait = post(async (body, { id }) => {
   const edit = (after: string) => aleph(["issue", "edit", "--after", after, "--", repo!, String(issue)]);
   await edit(on).catch((e) => fail(statusOf(e), `set the wait: ${errText(e)}`));
   try {
-    return await aleph(["drop", "--", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]);
+    return await aleph(["drop", "--", name, `The user chose to wait for ${on}: this job cannot succeed until it lands.`]);
   } catch (e) {
     const back = await edit(was).then(() => "its wait was put back", () => `it still waits on ${on}`);
     return fail(statusOf(e), `drop the job: ${errText(e)}; ${repo}-${issue} ${back}`);

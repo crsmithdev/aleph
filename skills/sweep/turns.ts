@@ -17,7 +17,7 @@ const WEEK = 7 * 864e5;
 const SAID = 600; // chars of a prompt or an answer
 const HEAD = 600, TAIL = 1200; // chars of a long reply: its outcome comes first and its open ends last
 
-export interface Turn { at: string; who: "chris" | "reply" | "asks"; text: string }
+export interface Turn { at: string; who: "user" | "reply" | "asks"; text: string }
 
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)} …` : s);
 const clip = (s: string) => (s.length > HEAD + TAIL ? `${s.slice(0, HEAD)}\n…\n${s.slice(-TAIL)}` : s);
@@ -54,7 +54,7 @@ export const turns = (jsonl: string, since: string): Turn[] | null => {
     const said = answer ? text(answer.content) : typed(text(c));
     if (!said) continue;
     flush();
-    out.push({ at: r.timestamp, who: "chris", text: cut(said, SAID) });
+    out.push({ at: r.timestamp, who: "user", text: cut(said, SAID) });
   }
   flush();
   return out;
@@ -81,10 +81,10 @@ if (import.meta.main) {
     .filter((f) => (v.session ? f.endsWith(`/${v.session}.jsonl`) : statSync(f).mtime.toISOString() > since));
   const found = files
     .map((f) => ({ id: f.split("/").at(-1)!.slice(0, -6), ts: turns(readFileSync(f, "utf8"), since) }))
-    .filter((s) => s.ts?.some((t) => t.who === "chris"))
+    .filter((s) => s.ts?.some((t) => t.who === "user"))
     .toSorted((a, b) => a.ts![0].at.localeCompare(b.ts![0].at));
   for (const { id, ts } of found) {
     console.log(`## ${id} ${ts![0].at.slice(0, 16)} to ${ts!.at(-1)!.at.slice(0, 16)}\n`);
-    for (const t of ts!) console.log(`${t.who === "chris" ? "Chris" : t.who === "asks" ? "Asks" : "Reply"}: ${t.text}\n`);
+    for (const t of ts!) console.log(`${t.who === "user" ? "User" : t.who === "asks" ? "Asks" : "Reply"}: ${t.text}\n`);
   }
 }

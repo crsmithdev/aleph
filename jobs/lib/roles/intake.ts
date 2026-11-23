@@ -13,7 +13,7 @@ import * as issues from "../../../lib/issue-file.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
 import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setIntake, setPlan, sourceOf } from "../../../lib/issue-file.ts";
 import { askAfterDrops } from "../../../issues/lib/issues.ts";
-import { always, answerDetail, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
+import { always, answerDetail, awaitsUser, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { onOf, type Repo, type Run } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -285,7 +285,7 @@ export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.
   const parts = doc ? partsOf(doc, item) : [];
   const split = planSet(item)
     ? parts.length
-      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- ${issueKey(p.id)} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nChris asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
+      ? `\n# Plan the rest\n\nIts parts so far:\n${parts.map((p) => `- ${issueKey(p.id)} (${issues.status(p)}): ${p.title}`).join("\n")}\n\nThe user asked to plan the rest: return "build" with 1 to 6 more "parts" for what the done parts do not cover.\n`
       : `\n# Split it\n\nA run of this issue reached its time box: return "build" with 2 to 6 "parts".\n`
     : "";
   return `You take in one open issue of the repo ${repo.key}, before any work starts on it. Your working directory is a clone of main: read the code to decide, with your read-only tools. Change nothing. Code checks your reply.
@@ -369,7 +369,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
       // An open item with an Ask (a proposal too) waits for the user: an after-link to it would stall this issue on their answer.
       const waits = v.after.filter((r) => {
         const o = issues.find(doc, r);
-        return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(o));
+        return o !== undefined && issues.status(o) === "open" && awaitsUser(refIn(o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
       if (after.length) issues.edit(item, { after });

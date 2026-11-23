@@ -222,7 +222,7 @@ test("next: each run state gives its step", () => {
     [[{ state: "failed", reason: "no commit" }], "rescue"],
     [[{ state: "failed" }], "rescue"],
     [[{ role: "land", state: "landed", commit: "abc1234def" }], "none"],
-    [[{ state: "dropped", reason: "dropped by Chris" }], "none"],
+    [[{ state: "dropped", reason: "dropped by the user" }], "none"],
     [[{ state: "failed", reason: "no commit" }, { role: "director", state: "done" }], "rescue"],
     [[{ state: "passed", next: "land" }, { role: "director", state: "passed" }], "land"],
     [[{ state: "passed" }, { role: "review", state: "done" }], "wait"],

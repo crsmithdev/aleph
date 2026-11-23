@@ -5,7 +5,7 @@
  * reads origin/main; a write is one commit on origin/main, made without a working tree, and the checkout follows. No
  * product repo's main moves when an item changes, and no branch of a product repo can edit its own item.
  *
- * It is the Issues module: the predicates (`isBuildable`, `isSorted`, `awaitsChris`), one read of a project's list
+ * It is the Issues module: the predicates (`isBuildable`, `isSorted`, `awaitsUser`), one read of a project's list
  * (`reader`), and the named writes (`note`, `close`, `closeAndFile`, `file`, `writeFiles` for the idea files). Every new issue but the flake tracker
  * comes from `writeFiling`, and every close is logged by `logClosed`. Callers do not read or write `fm` fields (tests/seams-lint.test.ts) or name a path.
  */

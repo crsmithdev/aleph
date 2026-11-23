@@ -64,7 +64,7 @@ describe("job", () => {
       expect(state((await jobView(name)).json.run.id).fate).toBeUndefined();
       await actionJob(name, "commit f.txt");
       await dropAs(name, { fate: "duplicate" });
-      expect(state((await jobView(name)).json.run.id)).toMatchObject({ fate: "duplicate", reason: "dropped by Chris" });
+      expect(state((await jobView(name)).json.run.id)).toMatchObject({ fate: "duplicate", reason: "dropped by the user" });
     }, 30_000);
 
     test("a new job with an ended job's name starts fresh, clearing a leftover branch", async () => {

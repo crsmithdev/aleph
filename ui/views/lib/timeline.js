@@ -66,11 +66,11 @@ export function gaps(runs, from, to) {
   const out = [];
   let cursor = from, prev = null;
   for (const s of runs) {
-    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.state === "waiting" });
+    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, user: prev?.state === "waiting" });
     cursor = Number.isFinite(cursor) ? Math.max(cursor, s.end) : s.end;
     prev = s.r;
   }
-  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.state === "waiting" });
+  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, user: prev?.state === "waiting" });
   return out;
 }
 
@@ -137,7 +137,7 @@ export function eventHtml(e, { el = "div", clamped = true } = {}) {
 
 /**
  * The Timeline panel. `segments` is `[{ title, aside?, rows }]`; a row is
- * `{ head, bars: [{ start, end, tone, label, tip, href? }], waits: [{ start, end, chris }], marks: [{ at, tone: "made" | "done", tip }], result, time, cost, events: [{ at?, tag, tone, html }] }`.
+ * `{ head, bars: [{ start, end, tone, label, tip, href? }], waits: [{ start, end, user }], marks: [{ at, tone: "made" | "done", tip }], result, time, cost, events: [{ at?, tag, tone, html }] }`.
  * "" for no rows; a row with nothing timed has an empty lane.
  * @design timeline
  */
@@ -161,7 +161,7 @@ export function renderTimeline(segments) {
 
 /** The legend items of the tones `rows` use. */
 const legendOf = (rows) => {
-  const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
+  const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.user ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
   return Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => [v, `t-${k}`]);
 };
 
@@ -174,7 +174,7 @@ function laneHtml(r, x) {
   // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
   return `<div class="dp-lane">` +
-    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting the user" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
+    r.waits.map((w) => `<span class="dp-wait${w.user ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.user ? "Awaiting the user" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
     r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ` tabindex="0"`} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}<span class="sr">${esc(b.tip ?? b.label)}</span></${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
 }

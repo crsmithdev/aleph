@@ -57,7 +57,7 @@ export interface Reason {
   /** What the `continue` action is called and does for this reason. */
   continue?: { label: string; hint: string };
   /** Only the user decides this reason: it goes on the director's escalation list, with this as the why. */
-  chrisOnly?: string;
+  userOnly?: string;
 }
 interface Granted { action: string; at: string }
 
@@ -92,10 +92,10 @@ const REASONS = {
     continue: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
   // Held by the memory re-check on a core note; the director never decides it. Its issue is parked, so no work starts on it.
   "core-change": { actions: ["approve", "disapprove"], always: "approve", card: "approve", name: "Core note changes",
-    line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}.", chrisOnly: "a change to a core note is Chris's" },
+    line: "The memory re-check holds a correct or archive verdict on a core note.", problem: "The memory re-check holds a change to a core note, {id}.", userOnly: "a change to a core note is the user's" },
   // The issue is parked; its option `Remove the link` opens it, `Drop the waiter` drops it (decideAsk).
   "blocker-dropped": { actions: ["resolve", "dismiss"], always: "resolve", card: "decide", name: "Dropped blockers",
-    line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked.", chrisOnly: "an after link to a dropped issue is Chris's" },
+    line: "An issue waits after an issue that was dropped.", problem: "{id} waits after an issue that was dropped, so it is parked.", userOnly: "an after link to a dropped issue is the user's" },
 } satisfies Record<string, Reason>;
 
 /** The limits on the text a card shows, in words: the title phrase, the case text, and each choice's text. */
@@ -190,7 +190,7 @@ export const askOf = (ref: string): Ask | null => record.issueAsk(record.read(re
 export const askOfItem = (item: issues.Issue): Ask | null => askOf(refIn(item));
 
 /** The issue `ref` waits for the user: it has an Ask. */
-export const awaitsChris = (ref: string): boolean => askOf(ref) !== null;
+export const awaitsUser = (ref: string): boolean => askOf(ref) !== null;
 
 /** Put `ask` on the issue `ref`. */
 export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, ask);
@@ -249,7 +249,7 @@ export const logAlways = (reason: string, ref: string, action: string, more: Par
  * Put `ask` on item `id` with the note `asks the user: <said>`, as one store write. With `said` null the Ask is set and
  * no note is added (the caller has written the text once already). Returns why it could not, or null.
  */
-export function askChris(place: Place, id: number | string, ask: Ask, said: string | null): string | null {
+export function askUser(place: Place, id: number | string, ask: Ask, said: string | null): string | null {
   const text = said === null ? "" : `asks the user: ${said}`;
   try {
     let found = false;
@@ -274,7 +274,7 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
  */
 export function askFromRun(e: Entry, place: Place, issue: number | string | undefined, ask: Ask, said: string, spec?: issues.Issue): string | null {
   markAsked(e, said, spec ? specVersion(spec) : undefined);
-  return issue === undefined ? "no issue" : askChris(place, issue, ask, said);
+  return issue === undefined ? "no issue" : askUser(place, issue, ask, said);
 }
 
 /** The factory set an Ask on the run's issue: the run no longer holds the factory. */
@@ -309,7 +309,7 @@ export const keepsOpen = (said: string): boolean => said.includes(PLAN_REST) || 
 export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: string): void {
   if (issues.status(part) !== "dropped") return;
   const issue = parentOf(doc, part);
-  if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(issue))) return;
+  if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsUser(refIn(issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
   askPartDropped(issue, `Sub-issue ${doc.repo}-${part.id} was dropped: ${reason}. What now?`);
 }
@@ -325,7 +325,7 @@ export function askPartDropped(issue: issues.Issue, question: string): void {
 }
 
 /** Who decides an Ask: the director first, and the user when it escalates. */
-export type Actor = "chris" | "director";
+export type Actor = "user" | "director";
 
 /**
  * Why `actor` may not take `action` on `ask`, or null when it may. The user may take the actions the card offers. The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
@@ -334,7 +334,7 @@ export type Actor = "chris" | "director";
  */
 export function may(actor: Actor, action: string, ask: Ask | null | undefined, on: { waiting?: string } = {}): string | null {
   if (!ask) return "it has no Ask";
-  if (actor === "chris") {
+  if (actor === "user") {
     const offered = ASK_REASONS[ask.reason] ? actionsOn(ask.reason) : [];
     return offered.includes(action) ? null : `its ${ask.reason} Ask offers no ${action}`;
   }

@@ -20,7 +20,7 @@ const rowsOf = (d: object, now?: number) => issueSegments(issue(d), now).flatMap
 describe("the waits", () => {
   test("a wait fills each gap over a minute: the factory's between runs, yours after a run that awaits you", () => {
     const w = gaps(spans(held()), Date.parse("2026-11-01T10:00:00Z"), NaN);
-    expect(w.map((x: any) => [dur((x.end - x.start) / 1000), x.chris])).toEqual([["28m 00s", false], ["4h 20m", true]]);
+    expect(w.map((x: any) => [dur((x.end - x.start) / 1000), x.user])).toEqual([["28m 00s", false], ["4h 20m", true]]);
   });
 
   test("a gap of a minute or less is no wait; a wait runs on to `to`", () => {
@@ -36,14 +36,14 @@ describe("the issue timeline", () => {
     expect(issueSegments(issue({ timeline: { filed: new Date(0).toISOString(), runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
     expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["implement", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1%231");
-    expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
+    expect(row.waits.map((w: any) => w.user)).toEqual([false, true]);
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "triage"]);
     expect(row.cost).toBe("$0.30");
   });
 
   test("an open issue waits up to now; a live run runs up to now", () => {
     const now = Date.parse("2026-11-01T12:00:00Z");
-    expect(rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, chris: false }]);
+    expect(rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, user: false }]);
     const live = rowsOf({ status: "open", timeline: { filed: new Date(now - 3_600_000).toISOString(), runs: [run("build", "2026-11-01T11:30:00Z", null, { state: "running" })] } }, now)[0];
     expect(live.bars[0].end).toBe(now);
   });
@@ -106,8 +106,8 @@ describe("the event tags", () => {
 
   test("a wait's tag is waiting, for the factory's wait and yours", () => {
     const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
-    expect(tagTone(waitEvent({ ...w, chris: false }))).toEqual(["waiting", "need"]);
-    expect(tagTone(waitEvent({ ...w, chris: true }))).toEqual(["waiting", "need"]);
+    expect(tagTone(waitEvent({ ...w, user: false }))).toEqual(["waiting", "need"]);
+    expect(tagTone(waitEvent({ ...w, user: true }))).toEqual(["waiting", "need"]);
   });
 
   test("a run's event shows its bar label, then the reason as the note with no colon between them", () => {
@@ -220,7 +220,7 @@ describe("the timeline panel", () => {
 
 describe("waitEvent", () => {
   const t0 = Date.parse("2026-11-01T08:00:00Z"), min = 60_000;
-  const w = { start: t0, end: t0 + 9 * min, chris: false };
+  const w = { start: t0, end: t0 + 9 * min, user: false };
   const iso = (m: number) => new Date(t0 + m * min).toISOString();
   test("a hold's event gives the tag, its content and the wait's length", () => {
     setCodes({ aleph: "a" });

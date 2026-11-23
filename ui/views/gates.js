@@ -107,12 +107,12 @@ const WAITS = [["d", 1440, "days"], ["h", 60, "hours"], ["min", 1, "minutes"]];
 const splitWait = (m) => { const [unit, k] = WAITS.find(([, k]) => m % k === 0); return { n: m / k, unit }; };
 
 /** Who decided a rule's Asks, each with its count and no zeros. */
-const who = (x) => [[x.rule, "rule"], [x.director, "director"], [x.chris, "user"]].filter(([n]) => n).map(([n, k]) => `${count(n)} ${k}`);
+const who = (x) => [[x.rule, "rule"], [x.director, "director"], [x.user, "user"]].filter(([n]) => n).map(([n, k]) => `${count(n)} ${k}`);
 
 /** Who decided a rule's Asks, as one bar: rule, director, user; "" when none did. */
 function decided(x) {
-  const all = x.rule + x.director + x.chris;
-  return all ? rowBar([["rule", x.rule], ["dir", x.director], ["user", x.chris]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), who(x).join(" · ")) : "";
+  const all = x.rule + x.director + x.user;
+  return all ? rowBar([["rule", x.rule], ["dir", x.director], ["user", x.user]].map(([k, n]) => ({ pct: (100 * n) / all, cls: `c-${k}` })), who(x).join(" · ")) : "";
 }
 
 /** The two settings of a rule: who decides first and, for a timed Ask, what happens when no one answers. Each has a Save of its own that shows after a change. */

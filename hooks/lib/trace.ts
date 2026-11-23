@@ -15,7 +15,7 @@ export function traceAttrs(input: Record<string, any>): Attrs {
   const s = input.session_id ? session(input.session_id).get() : null;
   return {
     "langfuse.session.id": input.session_id,
-    "langfuse.user.id": "chris",
+    "langfuse.user.id": "user",
     "langfuse.environment": sessionEnvironment(),
     "langfuse.trace.name": s?.name ?? (input.cwd ? basename(input.cwd) : undefined),
     "langfuse.trace.tags": s?.tags,

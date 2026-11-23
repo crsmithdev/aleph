@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../lib/issue-file.ts";
-import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, askOfItem, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, asking, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askUser, clearAsk, decideAsk, askOfItem, grant, needsOf, may, normalizeAsk, CLOSE_DONE, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { ASK_ACTIONS } from "../../../lib/naming.ts";
 import { specVersion } from "../../../lib/issue-spec.ts";
 import * as record from "../records/record.ts";
@@ -16,23 +16,23 @@ import { newIssue, setup, teardown } from "../transitions/factory.testkit.ts";
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
 
-test("askChris with a null text sets the Ask and adds no note; an unknown issue gets none", () => {
+test("askUser with a null text sets the Ask and adds no note; an unknown issue gets none", () => {
   setup();
   try {
     const id = newIssue();
-    expect(askChris({ key: "fac" }, id, ask, null)).toBeNull();
+    expect(askUser({ key: "fac" }, id, ask, null)).toBeNull();
     expect(askOf(`issue.${id}`)).toEqual(ask);
     expect(issues.find(readList({ key: "fac" })!, id)!.notes).toEqual([]);
-    expect(askChris({ key: "fac" }, 999, ask, null)).toBe("no issue 999");
+    expect(askUser({ key: "fac" }, 999, ask, null)).toBe("no issue 999");
     expect(askOf("issue.999")).toBeNull();
   } finally { teardown(); }
 });
 
-test("askChris with a text sets the Ask and adds the note `asks the user: <said>`", () => {
+test("askUser with a text sets the Ask and adds the note `asks the user: <said>`", () => {
   setup();
   try {
     const id = newIssue();
-    expect(askChris({ key: "fac" }, id, ask, "which one?")).toBeNull();
+    expect(askUser({ key: "fac" }, id, ask, "which one?")).toBeNull();
     expect(issues.find(readList({ key: "fac" })!, id)!.notes).toEqual([expect.stringContaining("asks the user: which one?")]);
   } finally { teardown(); }
 });
@@ -240,14 +240,14 @@ test("may: the director does not answer an Ask whose run waits for a spec edit",
 });
 
 test("may: Chris takes the actions the card offers, on a run and on an issue", () => {
-  expect(may("chris", "resolve", plain)).toBeNull();
-  expect(may("chris", "resolve", plain)).toBeNull();
-  expect(may("chris", "answer", plain)).toBe("its question Ask offers no answer");
-  expect(may("chris", "resolve", plainAsk("held-path", "x"))).toBe("its held-path Ask offers no resolve");
-  expect(may("chris", "approve", plainAsk("held-path", "x"))).toBeNull();
-  expect(may("chris", "continue", plainAsk("no-commit", "x"))).toBeNull();
-  expect(may("chris", "resolve", { ...plain, reason: "nope" })).toBe("its nope Ask offers no resolve");
-  expect(may("chris", "resolve", undefined)).toBe("it has no Ask");
+  expect(may("user", "resolve", plain)).toBeNull();
+  expect(may("user", "resolve", plain)).toBeNull();
+  expect(may("user", "answer", plain)).toBe("its question Ask offers no answer");
+  expect(may("user", "resolve", plainAsk("held-path", "x"))).toBe("its held-path Ask offers no resolve");
+  expect(may("user", "approve", plainAsk("held-path", "x"))).toBeNull();
+  expect(may("user", "continue", plainAsk("no-commit", "x"))).toBeNull();
+  expect(may("user", "resolve", { ...plain, reason: "nope" })).toBe("its nope Ask offers no resolve");
+  expect(may("user", "resolve", undefined)).toBe("it has no Ask");
 });
 
 test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option sets plan and any other answer closes the issue", () => {

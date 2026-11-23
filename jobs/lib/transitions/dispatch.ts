@@ -4,7 +4,7 @@
 import { issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { buildableIssue, buildableIssues, reader } from "../../../lib/store.ts";
-import { askChris, plainAsk } from "../asks/ask.ts";
+import { askUser, plainAsk } from "../asks/ask.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { allJobs, type Repo } from "../records/ledger.ts";
 import { lock } from "../../../lib/locks.ts";
@@ -128,11 +128,11 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         if (now) refused = d.text;
         if (d.ask === "no-commit") {
           const text = `the last ${NO_COMMIT_LIMIT} runs of this issue ended with no commit, so the factory stopped starting it; rewrite the issue or close the item.`;
-          const bad = askChris(repo, ref, { ...plainAsk("no-commit", text), facts: d.facts }, text);
+          const bad = askUser(repo, ref, { ...plainAsk("no-commit", text), facts: d.facts }, text);
           if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         } else {
-          const text = `the factory started this issue ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
-          const bad = askChris(repo, ref, { ...plainAsk("run-cap", text), facts: d.facts }, text);
+          const text = `the factory started this issue ${d.starts} times in the last hour; it stops starting it until the user reruns it.`;
+          const bad = askUser(repo, ref, { ...plainAsk("run-cap", text), facts: d.facts }, text);
           if (bad) logEvent({ subject: "rule", action: "failed", object: name, detail: `no issue note: ${bad}` });
         }
         continue;

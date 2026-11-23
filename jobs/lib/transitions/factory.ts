@@ -91,7 +91,7 @@ export function hookLines(now = Date.now()): string[] {
       if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${item.id}`);
     }
   }
-  if (refs.length) lines.push(`${refs.length} asks wait for Chris: ${refs.slice(0, 5).join(", ")}`);
+  if (refs.length) lines.push(`${refs.length} asks wait for the user: ${refs.slice(0, 5).join(", ")}`);
   lines.push(...redMains().map((r) => r.line), ...stallLines(now, jobs).map((h) => h.text));
   for (const repo of repos.filter((r) => r.sandbox)) lines.push(behind(repo, true) ?? "");
   return lines.filter(Boolean);

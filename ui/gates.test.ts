@@ -217,7 +217,7 @@ const data = () => ({
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { issues: 2, hours: 3 } },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, projects: [] })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, ...reasonText(reason), mode: r.always, fired: 0, decided: { rule: 0, director: 0, user: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "resolve", at: ago(1) } : null, projects: [] })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, total: 2, entries: [{ time: ago(1), subject: "rule", object: "r-5", action: "reran", detail: "rescue" }, { time: ago(2), subject: "human", object: "rescue", action: "changed", detail: "set to resolve" }] },
@@ -280,7 +280,7 @@ test("a cap set by its environment variable keeps its use in the hint, marks env
 });
 
 test("each rule setting has a Save of its own, and Decided counts show with thousands", () => {
-  const row = { ...rules().find((x) => x.reason === "question")!, decided: { rule: 1200, director: 1, chris: 0 } };
+  const row = { ...rules().find((x) => x.reason === "question")!, decided: { rule: 1200, director: 1, user: 0 } };
   const h = rulesOf([row]);
   expect(find(h, '.ins form[data-rule="question"]').map((f) => f.attrs["data-field"])).toEqual(["decide", "wait"]);
   expect(find(h, '.ins form button[type="submit"]').map((b) => [b.attrs.class, b.text])).toEqual([["act", "Save"], ["act", "Save"]]);
@@ -502,7 +502,7 @@ test("the Automation page has no explaining aside and no Pause button; the caps 
 test("rules() credits an Ask to the actor of the event that answered it, and a gate-cleared Ask to no one", () => {
   const asks = ["rule", "gate"].map((by, i) => ({ issue: `issue.${i + 1}`, reason: "held-path", set: ago(10), cleared: ago(9), by }));
   const row = rules(asks).find((x) => x.reason === "held-path")!;
-  expect(row.decided).toEqual({ rule: 1, director: 0, chris: 0 });
+  expect(row.decided).toEqual({ rule: 1, director: 0, user: 0 });
 });
 
 test("rules() has one row per Ask reason; renderRules is one list with a row per rule", () => {
@@ -566,7 +566,7 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   ];
   const row: any = rules(records, NOW + 3600_000).find((x) => x.reason === "question");
   expect(row.fired).toBe(5);
-  expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
+  expect(row.decided).toEqual({ rule: 2, director: 1, user: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = rulesOf([row]);
   expect(find(h, ".lhead .h").map((x) => x.text)).toEqual(["Fired", "Decided", "Decides"]);
@@ -771,7 +771,7 @@ test("the Automation page draws no backend line: the attention row of /api/atten
 });
 
 test("a timed reason's inspector opens on its timeout in the largest whole unit and its action", () => {
-  const row = (reason: string, timeout: number, noAnswer: string): any => ({ reason, ...reasonText(reason), mode: "", fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout, noAnswer, projects: [] });
+  const row = (reason: string, timeout: number, noAnswer: string): any => ({ reason, ...reasonText(reason), mode: "", fired: 0, decided: { rule: 0, director: 0, user: 0 }, outcome: { fixed: 0, none: 0 }, granted: null, timeout, noAnswer, projects: [] });
   const h = rulesOf([row("question", 120, "pick")]);
   expect(picks(h, "question", "wait")).toEqual([["wait", false, "Keep waiting"], ["pick", true, "Take the pick"], ["drop", false, "Drop"]]);
   expect(find(h, '.ins input[name="n"]')[0].attrs).toMatchObject({ type: "number", value: "2" });

@@ -277,7 +277,7 @@ export function checked(name: string): { job: string; name: string; state: "land
   patchRun(last.id, { check: "done" });
   const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
   const item = last.run.checkItem;
-  const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
+  const why = repo && item !== undefined ? store.close(repo, item, "checked by the user") : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   dispatchDetached();
   return { job: last.run.job, name, state: "landed", check: "done" };
@@ -325,7 +325,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
  */
 export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate; answer?: Answer; answered?: boolean } = {}): Promise<{ job: string; name: string; state: "dropped"; reason: string }> {
   checkName(name);
-  const reason = a.reason || "dropped by Chris";
+  const reason = a.reason || "dropped by the user";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
   const last = counting(runs);
   // The user's own drop answers the run's Ask: an answer-and-rerun (`answered`) with the reason's first verb, a plain drop with its second.

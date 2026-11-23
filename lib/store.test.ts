@@ -6,7 +6,7 @@ import * as issues from "./issue-file.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as store from "./store.ts";
 import * as verbs from "../issues/lib/issues.ts";
-import { askChris, askOf, setAsk, refIn, clearAsk } from "../jobs/lib/asks/ask.ts";
+import { askUser, askOf, setAsk, refIn, clearAsk } from "../jobs/lib/asks/ask.ts";
 import * as record from "../jobs/lib/records/record.ts";
 import { seed as seedJob } from "../jobs/job.testkit.ts";
 import { storeRepos } from "../tests/git.testkit.ts";
@@ -192,11 +192,11 @@ describe("the writes", () => {
     expect(text.match(/^# Notes$/gm)).toHaveLength(1);
   });
 
-  test("note leaves labels unset, after askChris set an ask", () => {
+  test("note leaves labels unset, after askUser set an ask", () => {
     const r = repo([{ title: "one", spec: true }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
     const [id] = r.ids;
-    expect(askChris(r, id, ask, "asked")).toBeNull();
+    expect(askUser(r, id, ask, "asked")).toBeNull();
     expect(store.note(r, id, "asked")).toBeNull();
     expect(store.note(r, id, "asked again")).toBeNull();
     expect(item(r, id).fm.labels).toBeUndefined();

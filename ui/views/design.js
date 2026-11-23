@@ -116,7 +116,7 @@ const DIFF = `diff --git a/ui/app.css b/ui/app.css
 
 const H = (h, m = 0) => new Date(2026, 10, 10, h, m).getTime();
 const TIMELINE = [{ title: "Runs", rows: [
-  { head: "<span class=\"t\" title=\"build 1\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), chris: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "error", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
+  { head: "<span class=\"t\" title=\"build 1\">build 1</span>", bars: [{ start: H(8, 10), end: H(8, 30), tone: "build", label: "build" }, { start: H(8, 30), end: H(8, 34), tone: "bad", label: "checks" }], waits: [{ start: H(8, 34), end: H(9, 2), user: true }], marks: [], result: badge("returned"), time: dur(1440), cost: money(2.3), events: [{ at: H(8, 34), tag: "returned", tone: "error", html: "Checks failed: <code>ui/page.test.ts</code>." }] },
   { head: "<span class=\"t\" title=\"build 2\">build 2</span>", bars: [{ start: H(9, 2), end: H(9, 20), tone: "build", label: "build" }, { start: H(9, 20), end: H(9, 24), tone: "land", label: "land" }], waits: [], marks: [{ at: H(9, 24), tone: "done", tip: "landed" }], result: badge("landed"), time: dur(1320), cost: money(1.82), events: [{ at: H(9, 24), tag: "landed", tone: "done", html: "Landed on main." }] },
 ] }];
 const NOW = "2026-11-10T17:00:00Z";

@@ -76,7 +76,7 @@ test("POST /api/jobs/:id/wait reads the issue from `target`, and a child issue",
     const calledNow = recorded().slice(before);
     expect(calledNow).toHaveLength(2);
     expect(calledNow[0]).toBe(`issue edit --after r-11 -- r ${n}`);
-    expect(calledNow[1].startsWith(`drop -- ${job} Chris chose to wait for r-11`)).toBe(true);
+    expect(calledNow[1].startsWith(`drop -- ${job} The user chose to wait for r-11`)).toBe(true);
   }
 });
 
@@ -112,10 +112,10 @@ test("park and unpark set the status of the job's issue", async () => {
 });
 
 test("cancel changes the issue before it drops the job, and restart leaves the issue alone", async () => {
-  for (const [then, first] of [["park", "issue edit --status parked -- r 5"], ["drop", "issue drop -- r 5 Chris cancelled its job"], ["restart", null]] as const) {
+  for (const [then, first] of [["park", "issue edit --status parked -- r 5"], ["drop", "issue drop -- r 5 The user cancelled its job"], ["restart", null]] as const) {
     const before = recorded().length;
     expect((await post(jp("won", "cancel"), { "X-Aleph-UI": "1" }, { then })).status).toBe(200);
-    expect(recorded().slice(before)).toEqual([...(first ? [first] : []), "drop -- won Chris cancelled it"]);
+    expect(recorded().slice(before)).toEqual([...(first ? [first] : []), "drop -- won The user cancelled it"]);
   }
 });
 

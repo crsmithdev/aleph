@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../lib/issue-file.ts";
 import { writeList } from "../../../lib/store.ts";
-import { ASK_REASONS, grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
+import { ASK_REASONS, grant, markAsked, PART_DROPPED, plainAsk, setAsk, awaitsUser } from "../asks/ask.ts";
 import { specVersion } from "../../../lib/issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { writeRepos } from "../../../tests/projects.testkit.ts";
@@ -55,7 +55,7 @@ test("an escalated Ask gets the director's case text and stays with Chris", asyn
   const a = asked(1)!;
   expect(a.situation).toBe(TEXT.situation);
   expect(a.recommend).toEqual(TEXT.recommend);
-  expect(awaitsChris(`issue.1`)).toBe(true);
+  expect(awaitsUser(`issue.1`)).toBe(true);
   expect(events()).toContainEqual(expect.objectContaining({ subject: "director", object: `issue.1`, action: "escalated", detail: "a question: the director did not decide" }));
   // Escalated once: no second run.
   await direct();
@@ -86,7 +86,7 @@ test("actions that leave the Ask open send it to Chris with the director's case 
   expect(a.situation).toBe(TEXT.situation);
   expect(a.recommend).toEqual(TEXT.recommend);
   expect(a.details).toContain("It did: note: looked at it.");
-  expect(a.details).toContain(`It could not: close: met on main: ${key}-1 was filed by Chris`);
+  expect(a.details).toContain(`It could not: close: met on main: ${key}-1 was filed by the user`);
 });
 
 test("a director add files the fix job through writeFiling: one filed event, on the new issue, and the ports' after once", async () => {
@@ -112,12 +112,12 @@ test("the escalation list: a land on a security path gets case text and no actio
   const out = await direct();
   expect(out.map((d) => [d.ref, d.outcome, d.why])).toEqual([
     [`issue.2`, "decided", undefined],
-    [`issue.1`, "escalated", "the run changes held path hooks/x.ts, so its land is Chris's"],
+    [`issue.1`, "escalated", "the run changes held path hooks/x.ts, so its land is the user's"],
   ]);
   expect(out[1].applied).toEqual([]);
   expect(out[1].refused.every((r) => r.endsWith("the Ask is on the escalation list"))).toBe(true);
   expect(landed).toEqual([]);
-  expect(awaitsChris(`issue.2`)).toBe(false);
+  expect(awaitsUser(`issue.2`)).toBe(false);
   expect(getRun(jobOfFolder(folder))!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
@@ -128,7 +128,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
   reply([{ do: "land" }]);
   const [d] = await direct();
-  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path bun.lock, so its land is Chris's" });
+  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path bun.lock, so its land is the user's" });
   expect(landed).toEqual([]);
 
   fresh([{ title: "plain", specced: true }]);
@@ -142,15 +142,15 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(getRun(jobOfFolder(folder))!.ask?.situation ?? "").toBe("");
 });
 
-test("an Ask of each reason with chrisOnly set goes on the escalation list with that why, whatever actions the director replies", async () => {
-  const chris = Object.entries(ASK_REASONS).filter(([, r]) => r.chrisOnly);
+test("an Ask of each reason with userOnly set goes on the escalation list with that why, whatever actions the director replies", async () => {
+  const chris = Object.entries(ASK_REASONS).filter(([, r]) => r.userOnly);
   expect(chris.map(([name]) => name)).toEqual(["core-change", "blocker-dropped"]);
-  for (const [reason, { chrisOnly }] of chris) {
+  for (const [reason, { userOnly }] of chris) {
     fresh([{ title: reason, ask: { reason, question: "Q?", options: [], why: ["w"] } }]);
     if (reason === "core-change" || reason === "blocker-dropped") writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
     replyWith({ case: { situation: "S.", effects: [], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
     const [d] = await direct();
-    expect(d).toMatchObject({ reason, outcome: "escalated", why: chrisOnly, applied: [] });
+    expect(d).toMatchObject({ reason, outcome: "escalated", why: userOnly, applied: [] });
     expect(issues.status(item(1))).not.toBe("dropped");
   }
 });
@@ -160,7 +160,7 @@ test("a core-change Ask on a parked issue is escalated to Chris with case text, 
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
   replyWith({ case: { situation: "The re-check says X is gone.", effects: [{ action: "approve", text: "Archives X." }, { action: "disapprove", text: "Keeps X." }], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
   const [d] = await direct();
-  expect(d).toMatchObject({ ref: `issue.1`, reason: "core-change", outcome: "escalated", why: "a change to a core note is Chris's", applied: [] });
+  expect(d).toMatchObject({ ref: `issue.1`, reason: "core-change", outcome: "escalated", why: "a change to a core note is the user's", applied: [] });
   expect(issues.status(item(1))).toBe("parked");
   expect(asked(1)!.situation).toBe("The re-check says X is gone.");
   expect(prompt()).toContain("Actions on the user's card: approve, disapprove");
@@ -172,7 +172,7 @@ test("a blocker-dropped Ask on a parked waiter is escalated to Chris, whatever a
   writeList({ key }, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
   replyWith({ case: { situation: "The blocker was dropped.", effects: [], recommend: null }, actions: [{ do: "drop-issue", reason: "stale" }] });
   const [d] = await direct();
-  expect(d).toMatchObject({ ref: `issue.1`, reason: "blocker-dropped", outcome: "escalated", why: "an after link to a dropped issue is Chris's", applied: [] });
+  expect(d).toMatchObject({ ref: `issue.1`, reason: "blocker-dropped", outcome: "escalated", why: "an after link to a dropped issue is the user's", applied: [] });
   expect(issues.status(item(1))).toBe("parked");
 });
 
@@ -181,7 +181,7 @@ test("closing or dropping an issue Chris filed is refused; the same on an agent'
   reply([{ do: "close", note: "met on main" }]);
   const [a, b] = await direct();
   expect(a).toMatchObject({ ref: `issue.1`, outcome: "escalated" });
-  expect(a.refused).toEqual([`close: met on main: ${key}-1 was filed by Chris, so closing or dropping it is his`]);
+  expect(a.refused).toEqual([`close: met on main: ${key}-1 was filed by the user, so closing or dropping it is theirs`]);
   expect(issues.status(item(1))).toBe("open");
   expect(b).toMatchObject({ ref: `issue.2`, outcome: "decided", applied: ["close: met on main"] });
   expect(issues.status(item(2))).toBe("done");
@@ -205,7 +205,7 @@ test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
   const [d] = await direct();
   expect(d.applied.length).toBe(10);
   expect(d.refused).toEqual(["rerun: more than 10 actions in one run"]);
-  expect(awaitsChris(`issue.1`)).toBe(true);
+  expect(awaitsUser(`issue.1`)).toBe(true);
 });
 
 test("a run-cap Ask: the director reruns the issue once; the second run-cap Ask on it goes to Chris", async () => {
@@ -216,8 +216,8 @@ test("a run-cap Ask: the director reruns the issue once; the second run-cap Ask 
   expect(asked(1)).toBeNull();
   setAsk(`issue.1`, plainAsk("run-cap", "3 starts in an hour, again"));
   const [d] = await direct();
-  expect(d).toMatchObject({ outcome: "escalated", why: `the director already decided a run-cap Ask on issue.1; the second goes to Chris` });
-  expect(awaitsChris(`issue.1`)).toBe(true);
+  expect(d).toMatchObject({ outcome: "escalated", why: `the director already decided a run-cap Ask on issue.1; the second goes to the user` });
+  expect(awaitsUser(`issue.1`)).toBe(true);
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
 
@@ -318,7 +318,7 @@ test("an Ask whose reason a rule grants user is escalated at once with no direct
   const out = await direct();
   expect(out.map((d) => [d.reason, d.outcome])).toEqual(expect.arrayContaining([["question", "escalated"]]));
   expect(asked(1)!.situation).toContain("a rule sends this Ask to the user");
-  expect(awaitsChris(`issue.1`)).toBe(true);
+  expect(awaitsUser(`issue.1`)).toBe(true);
   // A decision made with no run is kept nowhere but its events.
   expect(readRecord().find((d) => d.reason === "question")).toBeUndefined();
   expect(events()).toContainEqual(expect.objectContaining({ subject: "director", object: `issue.1`, action: "escalated", detail: expect.stringContaining("a rule sends this Ask to the user") }));
@@ -370,7 +370,7 @@ test("a review Ask on a run that changes a path the repo holds is Chris's, as th
   run({ name: "issue.1", target: "issue.1", ask: { reason: "review-held", question: "Land?", options: [], why: [] }, branch: `doc${n}` });
   reply([{ do: "land" }]);
   const [d] = await direct();
-  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path docs/a.md, so its land is Chris's" });
+  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes held path docs/a.md, so its land is the user's" });
   expect(landed).toEqual([]);
 });
 

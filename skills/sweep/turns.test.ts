@@ -26,10 +26,10 @@ test("a turn keeps what Chris typed, the question put to him, his answer and the
     rec(7, "assistant", [{ type: "text", text: "side" }], { isSidechain: true }),
   ].join("\n");
   expect(turns(log, at(0))!.map((t) => `${t.who}: ${t.text}`)).toEqual([
-    "chris: rename the tab",
+    "user: rename the tab",
     "reply: Done. Left out: the docs (ask)",
     "asks: Which name?",
-    "chris: Tabs",
+    "user: Tabs",
   ]);
 });
 

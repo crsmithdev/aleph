@@ -33,7 +33,7 @@ item from the current state, never from the handoff or transcript text alone.
      ```
 
    It prints one `## <session id> <start> to <end>` block per session that the user drove, with what they typed or
-   answered (`Chris:`), each question put to them (`Asks:`) and the reply that ended each turn (`Reply:`). A long
+   answered (`User:`), each question put to them (`Asks:`) and the reply that ended each turn (`Reply:`). A long
    reply keeps its start and its end. A transcript item is one of these:
    - A question put to the user that they did not answer in that session or a later one.
    - A decision left open: options offered and none chosen, or a choice the session put off.

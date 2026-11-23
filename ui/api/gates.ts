@@ -50,11 +50,11 @@ export function rules(asks = askHistory(), now = Date.now(), ms = LOG_DAYS * DAY
   return Object.entries(ASK_REASONS).map(([reason, r]) => {
     const g = granted[reason];
     const mine = recent.filter((a) => a.reason === reason);
-    const decided = { rule: 0, director: 0, chris: 0 }, outcome = { fixed: 0, none: 0 };
+    const decided = { rule: 0, director: 0, user: 0 }, outcome = { fixed: 0, none: 0 };
     for (const a of mine) {
       if (!a.cleared) continue;
       if (a.by === "rule" || a.by === "director") decided[a.by]++;
-      else if (a.by === "human") decided.chris++;
+      else if (a.by === "human") decided.user++;
       outcome[builds.some(({ run: x }) => x.target === a.issue && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
@@ -171,7 +171,7 @@ function schedules(): { name: string; last: string | null; result: string | null
 export function metrics(asks: AskSpan[], holds = allHolds(), now = Date.now(), jobs = allJobs(), span = LOG_DAYS * DAY, closedAt: ReadonlyMap<string, string> = new Map()) {
   const from = now - span;
   const answered = asks.filter((a) => a.cleared && Date.parse(a.set) >= from);
-  const chris = answered.filter((a) => a.by === "human").length, auto = answered.length - chris;
+  const user = answered.filter((a) => a.by === "human").length, auto = answered.length - user;
   const open: Record<string, number> = {}, names = new Set<string>();
   let ms = 0;
   const close = (name: string, end: number) => {
@@ -194,7 +194,7 @@ export function metrics(asks: AskSpan[], holds = allHolds(), now = Date.now(), j
     : []));
   return {
     days: span / DAY,
-    rate: auto + chris ? { auto, total: auto + chris, percent: Math.round((100 * auto) / (auto + chris)) } : null,
+    rate: auto + user ? { auto, total: auto + user, percent: Math.round((100 * auto) / (auto + user)) } : null,
     catches: {
       fired: sent.length,
       fixed: sent.filter(Boolean).length,

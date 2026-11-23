@@ -29,7 +29,7 @@ test("the report hook prints one line for each thing to act on, and nothing when
   const lines = text.split("\n").filter(Boolean);
   expect(lines).toHaveLength(3);
   expect(lines[0]).toBe("factory paused");
-  expect(lines[1]).toStartWith("1 asks wait for Chris: ");
+  expect(lines[1]).toStartWith("1 asks wait for the user: ");
   expect(lines[1]).toContain(`fac-${id}`);
   expect(lines[2]).toBe("fac is 2 commits behind origin/main");
   expect(text).not.toContain("git pull brings");

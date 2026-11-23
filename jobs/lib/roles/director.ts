@@ -188,31 +188,31 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
 function landRefusal(c: Case, held: string[]): string | null {
   const b = branchOf(c);
   const rule = b ? heldChange(b.repo, b.branch, held) : "unknown";
-  return rule ? (rule === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${rule}, so the land is Chris's`) : null;
+  return rule ? (rule === "unknown" ? "its branch cannot be read for security paths, so the land is the user's" : `it changes ${rule}, so the land is the user's`) : null;
 }
 
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
  * judgement: a change to a core note, an after link to a dropped issue, a land of a run that changes a security path, a path the repo holds or bun.lock (or a held run whose branch
  * cannot be read), and a second run-cap or rescue Ask on an issue the director already
- * decided once. Closing or dropping an issue the user filed is refused per action (`chrisOwns`).
+ * decided once. Closing or dropping an issue the user filed is refused per action (`userOwns`).
  */
 function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
-  const why = ASK_REASONS[reasonName(c)]?.chrisOnly;
+  const why = ASK_REASONS[reasonName(c)]?.userOnly;
   if (why) return { why };
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
-    return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
+    return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to the user` };
   const b = actionsOf(c).includes("approve") ? branchOf(c) : null;
   if (b) {
     const held = heldChange(b.repo, b.branch);
-    if (held === "unknown" && c.ask.reason === "held-path") return { why: "the held run's branch cannot be read for security paths, so its land is Chris's" };
-    if (held && held !== "unknown") return { why: `the run changes ${held}, so its land is Chris's`, file: held };
+    if (held === "unknown" && c.ask.reason === "held-path") return { why: "the held run's branch cannot be read for security paths, so its land is the user's" };
+    if (held && held !== "unknown") return { why: `the run changes ${held}, so its land is the user's`, file: held };
   }
   return null;
 }
 
 /** Whether closing or dropping this issue is the user's: they filed it. */
-const chrisOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "user";
+const userOwns = (item: issues.Issue): boolean => issues.sourceOf(item) === "user";
 
 const clip = (s: string) => (s.length > MAX_FILE ? `…${s.slice(-MAX_FILE)}` : s);
 
@@ -576,7 +576,7 @@ async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule
     return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false, ev: { note: `filed ${repo.key}-${w.value}: ${title}` } };
   }
   if (a.do === "close" || a.do === "drop-issue") {
-    if (chrisOwns(item)) return no(a, `${id} was filed by Chris, so closing or dropping it is his`);
+    if (userOwns(item)) return no(a, `${id} was filed by the user, so closing or dropping it is theirs`);
     // The close answers the Ask: a drop with the reason's second verb, a close with its first.
     const answer = { subject: by, answer: actionsOn(reasonOf(c.ask.reason))[a.do === "drop-issue" ? 1 : 0] };
     if (a.do === "drop-issue") {
@@ -599,7 +599,7 @@ async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule
     if (a.do === "answer" && a.option && !option) return no(a, `the Ask has no option ${a.option}`);
     const said = a.do === "rerun" ? `director: run it again${a.note ? `: ${a.note}` : ""}` : `director decided: ${option ? `${option.label}: ${option.line}. ` : ""}${a.note}`;
     // On the part-dropped Ask, any answer but the plan option closes the issue.
-    if (ask?.reason === "part-dropped" && !keepsOpen(said) && chrisOwns(item)) return no(a, `${id} was filed by Chris, and this answer closes it`);
+    if (ask?.reason === "part-dropped" && !keepsOpen(said) && userOwns(item)) return no(a, `${id} was filed by the user, and this answer closes it`);
     const after = a.do === "answer" ? a.after ?? (option?.after ? [option.after] : undefined) : undefined;
     const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}, by, option?.label));
     return why ? no(a, why) : done(a, { action: a.do === "rerun" ? "reran" : "answered", sub, note: a.do === "rerun" ? a.note : option ? `${option.label}: ${a.note}` : a.note });
