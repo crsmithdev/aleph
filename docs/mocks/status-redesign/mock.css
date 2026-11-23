@@ -38,6 +38,7 @@
 .alerts { display: flex; flex-direction: column; gap: var(--sp-8); margin-bottom: var(--sp-12); }
 .alert[data-card="approve"] { --k: var(--approve); --k-bg: var(--approve-bg); --k-ring: var(--approve-ring); }
 .alert[data-card="unstick"] { --k: var(--unstick); --k-bg: var(--unstick-bg); --k-ring: var(--unstick-ring); }
+.alert[data-card="need"] { --k: var(--need); --k-bg: var(--need-bg); --k-ring: var(--rule); }
 .alert .ask-box { box-shadow: none; }
 .alert .ask-head { cursor: default; gap: var(--sp-8); padding: var(--sp-6) var(--sp-12); font-size: var(--fs-sm); }
 .alert .ask-head .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

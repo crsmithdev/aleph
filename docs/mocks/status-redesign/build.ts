@@ -162,24 +162,29 @@ function problemRows(v: View) {
   return rows;
 }
 
-/** The alert and each Ask as a compact Ask card: the card's head (dot, kind, title, tag) with the waited time, then its actions in one row. */
+/** Each thing that needs Chris as a compact Ask card: the alert, each Ask, a backend that is down and a start context at 95% of its budget. Each shows the card's head (dot, kind, title, tag) with its time or value, then its actions in one row. */
 function alertCards(v: View) {
-  if (!v.busy) return "";
   const waited = (iso: string) => dur((v.T - Date.parse(iso)) / 1000);
   const act = (label: string, primary = false) => actButton(label, { act: "mock" }, { kind: "small", primary });
-  const box = (card: string, kind: string, what: string, detail: string, tagText: string, at: string, acts: string) =>
-    `<article class="alert" data-card="${card}"><div class="ask-box"><div class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t" title="${esc(detail)}"><b class="ask-kind">${esc(kind)}:</b> <span class="ask-title">${what}</span> <span class="pdetail">${esc(detail)}</span></span><span class="ask-tag">${esc(tagText)}</span><span class="num">${esc(waited(at))}</span></div><div class="pacts">${acts}</div></div></article>`;
-  const ci = box("unstick", "Alert", `<span class="idp">main</span> ${esc(NEEDS.ci.title)}`, NEEDS.ci.line, "red", NEEDS.ci.at, `<a class="act small" href="${CI}">CI run</a><a class="act small" href="${LIVE}#/issues/aleph/3403">a3403</a>`);
-  const asks = v.needs.map((i: any) => box(i.card, i.label, `${idLink(`a${i.id.split("-")[1]}`, i.href)} ${esc(i.title)}`, i.situation.replace(/`/g, ""), i.tag, i.at, `${act(i.actions[0].label, true)}${actButton(i.always.label, { act: "always" }, { kind: "small always" })}${act(i.actions[1].label)}`));
-  return `<div class="alerts" id="needs">${[ci, ...asks].join("")}</div>`;
+  const box = (card: string, kind: string, what: string, detail: string, tagText: string, side: string, acts: string) =>
+    `<article class="alert" data-card="${card}"><div class="ask-box"><div class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t" title="${esc(detail)}"><b class="ask-kind">${esc(kind)}:</b> <span class="ask-title">${what}</span> <span class="pdetail">${esc(detail)}</span></span><span class="ask-tag">${esc(tagText)}</span><span class="num">${esc(side)}</span></div><div class="pacts">${acts}</div></div></article>`;
+  const mem = d.memory.start.aleph, memPct = (mem.bytes / mem.budget) * 100, back = d.automation.backend;
+  return [
+    ...(v.busy ? [box("unstick", "Alert", `<span class="idp">main</span> ${esc(NEEDS.ci.title)}`, NEEDS.ci.line, "red", waited(NEEDS.ci.at), `<a class="act small" href="${CI}">CI run</a><a class="act small" href="${LIVE}#/issues/aleph/3403">a3403</a>`)] : []),
+    ...v.needs.map((i: any) => box(i.card, i.label, `${idLink(`a${i.id.split("-")[1]}`, i.href)} ${esc(i.title)}`, i.situation.replace(/`/g, ""), i.tag, waited(i.at), `${act(i.actions[0].label, true)}${actButton(i.always.label, { act: "always" }, { kind: "small always" })}${act(i.actions[1].label)}`)),
+    // The busy state's backends are up (README, Data).
+    ...(v.busy ? [] : [box("unstick", "Backend", `${esc(back.via)} has no credit`, "402; a start that needs it waits", "402", "down", `<a class="act small" href="https://openrouter.ai/settings/credits">Credits</a>`)]),
+    ...(memPct >= 95 ? [box("need", "Memory", "Start context near its budget", `${count(mem.budget - mem.bytes)} B left in aleph`, `${count(mem.core)} lines`, pct(memPct), `<a class="act small" href="${LIVE}#/memory">Memory</a>`)] : []),
+  ];
 }
 
-/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` puts the alert and the Asks first, as compact Ask cards. */
+/** Problems as a table: the word in its tone, what it is, and the value beside its usual value. `compact` leaves the detail out; `alerts` draws only what needs Chris, as compact Ask cards. */
 function problems(v: View, { compact = false, alerts = false } = {}) {
-  const rows = problemRows(v), top = alerts ? alertCards(v) : "", waits = alerts && v.busy ? v.needs.length + 1 : 0;
+  if (alerts) { const cards = alertCards(v); return card("Problems", cards.length ? `<div class="alerts" id="needs">${cards.join("")}</div>` : empty(), { count: count(cards.length), id: "problems" }); }
+  const rows = problemRows(v);
   const body = rows.map((r) => row([`<td>${tag(r.word, r.tone)}</td>`, `<td class="wide"><span class="pwhat">${r.what}</span>${compact ? "" : ` <span class="pdetail">${r.detail}</span>`}</td>`, cell(r.value, { num: true }), cell(r.usual, { num: true })]));
-  const head = heads(["", "Problem", ...(alerts ? ["", ""] : ["Value", "Usual"])], ["Value", "Usual"]);
-  return card("Problems", top + (rows.length ? dataTable(head, body.join("")) : waits ? "" : empty()), { count: count(waits + rows.length), id: "problems" });
+  const head = heads(["", "Problem", "Value", "Usual"], ["Value", "Usual"]);
+  return card("Problems", rows.length ? dataTable(head, body.join("")) : empty(), { count: count(rows.length), id: "problems" });
 }
 
 /** The fill of a run's elapsed time on the scale of its stage's slow end, with a mark at the median. Only a run past the slow end takes the need tone: half of all runs pass the median. */

@@ -120,6 +120,8 @@ Round 7: A drops the Usage and Memory meters of the scorecard, the lanes' aside 
 
 Round 8: the alert and the Asks are compact Ask cards (the card's head on one line, the actions under it, 76 px each) over the Problems table. The event log drops Model and Cost; in a column of 560 px or less it also drops Job and By. The lanes and the log fit their card from 1600 px down to 390 px with no horizontal scroll. The big numbers (`--metric`) are in Merriweather on all three pages, Chris's font pick.
 
+Round 9: A's Problems holds only cards, each a thing that needs Chris: the alert, the Asks, a backend that is down (Credits) and a start context at 95% (Memory). The rerun, hold, stage and monitor rows leave A; Efficiency and Flow hold that analysis.
+
 The Recommended section is of round 1.
 
 ## New parts
