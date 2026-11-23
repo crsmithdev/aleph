@@ -29,6 +29,8 @@ const USUAL: Record<string, [number, number]> = {
   review: [roleOf("reviewer").p50, roleOf("reviewer").p95], land: [F.phases.land.p50, F.phases.land.p90],
 };
 /** A card's duration, as cardDur() of ui/views/lib/flow-parts.js gives it (that module loads the router, which needs a page). */
+/** A duration column's head as a clock icon, its name in the title and the label. */
+const clockHead = (label: string, tag = "th") => `<${tag} class="num" title="${label}" aria-label="${label}"><wa-icon name="clock" aria-hidden="true"></wa-icon></${tag}>`;
 const cardDur = (s: number) => (!(s >= 600) ? dur(s) : Math.round(s / 60) < 60 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`);
 
 // ---- What each state holds ----
@@ -205,7 +207,7 @@ function waitingRows(v: View) {
 }
 
 /** The waiting issues under a sub-head with their count, by what they wait on; nothing when nothing waits. */
-const waitingPart = (v: View) => (v.waiting.length ? `<div class="sub-count" id="waiting">${subHead("Waiting")}<span class="count">${count(v.waiting.length)}</span></div>` + dataTable(heads(["Hold", "On", "Issues", "Waited"], ["Waited"]), waitingRows(v)) : "");
+const waitingPart = (v: View) => (v.waiting.length ? `<div class="sub-count" id="waiting">${subHead("Waiting")}<span class="count">${count(v.waiting.length)}</span></div>` + dataTable(heads(["Hold", "On", "Issues"]) + clockHead("Waited"), waitingRows(v)) : "");
 
 /** A column chart as SVG in chart colours, `h` px tall: a value over each bar, a label under it. */
 function columns(values: number[], labels: string[], h = 64) {
@@ -247,27 +249,26 @@ function flowCard(v: View) {
   const now: Record<string, number> = { intake: 0, queue: v.waiting.length, implement: 0, land: 0 };
   for (const a of v.active) now[a.role === "intake" || a.role === "land" ? a.role : "implement"]++;
   const slow = Math.max(...["intake", "queue", "implement", "land"].map((k) => F.phases[k].p90));
-  const phases = barList(["intake", "queue", "implement", "land"].map((k) => { const p = F.phases[k]; return barRow(`${esc(cap(k))} <span class="count">${count(now[k])}</span>`, (p.p90 / slow) * 100, `${dur(p.p50)} / ${dur(p.p90)}`, { top: p.p90 === slow }); }).join(""));
+  const phases = barList(["intake", "queue", "implement", "land"].map((k) => { const p = F.phases[k]; return barRow(`${esc(cap(k))} <span class="count">${count(now[k])}</span>`, (p.p90 / slow) * 100, dur(p.p90), { top: p.p90 === slow }); }).join(""));
   const stats = sideStats([
     { k: "Filed", v: count(f.filed) }, { k: "Landed", v: count(f.landed), state: "landed" }, { k: "Dropped", v: count(f.dropped) },
     { k: "First Pass", v: cardPct(F.firstPass), title: "Landed issues whose first run landed" }, { k: "Open", v: count(F.open.open), note: `+${count(F.open.parked)}`, title: `${plural(F.open.open, "open issue")}, ${plural(F.open.parked, "parked issue")}` }, { k: "Asks", v: count(F.asks.count), note: `${count(F.asks.manual)} yours`, title: `${count(F.asks.count)} Asks this week, ${count(F.asks.manual)} answered by Chris` },
   ]);
-  return card("Flow", `${stats}${subHead("Time by Phase, p50 / p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { id: "flow", cls: "flow" });
+  return card("Flow", `${stats}${subHead("Time by Phase, p90")}${phases}${subHead("Landed per Day")}${columns(F.days.map((x: any) => x.landed), F.days.map((x: any) => dayLabel(x.day)), 120)}`, { id: "flow", cls: "flow" });
 }
 
-/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context. */
+/** Memory as a split card: the start context against its budget and the offers per day; the six counts on the side. `compact` stacks the counts over the start context; the full card (A's) has no window notes and no Maintain light. */
 function memoryCard({ compact = false } = {}) {
   const m = d.memory;
   const start = barList(Object.entries<any>(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= 0.95 })).join(""));
   const days = m.offers, labels = days.map((_: number, i: number) => String(new Date(Date.parse(d.taken) - (9 - i) * 86_400_000).getDate()));
   const stats = sideStats([
-    { k: "Notes", v: count(m.total) }, { k: "Offered", v: count(m.offered), note: "7 days", title: "Notes that recall offered to an agent in 7 days" },
-    { k: "Never offered", v: count(m.never), title: "Notes that recall never offered" }, { k: "Unoffered reads", v: count(m.unofferedReads), note: "7 days", title: "Wiki reads in 7 days that no offer preceded" },
+    { k: "Notes", v: count(m.total) }, { k: "Offered", v: count(m.offered), note: compact ? "7 days" : "", title: "Notes that recall offered to an agent in 7 days" },
+    { k: "Never offered", v: count(m.never), title: "Notes that recall never offered" }, { k: "Unoffered reads", v: count(m.unofferedReads), note: compact ? "7 days" : "", title: "Wiki reads in 7 days that no offer preceded" },
     { k: "Refused", v: count(m.refused), state: m.refused ? "failed" : "", title: "Notes that lint refuses" }, { k: "Stale", v: count(m.stale), note: `${count(m.late)} late`, title: `${count(m.stale)} notes past their re-check date, ${count(m.late)} by more than 30 days` },
   ]);
-  const aside = statusLight("fine", `Maintain: ${clock(m.maintained)}`);
-  if (compact) return card("Memory", `${stats}${subHead("Start Context")}${start}`, { aside, id: "memory" });
-  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${columns(days, labels)}`, stats, { aside, id: "memory" });
+  if (compact) return card("Memory", `${stats}${subHead("Start Context")}${start}`, { aside: statusLight("fine", `Maintain: ${clock(m.maintained)}`), id: "memory" });
+  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${columns(days, labels)}`, stats, { id: "memory" });
 }
 
 // ---- The event viewer ----
@@ -302,7 +303,7 @@ function feed(v: View, n: number) {
 const eventsCard = (v: View) => card("Events", `${eventFilter(`ev-${v.key}`)}<div class="herald-feed">${feed(v, 16)}</div>`, { aside: statusLight("fine", "Live"), id: "events", cls: "events" });
 
 /** The event viewer as a log table: one event a row, the time first, then what happened, to what, who did it and what it cost. */
-/** `lean` drops the Live light and the Model and Cost columns. */
+/** `lean` drops the Live light and the Model and Cost columns, and heads Took with a clock. */
 function eventsLog(v: View, { lean = false } = {}) {
   // A run's start is its `running` event, shown as started; the rule's `started` on the issue repeats it, and a hold on the issue's own job says nothing.
   const es = v.st.events.filter((e: any) => !(e.action === "held" && String(e.detail).startsWith("job:")) && !(e.action === "started" && e.by === "rule") && !(String(e.target ?? e.object).startsWith("issue.") && !e.title)).slice(-18).reverse().map((e: any) => (e.action === "running" ? { ...e, action: "started", ended: null } : e));
@@ -313,7 +314,7 @@ function eventsLog(v: View, { lean = false } = {}) {
     return `<tr data-kind="${kindOf(e.action)}" data-text="${esc(`${issue ? shown(issue) : ""} ${job ? shown(job) : ""} ${text}`.toLowerCase())}"><td class="time lead">${esc(clock(e.at))}</td><td>${tag(e.action, e.action === "started" ? "run" : tone(e.action))}</td><td>${issue ? link(issue) : ""}</td>` +
       `${cell(text, { wide: true })}<td>${job ? link(job) : ""}</td><td>${esc(STAGE[e.role] ?? e.role ?? e.by)}</td>${lean ? "" : `<td>${e.model ? esc(shortModel(e.model)) : ""}</td>${cell(e.cost != null && e.action !== "started" ? money(e.cost) : "", { num: true })}`}${cell(took, { num: true })}</tr>`;
   }).join("");
-  const table = dataTable(heads(["Time", "Event", "Issue", "Title", "Job", "By", ...(lean ? [] : ["Model", "Cost"]), "Took"], ["Cost", "Took"]), rows);
+  const table = dataTable(lean ? heads(["Time", "Event", "Issue", "Title", "Job", "By"]) + clockHead("Took") : heads(["Time", "Event", "Issue", "Title", "Job", "By", "Model", "Cost", "Took"], ["Cost", "Took"]), rows);
   return card("Events", `${eventFilter(`log-${v.key}`)}${table}<div class="pager">${actButton(`Next ${Math.min(50, v.st.total - es.length)}`, { act: "more" })}<span class="of">1–${es.length} of ${count(v.st.total)}</span></div>`, { aside: lean ? "" : statusLight("fine", "Live"), id: "events", cls: "events" });
 }
 
@@ -361,7 +362,7 @@ const pageB = (v: View) => `${head(v)}${scorecard(v)}${triage(v)}${board(v)}<div
 
 // ---- C: Timeline ----
 
-/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. `running` keeps only the issues that run now; `waiting` adds the waiting issues under the lanes; `lean` drops the head's aside and the Cost column. */
+/** Each issue that ran in the window as a lane on one time axis: its runs as bars in the tone of their result, the waits between them striped. `running` keeps only the issues that run now; `waiting` adds the waiting issues under the lanes; `lean` drops the head's aside, the State label and the Cost column, and heads Took with a clock. */
 function motion(v: View, { running = false, waiting = false, lean = false } = {}) {
   const n = 12; // lanes above the fold
   const span = v.busy ? 3_600_000 : v.st.span, from = v.T - span, x = (t: number) => Math.min(100, Math.max(0, ((t - from) / span) * 100));
@@ -383,7 +384,7 @@ function motion(v: View, { running = false, waiting = false, lean = false } = {}
       l.runs.map((r: any) => `<a class="dp-bar t-${toneOf(r)}${r.live ? " live" : ""}" href="${to(r.id)}" style="${at(r.s, r.e)}" title="${esc(`${STAGE[r.role] ?? r.role} ${shown(r.id)} · ${r.live ? "running" : r.last} · ${dur((r.e - r.s) / 1000)}`)}">${esc(label(r))}</a>`).join("") +
       `</div><span class="dp-res">${tag(state(l), tone(state(l)))}</span><span class="num">${esc(dur((l.end - l.runs[0].s) / 1000))}</span>${lean ? "" : `<span class="num">${esc(money(l.cost))}</span>`}</div></div>`;
   };
-  const axis = `<div class="dp-tl dp-axis"><span>${plural(lanes.length, "issue")}</span><div class="dp-ticks">${ticks.map((t, i) => `<span${i === 4 ? ' class="end"' : ""} style="left:${i * 25}%">${esc(i === 4 ? "now" : clock(new Date(t).toISOString()))}</span>`).join("")}</div><span>State</span><span class="num">Took</span>${lean ? "" : '<span class="num">Cost</span>'}</div>`;
+  const axis = `<div class="dp-tl dp-axis"><span>${plural(lanes.length, "issue")}</span><div class="dp-ticks">${ticks.map((t, i) => `<span${i === 4 ? ' class="end"' : ""} style="left:${i * 25}%">${esc(i === 4 ? "now" : clock(new Date(t).toISOString()))}</span>`).join("")}</div>${lean ? `<span></span>${clockHead("Took", "span")}` : '<span>State</span><span class="num">Took</span><span class="num">Cost</span>'}</div>`;
   const legend = legendHtml([["implement", "t-build"], ["failed or returned", "t-bad"], ["land", "t-land"], ["intake, review", "t-aux"], ["waiting", "t-wait"]]);
   const spans = seg("Span", ["1h", "2h", "12h"].map((l) => ({ label: l, on: l === (v.busy ? "1h" : "12h"), attrs: "" })));
   const rest = lanes.length > n ? `<details class="more-lanes"><summary>${count(lanes.length - n)} more</summary>${lanes.slice(n, n + 30).map(lane).join("")}</details>` : "";

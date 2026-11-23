@@ -122,6 +122,8 @@ Round 8: the alert and the Asks are compact Ask cards (the card's head on one li
 
 Round 9: A's Problems holds only cards, each a thing that needs Chris: the alert, the Asks, a backend that is down (Credits) and a start context at 95% (Memory). The rerun, hold, stage and monitor rows leave A; Efficiency and Flow hold that analysis.
 
+Round 10: a clock icon heads each Took and Waited column (its name in the title). The lanes drop the State label. Flow's Time by Phase shows the p90 only. A's Memory card drops the two "7 days" notes and the Maintain light.
+
 The Recommended section is of round 1.
 
 ## New parts
