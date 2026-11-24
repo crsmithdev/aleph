@@ -15,7 +15,7 @@ import { causeOf, failedCheckOf, policyOf, type Fate } from "../records/outcome.
 import { addNote, issue as issueOf, jobLock, latestJob, openJob, stateOf } from "../records/job.ts";
 import { counting, getRun, makeJob, patchRun, setState, type Answer, type NewJob, allRuns } from "../records/record.ts";
 import { keepDiff } from "../records/jobdiff.ts";
-import { agentOf, landTerms, removeBranch, settleOnMain } from "../land/landing.ts";
+import { agentOf, heldByCi, landTerms, removeBranch, settleOnMain } from "../land/landing.ts";
 import { cutTitle } from "../roles/title.ts";
 import { git } from "../../../lib/git.ts";
 import { find } from "../../../lib/transcripts.ts";
@@ -244,6 +244,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "user"
     const unchecked = manual && !a.checked;
     const repo = repoOf(agent.repo);
     const item = onOf(agent);
+    if (heldByCi(agent.repo, item === undefined ? undefined : store.reader({ fetch: false }).item(repo.key, item))) refuse(`${name}: GitHub CI on main is red`);
     // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (landing.ts). Another job's commit, or a commit by hand, that names the item still refuses.
     const found = onMain(repo, { jobs: item !== undefined ? runs.map((e) => e.id) : undefined, item, fetch: item !== undefined });
     const landedAs = found?.how === "Job trailer" ? null : found?.commit;

@@ -24,6 +24,8 @@ import { readList, writeList } from "../../../lib/store.ts";
 import { addPart } from "../../../issues/lib/parts.testkit.ts";
 import { runNowOf } from "../../../ui/issue.ts";
 import { loadRegistry } from "../records/ledger.ts";
+import { putJson } from "../../../lib/db.ts";
+import { land } from "./transitions.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
@@ -124,6 +126,38 @@ test("a passed run on a parked issue is not waiting to land, and waits again onc
   expect(waitingToLand()).toContain(name);
   await dispatch(f);
   expect(f.calls).toContain(`land ${name}`);
+});
+
+/** Saves the repo's GitHub CI on main as red or green, the `ci` state row the tick writes. */
+const setCi = (ok: boolean) => putJson("state", "ci", { fac: { repo: "fac", ok, sha: "abc1234", url: "https://ci", ...(ok ? {} : { since: "2026-11-24T00:00:00Z", sinceSha: "def5678", runs: 2 }) } });
+
+/** A passed job waiting to land for an issue with the given areas; returns its name. */
+const passed = (areas: string[]) => {
+  const id = newIssue(areas);
+  mk(`p-${id}`, "build", "passed", { next: "land", land: true });
+  return `issue.${id}`;
+};
+
+test("while GitHub CI on main is red, waitingToLand omits a passed job whose issue is not red-main and lists the red-main fix, and lists both when CI is green", () => {
+  const plain = passed([]), fix = passed(["red-main"]);
+  setCi(false);
+  expect(waitingToLand()).toEqual([fix]);
+  setCi(true);
+  expect(waitingToLand()).toEqual([plain, fix]);
+});
+
+test("while GitHub CI on main is red, land refuses a non-fix job with the red CI and starts no run, and starts a red-main fix job", async () => {
+  const undo = stubUnit();
+  try {
+    const plain = passed([]), fix = passed(["red-main"]);
+    setCi(false);
+    await expect(land(plain)).rejects.toThrow(`${plain}: GitHub CI on main is red`);
+    expect(allRuns().filter((e) => e.run.role === "land")).toEqual([]);
+    await land(fix);
+    expect(allRuns().filter((e) => e.run.role === "land").map((e) => e.run.name)).toEqual([fix]);
+  } finally {
+    undo();
+  }
 });
 
 test("the first dispatch after the resume starts a next step the pause kept, once", async () => {

@@ -16,6 +16,7 @@ import { allRuns, jobOfRun } from "../records/record.ts";
 import { lock } from "../../../lib/locks.ts";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
 import { isLive } from "../infra/process.ts";
+import { redCi } from "../gates/ci.ts";
 import { removeWorktree } from "../infra/git.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
@@ -62,10 +63,15 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
   return null;
 }
 
+/** Whether a land waits for green CI: GitHub CI on the repo's main is red and the job's issue `item` is not a red-main fix. */
+export const heldByCi = (repo: string | undefined, item?: issues.Issue): boolean =>
+  redCi().some((c) => c.repo === repo) && !(item && issues.isRedMain(item));
+
 /**
  * Passed agent runs waiting to land by themselves, oldest first: the job's next step is a land (nextStep set `next`
  * for `--land` or an autoland repo). A land that lands again is the unit's own step, so it is not here. A job whose
- * issue is parked in the work store waits until the user reopens it.
+ * issue is parked in the work store waits until the user reopens it. A job waits too while GitHub CI on its main is red
+ * (heldByCi).
  */
 export function waitingToLand(jobs = allJobs()): string[] {
   const lists = reader({ fetch: false });
@@ -75,7 +81,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
     const repo = last.run.repo;
     const on = onOf(last.run);
     const item = repo === undefined || on === undefined ? undefined : lists.item(repo, on);
-    return item === undefined || issues.status(item) !== "parked";
+    return (item === undefined || issues.status(item) !== "parked") && !heldByCi(repo, item);
   }).sort((a, b) => num(a[0].id) - num(b[0].id)).map((j) => j.at(-1)!.run.name);
 }
 
