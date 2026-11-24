@@ -105,6 +105,7 @@
   // The chat agent (ui/chat-hooks.ts) gets the open notes of the page in view, named as annotate.js names a page, and
   // the notes its @ button points at.
   chat({
+    url: "/api/chat",
     headers: { "X-Aleph-UI": "1" },
     context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "") }),
   });
