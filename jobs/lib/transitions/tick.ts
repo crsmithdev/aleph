@@ -1,6 +1,6 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * maintainer (dry vault maintenance, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the CI read and
+ * maintainer (vault maintenance, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the CI read and
  * the firefighter every 5 minutes (every minute while a CI run on a factory main is in progress or a land on it is under 15 minutes old), the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as a `missed` event on its issue or job, so the cause gets fixed, and is started. A tick that finds nothing due reads
@@ -130,7 +130,7 @@ const summary = (r: Json): string => {
 };
 
 /**
- * The daily maintainer, from 03:00 local, once per local date, under the pause gate. The mechanical pass stays dry and
+ * The daily maintainer, from 03:00 local, once per local date, under the pause gate. The mechanical pass writes, and
  * its run record is its gate; the compile follows it.
  * Returns the report, or null when nothing is due or the vault is not there for the mechanical part.
  */
@@ -139,7 +139,7 @@ export async function maintainStep(now = Date.now()): Promise<Json | null> {
   if (new Date(now).getHours() < DAILY_HOUR || paused()) return null;
   const mech = isVault(root) && !(at && today(new Date(at)) === today(new Date(now)));
   if (!mech) return null;
-  const r = await maintainAll(root, true, now, { mech, compile: mech, decay: mech, overlap: mech, misses: mech });
+  const r = await maintainAll(root, false, now, { mech, compile: mech, decay: mech, overlap: mech, misses: mech });
   if (!r.ok) throw new Error("maintain failed; see its run record");
   return r;
 }

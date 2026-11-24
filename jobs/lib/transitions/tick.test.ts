@@ -338,9 +338,9 @@ test("a step that fails in a tick records a result that starts with failed and i
   expect(ran.smoke.result).toBe("failed: / answered 503");
 });
 
-// The daily vault maintenance, dry: from 03:00 local, on a vault that has VAULT.md, once per local date.
+// The daily vault maintenance: from 03:00 local, on a vault that has VAULT.md, once per local date.
 
-test("guard: the maintain step from 03:00 local returns the dry run's counts and records its run as ok", async () => {
+test("guard: the maintain step from 03:00 local returns the run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const r = await maintainStep(NOW);
   expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, overlap: 0, retry: 0, notes: 0, swapped: 0, rechecked: 0, resolved: 0, aliased: 0 });
@@ -375,26 +375,27 @@ test("a tick reads the table of jobs at most twice, whichever steps are due", as
   expect(record.runLoads - before).toBeLessThanOrEqual(2);
 });
 
-test("guard: a tick with a vault present records the maintain step's dry result in ran", async () => {
+test("guard: a tick with a vault present records the maintain step's result in ran", async () => {
   vaultHere();
   await runTick(NOW, quiet());
   const ran = tickRows();
-  expect(ran.maintain.result).toMatch(/^dry: 0 fixed, .* · 0 notes · 0 swapped · 0 rechecked · 0 resolved · 0 aliased$/);
+  expect(ran.maintain.result).toMatch(/^0 fixed, .* · 0 notes · 0 swapped · 0 rechecked · 0 resolved · 0 aliased$/);
 });
 
-test("guard: the maintain step's dry compile of yesterday runs the model and records no day", async () => {
+test("guard: the maintain step's compile of yesterday writes the model's note and records the day", async () => {
   const dir = vaultHere();
   const handoffs = join(base, `handoffs${n}`);
   mkdirSync(handoffs);
   writeFileSync(join(handoffs, "2026-11-03-120000.md"), "decided: keep the digest\n");
-  writeFileSync(join(base, "maintainer"), `#!/bin/bash\ncat > /dev/null\necho '{"type":"result","is_error":false,"result":"","structured_output":{"notes":[{"title":"Keep The Digest","kind":"decision"}]}}'\n`);
+  writeFileSync(join(base, "maintainer"), `#!/bin/bash\ncat > /dev/null\necho '{"type":"result","is_error":false,"result":"","structured_output":{"notes":[{"title":"Keep The Digest","kind":"decision","scope":"aleph","confidence":"reported","sources":["trace:abc123"],"claim":"The digest stays.","details":"It came up in the day.","evidence":"The handoff says so.","related":[]}]}}'\n`);
   chmodSync(join(base, "maintainer"), 0o755);
   Object.assign(process.env, { ALEPH_HANDOFFS_DIR: handoffs, ALEPH_MAINTAINER_CMD: join(base, "maintainer") });
   try {
     const r = await maintainStep(NOW);
-    expect(r!.compile).toMatchObject({ day: "2026-11-03", dry: true, notes: [{ title: "Keep The Digest", kind: "decision" }] });
+    expect(r!.compile).toMatchObject({ day: "2026-11-03", dry: false, notes: [{ title: "Keep The Digest", kind: "decision" }] });
+    expect(r!.compile.notes[0].refused).toBeUndefined();
     expect(r!.counts.notes).toBe(1);
-    expect(compiledDays(dir)).toEqual([]);
+    expect(compiledDays(dir)).toEqual(["2026-11-03"]);
   } finally {
     delete process.env.ALEPH_HANDOFFS_DIR;
     process.env.ALEPH_MAINTAINER_CMD = "false";
@@ -429,9 +430,9 @@ test("the maintain step compiles a day whose compile failed again on the next da
     rmSync(join(base, "asked"), { force: true });
     const r = await maintainStep(NOW + 864e5);
     expect(asked()).toHaveLength(2);
-    expect(r!.retried).toMatchObject([{ day: "2026-11-03", dry: true, notes: [] }]);
+    expect(r!.retried).toMatchObject([{ day: "2026-11-03", dry: false, notes: [] }]);
     expect(r!.retried[0].error).toBeUndefined();
-    expect(r!.compile).toMatchObject({ day: "2026-11-04", dry: true, notes: [] });
+    expect(r!.compile).toMatchObject({ day: "2026-11-04", dry: false, notes: [] });
     expect(retryDays(dir)).toEqual([]);
   } finally { endRetry(); }
 });
