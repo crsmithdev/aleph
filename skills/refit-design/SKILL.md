@@ -63,7 +63,7 @@ A finding with no element and no lines gets no note: it stays in the HTML report
 
 **Machine proof.** In `fix` mode, before the Hunt, commit the scope's CSS files and run `design fix <css files>`. It
 puts `var(<token>)` for each colour or length literal that equals the one value of one token from `design tokens`,
-one commit per line, and skips each `except` place. Copy each `@@ <file>:<line>` and diff it prints into your
+in a property where the CSS already uses that token, one commit per line, and skips each `except` place. Copy each `@@ <file>:<line>` and diff it prints into your
 summary. These fixes need no screenshots and get no finding. `scan` mode changes nothing, so it does not run it.
 
 ## Notes
