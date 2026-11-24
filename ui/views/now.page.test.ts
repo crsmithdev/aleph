@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./now.js";
 // @ts-ignore plain JS, shared with the page
-import { empty, error } from "./lib/html.js";
+import { chips, empty, error } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
 import { full } from "../now.testkit.ts";
@@ -122,6 +122,13 @@ test("Waiting groups the issues that wait by their hold, and gives how long the 
   expect(h).toContain('<td class="num">1h 00m</td>');
   expect(h).not.toContain("Mine");
   expect(cardOf(page({ jobs: [], queued: [] }), "motion")).not.toContain("Waiting");
+});
+
+test("Events folds a run of one job with no issue into one row, its keys as chips before its title", () => {
+  const ev = (seq: number, action: string) => ({ ...LOG.rows[0], seq, action, issue: null, job: { id: "j7", to: "#/jobs/j7" }, keys: ["dedupe", "dry"], title: "5 resolved" });
+  const h = cardOf(page({ log: { total: 2, rows: [ev(2, "done"), ev(1, "started")] } }), "events");
+  expect(h.match(/<tr>/g)).toHaveLength(2);
+  expect(h).toContain(`<summary><span>${chips(["dedupe", "dry"])}5 resolved</span>1 more</summary>`);
 });
 
 test("Events folds the older events of a run of one issue under its newest, and merges no row without an issue", () => {

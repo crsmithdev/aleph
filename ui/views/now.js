@@ -5,7 +5,7 @@
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, clock, count, dur, hours, plural, when } from "./lib/format.js";
-import { actButton, barList, barRow, card, cell, dataTable, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { actButton, barList, barRow, card, cell, chips, dataTable, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
@@ -141,18 +141,18 @@ const KINDS = [["", "All"], ["problem", "Problems"], ["landed", "Landed"], ["ask
 /** The word of an event: its tag. */
 const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.action));
 
-/** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, issue, title, job, who and how long the run took. */
+/** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, issue, keys and title, job, who and how long the run took. */
 const logRow = (run) => {
-  const [r, ...older] = run;
-  const title = older.length ? fold(`<span>${esc(r.title)}</span>${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : esc(r.title);
+  const [r, ...older] = run, said = chips(r.keys) + esc(r.title);
+  const title = older.length ? fold(`<span>${said}</span>${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : said;
   return row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${logTag(r)}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
     `<td class="wide" title="${esc(r.title)}">${title}</td>`, `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
 };
 
-/** The rows of the log in runs: consecutive rows of one issue are one run; a row with no issue is a run alone. */
+/** The rows of the log in runs: consecutive rows of one issue, or of one job when they have no issue, are one run. */
 const logRuns = (rows) => rows.reduce((runs, r) => {
-  const last = runs.at(-1);
-  if (r.issue && last?.[0].issue?.to === r.issue.to) last.push(r);
+  const last = runs.at(-1), of = (x) => x?.issue?.to ?? x?.job?.to;
+  if (of(r) && of(last?.[0]) === of(r)) last.push(r);
   else runs.push([r]);
   return runs;
 }, []);

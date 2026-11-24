@@ -54,9 +54,10 @@ test("serves one event a row, newest first, 25 a page, without the quiet events"
   expect(last.rows.map((r) => r.action).slice(-2)).toEqual(["failed", "held"]);
 });
 
-test("titles a job with no issue by its name, unless it repeats the role, then its reason", async () => {
-  expect((await log()).rows.slice(0, 2).map((r) => r.title)).toEqual(["pass: a run backs it", "dedupe-2026-11-01: dry: 5 resolved"]);
+test("gives a job with no issue its name less role and date, and its reason's head word, as keys, the rest as title", async () => {
+  expect((await log()).rows.slice(0, 2).map((r) => [r.keys, r.title])).toEqual([[["pass"], "a run backs it"], [["dedupe", "dry"], "5 resolved"]]);
   expect((await log("?q=dedupe")).total).toBe(1);
+  expect((await log("?q=pass")).total).toBe(1);
 });
 
 test("keeps one kind, and the rows whose id or title holds the search", async () => {
