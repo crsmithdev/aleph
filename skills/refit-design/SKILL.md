@@ -49,9 +49,26 @@ none, the run covers each route of the router. The report's unit is a component 
    returns, per component, the rules it breaks and the rules it follows (each by rule id and
    text, from `design rules --for <component>`) and the Design specimen id. Done when each route has returned and each component has an entry.
 
+## Three paths
+
+Each finding takes one path (aleph-tools ADR-0010):
+
+| Finding | Path |
+|---|---|
+| Has machine proof | Fixed alone, one commit per fix, with its `file:line` and diff. No note. |
+| On an element of the page | A note pinned on that element. |
+| In a file, with no element | A note on the page whose text holds the file, the lines and a fenced `diff` block. |
+
+A finding with no element and no lines gets no note: it stays in the HTML report.
+
+**Machine proof.** In `fix` mode, before the Hunt, commit the scope's CSS files and run `design fix <css files>`. It
+puts `var(<token>)` for each colour or length literal that equals the one value of one token from `design tokens`,
+one commit per line, and skips each `except` place. Copy each `@@ <file>:<line>` and diff it prints into your
+summary. These fixes need no screenshots and get no finding. `scan` mode changes nothing, so it does not run it.
+
 ## Notes
 
-Each finding also becomes a note on the page it audited, so the user answers it in the dock as they answer their own.
+Each other finding becomes a note on the page it audited, so the user answers it in the dock as they answer their own.
 Each finding in `findings.json` carries six more fields:
 
 - `rule`: the rule id of `design/` that the finding breaks.
