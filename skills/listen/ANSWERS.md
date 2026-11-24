@@ -22,8 +22,8 @@ The note lives in a scope file. In the commands below, `<scope>` is `<item-id>` 
 3. **Act** by the kind:
    Each reply below goes through `shelf note reply <scope> <note-id> "<text>"`.
    - `ui`: change the page so it follows the language. The homes stay as they are.
-   - `language`: reply `proposal: <the new or changed rule text>, in <home file and heading or bullet>`. Then go back
-     to `wait`. The user answers it with approve or discard.
+   - `language`: reply `proposal: <the new or changed rule text>, in <home file and heading or bullet>`, then a
+     fenced `diff` block with every line the proposal changes, `@@ <file>:<line>` first. Then go back to `wait`. The user answers it with approve or discard.
    - `approve`: write the proposal of the newest `proposal:` reply into its home.
    - `discard`: reply `discarded`, resolve the note, and go back to `wait`.
    - `exception`: add `except: <place>: <reason>` to the rule. In `design/rules.md` it is a `- except:` line under
@@ -40,6 +40,6 @@ asked it in the note editor, which shows the thread and waits for your reply.
 
 1. Read what the question needs: the note, its replies, the code it names. Change nothing.
 2. Reply with `shelf note reply <scope> <note-id> "<answer>"`, in at most three short sentences. When the answer is
-   a change, reply `proposal: <the change>` instead: the editor shows Approve and Discard on it, and each comes back
-   as an answer.
+   a change, reply `proposal: <the change>` and a fenced `diff` block of every line it changes instead: the editor
+   shows Approve and Discard on it, and each comes back as an answer. The user approves only lines they can see.
 3. Go back to `wait`. A question gets no commit, and the note stays open.

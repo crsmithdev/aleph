@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 /**
- * Adds each open finding of a refit-design run that the page shows (`seen`) as an agent note on that page, through
- * `shelf note add`.
- * A note is the headline, the plain sentence, then `rule:`, `where:`, `from:` and the key, `finding: <lens>:<rule>:<unit>`.
+ * Adds each open finding of a refit-design run that the page shows (`seen`) or that carries a `diff` as an agent note on
+ * that page, through `shelf note add`.
+ * A note is the headline, the plain sentence, the diff in a fenced `diff` block, then `rule:`, `where:`, `from:` and the
+ * key, `finding: <lens>:<rule>:<unit>`.
  * The run's `f<n>` restarts each run, so the key is what tells a repeat: a finding whose key an unresolved note on its
  * page holds gets no second note.
  *
@@ -11,7 +12,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-type Finding = { lens: string; rule: string; unit: string; url: string; selector: string; seen: boolean; headline: string; plain: string; locations: string[]; status: string };
+type Finding = { lens: string; rule: string; unit: string; url: string; selector: string; seen: boolean; headline: string; plain: string; diff?: string; locations: string[]; status: string };
 type Note = { url: string; note: string; status: string };
 
 const file = process.env.ALEPH_ANNOTATIONS ?? join(homedir(), ".aleph/annotations.json");
@@ -29,10 +30,10 @@ const key = (f: Finding) => `finding: ${f.lens}:${f.rule}:${f.unit}`;
 const held = new Set((JSON.parse(shelf(["list", "--all", "--json"])) as Note[])
   .filter((n) => n.status !== "resolved").map((n) => `${n.url} ${n.note.split("\n").find((l) => l.startsWith("finding: "))}`));
 
-for (const f of findings.filter((f) => f.seen && (f.status === "open" || f.status === "reverted"))) {
+for (const f of findings.filter((f) => (f.seen || f.diff) && (f.status === "open" || f.status === "reverted"))) {
   const id = `${f.url} ${key(f)}`;
   if (held.has(id)) { console.log(`held  ${id}`); continue; }
-  shelf(["add", "--selector", f.selector, "--url", f.url, "-"], [f.headline, f.plain, `rule: ${f.rule}`, `where: ${f.locations.join(", ")}`, "from: refit-design", key(f)].join("\n"));
+  shelf(["add", "--selector", f.selector, "--url", f.url, "-"], [f.headline, f.plain, ...(f.diff ? ["```diff", f.diff, "```"] : []), `rule: ${f.rule}`, `where: ${f.locations.join(", ")}`, "from: refit-design", key(f)].join("\n"));
   held.add(id);
   console.log(`added ${id}`);
 }

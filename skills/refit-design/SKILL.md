@@ -64,11 +64,15 @@ Each finding in `findings.json` carries six more fields:
 - `headline`: what is wrong, in plain words, at most 8 words: "Two motion tokens are never used".
 - `plain`: why it matters and the change, in one or two short sentences with no path or line:
   "Nothing reads `--t-fast` or `--t-slow`. Delete both."
+- `diff`: for a finding in a file, the lines as they are and the change, as a unified diff with no fence: a
+  `@@ <file>:<line>` line, then the `-`, `+` and context lines. Leave it out when no edit of named lines fixes the
+  finding. The user approves only a change they can see.
 
 After you write the findings, run `bun skills/refit-design/scripts/notes.ts <run dir>`. It adds an agent note for
-each `open` or `reverted` finding with `seen` true: the headline, the plain sentence, then `rule:`, `where:`, `from:` and the key line
-`finding: <lens>:<rule>:<unit>`. The dock shows the first two and folds the rest. It skips a finding whose key an
-unresolved note on that page holds. A finding with `seen` false is in the HTML report only, which stays as it is.
+each `open` or `reverted` finding with `seen` true or a `diff`: the headline, the plain sentence, the diff in a fenced
+`diff` block, then `rule:`, `where:`, `from:` and the key line `finding: <lens>:<rule>:<unit>`. The dock shows the
+first three and folds the rest. It skips a finding whose key an unresolved note on that page holds. A finding with
+`seen` false and no `diff` is in the HTML report only, which stays as it is.
 
 ## Act order
 
