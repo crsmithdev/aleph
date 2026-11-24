@@ -22,7 +22,7 @@ import { backlinks, coreNotes, dailyNotes, isVault, memoryFile, recallSeen, writ
 import { later, once, touch } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 import { errText } from "../../lib/errtext.ts";
-import { DAILY_HOUR, DAILY_TEXT } from "../../lib/schedule.ts";
+import { MAINTAIN_HOURS, MAINTAIN_TEXT } from "../../lib/schedule.ts";
 
 const inScope = (project: string | null) => (n: Note) => memoryIn(scopeOf(n), project);
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -164,14 +164,6 @@ async function log(url: URL): Promise<Response> {
   return json({ project, rows: rows.sort((a, b) => b.at.localeCompare(a.at)) });
 }
 
-/** The local 03:00 after `at`: when the daily maintainer step is next due. */
-function nextDaily(at: string): string {
-  const d = new Date(at);
-  d.setDate(d.getDate() + 1);
-  d.setHours(DAILY_HOUR, 0, 0, 0);
-  return d.toISOString();
-}
-
 /** The `maintain` row: the tick's last result (else the vault's run record), the queue sizes of the last mechanical pass and the notes of the last compile, the notes of the last re-check and the pairs of the last overlap pass. */
 function maintain(root: string, ran: TickRow | undefined) {
   const run = readRun(root, "maintain"), compile = readRun(root, "compile"), recheck = readRun(root, "recheck"), dedupe = readRun(root, "dedupe");
@@ -182,7 +174,7 @@ function maintain(root: string, ran: TickRow | undefined) {
   const rechecked = /(\d+) rechecked/.exec(recheck?.detail ?? "")?.[1];
   const resolved = /(\d+) resolved/.exec(dedupe?.detail ?? "")?.[1];
   const detail = [counts.decay !== undefined && `decay ${counts.decay}`, counts.overlap !== undefined && `overlap ${counts.overlap}`, notes && `${notes} notes`, rechecked && `${rechecked} rechecked`, resolved && `${resolved} resolved`].filter(Boolean).join(" · ");
-  return { name: "maintain", runs: DAILY_TEXT, last, next: last ? nextDaily(last) : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, compiles yesterday, re-checks stale notes, resolves overlaps" };
+  return { name: "maintain", runs: MAINTAIN_TEXT, last, next: last ? new Date(Date.parse(last) + MAINTAIN_HOURS * 3600_000).toISOString() : null, result: ran?.result ?? run?.result ?? null, detail: detail || null, does: "fixes the vault, compiles yesterday, re-checks stale notes, resolves overlaps" };
 }
 
 /** `GET /api/memory/processes`: the memory steps of the tick, and what each memory process left on disk. */

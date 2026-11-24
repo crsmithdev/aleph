@@ -1,7 +1,10 @@
 /** When the tick runs the memory steps: its due rules, and the Memory page read it. */
 
-/** The local hour from which the daily maintainer is due. */
+/** The local hour from which the maintainer compiles yesterday. */
 export const DAILY_HOUR = 3;
 
-/** The daily steps' schedule as the Memory page says it. */
-export const DAILY_TEXT = `daily after ${String(DAILY_HOUR).padStart(2, "0")}:00`;
+/** Hours from one maintainer run to the next. */
+export const MAINTAIN_HOURS = 6;
+
+/** The maintainer's schedule as the Memory page says it. */
+export const MAINTAIN_TEXT = `every ${MAINTAIN_HOURS} h`;

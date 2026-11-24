@@ -338,19 +338,21 @@ test("a step that fails in a tick records a result that starts with failed and i
   expect(ran.smoke.result).toBe("failed: / answered 503");
 });
 
-// The daily vault maintenance: from 03:00 local, on a vault that has VAULT.md, once per local date.
+// The vault maintenance: every 6 hours, on a vault that has VAULT.md; the compile of yesterday from 03:00 local.
 
-test("guard: the maintain step from 03:00 local returns the run's counts and records its run as ok", async () => {
+test("guard: the maintain step returns the run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const r = await maintainStep(NOW);
   expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, unread: 0, overlap: 0, retry: 0, notes: 0, swapped: 0, rechecked: 0, resolved: 0, aliased: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 
-test("guard: the maintain step returns null before 03:00, with no VAULT.md, and while the factory is paused", async () => {
+test("guard: the maintain step runs before 03:00 without the compile, and is null with no VAULT.md or while paused", async () => {
   const dir = vaultHere();
-  // 02:00 local: too early, so nothing runs and no run record is written.
-  expect(await maintainStep(Date.parse("2026-11-04T02:00:00Z"))).toBeNull();
+  // 02:00 local: the queues run, and yesterday is not compiled yet.
+  const early = await maintainStep(Date.parse("2026-11-04T02:00:00Z"));
+  expect(early!.compile).toBeUndefined();
+  expect(early!.recheck).toBeDefined();
   // A folder that is there, with no VAULT.md: not a vault, so nothing runs.
   const empty = join(base, "no-home");
   mkdirSync(empty, { recursive: true });
@@ -361,11 +363,11 @@ test("guard: the maintain step returns null before 03:00, with no VAULT.md, and 
   try { expect(await maintainStep(NOW)).toBeNull(); } finally { setPaused(false); }
 });
 
-test("guard: the maintain step runs once per local date: the same date again is null, the next date runs", async () => {
+test("guard: the maintain step runs again 6 hours after its last run, and is null before", async () => {
   vaultHere();
   const first = await maintainStep(NOW);
-  expect(await maintainStep(NOW + 3600_000)).toBeNull();
-  expect((await maintainStep(NOW + 864e5))!.counts).toEqual(first!.counts);
+  expect(await maintainStep(NOW + 5 * 3600_000)).toBeNull();
+  expect((await maintainStep(NOW + 6 * 3600_000))!.counts).toEqual(first!.counts);
 });
 
 test("a tick reads the table of jobs at most twice, whichever steps are due", async () => {

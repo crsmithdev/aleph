@@ -1,13 +1,13 @@
 /**
  * `aleph tick`, from its timer every minute. It starts only periodic work, each step on its own due rule: the
- * maintainer (vault maintenance, compile) and the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the CI read and
+ * maintainer (vault maintenance, compile) every 6 hours, the monitor once a day, the housekeeper once a day and after a land (at most once an hour), the CI read and
  * the firefighter every 5 minutes (every minute while a CI run on a factory main is in progress or a land on it is under 15 minutes old), the probe of a held backend, the smoke test and the sweep at each tick. No transition waits for it (PRINCIPLES.md rule 7): a run's end, an issue write
  * and an Ask each start their next step at once. The sweep is the safety net: work that should have started and did
  * not is logged as a `missed` event on its issue or job, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
 import { resolve } from "node:path";
-import { addDays, today, yesterday } from "../../../lib/day.ts";
+import { addDays, yesterday } from "../../../lib/day.ts";
 import { vaultDir } from "../../../lib/paths.ts";
 import { compiledDays, isVault, readRun, retryDays } from "../../../vault/lib/vault.ts";
 import { maintain } from "../../../vault/lib/maintain.ts";
@@ -47,7 +47,7 @@ import { CLOSED, issueKey, missedOf, parseKey } from "../../../lib/naming.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
 import { smokeStep } from "../gates/smoke.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { DAILY_HOUR } from "../../../lib/schedule.ts";
+import { DAILY_HOUR, MAINTAIN_HOURS } from "../../../lib/schedule.ts";
 
 /** How often each step with a fixed period runs. */
 const EVERY_MS = { ci: 5 * 60_000, firefight: 5 * 60_000 } as const;
@@ -130,16 +130,15 @@ const summary = (r: Json): string => {
 };
 
 /**
- * The daily maintainer, from 03:00 local, once per local date, under the pause gate. The mechanical pass writes, and
- * its run record is its gate; the compile follows it.
+ * The maintainer, every MAINTAIN_HOURS under the pause gate. The mechanical pass writes, and its run record is its gate.
+ * The compile of yesterday waits for 03:00 local, so a pass after midnight does not cut the day short.
  * Returns the report, or null when nothing is due or the vault is not there for the mechanical part.
  */
 export async function maintainStep(now = Date.now()): Promise<Json | null> {
   const root = resolve(vaultDir()), at = readRun(root, "maintain")?.at;
-  if (new Date(now).getHours() < DAILY_HOUR || paused()) return null;
-  const mech = isVault(root) && !(at && today(new Date(at)) === today(new Date(now)));
-  if (!mech) return null;
-  const r = await maintainAll(root, false, now, { mech, compile: mech, decay: mech, overlap: mech, misses: mech });
+  if (paused() || !isVault(root) || (at && now - Date.parse(at) < MAINTAIN_HOURS * 3600_000)) return null;
+  const compile = new Date(now).getHours() >= DAILY_HOUR;
+  const r = await maintainAll(root, false, now, { mech: true, compile, decay: true, overlap: true, misses: true });
   if (!r.ok) throw new Error("maintain failed; see its run record");
   return r;
 }

@@ -266,5 +266,5 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 |---|---|---|---|
 | Firefighter | Tick, each 5 minutes, or each minute while a CI run on main is in progress or a land ended in the last 15 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; one Ask per land run, under the lock `rescue-<repo>-<name>` |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
-| Maintainer | Tick, daily from 03:00; `aleph memory maintain [--dry]` | Runs the mechanical vault pass, and compiles yesterday into vault notes | The vault run record and `compiledDays` |
+| Maintainer | Tick, every 6 hours; `aleph memory maintain [--dry]` | Runs the mechanical vault pass and the queues, and from 03:00 compiles yesterday into vault notes | The vault run record and `compiledDays` |
 | Monitor | Tick, daily from its local hour (0 to 23, 0 by default; set on the Automation page) | Reads the day's records and writes numbered findings for the Status page | One per day |

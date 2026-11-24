@@ -460,7 +460,7 @@ test("/api/memory/processes reads the tick and the stale notes", async () => {
       ["recall trim", null, null, null],
       ["vault push", null, null, null],
     ]);
-    expect(m.steps[0]).toMatchObject({ name: "maintain", runs: "daily after 03:00", next: "2026-11-05T03:00:00.000Z", detail: "decay 3 · overlap 5 · 2 notes" });
+    expect(m.steps[0]).toMatchObject({ name: "maintain", runs: "every 6 h", next: "2026-11-04T16:00:00.000Z", detail: "decay 3 · overlap 5 · 2 notes" });
     const runs = join(base, "vault", ".index", "runs");
     writeFileSync(join(runs, "seen prune.json"), JSON.stringify({ at: "2026-11-04T11:45:00.000Z", result: "ok" }));
     writeFileSync(join(runs, "vault push.json"), JSON.stringify({ at: "2026-11-04T11:50:00.000Z", result: "failed", detail: "no route" }));
