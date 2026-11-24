@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { judge } from "./judge.ts";
 import { setModel } from "../routing/models.ts";
 import { judgeChoice, setJudgeChoice } from "../../../lib/jev.ts";
+import { runsOfRole } from "../records/record.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -37,6 +38,7 @@ test("a final message that may claim completion goes to Haiku, whose verdict and
   const r = await judge("TURN: EDIT a.ts\nFINAL MESSAGE: tests pass", "tests pass");
   expect(r).toMatchObject({ by: "haiku", verdict: { verdict: "deny", reason: "no run backs tests pass" }, jev: { pClaim: 0.3 } });
   expect(existsSync(join(dir, "haiku-ran"))).toBe(true);
+  expect(runsOfRole("judge").at(-1)?.run.reason).toBe("deny: no run backs tests pass");
 });
 
 test("the Haiku call carries effort low and no setting of effort high, so it does not think", async () => {

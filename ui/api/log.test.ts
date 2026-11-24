@@ -7,6 +7,7 @@ import { newItems, writeRepos } from "../../tests/projects.testkit.ts";
 import { writeList } from "../../lib/store.ts";
 import { add } from "../../lib/issue-file.ts";
 import { logEvent } from "../../lib/layout.ts";
+import { makeJob } from "../../jobs/lib/records/record.ts";
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 
@@ -28,6 +29,8 @@ beforeAll(async () => {
   logEvent({ time: at(7), subject: "gate", action: "held", object: "issue.1", detail: "file: a.ts: job.4" });
   logEvent({ time: at(6), subject: "gate", action: "failed", object: "issue.1", detail: "x" });
   for (let i = 0; i < 60; i++) logEvent({ time: at(5 - i / 100), subject: "gate", action: "landed", object: "issue.1" });
+  // Two jobs with no issue: one named for its task, one named for its role.
+  for (const [role, name, reason] of [["maintainer", "dedupe-2026-11-01", "dry: 5 resolved"], ["judge", "judge", "pass: a run backs it"]] as const) makeJob({ role, name, state: "done", reason });
   ({ server, stop } = await withServer({ warm: false }));
 });
 
@@ -42,13 +45,18 @@ const log = async (query = "") => (await fetch(`http://127.0.0.1:${server.port}/
 
 test("serves one event a row, newest first, 25 a page, without the quiet events", async () => {
   const all = await log();
-  expect(all.total).toBe(62);
+  expect(all.total).toBe(64);
   expect(all.rows).toHaveLength(25);
-  expect(all.rows[0]).toMatchObject({ action: "landed", issue: { id: expect.any(String), to: expect.stringContaining("#/issues/p/1") }, title: "Fix the pager", job: null });
+  expect(all.rows.find((r) => r.issue)).toMatchObject({ action: "landed", issue: { id: expect.any(String), to: expect.stringContaining("#/issues/p/1") }, title: "Fix the pager", job: null });
   expect((await log("?page=2")).rows).toHaveLength(25);
   const last = await log("?page=3");
-  expect(last.rows).toHaveLength(12);
+  expect(last.rows).toHaveLength(14);
   expect(last.rows.map((r) => r.action).slice(-2)).toEqual(["failed", "held"]);
+});
+
+test("titles a job with no issue by its name, unless it repeats the role, then its reason", async () => {
+  expect((await log()).rows.slice(0, 2).map((r) => r.title)).toEqual(["pass: a run backs it", "dedupe-2026-11-01: dry: 5 resolved"]);
+  expect((await log("?q=dedupe")).total).toBe(1);
 });
 
 test("keeps one kind, and the rows whose id or title holds the search", async () => {
