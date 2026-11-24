@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
@@ -1006,6 +1006,21 @@ describe("maintain", () => {
     expect(readdirSync(handoffs).sort()).toEqual([`${day(41)}-101010-not-compiled.md`, `${day(5)}-101010-recent.md`]);
     expect(readFileSync(join(vault, "wiki/gotchas/Core Twice.md"), "utf8")).toContain("core: Terse [[UI Text]] always");
     expect(gitLog()).toContain("maintain core: 1 notes");
+  });
+  test("archives a stale note with no recall in 30 days; a recalled or core one stays in the decay queue", async () => {
+    // gotcha 60 days x inferred 0.5 = a 30-day window, so 100 days old is stale.
+    const old = { confidence: "inferred", updated: day(100) };
+    for (const t of ["Unread Gear", "Recalled Widget"]) await cli("write", note(t, old), "--why", "x");
+    await cli("write", note("Core Sprocket", { ...old, core: "Sprockets turn" }), "--why", "x");
+    appendFileSync(join(vault, ".recall-log.jsonl"), JSON.stringify({ date: day(3), title: "Recalled Widget", query: "widget" }) + "\n");
+    const dry = await run(env(), "maintain", "--dry");
+    expect(dry.json.unread).toEqual([{ note: "Unread Gear" }]);
+    expect(existsSync(join(vault, "wiki/gotchas/Unread Gear.md"))).toBe(true);
+    const r = await run(env(), "maintain");
+    expect(r.json).toMatchObject({ ok: true, unread: [{ note: "Unread Gear", archived: true }], counts: { unread: 1, decay: 2 } });
+    expect(r.json.queues.decay.map((f: any) => f.note).sort()).toEqual(["Core Sprocket", "Recalled Widget"]);
+    expect(existsSync(join(vault, "archive/Unread Gear.md"))).toBe(true);
+    expect(gitLog()).toContain("archive: Unread Gear");
   });
   test("puts back a deleted pre-commit hook", async () => {
     overCore();

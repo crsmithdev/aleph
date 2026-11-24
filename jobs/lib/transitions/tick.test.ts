@@ -343,7 +343,7 @@ test("a step that fails in a tick records a result that starts with failed and i
 test("guard: the maintain step from 03:00 local returns the run's counts and records its run as ok", async () => {
   const dir = vaultHere();
   const r = await maintainStep(NOW);
-  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, overlap: 0, retry: 0, notes: 0, swapped: 0, rechecked: 0, resolved: 0, aliased: 0 });
+  expect(r!.counts).toEqual({ fixed: 0, adopt: 0, core: 0, handoffs: 0, decay: 0, unread: 0, overlap: 0, retry: 0, notes: 0, swapped: 0, rechecked: 0, resolved: 0, aliased: 0 });
   expect(readRun(dir, "maintain")?.result).toBe("ok");
 });
 

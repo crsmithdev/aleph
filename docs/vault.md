@@ -42,7 +42,7 @@ A miss is a query that did not surface a note the same turn then read, and that 
 
 The compile writes the missed notes with `write`, with no approval step. Each write is a pushed commit that can be reverted. `--dry` writes no notes but records its run.
 
-The mechanical pass runs `lint --fix` and `adopt`, and fixes repeated core links. It moves handoffs older than 30 days, whose day `compile` ran, to `~/.aleph/backups/maintain/<day>/`. It retries a failed push and installs the pre-commit hook when it is missing. It reports the decay, overlap and misses queues; the overlap queue shows at most 10 entries, and the count is the full number. With `--dry` the mechanical pass changes nothing.
+The mechanical pass runs `lint --fix` and `adopt`, and fixes repeated core links. It moves handoffs older than 30 days, whose day `compile` ran, to `~/.aleph/backups/maintain/<day>/`. It retries a failed push and installs the pre-commit hook when it is missing. It archives each stale note with no recall in 30 days and no core line, so the re-check spends its calls on notes that sessions use. It reports the decay, overlap and misses queues; the overlap queue shows at most 10 entries, and the count is the full number. With `--dry` the mechanical pass changes nothing.
 
 ## Note format
 

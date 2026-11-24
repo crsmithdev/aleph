@@ -7,9 +7,9 @@ import { join } from "node:path";
 import { alephPath, handoffsDir } from "../../lib/paths.ts";
 import { handoffOf } from "../../lib/handoffs.ts";
 import { addedDate, pushOrigin, trackedFiles } from "./git.ts";
-import { adopt, commitAndPush, installHook, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
+import { adopt, archive, commitAndPush, installHook, lint as lintOp, misses as missesOp, op, requireVault, type Result } from "./ops.ts";
 import { daysAgo, today } from "../../lib/day.ts";
-import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, recordRun, trimRecallLog, type Finding } from "./vault.ts";
+import { compiledDays, fixFrontmatter, lintVault, loadVault, loadWiki, readRecallLog, readRun, RECALL_DAYS, recordRun, trimRecallLog, type Finding } from "./vault.ts";
 
 const HANDOFF_DAYS = 30;
 const OVERLAP_QUEUE = 10;
@@ -82,14 +82,25 @@ export const maintain = (root: string, dry: boolean): Promise<Result<Json>> => o
     try { trimRecallLog(root); } catch { failed.push("recall trim"); }
   }
 
-  const lint = lintVault(await loadVault(root), { overlap: true, tracked: [...tracked] });
+  const all = await loadVault(root);
+  const lint = lintVault(all, { overlap: true, tracked: [...tracked] });
   const queue = (rule: string) => lint.warn.filter((f) => f.rule === rule);
+  // A stale note no session recalled is not worth a re-check: archive it. A core line loads at every start, so it stays.
+  const core = new Set(all.filter((n) => n.fm.core).map((n) => n.title));
+  const stale = decayQueue(root, queue("stale")), unused = (f: Finding & { count: number }) => !f.count && !core.has(f.note);
+  const unread = stale.filter(unused), decay = stale.filter((f) => !unused(f));
+  report.unread = [];
+  for (const f of unread) {
+    const r = dry ? null : await archive(root, f.note, `maintain: stale, no recall in ${RECALL_DAYS} days`);
+    if (r && !r.ok) failed.push(`archive ${f.note}`);
+    report.unread.push({ note: f.note, ...(r ? { archived: r.ok } : {}) });
+  }
   const misses = await missesOp();
-  report.queues = { decay: decayQueue(root, queue("stale")), overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.ok ? { misses: misses.value } : {}) };
+  report.queues = { decay, overlap: queue("overlap").slice(0, OVERLAP_QUEUE), ...(misses.ok ? { misses: misses.value } : {}) };
   const overlaps = queue("overlap").length;
   report.counts = {
     fixed: report.lint.fixed.length, adopt: untracked.length, core: cores.length, handoffs: report.handoffs.length,
-    decay: report.queues.decay.length, overlap: overlaps, retry: retry ? 1 : 0,
+    decay: decay.length, unread: unread.length, overlap: overlaps, retry: retry ? 1 : 0,
   };
   report.ok = !failed.length;
   recordRun(root, "maintain", report.ok ? "ok" : "failed", failed.length ? `failed: ${failed.join(", ")}` : `${dry ? "dry: " : ""}${JSON.stringify(report.counts)}`);
