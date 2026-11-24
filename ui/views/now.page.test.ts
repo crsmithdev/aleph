@@ -131,7 +131,7 @@ test("Events folds the older events of a run of one issue under its newest, and 
   expect(h.match(/<details/g)).toHaveLength(1);
   expect(h.match(/<td class="time lead">07:06/g)).toHaveLength(1);
   const [, inFold] = h.split("<details");
-  expect(inFold).toContain("2 more");
+  expect(inFold).toContain("<summary><span>Ta5</span>2 more</summary>");
   expect(inFold).toContain("07:05");
   expect(inFold).toContain("07:04");
   expect(inFold).not.toContain("07:06");

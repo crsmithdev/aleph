@@ -141,12 +141,12 @@ const KINDS = [["", "All"], ["problem", "Problems"], ["landed", "Landed"], ["ask
 /** The word of an event: its tag. */
 const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.action));
 
-/** One run of the log: the newest event of `run` as a row, and its older events in a fold under the title. Cells: time, word, issue, title, job, who and how long the run took. */
+/** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, issue, title, job, who and how long the run took. */
 const logRow = (run) => {
   const [r, ...older] = run;
-  const more = older.length ? fold(`${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`) : "";
+  const title = older.length ? fold(`<span>${esc(r.title)}</span>${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : esc(r.title);
   return row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${logTag(r)}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
-    `<td class="wide" title="${esc(r.title)}">${esc(r.title)}${more}</td>`, `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
+    `<td class="wide" title="${esc(r.title)}">${title}</td>`, `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
 };
 
 /** The rows of the log in runs: consecutive rows of one issue are one run; a row with no issue is a run alone. */

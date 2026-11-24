@@ -1061,6 +1061,10 @@ ul.tight li { margin: 1px 0; overflow-wrap: anywhere; }
 details.fold { margin: 0 0 var(--sp-8); }
 details.fold > summary { display: flex; align-items: baseline; }
 details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
+/* A fold on one line: its summary holds a text, then the marker and the count; the body opens under it. */
+details.line { margin: 0; padding: 0; border: 0; }
+details.line > summary { display: flex; padding: 0; }
+details.line > summary > span { order: -1; min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-6); color: var(--ink); }
 .pager { display: flex; align-items: center; gap: var(--sp-12); margin: var(--sp-10) 0 0; }
 .pager .of { font: var(--fw-mid) var(--fs-xs) var(--num); font-variant-numeric: tabular-nums; color: var(--muted); }
 
