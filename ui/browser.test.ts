@@ -611,7 +611,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched fetch away.
     // A decided Ask stays off the Status page when Problems draws again from a state that still lists it.
     await page.when('document.querySelector("#view #problems")');
-    // The state lists the Ask; its alert's Deny posts at once. After the POST every other fetch hangs.
+    // The state lists the Ask; its alert's Deny posts at once. A refresh of the state gets it too, so no draw of the server's own state comes between. After the POST every other fetch hangs.
     await page.ev(`Promise.all([import("/views/now.js"), fetch("/api/factory").then((r) => r.json())]).then(([{ view }, s]) => {
       s.asks = [{ id: "tools-5", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a third input file",
         situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-5/drop", body: {}, input: { name: "reason", lead: "" } }] }];
@@ -620,7 +620,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.beat();
       const f = window.fetch;
       window.posts = [];
-      window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push(u), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
+      window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push(u), Promise.resolve(new Response("{}"))) : String(u).startsWith("/api/factory?") ? Promise.resolve(Response.json(s)) : window.posts.length ? new Promise(() => {}) : f(u, o);
       document.querySelector('#problems article[data-ask="tools-5"] button.act[data-act="deny"]').click();
     })`);
     await page.when('window.posts.length && !document.querySelector("#view article[data-ask=\'tools-5\']")');
