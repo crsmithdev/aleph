@@ -124,14 +124,27 @@ test("Waiting groups the issues that wait by their hold, and gives how long the 
   expect(cardOf(page({ jobs: [], queued: [] }), "motion")).not.toContain("Waiting");
 });
 
-test("Events is a log of one event a row: its time, word, issue, title, job, by and took, with a filter and a pager", () => {
+test("Events folds the older events of a run of one issue under its newest, and merges no row without an issue", () => {
+  const ev = (seq: number, issue: string | null, action: string) => ({ ...LOG.rows[0], seq, action, at: `2026-11-01T07:0${seq}:00Z`, issue: issue && { id: issue, to: `#/issues/aleph/${issue}` }, job: null, title: issue ? `T${issue}` : "" });
+  const h = cardOf(page({ log: { total: 6, rows: [ev(6, "a5", "landed"), ev(5, "a5", "failed"), ev(4, "a5", "started"), ev(3, "a6", "landed"), ev(2, null, "held"), ev(1, null, "held")] } }), "events");
+  expect(h.match(/<tr>/g)).toHaveLength(5);
+  expect(h.match(/<details/g)).toHaveLength(1);
+  expect(h.match(/<td class="time lead">07:06/g)).toHaveLength(1);
+  const [, inFold] = h.split("<details");
+  expect(inFold).toContain("2 more");
+  expect(inFold).toContain("07:05");
+  expect(inFold).toContain("07:04");
+  expect(inFold).not.toContain("07:06");
+});
+
+test("Events is a log: each row has its time, word, issue, title, job, by and took, with a filter and a pager", () => {
   const h = cardOf(page({ log: LOG }, "kind=landed&q=fix"), "events");
   expect(h).toContain('value="fix"');
   expect(h).toContain('data-value="landed" aria-pressed="true"');
   expect(h).toContain('title="Time"');
   expect(h).toContain('href="#/issues/aleph/5">a5</a>');
   expect(h).toContain('<td class="num">1m 05s</td>');
-  expect(h).toContain("Next 1");
+  expect(h).toContain("Next 25");
   expect(cardOf(page({ log: { total: 0, rows: [] } }), "events")).toContain(empty());
   expect(cardOf(page({}), "events")).toContain("Loading the events");
 });

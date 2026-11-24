@@ -1,7 +1,7 @@
 /**
  * `GET /api/log`: the event log of the Status page, one event a row, newest first, `{ rows, total }`.
  * `?window=` and `?project=` scope it as every route does; `?kind=` keeps one kind of `KINDS`, `?q=` keeps the rows
- * whose issue, job or title holds the text, and `?page=` (from 1) picks 50 of the rest.
+ * whose issue, job or title holds the text, and `?page=` (from 1) picks 25 of the rest.
  */
 import { readEvents } from "../../lib/layout.ts";
 import { projectsOnMain } from "../../lib/store.ts";
@@ -11,7 +11,7 @@ import { mineOf, titlesOf } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { scopeOf, withProjects } from "./scope.ts";
 
-const PAGE = 50;
+const PAGE = 25;
 /** The kind of each action the filter names; any other action is in All only. */
 export const KINDS: Record<string, string> = { failed: "problem", returned: "problem", dropped: "problem", landed: "landed", question: "ask", answered: "ask", escalated: "ask", held: "hold" };
 

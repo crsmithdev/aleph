@@ -40,12 +40,14 @@ afterAll(() => {
 
 const log = async (query = "") => (await fetch(`http://127.0.0.1:${server.port}/api/log${query}`)).json() as Promise<{ rows: any[]; total: number }>;
 
-test("serves one event a row, newest first, 50 a page, without the quiet events", async () => {
+test("serves one event a row, newest first, 25 a page, without the quiet events", async () => {
   const all = await log();
   expect(all.total).toBe(62);
-  expect(all.rows).toHaveLength(50);
+  expect(all.rows).toHaveLength(25);
   expect(all.rows[0]).toMatchObject({ action: "landed", issue: { id: expect.any(String), to: expect.stringContaining("#/issues/p/1") }, title: "Fix the pager", job: null });
-  const last = await log("?page=2");
+  expect((await log("?page=2")).rows).toHaveLength(25);
+  const last = await log("?page=3");
+  expect(last.rows).toHaveLength(12);
   expect(last.rows.map((r) => r.action).slice(-2)).toEqual(["failed", "held"]);
 });
 

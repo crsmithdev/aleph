@@ -5,7 +5,7 @@
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, clock, count, dur, hours, plural, when } from "./lib/format.js";
-import { actButton, barList, barRow, card, cell, dataTable, empty, error, esc, filterBar, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { actButton, barList, barRow, card, cell, dataTable, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
@@ -138,9 +138,24 @@ export function renderWaiting(s) {
 /** The kinds the log filters by, as `/api/log` names them. */
 const KINDS = [["", "All"], ["problem", "Problems"], ["landed", "Landed"], ["ask", "Asks"], ["hold", "Holds"]];
 
-/** One event of the log: its time, its word, its issue and title, its job, who did it and how long the run took. */
-const logRow = (r) => row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${tag(r.action, r.action === "started" ? "run" : tone(r.action))}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
-  cell(r.title, { wide: true }), `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
+/** The word of an event: its tag. */
+const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.action));
+
+/** One run of the log: the newest event of `run` as a row, and its older events in a fold under the title. Cells: time, word, issue, title, job, who and how long the run took. */
+const logRow = (run) => {
+  const [r, ...older] = run;
+  const more = older.length ? fold(`${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`) : "";
+  return row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${logTag(r)}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
+    `<td class="wide" title="${esc(r.title)}">${esc(r.title)}${more}</td>`, `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
+};
+
+/** The rows of the log in runs: consecutive rows of one issue are one run; a row with no issue is a run alone. */
+const logRuns = (rows) => rows.reduce((runs, r) => {
+  const last = runs.at(-1);
+  if (r.issue && last?.[0].issue?.to === r.issue.to) last.push(r);
+  else runs.push([r]);
+  return runs;
+}, []);
 
 /** The log's filter, table and pager: the part that a filter, a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
 function logBody(log, q) {
@@ -149,7 +164,7 @@ function logBody(log, q) {
   if (log.error) return bar + error(log.error);
   if (!log.rows.length) return bar + empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Issue", "Title", "Job", "By"]) + iconHead("stopwatch", "Took");
-  return bar + dataTable(head, log.rows.map(logRow).join("")) + pager(Number(q.get("page")) || 1, log.total);
+  return bar + dataTable(head, logRuns(log.rows).map(logRow).join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
 }
 
 /** The Events card: the search, then the log's filter, table and pager. */
