@@ -128,7 +128,7 @@ test("Events folds a run of one job with no issue into one row, its keys as chip
   const ev = (seq: number, action: string) => ({ ...LOG.rows[0], seq, action, issue: null, job: { id: "j7", to: "#/jobs/j7" }, keys: ["dedupe", "dry"], title: "5 resolved" });
   const h = cardOf(page({ log: { total: 2, rows: [ev(2, "done"), ev(1, "started")] } }), "events");
   expect(h.match(/<tr>/g)).toHaveLength(2);
-  expect(h).toContain(`<summary><span>${chips(["dedupe", "dry"])}5 resolved</span>1 more</summary>`);
+  expect(h).toContain(`<summary><span>${chips(["dedupe", "dry"])}5 resolved</span>1</summary>`);
 });
 
 test("Events folds the older events of a run of one issue under its newest, and merges no row without an issue", () => {
@@ -138,7 +138,7 @@ test("Events folds the older events of a run of one issue under its newest, and 
   expect(h.match(/<details/g)).toHaveLength(1);
   expect(h.match(/<td class="time lead">07:06/g)).toHaveLength(1);
   const [, inFold] = h.split("<details");
-  expect(inFold).toContain("<summary><span>Ta5</span>2 more</summary>");
+  expect(inFold).toContain("<summary><span>Ta5</span>2</summary>");
   expect(inFold).toContain("07:05");
   expect(inFold).toContain("07:04");
   expect(inFold).not.toContain("07:06");

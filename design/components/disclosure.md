@@ -26,7 +26,7 @@ A disclosure is a fold. It hides detail until the reader opens it.
 - For a long list, use `moreFold()`: 10 items, then a fold.
 - For long text, use `clamp()`: 3 lines, then Show more.
 - At the end of a card, put technical details in `fold("Technical details", body, { cls: "more" })`.
-- In a table row, keep the count on the title's line: ``fold(`<span>${title}</span>${n} more`, body, { cls: "line" })``.
+- In a table row, keep the count on the title's line, as `+N`: ``fold(`<span>${title}</span>${n}`, body, { cls: "line" })``.
 
 ## Do and don't
 

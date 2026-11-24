@@ -144,7 +144,7 @@ const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.acti
 /** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, issue, keys and title, job, who and how long the run took. */
 const logRow = (run) => {
   const [r, ...older] = run, said = chips(r.keys) + esc(r.title);
-  const title = older.length ? fold(`<span>${said}</span>${older.length} more`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : said;
+  const title = older.length ? fold(`<span>${said}</span>${older.length}`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : said;
   return row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${logTag(r)}</td>`, `<td>${r.issue ? idLink(r.issue.id, r.issue.to) : ""}</td>`,
     `<td class="wide" title="${esc(r.title)}">${title}</td>`, `<td>${r.job ? idLink(r.job.id, r.job.to) : ""}</td>`, cell(r.by), cell(r.took == null ? "" : dur(r.took), { num: true })]);
 };

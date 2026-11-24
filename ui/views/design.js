@@ -267,7 +267,7 @@ function renderDesign(d) {
       "Click Drop: arm() asks for a second click, and the button goes back after 5 seconds. Beside it, the state of an answer that needs a reason.") +
     spec("disclosure", "Disclosure", fold("Closed by default", "<p>The body of a fold.</p>") + fold("Open by default", "<p>The body of a fold.</p>", { open: true }) +
       fold("Technical details", `<div class="body"><p>A run id and its log path.</p></div>`, { cls: "more" }) +
-      fold("<span>A row's title, with its count on the same line</span>2 more", "<p>The older events.</p>", { cls: "line" }) +
+      fold("<span>A row's title, with its count on the same line</span>2", "<p>The older events.</p>", { cls: "line" }) +
       moreFold(Array.from({ length: 13 }, (_, i) => `Item ${i + 1}`), (x) => x) + clamp(`<p>${"A long text that clamps. ".repeat(30)}</p>`)) +
 
     group("Text") +
