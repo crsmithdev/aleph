@@ -353,7 +353,8 @@ function drawTokens(root) {
     `<div class="design-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1)"></i><code>${n}</code></div>`).join("") +
     ["--dot-s", "--dot-m", "--dot-l"].map((n) => `<div class="design-tok"><i style="width:var(${n});height:var(${n});background:var(--series-1);border-radius:var(--r-pill)"></i><code>${n}</code></div>`).join("") +
     `<div class="design-tok"><i style="width:var(--indent-list);height:var(--sp-8);background:var(--series-1)"></i><code>--indent-list ${val("--indent-list")}</code></div>` +
-    `<div class="design-tok"><i style="width:var(--measure);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--measure ${val("--measure")}</code></div>`);
+    `<div class="design-tok"><i style="width:var(--measure);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--measure ${val("--measure")}</code></div>` +
+    `<div class="design-tok"><i style="width:var(--field-w);max-width:100%;height:var(--sp-8);background:var(--series-1)"></i><code>--field-w ${val("--field-w")}</code></div>`);
   fill("radius", names.filter((n) => n.startsWith("--r-")).map((n) =>
     `<div class="design-tok"><i style="width:48px;height:32px;border:1px solid var(--ink-2);border-radius:var(${n})"></i><code>${n}</code></div>`).join(""));
   fill("layers", ["--lift", "--card-lift", "--float"].map((n) =>

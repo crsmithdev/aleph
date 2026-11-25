@@ -290,7 +290,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     })`);
     expect(r).toMatchObject({ error: false, charts: 5 });
     // Each specimen shows its rules from the index at /api/design; the variants of a component have none.
-    expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, action"]);
+    expect(r.noRules).toEqual(["Current page in the sidebar (mock)", "Table, fit", "Table, empty", "Chart panel, no data", "Search box, folded", "Search box, action"]);
     expect(r).toMatchObject({ values: 22, contrast: 13 });
     // The new specimens each have an id, the buttons their three kinds, the row action a last td.acts, and the Failed series is the Error colour.
     expect(await page.ev(`({
