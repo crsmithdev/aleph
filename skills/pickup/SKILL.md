@@ -37,5 +37,6 @@ Before taking any action the handoff tells you to take:
 
 1. Verify the state described still matches reality. When the session start holds the handoff text and the git output, use that output and run no git command. Otherwise run `git status` and `git log -5`. Check that referenced files still exist and contain what the handoff claims, confirm any servers or processes are still running if relevant. If reality has drifted from the handoff, surface the drift to the user before proceeding.
 2. Archive the handoff so it isn't picked up twice: move it to `<handoffs dir>/$(date +%Y-%m-%d-%H%M%S)-<name>.md`, where `<name>` is the name argument, else `<scope>`. The date comes first because `vault compile` reads a day's handoffs by that prefix.
+3. Take over the listening, so each note reaches this session. For each `shelf wait` the handoff names, stop each running copy with the same arguments and folder (`pgrep -af "shelf wait"`, `/proc/<pid>/cwd`). Then start it again with `run_in_background`. A `/clear` keeps the old waits in this process, so take them over too. Done when each named wait runs from this session and no old copy runs.
 
 Then follow the **Resume instructions**. Lead with one sentence telling the user what you're picking up and what you're about to do. They may have switched contexts too.
