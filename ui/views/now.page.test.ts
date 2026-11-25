@@ -30,7 +30,7 @@ const BASE = { prev: { lost: 0.3, leadP50: 1200 }, base: { lost: 0.25, leadP50: 
 const USAGE = { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 const notes = [{ read: NOW, history: [...Array(29).fill(0), 3] }, { read: null, history: Array(30).fill(0) }];
 const MEMORY = { total: 2, notes, start: { aleph: { bytes: 3000, budget: 6000, core: ["a", "b"] } }, lint: { refuse: [], warn: [] }, misses: { unoffered_reads: 4 }, processes: { decay: { stale: [{ note: "N", over: 31 }] } } };
-const LOG = { total: 51, rows: [{ seq: 9, at: NOW, action: "landed", issue: { id: "a5", to: "#/issues/aleph/5" }, job: { id: "j7", to: "#/jobs/j7" }, title: "Fix it", by: "land", took: 65 }] };
+const LOG = { total: 51, rows: [{ seq: 9, at: NOW, action: "landed", issue: { id: "a5", to: "#/issues/aleph/5" }, job: { id: "j7", to: "#/jobs/j7" }, title: "Fix it", by: "land", took: 65, run: "issue.5" }] };
 
 const page = (s: object, q = "") => view.view.render({ ...state, usage: USAGE, now: NOW, ...s }, {}, new URLSearchParams(q)) as string;
 /** The HTML of the card with `id`. */
@@ -125,7 +125,7 @@ test("Waiting groups the issues that wait by their hold, and gives how long the 
 });
 
 test("Events folds a run of one job with no issue into one row, its keys as chips before its title", () => {
-  const ev = (seq: number, action: string) => ({ ...LOG.rows[0], seq, action, issue: null, job: { id: "j7", to: "#/jobs/j7" }, keys: ["dedupe", "dry"], title: "5 resolved" });
+  const ev = (seq: number, action: string) => ({ ...LOG.rows[0], seq, action, issue: null, job: { id: "j7", to: "#/jobs/j7" }, keys: ["dedupe", "dry"], title: "5 resolved", run: "job.7" });
   const h = cardOf(page({ log: { total: 2, rows: [ev(2, "done"), ev(1, "started")] } }), "events");
   expect(h.match(/<tr>/g)).toHaveLength(2);
   expect(h).toContain(`<summary><span>${chips(["dedupe", "dry"])}5 resolved</span>1</summary>`);
@@ -133,7 +133,7 @@ test("Events folds a run of one job with no issue into one row, its keys as chip
 });
 
 test("Events folds the older events of a run of one issue under its newest, and merges no row without an issue", () => {
-  const ev = (seq: number, issue: string | null, action: string) => ({ ...LOG.rows[0], seq, action, at: `2026-11-01T07:0${seq}:00Z`, issue: issue && { id: issue, to: `#/issues/aleph/${issue}` }, job: null, title: issue ? `T${issue}` : "" });
+  const ev = (seq: number, issue: string | null, action: string) => ({ ...LOG.rows[0], seq, action, at: `2026-11-01T07:0${seq}:00Z`, issue: issue && { id: issue, to: `#/issues/aleph/${issue}` }, job: null, title: issue ? `T${issue}` : "", run: issue });
   const h = cardOf(page({ log: { total: 6, rows: [ev(6, "a5", "landed"), ev(5, "a5", "failed"), ev(4, "a5", "started"), ev(3, "a6", "landed"), ev(2, null, "held"), ev(1, null, "held")] } }), "events");
   expect(h.match(/<tr>/g)).toHaveLength(5);
   expect(h.match(/<details/g)).toHaveLength(1);
@@ -145,8 +145,17 @@ test("Events folds the older events of a run of one issue under its newest, and 
   expect(inFold).not.toContain("07:06");
 });
 
+test("Events folds the changes a housekeeper makes under its run, each linking its issue", () => {
+  const job = { id: "j8", to: "#/jobs/j8" }, ev = (seq: number, action: string, issue: string | null) => ({ ...LOG.rows[0], seq, action, at: `2026-11-01T07:0${seq}:00Z`, issue: issue && { id: issue, to: `#/issues/aleph/${issue}` }, job: issue ? null : job, by: "housekeeper", run: "job.8" });
+  const h = cardOf(page({ log: { total: 4, rows: [ev(4, "done", null), ev(3, "changed", "a2"), ev(2, "changed", "a1"), ev(1, "started", null)] } }), "events");
+  expect(h.match(/<tr>/g)).toHaveLength(2);
+  const [, inFold] = h.split("<details");
+  expect(inFold).toContain('href="#/issues/aleph/a2">a2</a>');
+  expect(inFold).toContain('href="#/issues/aleph/a1">a1</a>');
+});
+
 test("Events starts each day and each page with a day row", () => {
-  const ev = (seq: number, at: string) => ({ ...LOG.rows[0], seq, at, issue: { id: `a${seq}`, to: `#/issues/aleph/${seq}` }, job: null });
+  const ev = (seq: number, at: string) => ({ ...LOG.rows[0], seq, at, issue: { id: `a${seq}`, to: `#/issues/aleph/${seq}` }, job: null, run: `issue.${seq}` });
   const h = cardOf(page({ log: { total: 3, rows: [ev(3, "2026-11-02T20:00:00"), ev(2, "2026-11-02T08:00:00"), ev(1, "2026-11-01T20:00:00")] } }), "events");
   expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
 });

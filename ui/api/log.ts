@@ -2,13 +2,14 @@
  * `GET /api/log`: the event log of the Status page, one event a row, newest first, `{ rows, total }`.
  * `?window=` and `?project=` scope it as every route does; `?q=` keeps the rows
  * whose issue, job or title holds the text, and `?page=` (from 1) picks 25 of the rest.
+ * A row's `run` is the key its run of rows goes by: its issue, else its job.
  */
 import { readEvents } from "../../lib/layout.ts";
 import { projectsOnMain } from "../../lib/store.ts";
 import { issueHref, jobHref, parseKey, runWord, shownId, targetOf, whoOf, wordOf, type EventRow } from "../../lib/naming.ts";
 import { reader } from "../../lib/store.ts";
 import { allRuns } from "../../jobs/lib/records/record.ts";
-import type { Run } from "../../jobs/lib/records/ledger.ts";
+import { issueKeyOf, type Run } from "../../jobs/lib/records/ledger.ts";
 import { mineOf, titlesOf } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { scopeOf, withProjects } from "./scope.ts";
@@ -28,6 +29,7 @@ function jobTitle(r: Run): { keys: string[]; title: string } {
 /** An event as a log row: a run's start reads as started, and an ended run gives its time in seconds. */
 function rowOf(e: EventRow, titles: Record<string, string>, projectOf: (n: number) => string | undefined, runOf: (id: string) => Run | undefined) {
   const tgt = targetOf(e), job = parseKey(e.object)?.kind === "job" ? e.object : null, issue = parseKey(tgt)?.kind === "issue" ? tgt : null;
+  const from = parseKey(e.subject)?.kind === "job" ? e.subject : null;
   const run = job && !issue ? runOf(job) : undefined;
   const took = e.action !== "running" && e.started && e.ended ? (Date.parse(e.ended) - Date.parse(e.started)) / 1000 : null;
   return {
@@ -35,6 +37,8 @@ function rowOf(e: EventRow, titles: Record<string, string>, projectOf: (n: numbe
     // A factory-wide run (a director's) has no project of its own: its issue's link takes the issue's.
     issue: issue ? ((p) => ({ id: shownId(issue, p), to: issueHref(issue, p) }))(e.project ?? projectOf(parseKey(issue)!.n)) : null, job: job ? { id: shownId(job), to: jobHref(shownId(job)) } : null,
     ...(run ? jobTitle(run) : { keys: [], title: (issue && titles[issue]) ?? "" }), by: e.object_role ? runWord(e.object_role) : whoOf(e.subject, e.subject_role), took,
+    // An event a job makes (a housekeeper's change, a review's return) goes with the rows of that job's run.
+    run: from ? (issueKeyOf({ target: runOf(from)?.target }) ?? from) : (issue ?? job),
   };
 }
 

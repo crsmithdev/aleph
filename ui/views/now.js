@@ -138,18 +138,19 @@ export function renderWaiting(s) {
 /** The word of an event: its tag. */
 const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.action));
 
-/** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, the issue or else the job, keys and title, then who and how long the run took in one line. */
+/** One run of the log: the newest event of `run` as a row, and its older events in a fold whose summary is the title. Cells: time, word, the issue or else the job, keys and title, then who and how long the run took in one line. A folded event links its issue when that is not the row's, as a housekeeper's change does, else its job. */
 const logRow = (run) => {
   const [r, ...older] = run, said = chips(r.keys) + esc(r.title), ref = r.issue ?? r.job;
-  const title = older.length ? fold(`<span>${said}</span>${older.length}`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${o.job ? idLink(o.job.id, o.job.to) : ""} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : said;
+  const link = (o) => ((x) => (x ? idLink(x.id, x.to) : ""))(o.issue && o.issue.to !== ref?.to ? o.issue : o.job);
+  const title = older.length ? fold(`<span>${said}</span>${older.length}`, `<ul class="tight">${older.map((o) => `<li>${esc(clock(o.at))} ${logTag(o)} ${link(o)} ${esc(o.by)}</li>`).join("")}</ul>`, { cls: "line" }) : said;
   return row([`<td class="time lead">${esc(clock(r.at))}</td>`, `<td>${logTag(r)}</td>`, `<td>${ref ? idLink(ref.id, ref.to) : ""}</td>`,
     `<td class="wide" title="${esc(r.title)}">${title}</td>`, `<td class="num">${meta([esc(r.by), r.took == null ? "" : dur(r.took)])}</td>`]);
 };
 
-/** The rows of the log in runs: consecutive rows of one issue, or of one job when they have no issue, are one run. */
+/** The rows of the log in runs: consecutive rows with one `run` key are one run. */
 const logRuns = (rows) => rows.reduce((runs, r) => {
-  const last = runs.at(-1), of = (x) => x?.issue?.to ?? x?.job?.to;
-  if (of(r) && of(last?.[0]) === of(r)) last.push(r);
+  const last = runs.at(-1);
+  if (r.run && last?.[0].run === r.run) last.push(r);
   else runs.push([r]);
   return runs;
 }, []);
