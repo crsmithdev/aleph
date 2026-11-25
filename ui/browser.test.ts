@@ -940,18 +940,19 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 60_000);
 
-  test("a filter click in Events fetches only the log, keeps the kind in the address, and draws its rows", async () => {
+  test("a search in Events fetches only the log, keeps the text in the address, and draws its rows", async () => {
     await page.go("#/");
-    await page.when('document.querySelector("#view #events .seg button[data-value=landed]")');
+    await page.when('document.querySelector("#view #events input[type=search]")');
     await page.ev(`(() => {
       const f = window.fetch;
       window.got = [];
       window.fetch = (u, o) => (window.got.push(String(u)), f(u, o));
-      document.querySelector("#view #events .seg button[data-value=landed]").click();
+      const box = document.querySelector("#view #events input[type=search]");
+      box.value = "land";
+      box.dispatchEvent(new Event("input", { bubbles: true }));
     })()`);
-    await page.when('document.querySelector("#view #events .seg button[data-value=landed]")?.getAttribute("aria-pressed") === "true"');
-    expect(await page.ev<string[]>("window.got")).toEqual([expect.stringMatching(/^\/api\/log\?.*kind=landed/)]);
-    expect(await page.ev("location.hash")).toContain("kind=landed");
+    await page.when('location.hash.includes("q=land") && document.querySelector("#view #events table, #view #events .empty")');
+    expect(await page.ev<string[]>("window.got")).toEqual([expect.stringMatching(/^\/api\/log\?.*q=land/)]);
     expect(page.errors).toEqual([]);
     await page.reload(); // Takes the patched fetch away.
     await page.go("#/issues");
