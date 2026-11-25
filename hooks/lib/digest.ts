@@ -45,6 +45,8 @@ function resultText(entry: Entry): string {
     return [tur.stdout, tur.stderr ? `stderr: ${tur.stderr}` : ""].filter(Boolean).join("\n");
   }
   const block = Array.isArray(entry.message?.content) ? entry.message.content.find((c: Entry) => c.type === "tool_result") : null;
+  // The judge reads text only, so a screenshot's image would read as an empty result.
+  if (Array.isArray(block?.content) && block.content.some((c: Entry) => c.type === "image")) return "(an image the assistant saw)";
   return resultContent(block?.content);
 }
 

@@ -60,8 +60,9 @@ describe("snapshot", () => {
     expect(diff(s0, snapshot(root))).toEqual([]);
     expect(diff(inside0, snapshot(agent))).toEqual([join(agent, "c.txt")]);
   });
-  test("a doc is not code", () => {
+  test("a doc or a mock is not code", () => {
     expect(isCode("/r/docs/verify-gate.md")).toBe(false);
+    expect(isCode("/r/docs/mocks/board/build.ts")).toBe(false);
     expect(isCode("/r/hooks/verify-gate.ts")).toBe(true);
   });
   test("is null outside a repo", () => {
@@ -102,6 +103,15 @@ describe("digest", () => {
     expect(d.items[1]).toContain("3 pass");
     expect(d.finalMessage).toBe("Fixed and tested.");
     expect(d.text).toContain("FINAL MESSAGE:\nFixed and tested.");
+  });
+  test("a screenshot Read shows as an image, not as an empty result", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "aleph-digest-")), "t.jsonl");
+    transcript(path, "p1", [
+      user("check the page"),
+      toolUse("t1", "Read", { file_path: "/s/page.png" }),
+      { type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "t1", content: [{ type: "image", source: { type: "base64", data: "iVBOR" } }] }] }, toolUseResult: { type: "image", file: {} } },
+    ]);
+    expect(digest(path, "p1").items[0]).toContain("→ (an image the assistant saw)");
   });
   test("skip grant is detected only from the user prompt text", () => {
     expect(userGrantedSkip("ok skip verify this one")).toBe(true);

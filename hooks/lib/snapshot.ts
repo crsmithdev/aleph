@@ -90,5 +90,5 @@ export function changedFiles(before: Snapshot, after: Snapshot): string[] {
   return [...out];
 }
 
-/** A doc is not code: changing only docs does not wake the gate. */
-export const isCode = (path: string) => !/\.mdx?$/i.test(path);
+/** A doc or a mock is not code: changing only docs or mocks does not wake the gate. */
+export const isCode = (path: string) => !/\.mdx?$/i.test(path) && !/\/docs\/mocks\//.test(path);
