@@ -98,23 +98,7 @@ Use a tone for a state, such as `--error` on a failed job, not for decoration. U
 - scope: global
 - reason: A reader must read text and see a mark in both themes.
 
-The minimum is 4.5:1 for text and 3:1 for a mark. `ui/error-contrast.test.ts` tests the error pair and the dark `--muted` pairs. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light` and once with `--mode dark`, each with the `--surface` value of that theme. The table gives the ratios of the pairs that were checked. Only these pairs are checked.
-
-| Pair | Light | Dark |
-|---|---|---|
-| `--ink` on `--surface` | 13.64 | 12.07 |
-| `--ink-2` on `--surface` | 8.02 | 8.02 |
-| `--muted` on `--surface` | 5.43 | 5.43 |
-| `--muted` on `--bg` | 4.93 | 6.21 |
-| `--muted` on `--sunk` | 4.57 | 6.75 |
-| `--muted` on `--raised` | 4.57 | 4.67 |
-| `--need` on `--need-bg` | 5.13 | 6.50 |
-| `--error` on `--error-bg` | 4.78 | 4.54 |
-| `--done` on `--done-bg` | 5.17 | 5.36 |
-| `--run` on `--run-bg` | 4.99 | 4.61 |
-| `--hot` on `--surface` | 4.65 | 5.80 |
-| `--focus` on `--surface` | 5.21 | 5.67 |
-| white on `--seg-reran` | 4.70 | 4.70 |
+The minimum is 4.5:1 for text and 3:1 for a mark. `ui/error-contrast.test.ts` tests the error pair and the dark `--muted` pairs. When you change a data colour, run `validate_palette.js` from the `dataviz` skill on the seven series colours, once with `--mode light` and once with `--mode dark`, each with the `--surface` value of that theme. The Contrast specimen on the Design page computes the ratio of each checked pair live from the tokens. Only these pairs are checked.
 
 ### Palettes
 - id: palettes
