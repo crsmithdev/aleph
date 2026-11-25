@@ -5,7 +5,7 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { freshness, iconHead, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { freshness, iconHead, dayRow, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderLanes, renderTimeline } from "./lib/timeline.js";
@@ -224,7 +224,7 @@ function renderDesign(d) {
     spec("table", "Table", dataTable(ISSUE_HEAD(sort), ISSUES.map(issueRow).join("")), "Column order: fold button, id, title, state, priority, project, labels, numbers, then time.") +
     spec("row-cell", "Row and cell", dataTable(heads(["Role", "Title", "Runs"], ["Runs"]), trow([cell("Worker"), cell("A title that takes the spare width, with its text as its title", { wide: true }), cell("1,234", { num: true })]) +
       trow([cell("Triage"), cell("A short title", { wide: true, title: "Another title" }), cell("12", { num: true })]))) +
-    spec("table-icon", "Table, icon heads", dataTable(iconHead("clock", "Time") + heads(["Event", "Issue"]) + iconHead("stopwatch", "Took"), `<tr><td class="time lead">16:58</td><td>landed</td><td>${idLink("a1700", "#/design")}</td><td class="num">${dur(574)}</td></tr>`, { fit: true }), "", "table") +
+    spec("table-icon", "Table, icon heads and a day row", dataTable(iconHead("clock", "Time") + heads(["Event", "Issue"]) + iconHead("stopwatch", "Took"), `${dayRow("Oct 28", 4)}<tr><td class="time lead">16:58</td><td>landed</td><td>${idLink("a1700", "#/design")}</td><td class="num">${dur(574)}</td></tr>`, { fit: true }), "", "table") +
     spec("table-fit", "Table, fit", dataTable(heads(["Role", "Runs", "p50"], ["Runs", "p50"]), `<tr><td>Worker</td><td class="num">31</td><td class="num">6m 40s</td></tr><tr><td>Triage</td><td class="num">12</td><td class="num">38s</td></tr>`, { fit: true }), "", "") +
     spec("table-empty", "Table, empty", empty(), "", "") +
     spec("chart", "Chart panel", `<div class="trio">${panelOf("design/time", FRAMES.time)}${panelOf("design/category", FRAMES.category)}${panelOf("design/cost", FRAMES.cost)}</div>`,

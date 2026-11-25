@@ -4,8 +4,8 @@
 // main column; Problems, Efficiency and Flow in the rail.
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { cardPct, clock, count, dur, hours, plural, when } from "./lib/format.js";
-import { actButton, barList, barRow, card, cell, chips, dataTable, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { cardPct, clock, count, day, dur, hours, plural, when } from "./lib/format.js";
+import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
@@ -164,7 +164,8 @@ function logBody(log, q) {
   if (log.error) return bar + error(log.error);
   if (!log.rows.length) return bar + empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Ref", "Title", "By"], ["By"]);
-  return bar + dataTable(head, logRuns(log.rows).map(logRow).join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
+  const rows = logRuns(log.rows).map((run, i, runs) => (i && day(runs[i - 1][0].at) === day(run[0].at) ? "" : dayRow(day(run[0].at), 5)) + logRow(run));
+  return bar + dataTable(head, rows.join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
 }
 
 /** The Events card: the search, then the log's filter, table and pager. */

@@ -145,6 +145,12 @@ test("Events folds the older events of a run of one issue under its newest, and 
   expect(inFold).not.toContain("07:06");
 });
 
+test("Events starts each day and each page with a day row", () => {
+  const ev = (seq: number, at: string) => ({ ...LOG.rows[0], seq, at, issue: { id: `a${seq}`, to: `#/issues/aleph/${seq}` }, job: null });
+  const h = cardOf(page({ log: { total: 3, rows: [ev(3, "2026-11-02T20:00:00"), ev(2, "2026-11-02T08:00:00"), ev(1, "2026-11-01T20:00:00")] } }), "events");
+  expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
+});
+
 test("Events is a log: each row has its time, word, issue or else job, title, and by with took, with a filter and a pager", () => {
   const h = cardOf(page({ log: LOG }, "kind=landed&q=fix"), "events");
   expect(h).toContain('value="fix"');

@@ -587,6 +587,8 @@ export const sideStats = (items) =>
  */
 export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
   `<div class="tscroll"><table class="tbl${fit ? " fit" : ""}"${id ? ` id="${esc(id)}"` : ""}>${head ? `<thead><tr>${head}</tr></thead>` : ""}<tbody>${rows}</tbody></table></div>`;
+/** A row that starts a day in an event log: `text` across all `cols` columns. */
+export const dayRow = (text, cols) => `<tr class="day"><th colspan="${cols}" scope="colgroup">${esc(text)}</th></tr>`;
 /** Plain header cells from labels; a label in `num` is right-aligned. */
 export const heads = (labels, num = []) => labels.map((l) => `<th${num.includes(l) ? ' class="num"' : ""}>${esc(l)}</th>`).join("");
 /** A column head as an icon with its name in `title`: a stopwatch over a duration, a clock over the time of an event. A duration is a number column. */
