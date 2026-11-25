@@ -1,0 +1,13 @@
+/* Mock frame only, and the three rules the options add. */
+.mock { max-width: 960px; margin: var(--sp-24) auto; display: grid; gap: var(--sp-28); }
+.opt > h2 { font-size: var(--fs-lg); margin: 0; }
+.opt > p { color: var(--muted); margin: var(--sp-4) 0 var(--sp-8); }
+
+/* B, C: the id before the title, and the quiet cell at the right. */
+table.tbl .ref { display: inline-block; min-width: 7ch; margin-right: var(--sp-8); }
+table.tbl td.tail { text-align: right; white-space: nowrap; color: var(--muted); font-size: var(--fs-sm); }
+table.tbl td.tail i { font-style: normal; margin: 0 var(--sp-6); }
+table.tbl td.tail b { font-weight: var(--fw-mid); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* C: a day row. */
+table.tbl tr.day th { text-align: left; font-size: var(--fs-xs); color: var(--muted); font-weight: var(--fw-mid); padding-top: var(--sp-12); border-bottom: 1px solid var(--rule); }

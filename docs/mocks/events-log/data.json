@@ -1,0 +1,801 @@
+{
+  "rows": [
+    {
+      "seq": 30902,
+      "at": "2026-11-25T17:22:22.961Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11231",
+        "to": "#/jobs/j11231"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": 12.679
+    },
+    {
+      "seq": 30901,
+      "at": "2026-11-25T17:22:10.283Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11231",
+        "to": "#/jobs/j11231"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30900,
+      "at": "2026-11-25T17:22:09.999Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11230",
+        "to": "#/jobs/j11230"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "0 rechecked, 1 refused",
+      "by": "maintainer",
+      "took": 42.731
+    },
+    {
+      "seq": 30899,
+      "at": "2026-11-25T17:21:27.270Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11230",
+        "to": "#/jobs/j11230"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "0 rechecked, 1 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30898,
+      "at": "2026-11-25T11:21:26.868Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11229",
+        "to": "#/jobs/j11229"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": 13.719
+    },
+    {
+      "seq": 30897,
+      "at": "2026-11-25T11:21:13.149Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11229",
+        "to": "#/jobs/j11229"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30896,
+      "at": "2026-11-25T11:21:12.871Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11228",
+        "to": "#/jobs/j11228"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "1 rechecked, 1 refused",
+      "by": "maintainer",
+      "took": 70.892
+    },
+    {
+      "seq": 30895,
+      "at": "2026-11-25T11:20:01.979Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11228",
+        "to": "#/jobs/j11228"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "1 rechecked, 1 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30894,
+      "at": "2026-11-25T11:20:01.861Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11227",
+        "to": "#/jobs/j11227"
+      },
+      "keys": [],
+      "title": "2 notes, 1 refused",
+      "by": "maintainer",
+      "took": 30.15
+    },
+    {
+      "seq": 30893,
+      "at": "2026-11-25T11:19:31.712Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11227",
+        "to": "#/jobs/j11227"
+      },
+      "keys": [],
+      "title": "2 notes, 1 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30892,
+      "at": "2026-11-25T08:00:59.924Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11226",
+        "to": "#/jobs/j11226"
+      },
+      "keys": [],
+      "title": "nothing looks off",
+      "by": "monitor",
+      "took": 11.154
+    },
+    {
+      "seq": 30891,
+      "at": "2026-11-25T08:00:48.772Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11226",
+        "to": "#/jobs/j11226"
+      },
+      "keys": [],
+      "title": "nothing looks off",
+      "by": "monitor",
+      "took": null
+    },
+    {
+      "seq": 30890,
+      "at": "2026-11-25T05:20:30.431Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11225",
+        "to": "#/jobs/j11225"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": 23.991
+    },
+    {
+      "seq": 30889,
+      "at": "2026-11-25T05:20:06.441Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11225",
+        "to": "#/jobs/j11225"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "3 resolved, 2 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30888,
+      "at": "2026-11-25T05:20:06.111Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11224",
+        "to": "#/jobs/j11224"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "3 rechecked, 2 refused",
+      "by": "maintainer",
+      "took": 168.125
+    },
+    {
+      "seq": 30887,
+      "at": "2026-11-25T05:17:17.978Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11224",
+        "to": "#/jobs/j11224"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "3 rechecked, 2 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30886,
+      "at": "2026-11-24T23:18:22.737Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11223",
+        "to": "#/jobs/j11223"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "4 resolved, 1 refused",
+      "by": "maintainer",
+      "took": 30.728
+    },
+    {
+      "seq": 30885,
+      "at": "2026-11-24T23:17:52.010Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11223",
+        "to": "#/jobs/j11223"
+      },
+      "keys": [
+        "dedupe"
+      ],
+      "title": "4 resolved, 1 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30884,
+      "at": "2026-11-24T23:17:51.702Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11222",
+        "to": "#/jobs/j11222"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "3 rechecked, 2 refused",
+      "by": "maintainer",
+      "took": 131.506
+    },
+    {
+      "seq": 30883,
+      "at": "2026-11-24T23:15:40.198Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11222",
+        "to": "#/jobs/j11222"
+      },
+      "keys": [
+        "recheck"
+      ],
+      "title": "3 rechecked, 2 refused",
+      "by": "maintainer",
+      "took": null
+    },
+    {
+      "seq": 30882,
+      "at": "2026-11-24T20:10:35.823Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11221",
+        "to": "#/jobs/j11221"
+      },
+      "keys": [
+        "aleph"
+      ],
+      "title": "1 applied, 0 refused",
+      "by": "housekeeper",
+      "took": 34.893
+    },
+    {
+      "seq": 30881,
+      "at": "2026-11-24T20:10:35.822Z",
+      "action": "changed",
+      "issue": {
+        "id": "a2117",
+        "to": "#/issues/aleph/2117"
+      },
+      "job": null,
+      "keys": [],
+      "title": "Measure tool result tokens a week after the tool denies",
+      "by": "housekeeper",
+      "took": null
+    },
+    {
+      "seq": 30880,
+      "at": "2026-11-24T20:10:00.932Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11221",
+        "to": "#/jobs/j11221"
+      },
+      "keys": [
+        "aleph"
+      ],
+      "title": "1 applied, 0 refused",
+      "by": "housekeeper",
+      "took": null
+    },
+    {
+      "seq": 30879,
+      "at": "2026-11-24T19:57:05.401Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11220",
+        "to": "#/jobs/j11220"
+      },
+      "keys": [
+        "aleph"
+      ],
+      "title": "0 applied, 0 refused",
+      "by": "housekeeper",
+      "took": 16.959
+    },
+    {
+      "seq": 30878,
+      "at": "2026-11-24T19:56:48.443Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11220",
+        "to": "#/jobs/j11220"
+      },
+      "keys": [
+        "aleph"
+      ],
+      "title": "0 applied, 0 refused",
+      "by": "housekeeper",
+      "took": null
+    },
+    {
+      "seq": 30877,
+      "at": "2026-11-24T19:05:29.129Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11219",
+        "to": "#/jobs/j11219"
+      },
+      "keys": [
+        "pass"
+      ],
+      "title": "The in-scope completion claims (the 6-hour maintainer schedule, the 03:00 compile guard, and the Memory page change) are backed by the full suite run after the last code edit (2426 pass, 0 fail) and the scoped run of jobs, ui and vault (1158 pass, 0 fail). The post-rebase failure is disclosed as the unrelated pin test.",
+      "by": "judge",
+      "took": 7.699
+    },
+    {
+      "seq": 30876,
+      "at": "2026-11-24T19:05:21.432Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11219",
+        "to": "#/jobs/j11219"
+      },
+      "keys": [
+        "pass"
+      ],
+      "title": "The in-scope completion claims (the 6-hour maintainer schedule, the 03:00 compile guard, and the Memory page change) are backed by the full suite run after the last code edit (2426 pass, 0 fail) and the scoped run of jobs, ui and vault (1158 pass, 0 fail). The post-rebase failure is disclosed as the unrelated pin test.",
+      "by": "judge",
+      "took": null
+    },
+    {
+      "seq": 30875,
+      "at": "2026-11-24T19:00:28.412Z",
+      "action": "done",
+      "issue": null,
+      "job": {
+        "id": "j11218",
+        "to": "#/jobs/j11218"
+      },
+      "keys": [
+        "pass"
+      ],
+      "title": "The in-scope claims about the `design fix` rule are backed by runs after the last code edit: the aleph-tools suite reports 69 pass, 0 fail, and the gauge trial output shows the radius and font-size swaps with the gap kept. The push, commit and docs claims are git bookkeeping or documentation, which are out of scope.",
+      "by": "judge",
+      "took": 5.721
+    },
+    {
+      "seq": 30874,
+      "at": "2026-11-24T19:00:22.692Z",
+      "action": "started",
+      "issue": null,
+      "job": {
+        "id": "j11218",
+        "to": "#/jobs/j11218"
+      },
+      "keys": [
+        "pass"
+      ],
+      "title": "The in-scope claims about the `design fix` rule are backed by runs after the last code edit: the aleph-tools suite reports 69 pass, 0 fail, and the gauge trial output shows the radius and font-size swaps with the gap kept. The push, commit and docs claims are git bookkeeping or documentation, which are out of scope.",
+      "by": "judge",
+      "took": null
+    },
+    {
+      "seq": 30873,
+      "at": "2026-11-24T18:59:26.922Z",
+      "action": "done",
+      "issue": {
+        "id": "a3472",
+        "to": "#/issues/aleph/3472"
+      },
+      "job": null,
+      "keys": [],
+      "title": "Hold pushes to main while main CI is red",
+      "by": "a rule",
+      "took": null
+    },
+    {
+      "seq": 30872,
+      "at": "2026-11-24T18:59:26.866Z",
+      "action": "done",
+      "issue": {
+        "id": "a3472",
+        "to": "#/issues/aleph/3472"
+      },
+      "job": null,
+      "keys": [],
+      "title": "Hold pushes to main while main CI is red",
+      "by": "a rule",
+      "took": null
+    },
+    {
+      "seq": 30871,
+      "at": "2026-11-24T18:59:20.039Z",
+      "action": "landed",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": {
+        "id": "j11217",
+        "to": "#/jobs/j11217"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "land",
+      "took": 95.184
+    },
+    {
+      "seq": 30870,
+      "at": "2026-11-24T18:59:19.866Z",
+      "action": "done",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": null,
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "a rule",
+      "took": null
+    },
+    {
+      "seq": 30869,
+      "at": "2026-11-24T18:58:26.093Z",
+      "action": "landed",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": {
+        "id": "j11216",
+        "to": "#/jobs/j11216"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "land",
+      "took": 51.231
+    },
+    {
+      "seq": 30868,
+      "at": "2026-11-24T18:58:25.950Z",
+      "action": "done",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": null,
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "a rule",
+      "took": null
+    },
+    {
+      "seq": 30866,
+      "at": "2026-11-24T18:57:44.857Z",
+      "action": "started",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": {
+        "id": "j11217",
+        "to": "#/jobs/j11217"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "land",
+      "took": null
+    },
+    {
+      "seq": 30865,
+      "at": "2026-11-24T18:57:41.465Z",
+      "action": "passed",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": {
+        "id": "j11209",
+        "to": "#/jobs/j11209"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "implement",
+      "took": 237.277
+    },
+    {
+      "seq": 30864,
+      "at": "2026-11-24T18:57:41.399Z",
+      "action": "done",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": {
+        "id": "j11214",
+        "to": "#/jobs/j11214"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "review",
+      "took": 40.736
+    },
+    {
+      "seq": 30862,
+      "at": "2026-11-24T18:57:34.863Z",
+      "action": "started",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": {
+        "id": "j11216",
+        "to": "#/jobs/j11216"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "land",
+      "took": null
+    },
+    {
+      "seq": 30861,
+      "at": "2026-11-24T18:57:31.493Z",
+      "action": "passed",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": {
+        "id": "j11210",
+        "to": "#/jobs/j11210"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "implement",
+      "took": 226.586
+    },
+    {
+      "seq": 30860,
+      "at": "2026-11-24T18:57:31.429Z",
+      "action": "done",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": {
+        "id": "j11215",
+        "to": "#/jobs/j11215"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "review",
+      "took": 28.071
+    },
+    {
+      "seq": 30859,
+      "at": "2026-11-24T18:57:03.359Z",
+      "action": "started",
+      "issue": {
+        "id": "a3475",
+        "to": "#/issues/aleph/3475"
+      },
+      "job": {
+        "id": "j11215",
+        "to": "#/jobs/j11215"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold hand pushes to main while CI is red",
+      "by": "review",
+      "took": null
+    },
+    {
+      "seq": 30858,
+      "at": "2026-11-24T18:57:00.663Z",
+      "action": "started",
+      "issue": {
+        "id": "a3474",
+        "to": "#/issues/aleph/3474"
+      },
+      "job": {
+        "id": "j11214",
+        "to": "#/jobs/j11214"
+      },
+      "keys": [],
+      "title": "[Red CI hold] Hold lands while GitHub CI on main is red",
+      "by": "review",
+      "took": null
+    },
+    {
+      "seq": 30857,
+      "at": "2026-11-24T18:55:43.754Z",
+      "action": "landed",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11213",
+        "to": "#/jobs/j11213"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "land",
+      "took": 10.924
+    },
+    {
+      "seq": 30856,
+      "at": "2026-11-24T18:55:43.565Z",
+      "action": "done",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": null,
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "a rule",
+      "took": null
+    },
+    {
+      "seq": 30854,
+      "at": "2026-11-24T18:55:32.831Z",
+      "action": "started",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11213",
+        "to": "#/jobs/j11213"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "land",
+      "took": null
+    },
+    {
+      "seq": 30853,
+      "at": "2026-11-24T18:55:29.554Z",
+      "action": "passed",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11211",
+        "to": "#/jobs/j11211"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "implement",
+      "took": 89.333
+    },
+    {
+      "seq": 30852,
+      "at": "2026-11-24T18:55:29.506Z",
+      "action": "done",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11212",
+        "to": "#/jobs/j11212"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "review",
+      "took": 17.269
+    },
+    {
+      "seq": 30851,
+      "at": "2026-11-24T18:55:12.238Z",
+      "action": "started",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11212",
+        "to": "#/jobs/j11212"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "review",
+      "took": null
+    },
+    {
+      "seq": 30849,
+      "at": "2026-11-24T18:54:00.221Z",
+      "action": "started",
+      "issue": {
+        "id": "a3473",
+        "to": "#/issues/aleph/3473"
+      },
+      "job": {
+        "id": "j11211",
+        "to": "#/jobs/j11211"
+      },
+      "keys": [],
+      "title": "Keep ALEPH_TOOLS_REF in step with aleph-tools",
+      "by": "implement",
+      "took": null
+    }
+  ],
+  "total": 3404
+}
