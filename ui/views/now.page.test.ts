@@ -82,7 +82,7 @@ async function more(q = "", answers: Record<string, unknown> = {}) {
 
 test("more loads the flow and the event log for the address's window, the memory, and the last hour's runs", async () => {
   expect((await more()).urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes", "/api/jobs?window=hour&limit=500", "/api/log?window=week"]);
-  expect((await more("window=day&kind=landed&q=pager&page=2")).urls.at(-1)).toBe("/api/log?window=day&kind=landed&q=pager&page=2");
+  expect((await more("window=day&q=pager&page=2")).urls.at(-1)).toBe("/api/log?window=day&q=pager&page=2");
   const { s } = await more("", { "/api/jobs": { jobs: [{ id: "job.1" }] }, "/api/memory": { total: 3 }, "/api/memory/processes": { steps: [] } });
   expect(s.jobs).toEqual([{ id: "job.1" }]);
   expect(s.memory).toEqual({ total: 3, processes: { steps: [] } });
@@ -151,10 +151,10 @@ test("Events starts each day and each page with a day row", () => {
   expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
 });
 
-test("Events is a log: each row has its time, word, issue or else job, title, and by with took, with a filter and a pager", () => {
-  const h = cardOf(page({ log: LOG }, "kind=landed&q=fix"), "events");
+test("Events is a log: each row has its time, word, issue or else job, title, and by with took, with a search and a pager", () => {
+  const h = cardOf(page({ log: LOG }, "q=fix"), "events");
   expect(h).toContain('value="fix"');
-  expect(h).toContain('data-value="landed" aria-pressed="true"');
+  expect(h).not.toContain('class="seg"');
   expect(h).toContain('title="Time"');
   expect(h).toContain('href="#/issues/aleph/5">a5</a>');
   expect(h).not.toContain('href="#/jobs/j7"');

@@ -67,7 +67,7 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `GET /api/status` | The tone of the status sentence (`alert`, `warning`, `ask` or `fine`), for the sidebar |
 | `POST /api/factory/pause`, `/resume` | Pauses or resumes the factory |
 | `GET /api/flow` | The Status, Agents and Jobs pages, for `?window=` |
-| `GET /api/log` | The Status page's event log: one event a row, newest first, 25 a page; `?window=`, `?kind=` (`problem`, `landed`, `ask`, `hold`), `?q=` and `?page=` |
+| `GET /api/log` | The Status page's event log: one event a row, newest first, 25 a page; `?window=`, `?q=` and `?page=` |
 | `GET /api/automation` | The Automation page: the rules, the caps' settings, held paths and the decision log |
 | `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
 | `GET /api/issues` | The Issues page rows, with stage, job count and cost |

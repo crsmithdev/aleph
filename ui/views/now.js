@@ -5,7 +5,7 @@
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, clock, count, day, dur, hours, plural, when } from "./lib/format.js";
-import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, filterBar, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
@@ -57,10 +57,10 @@ async function memoryOf(q) {
 /** The runs of the last hour in the project of `q`: the lanes of the issues that run now. */
 const jobsOf = async (q) => { const d = await load(scope(q).url("/api/jobs?window=hour&limit=500"), "the runs"); return d.error ? d : d.jobs; };
 
-/** A page of the event log for the window, kind, search and page of `q`. */
+/** A page of the event log for the window, search and page of `q`. */
 function logOf(q) {
   const s = scope(q), out = new URLSearchParams({ window: s.window });
-  for (const k of ["kind", "q", "page"]) if (q.get(k)) out.set(k, q.get(k));
+  for (const k of ["q", "page"]) if (q.get(k)) out.set(k, q.get(k));
   return load(s.url(`/api/log?${out}`), "the events");
 }
 
@@ -135,9 +135,6 @@ export function renderWaiting(s) {
 
 // ---- Events ----
 
-/** The kinds the log filters by, as `/api/log` names them. */
-const KINDS = [["", "All"], ["problem", "Problems"], ["landed", "Landed"], ["ask", "Asks"], ["hold", "Holds"]];
-
 /** The word of an event: its tag. */
 const logTag = (r) => tag(r.action, r.action === "started" ? "run" : tone(r.action));
 
@@ -157,22 +154,21 @@ const logRuns = (rows) => rows.reduce((runs, r) => {
   return runs;
 }, []);
 
-/** The log's filter, table and pager: the part that a filter, a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
+/** The log's table and pager: the part that a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
 function logBody(log, q) {
-  const bar = filterBar([{ label: "Show", bare: true, name: "kind", value: q.get("kind") ?? "", options: KINDS.map(([value, label]) => ({ value, label })) }]);
-  if (!log) return bar + loadingLine("the events");
-  if (log.error) return bar + error(log.error);
-  if (!log.rows.length) return bar + empty();
+  if (!log) return loadingLine("the events");
+  if (log.error) return error(log.error);
+  if (!log.rows.length) return empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Ref", "Title", "By"], ["By"]);
   const rows = logRuns(log.rows).map((run, i, runs) => (i && day(runs[i - 1][0].at) === day(run[0].at) ? "" : dayRow(day(run[0].at), 5)) + logRow(run));
-  return bar + dataTable(head, rows.join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
+  return dataTable(head, rows.join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
 }
 
-/** The Events card: the search, then the log's filter, table and pager. */
+/** The Events card: the search, then the log's table and pager. */
 export const renderLog = (log, q = new URLSearchParams()) =>
   card("Events", `${searchBox("status-log", q.get("q") ?? "", "Search ids and titles")}<div id="log">${logBody(log, q)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events" });
 
-/** A filter, a search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
+/** A search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
 function wireLog(root, s) {
   const card = root.querySelector("#events");
   if (!card || card._wired) return;
@@ -180,8 +176,7 @@ function wireLog(root, s) {
   const go = async (changes) => { setQuery(changes); s.log = await logOf(hashQuery()); redraw(); };
   let typing;
   card.addEventListener("click", (e) => {
-    const k = e.target.closest?.(".seg button"), p = e.target.closest?.(".pager button[data-page]");
-    if (k) go({ kind: k.dataset.value, page: "" });
+    const p = e.target.closest?.(".pager button[data-page]");
     if (p) go({ page: p.dataset.page });
   });
   card.addEventListener("input", (e) => {

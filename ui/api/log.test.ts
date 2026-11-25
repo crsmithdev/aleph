@@ -60,9 +60,7 @@ test("gives a job with no issue its name less role and date, and its reason's he
   expect((await log("?q=pass")).total).toBe(1);
 });
 
-test("keeps one kind, and the rows whose id or title holds the search", async () => {
-  expect((await log("?kind=problem")).rows.map((r) => r.action)).toEqual(["failed"]);
-  expect((await log("?kind=hold")).total).toBe(1);
+test("keeps the rows whose id or title holds the search", async () => {
   expect((await log("?q=PAGER")).total).toBe(62);
   expect((await log("?q=nothing")).total).toBe(0);
 });
