@@ -940,7 +940,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.width(1200);
   }, 60_000);
 
-  test("a search in Events fetches only the log, keeps the text in the address, and draws its rows", async () => {
+  test("a search typed in Events fetches only the log, keeps the text in the address, and draws its rows", async () => {
     await page.go("#/");
     await page.when('document.querySelector("#view #events input[type=search]")');
     await page.ev(`(() => {
@@ -948,11 +948,12 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       window.got = [];
       window.fetch = (u, o) => (window.got.push(String(u)), f(u, o));
       const box = document.querySelector("#view #events input[type=search]");
-      box.value = "land";
+      box.focus(); // A focused field holds back the page's reload, so only the log's own fetch can draw the rows.
+      box.value = "zzzz";
       box.dispatchEvent(new Event("input", { bubbles: true }));
     })()`);
-    await page.when('location.hash.includes("q=land") && document.querySelector("#view #events table, #view #events .empty")');
-    expect(await page.ev<string[]>("window.got")).toEqual([expect.stringMatching(/^\/api\/log\?.*q=land/)]);
+    await page.when('location.hash.includes("q=zzzz") && document.querySelector("#view #events .empty")');
+    expect(await page.ev<string[]>("window.got")).toEqual([expect.stringMatching(/^\/api\/log\?.*q=zzzz/)]);
     expect(page.errors).toEqual([]);
     await page.reload(); // Takes the patched fetch away.
     await page.go("#/issues");

@@ -350,6 +350,12 @@ export function filterBar(groups) {
  */
 export const searchBox = (ui, value, placeholder, action = "") =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}">${action}</div>`;
+/**
+ * A search box folded to an icon, for a card's head: it opens on focus and stays open while it holds text. The arguments are those of `searchBox`.
+ * @design search-box
+ */
+export const searchFold = (ui, value, placeholder) =>
+  `<label class="sfold"><wa-icon name="magnifying-glass" aria-hidden="true"></wa-icon><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></label>`;
 /** The tabs of a page that shows one pane at a time: a segmented control over the panes. `items` is `[[id, label]]`; `panes` maps an id to its HTML; `on` is the open id. A button carries `data-tab`; `wireTabs()` switches the panes.
  * With `head`, the control is a card's head beside `head.aside`, and `head.top` sits between the head and the panes, so it shows on every tab.
  * @design tabs

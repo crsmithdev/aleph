@@ -75,6 +75,7 @@
   --dot-m: 8px;  /* a dot; the ask dot */
   --dot-l: 12px;  /* a dot */
   --measure: 76ch;  /* the width of prose */
+  --field-w: 240px;  /* a search field's least width */
   /* Motion: the Herald's rows (heraldMotion in views/now.js) and the run dot. */
   --t-fast: 150ms; --t-mid: 220ms; --t-slow: 320ms; --ease: cubic-bezier(.2,.7,.2,1);
   --z-rowlink: 1;  /* tr.rowlink links */
@@ -1036,7 +1037,7 @@ table.tbl td.labels { max-width: 24ch; overflow: hidden; text-overflow: ellipsis
 .fbar .fg > .seg { min-width: 0; }
 .fbar .fl { font-size: var(--fs-xs); color: var(--muted); }
 .fbar select { min-height: var(--ctl-h); }
-.fbar input[type="search"] { flex: 1 1 240px; min-width: 0; min-height: var(--ctl-h); }
+.fbar input[type="search"] { flex: 1 1 var(--field-w); min-width: 0; min-height: var(--ctl-h); }
 /* A search box's action sits inside the field's right end, so the page does not move when it shows. */
 .fbar:has(> .hint) { position: relative; }
 .fbar:has(> .hint) input[type="search"] { padding-right: 18ch; }
@@ -1281,6 +1282,12 @@ pre.stat b { color: var(--need); }
 .pacts { display: flex; flex-wrap: wrap; gap: var(--sp-6); padding: var(--sp-6) var(--sp-12); }
 input:where(:not([type="checkbox"], [type="radio"])), select, textarea { font: var(--fs-sm) var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-4) var(--sp-8); }
 input[type="search"] { background: var(--sunk); }
+/* A folded search: one control's width until focus or text opens it. */
+.sfold { position: relative; display: inline-flex; align-items: center; }
+.sfold wa-icon { position: absolute; left: var(--sp-8); color: var(--muted); pointer-events: none; }
+.sfold input { width: var(--ctl-h); min-height: var(--ctl-h); padding-left: var(--ctl-h); cursor: pointer; transition: width var(--t-mid) var(--ease); }
+.sfold input:focus, .sfold input:not(:placeholder-shown) { width: var(--field-w); cursor: text; }
+.sfold input:placeholder-shown:not(:focus)::placeholder { color: transparent; }
 select:hover { border-color: var(--ink-2); }
 form.stack { display: grid; gap: var(--sp-8); max-width: 640px; margin-top: var(--sp-8); }
 form.stack label, .field { display: grid; gap: var(--sp-4); font-size: var(--fs-xs); color: var(--muted); }

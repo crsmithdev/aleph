@@ -5,7 +5,7 @@
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
 import { cardPct, clock, count, day, dur, hours, plural, when } from "./lib/format.js";
-import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchBox, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
+import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchFold, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
@@ -29,7 +29,7 @@ export const view = {
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
   mount: (root, s, q) => {
-    scope(q).wire(root); wireLog(root, s);
+    scope(q).wire(root); wireLog(root);
     const f = usable(s.flow), m = s.memory && !s.memory.error ? s.memory : null;
     if (f) root.querySelector('aleph-chart[key="status/landed"]').frame = landedFrame(f);
     if (m) root.querySelector('aleph-chart[key="status/offers"]').frame = offersFrame(m, Date.parse(s.now));
@@ -164,16 +164,17 @@ function logBody(log, q) {
   return dataTable(head, rows.join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
 }
 
-/** The Events card: the search, then the log's table and pager. */
+/** The Events card: the search folded in its head, then the log's table and pager. */
 export const renderLog = (log, q = new URLSearchParams()) =>
-  card("Events", `${searchBox("status-log", q.get("q") ?? "", "Search ids and titles")}<div id="log">${logBody(log, q)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events" });
+  card("Events", `<div id="log">${logBody(log, q)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events", aside: searchFold("status-log", q.get("q") ?? "", "Search ids and titles") });
 
 /** A search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
-function wireLog(root, s) {
+// The card is wired once, at a first draw that comes before `more`, so the log goes on the state drawn last.
+function wireLog(root) {
   const card = root.querySelector("#events");
   if (!card || card._wired) return;
   card._wired = true;
-  const go = async (changes) => { setQuery(changes); s.log = await logOf(hashQuery()); redraw(); };
+  const go = async (changes) => { setQuery(changes); page.state.log = await logOf(hashQuery()); redraw(); };
   let typing;
   card.addEventListener("click", (e) => {
     const p = e.target.closest?.(".pager button[data-page]");

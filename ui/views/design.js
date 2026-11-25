@@ -5,7 +5,7 @@
 import { moved } from "./lib/router.js";
 import { scope } from "./lib/address.js";
 import { bytes, clock, count, day, days, dur, durMs, hourLabel, hours, mean, money, pct, shortModel, span, when, wkText } from "./lib/format.js";
-import { freshness, iconHead, dayRow, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
+import { freshness, iconHead, dayRow, splitCard, sideStats, actButton, arm, cell, list, group as grp, meta, miss, note, row as trow, rowAct, shaLink, subHead, moreFold, editable, field, form, inputBox, searchBox, searchFold, selectBox, setting, settings, statusLight, tabs, wireEdit, wireTabs, toc, wireToc, fold, linkButton, idLink, badge, error, loadingLine, notice, barList, barRow, legendHtml, card, cardTrend, chips, clamp, cmd, crumb, dataTable, diffHtml, empty, facts, filterBar, heads, md, meter, pageHead, pager, priorityBadge, statusRow, seg, sortHead, statCard, tag, tiles } from "./lib/html.js";
 import { PRIORITIES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { detailPanel, panel, renderKpis, renderLanes, renderTimeline } from "./lib/timeline.js";
@@ -280,6 +280,7 @@ function renderDesign(d) {
     ])) +
     spec("pager", "Pager", pager(1, 345) + pager(2, 345) + pager(7, 345)) +
     spec("search", "Search box", searchBox("design-search", "", "Search ids and titles")) +
+    spec("search/fold", "Search box, folded", card("Events", "", { count: "3,326", aside: searchFold("design-search-fold", "", "Search ids and titles") }), "Focus or text opens it.") +
     spec("search/action", "Search box, action", searchBox("design-search-act", "chevron fold", "Search ids and titles", `<button type="button" class="hint">Ctrl+↵ File in aleph</button>`)) +
     spec("tabs", "Tabs", tabs("Design tabs", [["one", "Write-up"], ["two", "Log"], ["three", "Lens"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>", three: "<p>The third pane.</p>" })) +
     spec("tab-card", "Tab card", card("", tabs("Design tab card", [["one", "Events"], ["two", "Inspector"]], { one: "<p>The first pane.</p>", two: "<p>The second pane.</p>" }, "one",

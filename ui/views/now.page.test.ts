@@ -153,7 +153,7 @@ test("Events starts each day and each page with a day row", () => {
 
 test("Events is a log: each row has its time, word, issue or else job, title, and by with took, with a search and a pager", () => {
   const h = cardOf(page({ log: LOG }, "q=fix"), "events");
-  expect(h).toContain('value="fix"');
+  expect(h).toMatch(/<span class="aside"><label class="sfold">.*value="fix"/);
   expect(h).not.toContain('class="seg"');
   expect(h).toContain('title="Time"');
   expect(h).toContain('href="#/issues/aleph/5">a5</a>');
