@@ -39,6 +39,16 @@ const str = (v: unknown): string | null => (v === undefined || v === null || v =
 /** An issue ref: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
 
+/** Machine note prefixes, matched after the `- ` and the stamp are removed. */
+const MACHINE = /^(intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done): (.*)$/s;
+/** The notes a person or a job needs to read, which stay plain. */
+const READ = /^(?:intake: for (?:Chris|User):|triage: for (?:Chris|User):|triage: a live check:|acceptance rerun by hand)/;
+/** A note line as `{ at, text }`; a machine note also has its prefix as `tag` and its text after the prefix. */
+function noteFields(line: string) {
+  const n = todos.noteOf(line), m = MACHINE.exec(n.text);
+  return m && !READ.test(n.text) ? { ...n, tag: m[1], text: m[2] } : n;
+}
+
 /** The registry repo and the ref (`7`, `7.1`) of an issue ID from a route; null when no registry repo has it. */
 function issueOf(id: string): { repo: Repo; ref: string } | null {
   const registry = loadRegistry(), p = parseId(id);
@@ -144,7 +154,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const waiting = awaiting(repo.key, item, mine?.stage ?? "waiting");
   const ask = waiting && attend({ runs: [], issues: [waiting] }).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, investigations: investigations(issueKey(n)), specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...runNowOf(repo, doc, item, jobsAll), ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, parts, refs, referencedBy, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(noteFields), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, investigations: investigations(issueKey(n)), specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**

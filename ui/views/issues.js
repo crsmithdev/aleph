@@ -405,18 +405,8 @@ function addMedia(form, files) {
 
 const renderNoteForm = (d, ref) => formOf("issue-note", [field("Add a note", `<textarea name="text" rows="3" required></textarea>`)], "Add note", ` data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"`);
 
-/** Machine note prefixes, matched after the `- ` and the stamp are removed. */
-const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
-/** The notes a person or a job needs to read, which stay visible. */
-const READ = /^(?:intake: for (?:Chris|User):|triage: for (?:Chris|User):|triage: a live check:|acceptance rerun by hand)/;
-/** True when a note (`{ at, text }`) is a machine line: the prefix at the start of its text. */
-const isMachineNote = (n) => MACHINE.test(n.text) && !READ.test(n.text);
-
-/** A note as an event: a machine note's prefix is its tag, any other note is tagged "note". */
-function noteItem(e) {
-  const m = /^([a-z ]+): (.*)$/s.exec(e.text);
-  return m && isMachineNote(e) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(shortText(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(shortText(e.text)) };
-}
+/** A note as an event: a machine note's tag is its prefix, any other note is tagged "note". */
+const noteItem = (e) => ({ at: e.at, tag: e.tag ?? "note", tone: "quiet", html: esc(shortText(e.text)) });
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
 function filedAt(d, runs) {
@@ -534,10 +524,10 @@ export function renderIssue(d) {
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {
-    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(shortText(n.text)) };
+    const e = noteEvent(n), it = e ? noteItem(e) : { tag: n.tag ?? "note", tone: "quiet", html: esc(shortText(n.text)) };
     return eventHtml({ at: e?.at, ...it }, { el: "li", clamped: false });
   };
-  const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
+  const folded = tracker ? [] : d.notes.filter((n) => n.tag), shown = tracker ? d.notes : d.notes.filter((n) => !n.tag);
   const machineNotes = folded.length ? fold(plural(folded.length, "machine note"), `<ul class="notes">${folded.map(noteRow).join("")}</ul>`, { cls: "notes-fold" }) : "";
   const notes = (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);

@@ -32,7 +32,7 @@ describe("the waits", () => {
 
 describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
-    const [row] = rowsOf({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: ["- 2026-11-01T10:41:00.000Z: triage: asked"].map(noteOf) });
+    const [row] = rowsOf({ timeline: { filed: "2026-11-01T10:00:00Z", runs: held() }, notes: [{ at: "2026-11-01T10:41:00.000Z", tag: "triage", text: "asked" }] });
     expect(issueSegments(issue({ timeline: { filed: new Date(0).toISOString(), runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
     expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["intake", "aux"], ["implement", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1%231");
@@ -61,7 +61,7 @@ describe("the issue timeline", () => {
       run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1", issue: "fac-1.1" }),
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2", issue: "fac-1.2" }),
     ];
-    const notes = ["- 2026-11-01T10:06:00.000Z: planner: split into fac-1.1, fac-1.2", "- 2026-11-01T10:25:00.000Z: its sub-issues are done"].map(noteOf);
+    const notes = [{ at: "2026-11-01T10:06:00.000Z", tag: "planner", text: "split into fac-1.1, fac-1.2" }, noteOf("- 2026-11-01T10:25:00.000Z: its sub-issues are done")];
     const segs = issueSegments(issue({ parts, notes, timeline: { filed: "2026-11-01T10:00:00Z", runs } }));
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Sub-issues", 2], ["After the Sub-issues", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;

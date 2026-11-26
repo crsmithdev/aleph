@@ -8,8 +8,8 @@ import { contentText, runWord, wordOf } from "../../../lib/naming.ts";
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** A note of the issue answer (`{ at, text }`, issues/lib/issue-file.ts noteOf) as an event at its time in ms; null for one with no stamp. */
-export const noteEvent = (n) => (n.at ? { at: Date.parse(n.at), text: n.text } : null);
+/** A note of the issue answer (`{ at, text, tag? }`, ui/api/issues.ts noteFields) as an event at its time in ms; null for one with no stamp. */
+export const noteEvent = (n) => (n.at ? { at: Date.parse(n.at), text: n.text, tag: n.tag } : null);
 
 /**
  * The position of each time as a share of the axis. Each span between two neighbouring times takes the

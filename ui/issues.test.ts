@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
-import { add, noteOf, setStatus, type Doc } from "../lib/issue-file.ts";
+import { add, note, noteOf, setStatus, type Doc } from "../lib/issue-file.ts";
 import { addPart } from "../issues/lib/parts.testkit.ts";
 import * as todos from "../lib/issue-file.ts";
 import { askOf, setAsk, refIn, type Ask } from "../jobs/lib/asks/ask.ts";
@@ -261,6 +261,18 @@ describe("GET /api/issues/:id", () => {
     expect(d.jobs.map((j: any) => j.name).sort()).toEqual(["on-4", "todo-4"]);
     const g = await afterSeed("/api/issues/fac-2");
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
+  });
+
+  test("a machine note has its prefix as tag and its text after it; a plain note has no tag", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => {
+      const item = add(doc, "noted");
+      note(item, "intake: text");
+      note(item, "intake: for User: read this");
+      note(item, "call me back");
+      return item.id;
+    }, true)!.value;
+    const { notes } = await getJson(`/api/issues/fac-${n}`);
+    expect(notes.map((x: any) => [x.tag, x.text])).toEqual([["intake", "text"], [undefined, "intake: for User: read this"], [undefined, "call me back"]]);
   });
 
   test("unknown issue and other project are 404", async () => {
@@ -985,7 +997,7 @@ test("the Issue page's notes show an issue id in its short form", () => {
   setCodes({ aleph: "a" });
   try {
     const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], parts: [], timeline: { runs: [] },
-      notes: ["- 2026-11-05T11:02:00.000Z: intake: filed aleph-1443 for x", "- 2026-11-05T11:03:00.000Z: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"].map(noteOf) };
+      notes: [{ at: "2026-11-05T11:02:00.000Z", tag: "intake", text: "filed aleph-1443 for x" }, ...["- 2026-11-05T11:03:00.000Z: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"].map(noteOf)] };
     const h = v.renderIssue(d);
     expect(h).toContain("filed a1443 for x");
     expect(h).toContain("director: filed a1441 for x");
@@ -1000,7 +1012,7 @@ test("the Issue page's notes show an issue id in its short form", () => {
 
 test("the Issue page gives a machine note and a plain note each a dp-ev row with its time, tag and body", () => {
   const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], parts: [], timeline: { runs: [] },
-    notes: ["- 2026-11-05T11:02:00.000Z: intake: sized it", "- 2026-11-05T11:03:00.000Z: call me back"].map(noteOf) };
+    notes: [{ at: "2026-11-05T11:02:00.000Z", tag: "intake", text: "sized it" }, noteOf("- 2026-11-05T11:03:00.000Z: call me back")] };
   const notes = v.renderIssue(d).match(/<ul class="notes">.*?<\/ul>/gs)!.join("");
   // The rows are the timeline's own event rows, as list items and never clamped.
   const ev = (at: string, tag: string, html: string) => tl.eventHtml({ at: Date.parse(at), tag, tone: "quiet", html }, { el: "li", clamped: false });
