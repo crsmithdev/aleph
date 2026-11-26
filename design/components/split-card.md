@@ -16,7 +16,7 @@ A split card puts a main part and a side part in one card, split 3 : 1 by a rule
 | Part | Holds | Optional | Style |
 |---|---|---|---|
 | Box | The card |  | the card box, a grid of 3fr and 1fr |
-| Main | The head (title and aside) and the main part |  | `--sp-20` to the rule |
+| Main | The head (title and aside) and the main part |  | `--sp-20` to the rule; `--sp-12` between its parts, as in a card |
 | Rule | The split |  | a `--rule` line, `--sp-20` to the side |
 | Side | Side stats, or a bare chart under a `subHead()` |  | centred in the card's height |
 | Side stat key `k` | The measure |  | `--sans` `--fs-2xs` `--fw-strong`, capitals, `--muted` |

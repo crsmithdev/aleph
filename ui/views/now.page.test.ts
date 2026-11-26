@@ -100,7 +100,7 @@ test("a failed load shows error() in its own card only", () => {
 
 const run = (id: string, issue: string, state: string, started: string, ended: string | null, kind = "build") => ({ id, repo: "aleph", issue, title: `Title ${issue}`, kind, state, started, ended });
 
-test("Issues in Motion draws a lane for each issue with a live run, with its runs of the hour, from the first of them to now", () => {
+test("Activity draws a lane for each issue with a live run, with its runs of the hour, from the first of them to now", () => {
   setCodes({ aleph: "a" });
   const jobs = [run("job.2", "issue.5", "running", "2026-11-01T07:50:00Z", null, "land"), run("job.1", "issue.5", "passed", "2026-11-01T07:30:00Z", "2026-11-01T07:45:00Z"), run("job.3", "issue.6", "landed", "2026-11-01T07:40:00Z", "2026-11-01T07:41:00Z", "land")];
   const h = cardOf(page({ jobs }), "motion");
@@ -157,9 +157,9 @@ test("Events folds the changes a housekeeper makes under its run, each linking i
   expect(inFold).toContain('href="#/issues/aleph/a1">a1</a>');
 });
 
-test("Events starts each day and each page with a day row", () => {
+test("Events starts each past day and each page with a day row, and today with none", () => {
   const ev = (seq: number, at: string) => ({ ...LOG.rows[0], seq, at, issue: { id: `a${seq}`, to: `#/issues/aleph/${seq}` }, job: null, run: `issue.${seq}` });
-  const h = cardOf(page({ log: { total: 3, rows: [ev(3, "2026-11-02T20:00:00"), ev(2, "2026-11-02T08:00:00"), ev(1, "2026-11-01T20:00:00")] } }), "events");
+  const h = cardOf(page({ log: { total: 4, rows: [ev(4, new Date().toISOString()), ev(3, "2026-11-02T20:00:00"), ev(2, "2026-11-02T08:00:00"), ev(1, "2026-11-01T20:00:00")] } }), "events");
   expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
 });
 
@@ -204,6 +204,7 @@ test("Flow shows the window's counts, each phase's p90 with the issues in it now
   const side = h.slice(h.indexOf('<dl class="sstats">'), h.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   expect(side).toBe("Filed 12 Landed 7 Dropped 3 First Pass 91% Open 4 +2 Asks 5 2 yours");
   expect(h).toContain("Time by Phase, p90");
+  expect([...h.slice(h.indexOf("Time by Phase")).matchAll(/<span class="bl">([^<]+) </g)].map((m) => m[1])).toEqual(["Implement", "Queue", "Intake", "Land"]);
   expect(h).toContain('<aleph-chart key="status/landed" bare>');
   expect(h).toContain("Landed per Day");
   expect(view.landedFrame(WEEK).rows.map((r: any) => r.landed)).toEqual([1, 1]);

@@ -240,7 +240,7 @@ function renderDesign(d) {
         legendHtml([["Intake", "c-s6"], ["Queue", "c-s4"], ["Implement", "c-run"], ["Land", "c-done"]])),
       "Side stats on the right of one; a bare chart on each side of the other, the right one capped at 30 minutes.") +
     spec("timeline", "Timeline", renderTimeline(TIMELINE)) +
-    spec("lanes", "Lanes", card("Issues in Motion", renderLanes(TIMELINE[0].rows, H(8, 10), H(9, 30))), "On a linear axis, from the first run to now, inside a card.") +
+    spec("lanes", "Lanes", card("Activity", renderLanes(TIMELINE[0].rows, H(8, 10), H(9, 30))), "On a linear axis, from the first run to now, inside a card.") +
 
     group("Lists of items") +
     spec("ask", "Ask card", askCard(ASK, NOW)) +

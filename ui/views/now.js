@@ -86,7 +86,7 @@ export function renderControls(s) {
 const ctl = (verb, label) =>
   actButton(label, { act: verb, path: `/api/factory/${verb}`, ...(verb === "pause" ? { confirm: "1" } : {}), label }, { cls: "warn" });
 
-// ---- Issues in Motion ----
+// ---- Activity ----
 
 /** The lanes of the issues with a live run: each issue's runs of the last hour on one axis from the first of them to now. `jobs` are /api/jobs rows. */
 export function lanesOf(jobs, now) {
@@ -101,9 +101,9 @@ export function lanesOf(jobs, now) {
   return { rows, from, count: live.length };
 }
 
-/** The Issues in Motion card: the lanes, then the issues that wait, by what they wait on. `s.jobs` is null while it loads, or `{ error }`. */
+/** The Activity card: the lanes, then the issues that wait, by what they wait on. `s.jobs` is null while it loads, or `{ error }`. */
 export function renderMotion(s) {
-  const box = (body, n) => card("Issues in Motion", body + renderWaiting(s), { count: n, id: "motion" });
+  const box = (body, n) => card("Activity", body + renderWaiting(s), { count: n, id: "motion" });
   if (!s.jobs) return box(loadingLine("the runs"));
   if (s.jobs.error) return box(error(s.jobs.error));
   const now = Date.parse(s.now), l = lanesOf(s.jobs, now);
@@ -161,7 +161,9 @@ function logBody(log) {
   if (log.error) return error(log.error);
   if (!log.rows.length) return empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Ref", "Title", "By"], ["By"]);
-  const rows = logRuns(log.rows).map((run, i, runs) => (i && day(runs[i - 1][0].at) === day(run[0].at) ? "" : dayRow(day(run[0].at), 5)) + logRow(run));
+  // Today's rows have no day row: only a past day is named.
+  const today = day(new Date()), on = (run) => day(run[0].at);
+  const rows = logRuns(log.rows).map((run, i, runs) => (on(run) === today || (i && on(runs[i - 1]) === on(run)) ? "" : dayRow(on(run), 5)) + logRow(run));
   return dataTable(head, rows.join("")) + pager(1, log.total, 25, { at: log.from - 1, back: { before: log.prev }, fwd: { before: log.next } });
 }
 
@@ -335,7 +337,7 @@ export function renderFlow(d, s) {
   if (!d) return card("Flow", loadingLine("the flow"), { id: "flow" });
   if (d.error) return card("Flow", error(d.error), { id: "flow" });
   const now = phasesNow(s);
-  const keys = Object.keys(now), slow = Math.max(...keys.map((k) => d.phases[k].p90 ?? 0));
+  const keys = Object.keys(now).sort((a, b) => (d.phases[b].p90 ?? 0) - (d.phases[a].p90 ?? 0)), slow = d.phases[keys[0]].p90 ?? 0;
   const phases = barList(keys.map((k) => barRow(`${esc(NAMES[k === "implement" ? "build" : k])} <span class="count">${count(now[k])}</span>`, slow ? ((d.phases[k].p90 ?? 0) / slow) * 100 : 0, d.phases[k].count ? dur(d.phases[k].p90) : "–", { top: d.phases[k].p90 === slow })).join(""));
   const stats = sideStats(flowStats(d));
   const landed = landedFrame(d);

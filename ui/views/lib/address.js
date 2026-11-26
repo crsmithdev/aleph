@@ -66,19 +66,17 @@ export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects").then((r
 });
 /**
  * The options of the Project select: All and aleph, then the other onboarded repos, then the other repos with an open issue,
- * each with its count of open issues, once /api/projects has answered. A project of `more` or `cur` goes among the rest, though it has no open issue; one that the registry does not hold goes last, with no count.
+ * once /api/projects has answered. A project of `more` or `cur` goes among the rest, though it has no open issue; one that the registry does not hold goes last.
  */
 function projectOptions(cur, more = []) {
   const item = (value, label) => `<option value="${esc(value)}"${value === cur ? " selected" : ""}>${esc(label)}</option>`;
-  const named = (k) => item(k, `${k} (${projects[k].issues})`);
+  const named = (k) => item(k, k);
   const keys = Object.keys(projects).sort(), rest = keys.filter((k) => k !== "aleph");
-  const total = keys.reduce((n, k) => n + projects[k].issues, 0);
-  const groups = [
-    rest.filter((k) => projects[k].onboarded).map(named),
-    [...rest.filter((k) => !projects[k].onboarded && (projects[k].issues > 0 || k === cur || more.includes(k))).map(named),
-      ...[...new Set([...more, cur])].filter((k) => k && !projects[k]).sort().map((k) => item(k, k))],
-  ].filter((g) => g.length);
-  return [item("", keys.length ? `All Projects (${total})` : "All Projects"), ...(projects.aleph ? [named("aleph")] : []), ...groups.map((g) => `<hr>${g.join("")}`)].join("");
+  return [
+    item("", "All Projects"), ...(projects.aleph ? [named("aleph")] : []), ...rest.filter((k) => projects[k].onboarded).map(named),
+    ...rest.filter((k) => !projects[k].onboarded && (projects[k].issues > 0 || k === cur || more.includes(k))).map(named),
+    ...[...new Set([...more, cur])].filter((k) => k && !projects[k]).sort().map(named),
+  ].join("");
 }
 /**
  * The scope of a page from its query `q`, the address's by default. The project ("" is All) and the window come from the

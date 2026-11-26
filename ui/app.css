@@ -1361,7 +1361,7 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
    ECharts sizes its canvas to the box, so a box sized by its content grows each time the chart resizes. */
 /* A split card: the head and the main part on the left, a rule, and a side part a third of the main's width. In a container under 560px, the side goes under the main. */
 .card.duo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
-.duo-main { min-width: 0; padding-right: var(--sp-20); display: flex; flex-direction: column; }
+.duo-main { min-width: 0; padding-right: var(--sp-20); display: flex; flex-direction: column; gap: var(--sp-12); }
 .duo-side { min-width: 0; padding-left: var(--sp-20); border-left: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: center; }
 .sstats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-16) var(--sp-12); margin: 0; }
 .sstats dt { color: var(--muted); font: var(--fw-strong) var(--fs-2xs)/1.2 var(--sans); letter-spacing: var(--ls-caps); text-transform: uppercase; }

@@ -44,20 +44,20 @@ describe("projectKeysOnce", () => {
     expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
     expect(urls).toEqual(["/api/projects"]);
   });
-  test("the Project select has no label and lists All and aleph, the onboarded repos, then the rest with an open issue, each with its count", async () => {
+  test("the Project select has no label and lists All and aleph, the onboarded repos, then the rest with an open issue", async () => {
     const copy = await import(`./address.js?copy=${++copies}`);
     const p = (issues: number, onboarded = false) => ({ code: null, issues, onboarded });
     globalThis.fetch = (async () => Response.json({ zed: p(2), aleph: p(9, true), mid: p(0, true), beta: p(3, true), idle: p(0), alpha: p(1) })) as any;
     await copy.projectKeysOnce();
     const h = copy.scope(new URLSearchParams()).bar();
     expect(h).not.toContain('class="fl"');
-    expect(h.match(/<select[^>]*>.*<\/select>/)![0]).toBe('<select name="project" aria-label="Project"><option value="" selected>All Projects (15)</option><option value="aleph">aleph (9)</option>' +
-      '<hr><option value="beta">beta (3)</option><option value="mid">mid (0)</option><hr><option value="alpha">alpha (1)</option><option value="zed">zed (2)</option></select>');
+    expect(h.match(/<select[^>]*>.*<\/select>/)![0]).toBe('<select name="project" aria-label="Project"><option value="" selected>All Projects</option><option value="aleph">aleph</option>' +
+      '<option value="beta">beta</option><option value="mid">mid</option><option value="alpha">alpha</option><option value="zed">zed</option></select>');
     // The chosen project and a name the page adds stay listed, though neither has an open issue in the registry.
     const picked = copy.scope(new URLSearchParams("project=idle")).bar({ more: ["notes"] });
-    expect(picked).toContain('<option value="idle" selected>idle (0)</option><option value="zed">zed (2)</option><option value="notes">notes</option>');
+    expect(picked).toContain('<option value="idle" selected>idle</option><option value="zed">zed</option><option value="notes">notes</option>');
     // A name the page adds that the registry holds with no open issue is listed too.
-    expect(copy.scope(new URLSearchParams()).bar({ more: ["idle"] })).toContain('<option value="idle">idle (0)</option>');
+    expect(copy.scope(new URLSearchParams()).bar({ more: ["idle"] })).toContain('<option value="idle">idle</option>');
     // The select keeps the names, for the options that wireScope draws again when the registry answers.
     expect(picked).toContain('aria-label="Project" data-more="notes">');
   });
