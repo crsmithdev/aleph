@@ -19,7 +19,7 @@
 //   error, since: the mark of data that failed to rebuild; the panel says how old it is and why.
 // The kind of `over` is the group, and the group gives the forms.
 import { keep, kept } from "./address.js";
-import { chart, legend, readTokens } from "./chart-theme.js";
+import { chart, legend } from "./chart-theme.js";
 import { count, day, dur, markLine, money, pct, xLabel } from "./format.js";
 import { card, empty, esc, notice, selectBox } from "./html.js";
 
@@ -171,7 +171,8 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
       this.innerHTML = panel(f, s.form, this.#bare);
       const box = this.querySelector(".chartbox");
       if (!box || !globalThis.echarts) return;
-      this.#chart = chart(box, option(f, s.form, readTokens(), s.hidden));
+      // A re-theme builds the option again, with the series the reader hid since this draw.
+      this.#chart = chart(box, (t) => option(f, s.form, t, this.#state.hidden));
       this.#chart.on("legendselectchanged", (e) => keep(this.key, { ...kept(this.key, {}), hidden: Object.keys(e.selected).filter((n) => !e.selected[n]) }));
       this.#chart.on("click", (p) => {
         // The link of the point, or of the row whose name the clicked axis label gives.

@@ -181,13 +181,18 @@ test("Events is a log: each row has its time, word, issue or else job, title, an
   expect(cardOf(page({}), "events")).toContain("Loading the events");
 });
 
-test("Memory shows the start context against its budget, the offers per day and the six counts", () => {
+test("Memory shows the core lines demoted in the window, the offers per day and the six counts", () => {
   const h = page({ memory: MEMORY }), m = h.slice(h.indexOf('id="memory"'), h.indexOf('class="stack"'));
-  expect(m).toContain("3,000 / 6,000 B");
+  expect(m).toContain(`<h3 class="sub-head">Demoted</h3>${empty()}`);
   expect(m).toContain('<aleph-chart key="status/offers" bare>');
   const side = m.slice(m.indexOf('<dl class="sstats">'), m.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   expect(side).toBe("Notes 2 Offered 1 Never offered 1 Unoffered reads 4 Refused 0 Stale 1 1 late");
   expect(view.offersFrame(MEMORY, Date.parse(NOW)).rows.map((r: any) => r.offers)).toEqual([0, 0, 0, 0, 0, 0, 3]);
+  // A global line shows in each scope's list and draws once; a day that ends before the week starts is out of it.
+  const line = (title: string, on: string) => ({ title, core: "c", scope: "global", on, by: "write" });
+  const start = { aleph: { ...MEMORY.start.aleph, demoted: [line("B", "2026-10-31"), line("A", "2026-10-25"), line("Old", "2026-10-24")] }, global: { ...MEMORY.start.aleph, demoted: [line("A", "2026-10-25")] } };
+  const d = page({ memory: { ...MEMORY, start } }, "window=week"), dm = d.slice(d.indexOf('id="memory"'), d.indexOf('class="stack"'));
+  expect([...dm.matchAll(/<tr><td class="wide" title="([^"]+)"/g)].map((x) => x[1])).toEqual(["B", "A"]);
 });
 
 test("Efficiency shows the hours by outcome, the lost hours by cause and the failed runs by stage", () => {

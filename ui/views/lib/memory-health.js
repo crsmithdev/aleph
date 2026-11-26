@@ -81,6 +81,12 @@ const rulesOf = (lint) => [...Map.groupBy([...lint.refuse.map((f) => ({ ...f, re
   .sort((a, b) => b.n - a.n);
 
 const noteLink = (title) => `<td class="wide" title="${esc(title)}">${link(title)}</td>`;
+/**
+ * The demoted core lines (`/api/memory` start `demoted`) as a table, in the order given; `restore` adds each line's Restore.
+ * A restore sets the core line back through vault write, which demotes the oldest line again if this one does not fit.
+ */
+export const demotedTable = (list, restore = false) => list.length ? dataTable(heads(["Core line", "By", "Day", ...(restore ? ["Action"] : [])]), list.map((d) => row([noteLink(d.title), cell(d.by), cell(shortDay(d.on)),
+  ...(restore ? [rowAct("Restore", { act: "restore", label: "Restore", name: d.title, path: `/api/memory/notes/${encodeURIComponent(d.title)}/core`, body: JSON.stringify({ core: d.core }) })] : [])])).join("")) : empty();
 const scopeChip = (s) => (s && s !== "aleph" ? chip(s) : "");
 
 /** Run and Dry run of the maintainer: each starts `aleph memory maintain` detached. */
@@ -109,9 +115,7 @@ export function renderHealth(m, now = Date.now()) {
   const quality = ms ? facts([["Recalls", `${count(ms.recalls)} in ${count(ms.days)} days`], ["Empty", count(ms.empty)], ["Reformulated", count(ms.reformulated)], ["Unoffered reads", count(ms.unoffered_reads)]]) : "";
   const start = barList(Object.entries(m.start).map(([k, x]) => barRow(esc(k), 0, `${B(x.bytes)} / ${B(x.budget)}`, { bar: meter((x.bytes / x.budget) * 100, `${k} ${B(x.bytes)} of ${B(x.budget)}`, { mark: FULL * 100 }) })).join("")) +
     subHead("Largest Core Lines") + dataTable(heads(["Core line", "Scope", "Bytes"], ["Bytes"]), [...s.core].sort((a, b) => b.bytes - a.bytes).slice(0, 5).map((c) => row([noteLink(c.title), `<td>${scopeChip(c.scope)}</td>`, cell(B(c.bytes), { num: true })])).join("")) +
-    // A restore sets the core line back through vault write, which demotes the oldest line again if this one does not fit.
-    subHead("Demoted") + (s.demoted?.length ? dataTable(heads(["Core line", "By", "Day", "Action"]), s.demoted.map((d) => row([noteLink(d.title), cell(d.by), cell(shortDay(d.on)),
-      rowAct("Restore", { act: "restore", label: "Restore", name: d.title, path: `/api/memory/notes/${encodeURIComponent(d.title)}/core`, body: JSON.stringify({ core: d.core }) })])).join("")) : empty());
+    subHead("Demoted") + demotedTable(s.demoted ?? [], true);
   const most = Math.max(1, ...rules.map((r) => r.n));
   const lint = rules.length ? barList(rules.map((r) => barRow(`<code>${esc(r.rule)}</code>${r.refused ? ` ${tag("refused", "error")}` : ""}`, 0, count(r.n), { bar: meter([{ pct: (r.n / most) * 100, cls: r.refused ? "c-err" : "" }], `${r.rule} ${r.n}`) })).join("")) : empty();
   const fixes = rules.length ? dataTable(heads(["Rule", "Fix", "Notes"]), rules.map((r) => row([`<td><code>${esc(r.rule)}</code></td>`, cell(FIX[r.rule] ?? r.detail, { wide: true }), cell(r.notes.join(", "), { wide: true, title: r.notes.join("\n") })])).join("")) : empty();

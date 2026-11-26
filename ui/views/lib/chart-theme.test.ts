@@ -4,15 +4,15 @@ import { chart, fitGrid, chartTheme } from "./chart-theme.js";
 // @ts-ignore the module is plain JS, shared with the page
 import { shortModel } from "./format.js";
 
-test("chart on() attaches a handler that survives a re-theme", () => {
+test("chart on() attaches a handler that survives a re-theme, and a re-theme builds the option from the new tokens", () => {
   const g = globalThis as any;
   const made: any[] = [];
-  let retheme = () => {};
+  let retheme = () => {}, ink = "black";
   const keep = { echarts: g.echarts, matchMedia: g.matchMedia, ResizeObserver: g.ResizeObserver, getComputedStyle: g.getComputedStyle, document: g.document };
   g.echarts = {
     registerTheme() {},
     init() {
-      const c: any = { ons: [], getOption: () => ({ legend: [{ show: false }] }), setOption() {}, dispose() {}, resize() {} };
+      const c: any = { ons: [], opts: [], getOption: () => ({ legend: [{ show: false }] }), setOption(o: unknown) { c.opts.push(o); }, dispose() {}, resize() {} };
       c.on = (ev: string, fn: unknown) => c.ons.push([ev, fn]);
       made.push(c);
       return c;
@@ -20,15 +20,18 @@ test("chart on() attaches a handler that survives a re-theme", () => {
   };
   g.matchMedia = () => ({ addEventListener: (_: string, fn: () => void) => { retheme = fn; }, removeEventListener() {} });
   g.ResizeObserver = class { observe() {} disconnect() {} };
-  g.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  g.getComputedStyle = () => ({ getPropertyValue: (k: string) => (k === "--ink" ? ink : "") });
   g.document = { documentElement: {} };
   try {
     const fn = () => {};
-    const c = chart({}, {});
+    const c = chart({}, (t: any) => ({ ink: t.ink }));
     c.on("click", fn);
     expect(made[0].ons).toEqual([["click", fn]]);
+    expect(made[0].opts[0]).toEqual({ ink: "black" });
+    ink = "white";
     retheme();
     expect(made[1].ons).toEqual([["click", fn]]);
+    expect(made[1].opts[0]).toEqual({ ink: "white" });
   } finally {
     Object.assign(g, keep);
   }

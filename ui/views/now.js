@@ -4,15 +4,16 @@
 // main column; Problems, Efficiency and Flow in the rail.
 import { hashQuery, scope, setQuery } from "./lib/address.js";
 import { undecided } from "./lib/decisions.js";
-import { cardPct, clock, count, day, dur, hours, plural, when } from "./lib/format.js";
+import { cardPct, clock, count, day, dur, hours, localMs, plural, when } from "./lib/format.js";
 import { actButton, barList, barRow, card, cell, chips, dataTable, dayRow, empty, error, esc, fold, heads, iconHead, idLink, legendHtml, linkButton, loadingLine, meta, meter, pageHead, pager, priorityBadge, repoIdLink, row, searchFold, sectionHead, sideStats, splitCard, subHead, tag, tiles, tone } from "./lib/html.js";
 import { factsOf, issueHref, jobHref, NAMES, shortText, shownId } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { bucketOf, flowOf, statusCards, usable, waitingOf } from "./lib/flow-parts.js";
 import { actMsg, alertCard, askAlert, itemId } from "./lib/ask-cards.js";
 import { laneRow, renderLanes, spans } from "./lib/timeline.js";
-import { offered } from "./lib/memory-health.js";
+import { demotedTable, offered } from "./lib/memory-health.js";
 import { verdict } from "../../lib/status-words.ts";
+import { DAY, WINDOWS } from "../../lib/windows.ts";
 import { get, redraw } from "./lib/router.js";
 
 export const view = {
@@ -24,7 +25,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   live: true,
   // `more` adds /api/flow for the window with its baseline, the Memory page's data, the runs of the last hour and a page of the event log; the page draws without them first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", statusCards(s, f, { memory: s.memory ?? null }), "scorecard")}<div class="rail"><div class="rail-main">${renderMotion(s)}${renderLog(s.log ?? null, q, s.now)}${renderMemory(s.memory ?? null, s.now)}</div><div class="stack">${renderProblems(s, page.stale)}${renderEfficiency(f)}${renderFlow(f, s)}</div></div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", statusCards(s, f, { memory: s.memory ?? null }), "scorecard")}<div class="rail"><div class="rail-main">${renderMotion(s)}${renderLog(s.log ?? null, q, s.now)}${renderMemory(s.memory ?? null, s.now, w)}</div><div class="stack">${renderProblems(s, page.stale)}${renderEfficiency(f)}${renderFlow(f, s)}</div></div></div>`; },
   more: async (s, q) => { const [flow, memory, jobs, log] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q), jobsOf(q), logOf(q)]); return { ...s, flow, memory, jobs, log }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
@@ -200,12 +201,15 @@ export const offersFrame = (m, now) => {
   return { measure: { name: "Offers", unit: "count", agg: "sum" }, over: { kind: "time", window: "week" }, by: { name: "Kind", keys: [{ key: "offers", name: "Offers", color: "muted" }] }, rows, form: "columns", legend: false };
 };
 
-/** The Memory card at `now`: the start context against its budget and the offers per day; the six counts of the Memory page on the side. `m` is null while it loads, or `{ error }`. */
-export function renderMemory(m, now) {
+/** The Memory card at `now`: the core lines demoted on a day of window `w`, newest first, and the offers per day; the six counts of the Memory page on the side. `m` is null while it loads, or `{ error }`. */
+export function renderMemory(m, now, w) {
   if (!m) return card("Memory", loadingLine("the memory"), { id: "memory" });
   if (m.error) return card("Memory", error(m.error), { id: "memory" });
-  const start = barList(Object.entries(m.start).map(([k, s]) => barRow(`${esc(k)} <span class="count">${count(s.core.length)} lines</span>`, (s.bytes / s.budget) * 100, `${count(s.bytes)} / ${count(s.budget)} B`, { top: s.bytes / s.budget >= FULL })).join(""));
-  return splitCard("Memory", `${subHead("Start Context")}${start}${subHead("Offers per Day")}${panelOf("status/offers", offersFrame(m, Date.parse(now)), "", { bare: true })}`, sideStats(memoryStats(m, now)), { id: "memory" });
+  // A demotion has a day, not a time: it counts when its day ends after the window starts. A global line shows in each scope's list.
+  const from = Date.parse(now) - WINDOWS[w];
+  const demoted = [...new Map(Object.values(m.start).flatMap((s) => s.demoted ?? []).map((d) => [d.title, d])).values()]
+    .filter((d) => localMs(d.on) + DAY > from).sort((a, b) => b.on.localeCompare(a.on));
+  return splitCard("Memory", `${subHead("Demoted")}${demotedTable(demoted)}${subHead("Offers per Day")}${panelOf("status/offers", offersFrame(m, Date.parse(now)), "", { bare: true })}`, sideStats(memoryStats(m, now)), { id: "memory" });
 }
 
 /** The six counts of the Memory page at `now`, as `sideStats` takes them. */
@@ -220,7 +224,7 @@ export function memoryStats(m, now) {
     { k: "Stale", v: count(stale.length), note: `${count(late)} late`, title: `${count(stale.length)} notes past their re-check date, ${count(late)} by more than 30 days` },
   ];
 }
-/** The share of the start budget at which the Memory card marks a start context as full. */
+/** The share of the start budget at which a start context counts as near full (herdr/status.ts). */
 export const FULL = 0.95;
 
 // ---- Problems ----

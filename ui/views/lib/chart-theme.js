@@ -32,25 +32,28 @@ export function fitGrid(c) {
   c.setOption({ grid: { top: Math.ceil(box.y + box.height) + 14 } });
 }
 /**
- * Init an ECharts chart on `el` with `option`, themed from the page tokens. It re-themes when
- * prefers-color-scheme changes and resizes with the element. Returns a wrapper over the instance.
+ * Init an ECharts chart on `el` with the option `make` gives for the page tokens, themed from them. It re-themes when
+ * prefers-color-scheme changes or the dock's theme picker sets the tokens, and resizes with the element. Returns a wrapper over the instance.
  */
-export function chart(el, option) {
+export function chart(el, make) {
   const echarts = globalThis.echarts;
   if (!echarts) throw new Error("ECharts is not loaded");
   const name = `aleph-${++seq}`;
-  const build = () => { echarts.registerTheme(name, chartTheme(readTokens())); return echarts.init(el, name); };
+  // The option is built again from the new tokens: an option that the old instance resolved holds the old theme's colours.
+  const build = () => {
+    const t = readTokens();
+    echarts.registerTheme(name, chartTheme(t));
+    const c = echarts.init(el, name);
+    c.setOption(make(t));
+    fitGrid(c);
+    return c;
+  };
   const handlers = [];
   let c = build();
-  c.setOption(option);
-  fitGrid(c);
   const mq = matchMedia("(prefers-color-scheme: dark)");
   const retheme = () => {
-    const opt = c.getOption();
     c.dispose();
     c = build();
-    c.setOption(opt);
-    fitGrid(c);
     for (const [ev, fn] of handlers) c.on(ev, fn);
   };
   mq.addEventListener("change", retheme);
