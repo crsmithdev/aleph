@@ -161,7 +161,7 @@ function issueGroup(issue, xs) {
 function systemGroups(jobs) {
   return [...Map.groupBy(jobs.filter((j) => !j.issue), (j) => (ROLES.has(j.kind) ? j.kind : j.name))].map(([name, xs]) => {
     const runs = [...xs].sort(byStart), last = runs.at(-1);
-    return { key: `sys.${name}`, id: last.id.replace(/^job\./, ""), title: name, href: jobHref(last.id), repo: last.repo, runs, cost: runs.reduce((n, r) => n + (r.cost ?? 0), 0) };
+    return { key: `sys.${name}`, id: shownId(last.id), title: name, href: jobHref(last.id), repo: last.repo, runs, cost: runs.reduce((n, r) => n + (r.cost ?? 0), 0) };
   });
 }
 

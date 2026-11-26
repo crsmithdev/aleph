@@ -44,17 +44,19 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-const log = async (query = "") => (await fetch(`http://127.0.0.1:${server.port}/api/log${query}`)).json() as Promise<{ rows: any[]; total: number }>;
+const log = async (query = "") => (await fetch(`http://127.0.0.1:${server.port}/api/log${query}`)).json() as Promise<{ rows: any[]; total: number; next: number | null; prev: number | null; from: number }>;
 
-test("serves one event a row, newest first, 25 a page, without the quiet events", async () => {
+test("serves one event a row, newest first, 25 a page by cursor, without the quiet events", async () => {
   const all = await log();
-  expect(all.total).toBe(66);
-  expect(all.rows).toHaveLength(25);
+  expect([all.total, all.rows.length, all.from, all.prev, all.next]).toEqual([66, 25, 1, null, all.rows[24].seq]);
   expect(all.rows.find((r) => r.action === "landed")).toMatchObject({ issue: { id: expect.any(String), to: expect.stringContaining("#/issues/p/1") }, title: "Fix the pager", job: null });
-  expect((await log("?page=2")).rows).toHaveLength(25);
-  const last = await log("?page=3");
-  expect(last.rows).toHaveLength(16);
+  const two = await log(`?before=${all.next}`);
+  expect([two.rows.length, two.from, two.prev, two.rows[0].seq]).toEqual([25, 26, 0, all.rows[24].seq - 1]);
+  const last = await log(`?before=${two.next}`);
+  expect([last.rows.length, last.from, last.prev, last.next]).toEqual([16, 51, all.rows[24].seq, null]);
   expect(last.rows.map((r) => r.action).slice(-2)).toEqual(["failed", "held"]);
+  expect((await log("?before=0")).rows).toEqual(all.rows);
+  expect((await fetch(`http://127.0.0.1:${server.port}/api/log?before=soon`)).status).toBe(400);
 });
 
 test("gives a job with no issue its name less role and date, and its reason's head word, as keys, the rest as title", async () => {
@@ -69,7 +71,16 @@ test("keeps the rows whose id or title holds the search", async () => {
 });
 
 test("puts an event a job makes in that job's run, and any other in its issue's, else its job's", async () => {
-  const rows = (await log()).rows.concat((await log("?page=2")).rows, (await log("?page=3")).rows);
+  const one = await log(), two = await log(`?before=${one.next}`), rows = one.rows.concat(two.rows, (await log(`?before=${two.next}`)).rows);
   expect(rows.filter((r) => r.run === hk).map((r) => r.action).sort()).toEqual(["changed", "done"]);
   expect(rows.find((r) => r.action === "landed").run).toBe("issue.1");
+});
+
+// Last in the file: the new event stays.
+test("a page by cursor holds its rows when a new event arrives above it", async () => {
+  const one = await log(), two = await log(`?before=${one.next}`);
+  logEvent({ time: new Date(NOW).toISOString(), subject: "gate", action: "failed", object: "issue.1", detail: "y" });
+  const again = await log(`?before=${one.next}`);
+  expect(again.rows.map((r) => r.seq)).toEqual(two.rows.map((r) => r.seq));
+  expect([again.from, again.total]).toEqual([27, 67]);
 });

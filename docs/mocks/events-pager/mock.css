@@ -1,0 +1,9 @@
+/* Mock frame only. */
+.mock { max-width: 960px; margin: var(--sp-24) auto; display: grid; gap: var(--sp-28); }
+.mock .lede { color: var(--muted); margin: 0; }
+.opt > h2 { font-size: var(--fs-lg); margin: 0; }
+.opt > p { color: var(--muted); margin: var(--sp-4) 0 var(--sp-8); }
+.opt .api { font: var(--fs-xs) / 1.6 var(--mono); background: var(--sunk); padding: var(--sp-8) var(--sp-12); border-radius: 6px; margin: 0 0 var(--sp-12); overflow-x: auto; }
+
+/* The icon-only pager button the options add. */
+.pager button.act.glyph { display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; }

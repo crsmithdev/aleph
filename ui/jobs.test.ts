@@ -334,7 +334,7 @@ describe("GET /api/jobs/:id/diff", () => {
 
 describe("render", () => {
   const job: any = {
-    id: "fac-9#3", name: "fac-9", repo: "fac", item: { id: 9, title: "Fix <it>" }, state: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
+    id: "fac-9#3", name: "fac-9", repo: "fac", item: { id: 9, ref: "fac-9", href: "#/issues/fac/9", title: "Fix <it>" }, state: "landed", started: ago(5), cost: 0.75, defaults: ["a? -> b"], followups: ["tidy"],
     runs: [
       { id: "1", kind: "worker", state: "failed", started: ago(5), ended: ago(4), cost: 0.5, model: "m1" },
       { id: "2", kind: "worker", state: "passed", started: ago(3.5), ended: ago(3), cost: 0.25 },

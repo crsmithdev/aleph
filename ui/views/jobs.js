@@ -4,7 +4,7 @@
 import { bytes, count, dur, plural, money, span, when } from "./lib/format.js";
 import { actButton, runNowButton, fold, pageHead, badCount, blockersHtml, chip, codeText, tag, tone, badge, error, miss, note, shaLink, statusRow, crumb, heads, pagedTable, empty, esc, idLink, linkButton, loadDiff, loadingLine, md, priorityBadge, wkHtml } from "./lib/html.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "./lib/timeline.js";
-import { shortText, issueHref } from "../../lib/naming.ts";
+import { shortText } from "../../lib/naming.ts";
 import { investigateButton, investigationPanel } from "./lib/investigation.js";
 
 /** The Job view, routed at `#/jobs/<job ID>`. */
@@ -108,7 +108,7 @@ function lifecycle(j) {
 export function renderJob(j) {
   const id = shortText(j.name), p = j.parent;
   // The issue the job works on: a part's parent, else the job's own item.
-  const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: issueHref(`${j.repo}-${j.item.id}`) });
+  const iss = p ?? (j.item && { id: j.item.ref, href: j.item.href });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${shortText(iss.id)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
   const nav = [p?.next ? linkButton(`Next sub-issue: ${shortText(p.next.id)}`, p.next.href) : "", j.trace ? linkButton("Trace", j.trace) : ""].join("");
   const pills = statusRow(badge(j.state), j.item ? priorityBadge(j.item.priority) : "", `${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(shortText(p.id), p.href)}` }) : ""}${idLink(shortText(j.name))}`);

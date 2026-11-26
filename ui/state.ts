@@ -60,7 +60,8 @@ export function titlesOf(events: EventRow[], lists: ReturnType<typeof reader>): 
 export interface Job {
   /** The job ID of the run that counts, `a1430#2`: the Job page's address and the one an action acts on. */
   id: string;
-  name: string; repo: string; item: { id: number | string; title: string; priority?: string } | null;
+  /** `ref` is the issue's full ID (`aleph-240`) and `href` its page. */
+  name: string; repo: string; item: { id: number | string; ref: string; href: string; title: string; priority?: string } | null;
   state: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
@@ -136,7 +137,7 @@ export interface State {
   /** Everything that waits for the user: one entry per awaiting run, issue and proposal, with its card and reason. */
   asks: AskItem[];
   /** Queued and blocked issues (and old items): the Queued lane. */
-  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
+  queued: { repo: string; id: number | string; ref: string; href: string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
     /** The hold event the dispatch stores in the record: the action word and the content the card shows. */
     ev?: Hold;
     /** When the hold in force began: the time of the issue's newest `held` event, when no start came after it (ADR 0001). */
@@ -187,8 +188,9 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const repo = v.repo ? registry[v.repo] : undefined;
     const todo = v.item;
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
+    const ref = `${v.repo ?? ""}-${todo}`, at = { ref, href: issueHref(ref) };
     const job: Job = {
-      id: v.run.id, name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
+      id: v.run.id, name: v.name, repo: v.repo ?? "", item: found ? { id: found.id, ...at, title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, ...at, title: "" } : null,
       state: v.state, started: v.started, run: { id: v.run.id, kind: v.run.role, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
@@ -351,7 +353,7 @@ const queuedOf = (slots: Slot[], { pickedUp }: Pickups, { blocker }: Projector, 
   byPriority(slots.filter(({ item, st }) => status(item) === "open" && (st === "queued" || st === "held")).map(({ repo, item, id, st, part }) => {
     // The stage already says when an issue is to plan.
     const w = decide(repo, item), hold = eventsOf(issueKey(item.id), "held", "started").at(-1);
-    return { item, repo: repo.key, id: item.id, title: item.title, priority: priorityOf(item), stage: st, at: updated(item) ?? created(item) ?? "", since: pickedUp(id), ...(part ? { part } : {}), kind: w.kind,
+    return { item, repo: repo.key, id: item.id, ref: id, href: issueHref(id), title: item.title, priority: priorityOf(item), stage: st, at: updated(item) ?? created(item) ?? "", since: pickedUp(id), ...(part ? { part } : {}), kind: w.kind,
       ...(w.ev ? { ev: w.ev } : {}), ...(hold?.action === "held" ? { heldAt: hold.time } : {}), ...(w.kind === "after" && w.ids ? { waits: w.ids.map(blocker) } : {}),
     };
   }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q);

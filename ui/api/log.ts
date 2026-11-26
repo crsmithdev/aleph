@@ -1,7 +1,8 @@
 /**
- * `GET /api/log`: the event log of the Status page, one event a row, newest first, `{ rows, total }`.
+ * `GET /api/log`: the event log of the Status page, one event a row, newest first, `{ rows, next, prev, from, total }`.
  * `?window=` and `?project=` scope it as every route does; `?q=` keeps the rows
- * whose issue, job or title holds the text, and `?page=` (from 1) picks 25 of the rest.
+ * whose issue, job or title holds the text, and `?before=` (a seq; none or 0 is the newest) picks the 25 rows below it.
+ * `next` and `prev` are the `before` of the next and previous page, null at an end; `from` is the first row's place, from 1.
  * A row's `run` is the key its run of rows goes by: its issue, else its job.
  */
 import { readEvents } from "../../lib/layout.ts";
@@ -47,13 +48,16 @@ export const routes: Routes = {
     const sc = scopeOf(url);
     if (sc instanceof Response) return sc;
     const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
-    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const before = Number(url.searchParams.get("before") ?? 0);
+    if (!Number.isInteger(before) || before < 0) return Response.json({ error: "before must be a seq" }, { status: 400 });
     const events = mineOf(withProjects(readEvents(Date.now() - sc.ms)), sc.project).filter((e) => !quiet(e));
     // One read of the issues' projects and of the jobs, and only when a row needs it.
     let projects: Map<number, string> | undefined, runs: Map<string, Run> | undefined;
     const titles = titlesOf(events, reader()), projectOf = (n: number) => (projects ??= projectsOnMain()).get(n);
     const runOf = (id: string) => (runs ??= new Map(allRuns().map((x) => [x.id, x.run]))).get(id);
     const rows = events.reverse().map((e) => rowOf(e, titles, projectOf, runOf)).filter((r) => !q || [r.issue?.id, r.job?.id, r.title, ...r.keys].some((t) => t?.toLowerCase().includes(q)));
-    return Response.json({ rows: rows.slice((page - 1) * PAGE, page * PAGE), total: rows.length });
+    const i = rows.findIndex((r) => r.seq! < before), at = !before ? 0 : i < 0 ? rows.length : i, up = Math.max(0, at - PAGE);
+    const page = rows.slice(at, at + PAGE), next = at + PAGE < rows.length ? page.at(-1)!.seq : null;
+    return Response.json({ rows: page, next, prev: at ? (up ? rows[up - 1].seq : 0) : null, from: at + 1, total: rows.length });
   },
 };

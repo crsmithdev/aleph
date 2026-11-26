@@ -60,7 +60,7 @@ const jobsOf = async (q) => { const d = await load(scope(q).url("/api/jobs?windo
 /** A page of the event log for the window, search and page of `q`. */
 function logOf(q) {
   const s = scope(q), out = new URLSearchParams({ window: s.window });
-  for (const k of ["q", "page"]) if (q.get(k)) out.set(k, q.get(k));
+  for (const k of ["q", "before"]) if (q.get(k)) out.set(k, q.get(k));
   return load(s.url(`/api/log?${out}`), "the events");
 }
 
@@ -126,7 +126,7 @@ export function renderWaiting(s) {
   const holds = holdsOf(s);
   if (!holds.length) return "";
   const rows = holds.map(({ qs, waited }) => {
-    const issues = qs.map((q) => { const id = `${q.repo}-${q.id}`; return `${repoIdLink(id, issueHref(id))} ${esc(q.title)}`; }).join(" · ");
+    const issues = qs.map((q) => `${repoIdLink(q.ref, q.href)} ${esc(q.title)}`).join(" · ");
     // The cell's text is escaped once already, so the title takes it with the tags cut.
     return row([`<td>${tag(qs[0].kind, "quiet")}</td>`, `<td>${holdOn(qs[0])}</td>`, `<td class="wide" title="${issues.replace(/<[^>]*>/g, "")}">${issues}</td>`, cell(waited === null ? "–" : dur(waited), { num: true })]);
   });
@@ -156,18 +156,18 @@ const logRuns = (rows) => rows.reduce((runs, r) => {
 }, []);
 
 /** The log's table and pager: the part that a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
-function logBody(log, q) {
+function logBody(log) {
   if (!log) return loadingLine("the events");
   if (log.error) return error(log.error);
   if (!log.rows.length) return empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Ref", "Title", "By"], ["By"]);
   const rows = logRuns(log.rows).map((run, i, runs) => (i && day(runs[i - 1][0].at) === day(run[0].at) ? "" : dayRow(day(run[0].at), 5)) + logRow(run));
-  return dataTable(head, rows.join("")) + pager(Number(q.get("page")) || 1, log.total, 25);
+  return dataTable(head, rows.join("")) + pager(1, log.total, 25, { at: log.from - 1, back: { before: log.prev }, fwd: { before: log.next } });
 }
 
 /** The Events card: the search folded in its head, then the log's table and pager. */
 export const renderLog = (log, q = new URLSearchParams()) =>
-  card("Events", `<div id="log">${logBody(log, q)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events", aside: searchFold("status-log", q.get("q") ?? "", "Search ids and titles") });
+  card("Events", `<div id="log">${logBody(log)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events", aside: searchFold("status-log", q.get("q") ?? "", "Search ids and titles") });
 
 /** A search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
 // The card is wired once, at a first draw that comes before `more`, so the log goes on the state drawn last.
@@ -178,13 +178,13 @@ function wireLog(root) {
   const go = async (changes) => { setQuery(changes); page.state.log = await logOf(hashQuery()); redraw(); };
   let typing;
   card.addEventListener("click", (e) => {
-    const p = e.target.closest?.(".pager button[data-page]");
-    if (p) go({ page: p.dataset.page });
+    const p = e.target.closest?.(".pager button[data-before]");
+    if (p) go({ before: p.dataset.before });
   });
   card.addEventListener("input", (e) => {
     if (!e.target.matches?.('input[type="search"]')) return;
     clearTimeout(typing);
-    typing = setTimeout(() => go({ q: e.target.value.trim(), page: "" }), 200);
+    typing = setTimeout(() => go({ q: e.target.value.trim(), before: "" }), 200);
   });
 }
 

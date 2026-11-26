@@ -22,7 +22,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     now: "time", factory: { paused: "boolean", liveCap: "number", liveRuns: "number", runCap: "number", runStarts: "number", nextTick: "time?" },
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }],
     errored: [job], running: [job], runningIssues: "array",
-    queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
+    queued: [{ repo: "string", id: "number|string", ref: "string", href: "string", title: "string", stage: "string", kind: "string" }],
     asks: [{ key: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
     usage: "object?",
   },
@@ -50,7 +50,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   },
   "/api/issues/:id/media/:name": "text",
   "/api/jobs": { jobs: [row], next: "time?" },
-  "/api/log": { rows: [{ seq: "number", at: "time", action: "string", issue: "object?", job: "object?", keys: "array", title: "string?", by: "string?", took: "number?" }], total: "number" },
+  "/api/log": { rows: [{ seq: "number", at: "time", action: "string", issue: "object?", job: "object?", keys: "array", title: "string?", by: "string?", took: "number?" }], next: "number?", prev: "number?", from: "number", total: "number" },
   "/api/jobs/:id": {
     ...job, "item?": "object?", "ended?": "time", "model?": "string", defaults: "array", followups: "array", runs: [{ id: "string", kind: "string", state: "string", started: "time" }],
     holds: "array", "next?": "object", "rounds?": "number", "spec?": "string", subject: "string", investigations: "array", "*": "any",

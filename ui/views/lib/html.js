@@ -642,14 +642,17 @@ export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
   const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
   return c * sort.dir || (tie ? tie(a, b) : 0);
 });
+/** A pager button: a chevron glyph, its words in `aria-label` and `title`; `data` goes on as `data-*`. */
+const turn = (icon, label, data) => actButton("", data, { cls: "glyph" }).replace("><", ` aria-label="${esc(label)}" title="${esc(label)}"><wa-icon name="${icon}" aria-hidden="true"></wa-icon><`);
 /**
- * Under a long table: "Previous 50" and "Next 50" (`data-page` holds the page each goes to) and "51–100 of 345".
+ * Under a long table: a left chevron, "51–100 of 345", a right chevron. `data-page` holds the page each goes to, or
+ * for a list paged by cursor (`at`, the rows before this page), `back` and `fwd` are the `data-*` of each button.
  * @design pager
  */
-export function pager(page, total, step = 50, { cls = "" } = {}) {
-  const p = pageIn(page, total, step), from = (p - 1) * step, to = Math.min(total, from + step);
-  const prev = p > 1 ? actButton(`Previous ${step}`, { page: p - 1 }) : "", next = to < total ? actButton(`Next ${Math.min(step, total - to)}`, { page: p + 1 }) : "";
-  return `<div class="pager${cls ? ` ${cls}` : ""}">${prev}${next}<span class="of">${to - from > 1 && total > step ? `${from + 1}–${to}` : to} of ${total}</span></div>`;
+export function pager(page, total, step = 50, { cls = "", at, back, fwd } = {}) {
+  const p = pageIn(page, total, step), from = at ?? (p - 1) * step, to = Math.min(total, from + step);
+  const prev = from > 0 ? turn("chevron-left", `Previous ${step}`, back ?? { page: p - 1 }) : "", next = to < total ? turn("chevron-right", `Next ${Math.min(step, total - to)}`, fwd ?? { page: p + 1 }) : "";
+  return `<div class="pager${cls ? ` ${cls}` : ""}">${prev}<span class="of">${to - from > 1 && total > step ? `${from + 1}–${to}` : to} of ${total}</span>${next}</div>`;
 }
 /** Show page `page` of the rows in `box` (its `tbody` rows, or its list items) and hide the rest. */
 function turnPage(box, page, step = 50) {
@@ -680,7 +683,7 @@ if (typeof document !== "undefined") {
   // After a page turn, bring the top of the table into view. Capture runs before the view's handler draws the table
   // again, so the box is found while the button is still in it; a box drawn again is found by its id.
   document.addEventListener("click", (e) => {
-    const b = e.target.closest?.(".pager button[data-page]"), box = b?.closest(".paged, [id]");
+    const b = e.target.closest?.(".pager button"), box = b?.closest(".paged, [id]");
     if (!box) return;
     requestAnimationFrame(() => {
       const el = box.isConnected ? box : box.id && document.getElementById(box.id);

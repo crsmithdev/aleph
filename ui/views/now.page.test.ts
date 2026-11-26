@@ -6,6 +6,7 @@ import { chips, empty, error, meta } from "./lib/html.js";
 import { setCodes } from "../../lib/naming.ts";
 import { job, state } from "../fixtures/status-state.ts";
 import { full } from "../now.testkit.ts";
+import { SCHEMAS, check } from "../schemas.ts";
 
 afterEach(() => setCodes({}));
 
@@ -30,7 +31,7 @@ const BASE = { prev: { lost: 0.3, leadP50: 1200 }, base: { lost: 0.25, leadP50: 
 const USAGE = { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 const notes = [{ read: NOW, history: [...Array(29).fill(0), 3] }, { read: null, history: Array(30).fill(0) }];
 const MEMORY = { total: 2, notes, start: { aleph: { bytes: 3000, budget: 6000, core: ["a", "b"] } }, lint: { refuse: [], warn: [] }, misses: { unoffered_reads: 4 }, processes: { decay: { stale: [{ note: "N", over: 31 }] } } };
-const LOG = { total: 51, rows: [{ seq: 9, at: NOW, action: "landed", issue: { id: "a5", to: "#/issues/aleph/5" }, job: { id: "j7", to: "#/jobs/j7" }, title: "Fix it", by: "land", took: 65, run: "issue.5" }] };
+const LOG = { total: 51, next: 8, prev: null, from: 1, rows: [{ seq: 9, at: NOW, action: "landed", issue: { id: "a5", to: "#/issues/aleph/5" }, job: { id: "j7", to: "#/jobs/j7" }, keys: [], title: "Fix it", by: "land", took: 65, run: "issue.5" }] };
 
 const page = (s: object, q = "") => view.view.render({ ...state, usage: USAGE, now: NOW, ...s }, {}, new URLSearchParams(q)) as string;
 /** The HTML of the card with `id`. */
@@ -82,7 +83,7 @@ async function more(q = "", answers: Record<string, unknown> = {}) {
 
 test("more loads the flow and the event log for the address's window, the memory, and the last hour's runs", async () => {
   expect((await more()).urls).toEqual(["/api/flow?window=week&baseline=1", "/api/memory", "/api/memory/processes", "/api/jobs?window=hour&limit=500", "/api/log?window=week"]);
-  expect((await more("window=day&q=pager&page=2")).urls.at(-1)).toBe("/api/log?window=day&q=pager&page=2");
+  expect((await more("window=day&q=pager&before=30912")).urls.at(-1)).toBe("/api/log?window=day&q=pager&before=30912");
   const { s } = await more("", { "/api/jobs": { jobs: [{ id: "job.1" }] }, "/api/memory": { total: 3 }, "/api/memory/processes": { steps: [] } });
   expect(s.jobs).toEqual([{ id: "job.1" }]);
   expect(s.memory).toEqual({ total: 3, processes: { steps: [] } });
@@ -114,11 +115,13 @@ test("Issues in Motion draws a lane for each issue with a live run, with its run
 
 test("Waiting groups the issues that wait by their hold, and gives how long the oldest has waited", () => {
   const ev = { action: "held", detail: "file: ui/a.ts: job.4" };
-  const queued = [{ repo: "aleph", id: 7, title: "One", kind: "file", ev, heldAt: "2026-11-01T07:00:00Z" }, { repo: "aleph", id: 8, title: "Two", kind: "file", ev, heldAt: "2026-11-01T07:30:00Z" }, { repo: "aleph", id: 9, title: "Mine", kind: "job" }];
+  const queued = [{ repo: "aleph", id: 7, ref: "aleph-7", href: "#/issues/aleph/7", stage: "held", title: "One", kind: "file", ev, heldAt: "2026-11-01T07:00:00Z" }, { repo: "aleph", id: 8, ref: "aleph-8", href: "#/issues/aleph/8", stage: "held", title: "Two", kind: "file", ev, heldAt: "2026-11-01T07:30:00Z" }, { repo: "aleph", id: 9, ref: "aleph-9", href: "#/issues/aleph/9", stage: "held", title: "Mine", kind: "job" }];
+  expect(queued.flatMap((q) => check((SCHEMAS["/api/factory"] as any).queued[0], q, "$", false))).toEqual([]);
   const h = cardOf(page({ jobs: [], queued }), "motion");
   expect(h).toContain("Waiting");
   expect(h.match(/<tr>/g)?.length).toBe(2); // the head and one hold
   expect(h).toContain("ui/a.ts: job.4");
+  expect(h).toContain('href="#/issues/aleph/8"');
   expect(h).toContain('<td class="num">1h 00m</td>');
   expect(h).not.toContain("Mine");
   expect(cardOf(page({ jobs: [], queued: [] }), "motion")).not.toContain("Waiting");
@@ -160,6 +163,10 @@ test("Events starts each day and each page with a day row", () => {
   expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
 });
 
+test("the log fixture has the shape /api/log sends, so a changed route fails here", () => {
+  expect(check(SCHEMAS["/api/log"], LOG)).toEqual([]);
+});
+
 test("Events is a log: each row has its time, word, issue or else job, title, and by with took, with a search and a pager", () => {
   const h = cardOf(page({ log: LOG }, "q=fix"), "events");
   expect(h).toMatch(/<span class="aside"><label class="sfold">.*value="fix"/);
@@ -168,7 +175,8 @@ test("Events is a log: each row has its time, word, issue or else job, title, an
   expect(h).toContain('href="#/issues/aleph/5">a5</a>');
   expect(h).not.toContain('href="#/jobs/j7"');
   expect(h).toContain(`<td class="num">${meta(["land", "1m 05s"])}</td>`);
-  expect(h).toContain("Next 25");
+  expect(h).toContain('data-before="8" aria-label="Next 25"');
+  expect(cardOf(page({ log: { ...LOG, from: 26, prev: 0 } }), "events")).toContain('data-before="0" aria-label="Previous 25"');
   expect(cardOf(page({ log: { total: 0, rows: [] } }), "events")).toContain(empty());
   expect(cardOf(page({}), "events")).toContain("Loading the events");
 });

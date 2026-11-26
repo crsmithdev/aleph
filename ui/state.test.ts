@@ -164,7 +164,7 @@ describe("an intake run", () => {
     run(ids[0], { role: "intake", job: "intake-fac-2", name: "intake-fac-2", state: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting issue", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), kind: "ready" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, ref: "fac-2", href: "#/issues/fac/2", title: "waiting issue", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), kind: "ready" }]);
   });
 });
 

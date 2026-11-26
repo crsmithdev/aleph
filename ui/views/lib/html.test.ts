@@ -236,17 +236,25 @@ test("pageRows gives one page of rows, and a page past the end is the last page"
 
 test("pager: Next and Previous go one page each way, and the range names the rows shown", () => {
   const first = pager(1, 120), mid = pager(2, 120), last = pager(3, 120);
-  expect(first).toContain('data-page="2">Next 50<');
+  expect(first).toContain('data-page="2" aria-label="Next 50" title="Next 50"><wa-icon name="chevron-right"');
   expect(first).not.toContain("Previous");
   expect(first).toContain("1–50 of 120");
-  expect(mid).toContain('data-page="1">Previous 50<');
-  expect(mid).toContain('data-page="3">Next 20<');
+  expect(mid).toContain('data-page="1" aria-label="Previous 50" title="Previous 50"><wa-icon name="chevron-left"');
+  expect(mid).toContain('data-page="3" aria-label="Next 20"');
   expect(mid).toContain("51–100 of 120");
   expect(last).not.toContain("Next");
   expect(last).toContain("101–120 of 120");
   expect(pager(9, 120)).toBe(last);
   expect(pager(1, 12)).toBe('<div class="pager"><span class="of">12 of 12</span></div>');
   expect(pager(2, 51)).toContain("51 of 51");
+});
+
+test("pager by cursor: the range starts after the rows before it, and each button carries its cursor", () => {
+  const h = pager(1, 2891, 25, { at: 28, back: { before: "" }, fwd: { before: 30912 } });
+  expect(h).toContain("29–53 of 2891");
+  expect(h).toContain('data-before="" aria-label="Previous 25"');
+  expect(h).toContain('data-before="30912" aria-label="Next 25"');
+  expect(pager(1, 30, 25, { at: 0, fwd: { before: 5 } })).not.toContain("Previous");
 });
 
 test("sortRows sorts a copy, numbers by value, text in numeric mode, ties by tie", () => {

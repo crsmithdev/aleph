@@ -1071,6 +1071,7 @@ details.line > summary { display: flex; padding: 0; }
 details.line > summary::before { width: auto; }
 details.line > summary > span { order: -1; min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-right: var(--sp-6); color: var(--ink); }
 .pager { display: flex; align-items: center; gap: var(--sp-12); margin: var(--sp-10) 0 0; }
+.pager .act.glyph { display: inline-grid; place-items: center; width: var(--ctl-h); height: var(--ctl-h); padding: 0; }
 .pager .of { font: var(--fw-mid) var(--fs-xs) var(--num); font-variant-numeric: tabular-nums; color: var(--muted); }
 
 .clear { margin: 0 0 var(--sp-28); padding: var(--sp-10) 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); font-size: var(--fs-sm); color: var(--ink-2); }
