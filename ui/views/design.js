@@ -361,6 +361,7 @@ function drawTokens(root) {
     `<div class="design-tok"><i style="width:96px;height:48px;background:var(--surface);border-radius:var(--r-ctl);box-shadow:var(${n})"></i><code>${n}</code></div>`).join("") +
     `<div class="design-tok"><i style="width:96px;height:var(--ctl-h);border:1px solid var(--ink-2);border-radius:var(--r-ctl)"></i><code>--ctl-h ${val("--ctl-h")}</code></div>` +
     `<div class="design-tok"><i style="width:96px;height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-h ${val("--bar-h")}</code></div>` +
+    `<div class="design-tok"><i style="width:var(--bar-w);height:var(--bar-h);background:var(--series-1);border-radius:var(--r-hair)"></i><code>--bar-w ${val("--bar-w")}</code></div>` +
     `<div class="design-tok"><i style="width:96px;height:32px;background:var(--series-1);opacity:var(--dim)"></i><code>--dim ${val("--dim")}</code></div>` +
     ["--z-rowlink", "--z-sticky", "--z-overlay", "--t-fast", "--t-mid", "--t-slow", "--ease"].map((n) => `<div class="design-tok"><code>${n} ${val(n)}</code></div>`).join(""));
 }
