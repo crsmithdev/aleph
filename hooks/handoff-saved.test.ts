@@ -70,6 +70,8 @@ describe("the clear and pickup cycle", () => {
     expect(stop).toContain(plain);
     expect(log()).toBe("");
     const path = join(root, "projects", "proj", "p7.md");
+    mkdirSync(join(root, "projects", "proj"));
+    writeFileSync(path, "# Handoff\n\n## Intent\n\nFix the gauge\n");
     const out = JSON.parse(run(path, env));
     expect(out.continue).toBe(false);
     expect(out.stopReason).toContain("on its own");
@@ -77,7 +79,7 @@ describe("the clear and pickup cycle", () => {
     expect(log()).not.toContain("/clear");
     await Bun.spawn(["sh", "-c", `echo go > ${join(root, "gate")}`]).exited;
     await Bun.file(join(root, "done")).text();
-    expect(log().trim().split("\n")).toEqual(["agent wait p7 --until idle --until done", "agent prompt p7 /clear --wait", `agent prompt p7 /aleph:pickup ${path} --wait`]);
+    expect(log().trim().split("\n")).toEqual(["agent wait p7 --until idle --until done", "agent prompt p7 /clear --wait", "agent prompt p7 /rename Fix the gauge --wait", `agent prompt p7 /aleph:pickup ${path} --wait`]);
   });
 
   test("in the desktop app this terminal's hc file runs the hc cycle, and another terminal's file or the flat file starts nothing", async () => {
@@ -90,11 +92,13 @@ describe("the clear and pickup cycle", () => {
     }
     expect(log()).toBe("");
     const path = join(root, "projects", "proj", "hc-t12.md");
+    mkdirSync(join(root, "projects", "proj"));
+    writeFileSync(path, "# Handoff\n\n## Intent\n\nFix the gauge\n");
     const out = JSON.parse(run(path, env));
     expect(out.stopReason).toContain("on its own");
     expect(out.stopReason).toContain("do not run /clear");
     await Bun.file(join(root, "done")).text();
-    expect(log().trim().split("\n")).toEqual(["wait t12", "send t12 /clear", "wait t12", `send t12 /aleph:pickup ${path}`]);
-    expect(readFileSync(join(root, "ids"), "utf8").trim().split("\n")).toEqual(["unset", "unset"]);
+    expect(log().trim().split("\n")).toEqual(["wait t12", "send t12 /clear", "wait t12", "send t12 /rename Fix the gauge", "wait t12", `send t12 /aleph:pickup ${path}`]);
+    expect(readFileSync(join(root, "ids"), "utf8").trim().split("\n")).toEqual(["unset", "unset", "unset"]);
   });
 });
