@@ -186,7 +186,7 @@ test("Memory shows the core lines demoted in the window, the offers per day and 
   expect(m).toContain(`<h3 class="sub-head">Demoted</h3>${empty()}`);
   expect(m).toContain('<aleph-chart key="status/offers" bare>');
   const side = m.slice(m.indexOf('<dl class="sstats">'), m.indexOf("</dl>")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-  expect(side).toBe("Notes 2 Offered 1 Never offered 1 Unoffered reads 4 Refused 0 Stale 1 1 late");
+  expect(side).toBe("Notes 2 Offered 1 Never 1 Unoffered 4 Refused 0 Stale 1 1 late");
   expect(view.offersFrame(MEMORY, Date.parse(NOW)).rows.map((r: any) => r.offers)).toEqual([0, 0, 0, 0, 0, 0, 3]);
   // A global line shows in each scope's list and draws once; a day that ends before the week starts is out of it.
   const line = (title: string, on: string) => ({ title, core: "c", scope: "global", on, by: "write" });

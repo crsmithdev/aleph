@@ -84,7 +84,7 @@ test("Efficiency, Flow and Memory carry the page's figures", () => {
   const text = plain(render(state, flow, { width: 120, height: 80 }));
   expect(section(text, "Efficiency")).toEqual(["8.0h of 10h reached main", "landed 8.0h · failed 2.0h", "Lost Time by Cause", "check 1.5h", "timeout 0.5h", "Failed Runs by Stage", "Implement 1 of 3", "Recheck 1 of 3"]);
   expect(section(text, "Flow")).toEqual(["Filed 9 · Landed 7 · Dropped 1 · First Pass 71% · Open 4 +6 · Asks 3 1 yours", "Time by Phase, p90", "Intake 0 1m 00s", "Queue 2 1m 30s", "Implement 1 1h 00m", "Land 0 –"]);
-  expect(section(text, "Memory")).toEqual(["aleph 2 lines 5,900 / 6,000 B", "Notes 3 · Offered 1 · Never offered 2 · Unoffered reads 2 · Refused 0 · Stale 1 1 late"]);
+  expect(section(text, "Memory")).toEqual(["aleph 2 lines 5,900 / 6,000 B", "Notes 3 · Offered 1 · Never 2 · Unoffered 2 · Refused 0 · Stale 1 1 late"]);
 });
 
 test("the data gives the mod each bar's share of the largest and the series of the two column charts", () => {

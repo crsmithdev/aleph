@@ -218,8 +218,8 @@ export function memoryStats(m, now) {
   return [
     { k: "Notes", v: count(m.total) },
     { k: "Offered", v: count(m.notes.filter((n) => offered(n, Date.parse(now))).length), title: "Notes that recall offered to an agent in 7 days" },
-    { k: "Never offered", v: count(m.notes.filter((n) => !n.read).length), title: "Notes that recall never offered" },
-    { k: "Unoffered reads", v: count(m.misses?.unoffered_reads), title: "Wiki reads in 7 days that no offer preceded" },
+    { k: "Never", v: count(m.notes.filter((n) => !n.read).length), title: "Notes that recall never offered" },
+    { k: "Unoffered", v: count(m.misses?.unoffered_reads), title: "Wiki reads in 7 days that no offer preceded" },
     { k: "Refused", v: count(m.lint.refuse.length), state: m.lint.refuse.length ? "failed" : "", title: "Notes that lint refuses" },
     { k: "Stale", v: count(stale.length), note: `${count(late)} late`, title: `${count(stale.length)} notes past their re-check date, ${count(late)} by more than 30 days` },
   ];
