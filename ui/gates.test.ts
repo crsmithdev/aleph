@@ -636,7 +636,7 @@ test("the Monitor draws **text** as bold in the list, and escapes other HTML in 
 
 test("the body has the tick, the suite and the monitor with their last run from the tick table; with no record each has not run", async () => {
   const none: any = (await body()).schedules;
-  expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d", hour: 0 }]);
+  expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min", n: 1, unit: "min" }, { name: "suite", last: null, result: null, every: "1h", n: 1, unit: "h" }, { name: "monitor", last: null, result: null, every: "1d", n: null, unit: null, hour: 0 }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(find(h, "h2").map((x) => x.text)).toEqual(["Schedules"]);
   // One settings list: no table, a row per schedule with its control and Save, and a miss text for the run it has not had.
@@ -655,14 +655,17 @@ test("the body has the tick, the suite and the monitor with their last run from 
     ["Monitor hour", true, "0", [], ["Save"]],
   ]);
   expect(text(h)).not.toContain("has not run");
+  // The box and the select come from the number and unit, not from the text of the interval.
+  const secs = gates.renderSchedules({ schedules: [{ name: "tick", last: null, result: null, every: null, n: 30, unit: "s" }] });
+  expect([find(secs, "input")[0].attrs.value, find(secs, "option[selected]").map((x) => x.text)]).toEqual(["30", ["seconds"]]);
   const ran = { "suite plain": { last: ago(11), result: "green" }, "suite held": { last: ago(10), result: "green" }, monitor: { last: ago(50), result: "7 findings" }, ci: { last: ago(9), result: null }, firefight: { last: ago(2), result: null } };
   for (const [k, v] of Object.entries(ran)) setTick(k, v);
   putJson("state", "tick.missed", ["stalled:x"]);
   const d: any = (await body()).schedules;
   expect(d).toEqual([
-    { name: "tick", last: ago(2), result: "1 missed", every: "1min" },
-    { name: "suite", last: ago(10), result: "held: green; plain: green", every: "1h" },
-    { name: "monitor", last: ago(50), result: "7 findings", every: "1d", hour: 0 },
+    { name: "tick", last: ago(2), result: "1 missed", every: "1min", n: 1, unit: "min" },
+    { name: "suite", last: ago(10), result: "held: green; plain: green", every: "1h", n: 1, unit: "h" },
+    { name: "monitor", last: ago(50), result: "7 findings", every: "1d", n: null, unit: null, hour: 0 },
   ]);
   const t = gates.renderSchedules({ ...(await body()), schedules: d });
   expect(text(t)).not.toContain("has not run");

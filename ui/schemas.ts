@@ -31,7 +31,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/attention/facts": { "*": [attentionRow] },
   "/api/automation": {
     now: "time", caps: { "*": { env: "string", min: "number", set: "boolean" } }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
-    schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
+    schedules: [{ name: "string", every: "string?", n: "number?", unit: "string?" }], monitor: "object?", backend: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
     held: ["string"], repoHeld: "array", log: { days: "number", max: "number", total: "number", entries: "array" },
   },
   "/api/flow": {

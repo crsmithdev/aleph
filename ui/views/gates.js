@@ -79,13 +79,11 @@ export function renderMonitor(d) {
   return card(`Monitor, ${day(localMs(m.day))}`, body || empty(), { id: "monitor", count: count(m.findings.length), aside: linkButton("Close", "#/automation") });
 }
 
-/** An interval as systemd writes it ("30s", "1min", "2h") split into a number and its unit, or null for any other form. */
 const UNITS = [["s", "seconds"], ["min", "minutes"], ["h", "hours"]];
-const splitEvery = (every) => { const m = /^([1-9]\d*)(s|min|h)$/.exec(every ?? ""); return m ? { n: m[1], unit: m[2] } : null; };
 
 /** The interval of a schedule as a setting: a number and a unit, with a Save button that posts them. The hint gives the last run's result and when it ran. */
 function everySetting(s, hint) {
-  const v = splitEvery(s.every) ?? { n: "", unit: "min" }, id = `every-${s.name}`;
+  const v = { n: s.n ?? "", unit: s.unit ?? "min" }, id = `every-${s.name}`;
   return setting(`${s.name[0].toUpperCase()}${s.name.slice(1)} every`, inputBox("n", v.n, { id, type: "number", attrs: ` min="1" step="1" inputmode="numeric" required` }) +
     selectBox(`${s.name} unit`, "unit", UNITS.map(([value, label]) => ({ value, label })), v.unit), { id, save: "Save", hint, attrs: ` data-schedule="${esc(s.name)}"` });
 }

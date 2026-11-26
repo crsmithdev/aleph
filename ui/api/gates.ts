@@ -147,7 +147,13 @@ function repoHeld(): { repo: string; held: string[] }[] {
 /** The settings the Controls panel edits besides the two caps, as the factory reads them now. */
 const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds(), fixRounds: fixRounds(), landBatch: landBatch(), loadLimit: loadLimit() });
 
-function schedules(): { name: string; last: string | null; result: string | null; every: string | null; hour?: number }[] {
+/** A timer's interval as systemd writes it ("30s", "1min", "2h"), and its number and unit; null for each when it has another form. */
+function every(timer: string) {
+  const text = intervalOf(timer), m = /^([1-9]\d*)(s|min|h)$/.exec(text ?? "");
+  return { every: text, n: m ? Number(m[1]) : null, unit: m ? m[2] : null };
+}
+
+function schedules(): { name: string; last: string | null; result: string | null; every: string | null; n: number | null; unit: string | null; hour?: number }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   const rows = tickRows(), missed = tickMissed();
   const times = ["ci", "firefight"].map((k) => Date.parse(rows[k]?.last ?? "")).filter((x) => !Number.isNaN(x));
@@ -156,9 +162,9 @@ function schedules(): { name: string; last: string | null; result: string | null
   const monitor = rows.monitor?.last ? { at: rows.monitor.last, result: rows.monitor.result } : null;
   const runs = Object.entries(suite).sort(([a], [b]) => (a < b ? -1 : 1));
   return [
-    { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null, every: intervalOf(TIMERS.tick) },
-    { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null, every: intervalOf(TIMERS.suite) },
-    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null, every: "1d", hour: monitorHour() },
+    { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null, ...every(TIMERS.tick) },
+    { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null, ...every(TIMERS.suite) },
+    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null, every: "1d", n: null, unit: null, hour: monitorHour() },
   ];
 }
 
