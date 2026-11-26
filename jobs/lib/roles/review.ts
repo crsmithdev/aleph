@@ -40,8 +40,10 @@ function reviewDiff(cwd: string, range: { from: string; to: string; merge: boole
 /**
  * The reviewer call of the worker verdict, on the review model with the build's env. It gives the reason to hold, or
  * null on a pass, and the cost; it fails closed. `onSpawn` gets the reviewer's process, so the unit's stop signal reaches it.
+ * An off review starts no reviewer and gives no verdict, so the build holds for the user.
  */
 export const reviewer = (onSpawn: (p: ReturnType<typeof Bun.spawn>) => void): Review => async (folder, run, repo, base, branch, findings, changed, env, keep) => {
+  if (!readModels().review.enabled) return { reason: "reviewer: no verdict (the review is off)", none: true };
   const spec = jobSpec(run);
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());

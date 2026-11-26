@@ -152,13 +152,13 @@ const loading = (outs: any[]) => renderFactoryAgents(S, { ...D, agents: { ...age
 /** The list row of a model setting. */
 const row = (h: string, key: string) => h.match(new RegExp(`<li class="lrow"[^>]*data-key="${key}".*?</li>`))![0];
 /** The cell columns of a row: runs, success, p50, cost, per output. */
-const cells = (r: string) => [...r.matchAll(/<span class="c">(.*?)<\/span>(?=<span class="c">|<\/li>)/g)].map((x) => x[1]);
+const cells = (r: string) => [...r.matchAll(/<span class="c(?: bar)?">(.*?)<\/span>(?=<span class="c|<\/li>)/g)].map((x) => x[1]);
 
 test("the Roles list has three groups of rows, each with a select and a switch on every role", () => {
   const h = page([]);
   expect([...h.matchAll(/<h3 class="sub-head">([^<]+)<\/h3><span class="count">(\d+)</g)].map((x) => [x[1], x[2]])).toEqual([["Workers", "3"], ["Review and Intake", "3"], ["Oversight", "5"]]);
   expect([...h.matchAll(/<li class="lrow"[^>]*data-key="(\w+)"/g)].map((x) => x[1])).toEqual(["small", "medium", "large", "review", "intake", "judge", "director", "monitor", "housekeeper", "maintainer", "investigator"]);
-  expect([...h.matchAll(/<span class="h">([^<]+)</g)].map((x) => x[1]).slice(0, 5)).toEqual(["Runs", "Success", "p50", "Cost", "Per Output"]);
+  expect([...h.matchAll(/<span class="h">([^<]+)</g)].map((x) => x[1]).slice(0, 10)).toEqual(["Runs", "Success", "p50", "$", "$ / change", "Runs", "Success", "p50", "$", "$ / output"]);
   // The second offer of each key is configured, so a select that kept its first option fails.
   const models = Object.fromEntries(Object.keys(OFFERS).map((k) => [k, { enabled: true, model: (OFFERS as any)[k][1] }]));
   const all = page([], { ...M, models });
@@ -171,10 +171,9 @@ test("the Roles list has three groups of rows, each with a select and a switch o
   }
 });
 
-test("every switch is live but the review's, which is checked and disabled with the reason", () => {
+test("every switch is live", () => {
   const h = page([], { ...M, models: Object.fromEntries(Object.entries(M.models).map(([k, v]) => [k, { ...v, enabled: true }])) });
-  for (const k of ["small", "medium", "large", "intake", "judge", "director", "monitor", "housekeeper", "maintainer", "investigator"]) expect(row(h, k)).toMatch(new RegExp(`data-name="${k}" aria-label="[\\w ]+ on" checked>`));
-  expect(row(h, "review")).toContain('data-name="review" aria-label="Reviewer on" checked disabled title="A build needs its review to land">');
+  for (const k of ["small", "medium", "large", "review", "intake", "judge", "director", "monitor", "housekeeper", "maintainer", "investigator"]) expect(row(h, k)).toMatch(new RegExp(`data-name="${k}" aria-label="[\\w ]+ on" checked>`));
   expect(h.match(/type="checkbox"/g)!.length).toBe(11);
 });
 
@@ -220,17 +219,17 @@ test("a count goes through count()", () => {
   expect(cells(row(page([full("worker", "haiku", { size: "small", runs: 1234 })]), "small"))[0]).toBe("1,234");
 });
 
-test("an outcome on a full model id joins the row of its short model, and earlier models go in the inspector", () => {
+test("an outcome on a full model id joins the row of its short model, and each earlier model is a row under it", () => {
   const o = (role: string, model: string, runs: number, extra: any = {}) => ({ ...full(role, model), runs, ...extra });
   const outs = [o("intake", "claude-opus-5-5", 151), o("worker", "gpt-oss-20b", 14, { size: "small", from: "2026-10-20T08:00:00Z", to: "2026-10-23T08:00:00Z" }), o("worker", "haiku", 11, { size: "small" }), o("reviewer", "unset", 3)];
   const h = page(outs);
   expect(cells(row(h, "intake"))[0]).toBe("151");
   expect(cells(row(h, "small"))[0]).toBe("11");
   expect(h.match(/data-key="intake"/g)!.length).toBe(1);
-  const t = h.match(/<template data-inspect="small">.*?<\/template>/s)![0];
-  expect(t).toContain("Earlier Models");
-  expect(t).toMatch(/<td>gpt-oss-20b<\/td><td>Oct 23<\/td><td class="num">14<\/td>/);
-  expect(t).toContain("Small · haiku");
+  expect([...h.matchAll(/<li class="lrow"[^>]*data-key="([\w:.-]+)"/g)].map((x) => x[1]).slice(0, 2)).toEqual(["small", "small:gpt-oss-20b"]);
+  expect(cells(row(h, "small:gpt-oss-20b"))[0]).toBe("14");
+  expect(h.match(/<template data-inspect="small">.*?<\/template>/s)![0]).toContain("Small · haiku");
+  expect(h.match(/<template data-inspect="small:gpt-oss-20b">.*?<\/template>/s)![0]).toContain("<dt>Until</dt><dd>Oct 23</dd>");
   expect(h).not.toContain("not recorded");
 });
 

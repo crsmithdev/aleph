@@ -67,7 +67,7 @@ describe("the Hooks page", () => {
   test("a row draws its outcomes as one bar with the numbers in its tooltip, the holds and the error causes; a hook with none has no bar", () => {
     const html = page("");
     const row = html.split('data-key="Stop/one way"')[1].split("</li>")[0];
-    expect(row).toMatch(/<span class="c"><span class="rowbar"><span class="meter"[^>]*title="caught 1, no effect 1"/);
+    expect(row).toMatch(/<span class="c bar"><span class="rowbar"><span class="meter"[^>]*title="caught 1, no effect 1"/);
     expect(row).toContain('<span class="c">2</span>');
     expect(row).not.toContain("cause");
     const bare = page("", { ...data, holds: [], hooks: [{ ...data.hooks[0], holds: 0 }] }).split('data-key="Stop/one way"')[1].split("</li>")[0];

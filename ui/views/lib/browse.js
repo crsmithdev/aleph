@@ -35,10 +35,13 @@ function plan({ groups, cap = Infinity }, st) {
   });
 }
 
+/** The class of each row bar of bars.js. */
+const BAR = /class="(rowbar|ratebar|runstrip|logmeter)[ "]/;
+
 /** The rows of a list on one grid, so the columns of every group line up. The selected row is `sel`. */
 function rows(list, st, sel) {
   const on = Boolean(st.q.trim() || Object.values(st.f).some(Boolean)), parts = plan(list, st);
-  const row = (r) => `<li class="lrow" tabindex="0" data-key="${esc(r.key)}" aria-current="${r.key === sel}"><span class="lead">${r.lead}</span><span class="main">${r.main}</span>${r.cells.map((c) => `<span class="c">${c}</span>`).join("")}</li>`;
+  const row = (r) => `<li class="lrow" tabindex="0" data-key="${esc(r.key)}" aria-current="${r.key === sel}"><span class="lead">${r.lead}</span><span class="main">${r.main}</span>${r.cells.map((c, i) => `<span class="${i === list.wide ? "c bar" : "c"}">${c}</span>`).join("")}</li>`;
   const group = ({ g, hits, drawn }) => {
     // A group with no rows says so, unless a search or a filter is on: then only the groups with matches draw.
     if ((g.rows.length || on) && !drawn.length) return "";
@@ -60,14 +63,17 @@ function rows(list, st, sel) {
  * @design list-surface
  */
 export function browse({ id, label, search, hint = "", filters = [], groups, cap }) {
-  const list = { groups, cap };
+  const n = Math.max(0, ...groups.map((g) => g.heads.length));
+  // The first cell column that holds a row bar takes the room the other columns leave (rule page-bar-wide).
+  const wide = groups.flatMap((g) => g.rows).map((r) => r.cells.findIndex((c) => BAR.test(c))).find((i) => i >= 0) ?? -1;
+  const list = { groups, cap, wide };
   lists.set(id, list);
   const st = stateOf(id, filters), all = groups.flatMap((g) => g.rows), shown = plan(list, st).flatMap((p) => p.drawn);
   const sel = (all.find((r) => r.key === kept(`browse.${id}`, {}).sel) ?? shown[0] ?? all[0])?.key, cur = all.find((r) => r.key === sel);
   const bar = searchBox(`browse-${id}`, st.q, search, hint ? `<span class="hint">${esc(hint)}</span>` : "") +
     (filters.length ? filterBar(filters.map((f) => ({ label: f.label, name: f.name, value: st.f[f.name], data: f.options.length > SEGS, options: [{ value: "", label: "All" }, ...f.options.map((o) => ({ value: o, label: o }))] }))) : "");
   const ins = `<aside class="card ins" aria-label="Inspector">${cur ? inspect(cur) : empty("Select a row")}</aside>`;
-  return `<div class="browse" data-browse="${esc(id)}"><section class="card lcard" aria-label="${esc(label)}">${bar}<ul class="lrows" style="--n: ${Math.max(0, ...groups.map((g) => g.heads.length))}">${rows(list, st, sel)}</ul></section>${ins}` +
+  return `<div class="browse" data-browse="${esc(id)}"><section class="card lcard" aria-label="${esc(label)}">${bar}<ul class="lrows" style="--n: ${n}${wide < 0 ? "" : `; --cols: ${Array.from({ length: n }, (_, i) => (i === wide ? "minmax(var(--bar-w), 1fr)" : "max-content")).join(" ")}`}">${rows(list, st, sel)}</ul></section>${ins}` +
     shown.map((r) => `<template data-inspect="${esc(r.key)}">${inspect(r)}</template>`).join("") + `</div>`;
 }
 

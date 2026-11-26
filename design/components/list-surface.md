@@ -26,6 +26,7 @@ The list surface is one card that holds a search, the filters and the rows of a 
 ## Rules
 
 - Every group's rows share one grid, so the columns line up across groups. `heads` names the cell columns; a group with fewer columns leaves its last ones empty.
+- The first cell column that holds a row bar shares the spare width with the main cell, and its bar fills the cell (`page-bar-wide`).
 - A row is `{ key, lead, main, cells, text, data, inspect }`. `text` is what the search matches. `data` holds the values the filters match. `inspect` is HTML, or a function that gives it: a row that is not drawn builds its inspector when a search brings it up.
 - A group holds every row. The search and the filters match them all, and the group draws the first `cap` matches, with an "N of M" line counted against the matches. `browse({ cap })` limits all groups together, as the log of days needs. A `more` line is a note after the rows.
 - A filter with more than 3 options is a select: its segments would run past a phone's width.

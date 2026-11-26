@@ -126,14 +126,14 @@ const ASK = {
   situation: "Two tables show a day with no time two ways: Oct 28 and 10/28.",
   actions: [{ label: "Oct 28", act: "design", path: "/api/design-act", primary: true }, { label: "10/28", act: "design", path: "/api/design-act" }, { label: "Deny", act: "design", path: "/api/design-act", input: { name: "reason" } }],
 };
-const BROWSE = [["Today", [["a1706", "Show the cost of each run on its job page", "landed", 4.12, "3h ago", "yours"], ["a1705", "Fail CI on a new hard-coded colour in ui/", "running", 1.37, "1h ago", "factory"]]],
-  ["Earlier", [["a1700", "Give each component in design.md a live render, a title long enough to be cut at the end of the line", "landed", 9.1, "2d ago", "yours"], ["a1699", "Show the p90 on the flow chart", "landed", 2.2, "3d ago", "yours"], ["a1698", "Move the sidebar dock", "landed", 1.4, "4d ago", "yours"]]]];
-const browseRow = ([id, title, state, cost, ago, who]) => ({
-  key: id, lead: idLink(id, "#/design"), main: `<span class="t" title="${title}">${title}</span>${badge(state)}`, cells: [money(cost), ago], text: `${id} ${title}`, data: { who },
+const BROWSE = [["Today", [["a1706", "Show the cost of each run on its job page", "landed", 4.12, "3h ago", "yours", 0.92], ["a1705", "Fail CI on a new hard-coded colour in ui/", "running", 1.37, "1h ago", "factory", 0.6]]],
+  ["Earlier", [["a1700", "Give each component in design.md a live render, a title long enough to be cut at the end of the line", "landed", 9.1, "2d ago", "yours", 0.85], ["a1699", "Show the p90 on the flow chart", "landed", 2.2, "3d ago", "yours", 0.97], ["a1698", "Move the sidebar dock", "landed", 1.4, "4d ago", "yours", 0.7]]]];
+const browseRow = ([id, title, state, cost, ago, who, pass]) => ({
+  key: id, lead: idLink(id, "#/design"), main: `<span class="t" title="${title}">${title}</span>${badge(state)}`, cells: [rateBar(pass, 0.8), money(cost), ago], text: `${id} ${title}`, data: { who },
   inspect: inspector({ id, title, status: statusRow(badge(state), "", ""), rows: [["Cost", money(cost)], ["Last", ago]], href: "#/design",
     body: `${subHead("Runs")}${dataTable(heads(["Stage", "Took"], ["Took"]), trow([cell("build"), cell(dur(574), { num: true })]))}${settings("Land", [setting("Land after", inputBox("minutes", "0", { id: `design-land-${id}`, type: "number", attrs: ' min="0"' }), { id: `design-land-${id}`, save: "Save" })])}` }),
 });
-const BROWSE_GROUPS = BROWSE.map(([title, rs], i) => ({ title, count: String(rs.length), heads: ["Cost", "Last"], rows: rs.map(browseRow), ...(i ? { cap: 1 } : {}) }));
+const BROWSE_GROUPS = BROWSE.map(([title, rs], i) => ({ title, count: String(rs.length), heads: ["Pass", "Cost", "Last"], rows: rs.map(browseRow), ...(i ? { cap: 1 } : {}) }));
 const VIEWS = [{ id: "list", label: "List" }, { id: "flow", label: "Flow" }];
 const RUNS = [{ secs: 540, cls: "done", tip: "build done 9m 00s" }, { secs: 120, cls: "error", tip: "checks error 2m 00s" }, { secs: 300, cls: "run", tip: "build running 5m 00s" }];
 

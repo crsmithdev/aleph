@@ -433,6 +433,12 @@ A row hides its defaults: no `medium`, no `aleph`, no zero. A column that shows 
 
 A row carries its evidence: a run strip, an outcome bar or a rate against its baseline (`row-bars`).
 
+### A bar column takes the spare width
+- id: page-bar-wide
+- scope: global
+
+A list column that holds a row bar grows to take the room the other columns leave, and its bar fills the cell. `browse()` finds the column, and the column is at least `--bar-w` wide.
+
 ### No metric cards first
 - id: page-no-cards-first
 - scope: global

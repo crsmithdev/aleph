@@ -2,7 +2,7 @@
 import { get, moved, redraw } from "./lib/router.js";
 import { postJson, scope } from "./lib/address.js";
 import { cardPct, count, day, dur, money, pct, shortModel } from "./lib/format.js";
-import { cell, dataTable, empty, error, esc, heads, loadingLine, notice, row, say, selectBox, subHead } from "./lib/html.js";
+import { empty, error, esc, loadingLine, notice, say, selectBox } from "./lib/html.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "./lib/chart.js";
 import { flowOf, weekGone } from "./lib/flow-parts.js";
@@ -27,12 +27,11 @@ const GROUPS = [
   ["Oversight", [["director", "director"], ["monitor", "monitor"], ["housekeeper", "housekeeper"], ["maintainer", "maintainer"], ["investigator", "investigator"]]],
 ];
 
-/** What waits while a role is off, for its Off title: no run starts, and no work fails. The review stays on: a build with no verdict holds for the user. */
+/** What waits while a role is off, for its Off title: no run starts, and no work fails. */
 const WAITS = {
-  intake: "Issues wait unsorted", director: "Asks wait for you", monitor: "No daily reading", housekeeper: "Parked issues wait",
+  review: "Builds wait for you", intake: "Issues wait unsorted", director: "Asks wait for you", monitor: "No daily reading", housekeeper: "Parked issues wait",
   maintainer: "Memory passes wait", judge: "Stop gate passes unjudged", investigator: "No investigations",
 };
-const LOCKED = { review: "A build needs its review to land" };
 
 /** The noun of each role's output; a role not named here counts its OK runs. */
 const NOUNS = { worker: "landed", reviewer: "verdicts", intake: "triages", director: "steps", monitor: "readings", housekeeper: "sweeps", judge: "calls" };
@@ -46,40 +45,46 @@ function goesTo(key, set) {
 /** What a run made: landed builds for a worker, verdicts for the reviewer, OK runs for another role. */
 const output = (o) => (o.role === "worker" ? o.built : o.role === "reviewer" ? o.pass + o.fail : o.succeeded);
 
-/** The inspector of one role: the figures of its model, then each earlier model. */
-function roleInspect(key, role, label, model, cur, past) {
+/** The inspector of one role's model: its figures, with the day it ended for an earlier model. */
+function roleInspect(key, role, label, model, cur, until) {
   const out = cur ? output(cur) : 0;
   const kv = !cur ? [] : [
     ["Runs", esc(count(cur.runs))], ["Failed", cur.failed ? esc(count(cur.failed)) : ""], ["Error", cur.error ? esc(count(cur.error)) : ""],
     ["Success", esc(cardPct(cur.rate))], ["Baseline", cur.baseline == null ? "" : esc(cardPct(cur.baseline))],
     ["First Pass", cur.built ? esc(cardPct(cur.firstPass / cur.built)) : ""], ["Review Pass", cur.reviewPass == null ? "" : esc(cardPct(cur.reviewPass))],
     ["p50", esc(dur(cur.p50))], ["p95", esc(dur(cur.p95))], ["Cost", cur.cost ? esc(money(cur.cost)) : ""],
-    ["Output", out ? esc(`${count(out)} ${NOUNS[role] ?? "runs"}`) : ""], ["Since", esc(day(cur.from))],
+    ["Output", out ? esc(`${count(out)} ${NOUNS[role] ?? "runs"}`) : ""], ["Since", esc(day(cur.from))], ["Until", until ? esc(day(cur.to)) : ""],
   ];
-  const table = past.length ? subHead("Earlier Models") + dataTable(heads(["Model", "Until", "Runs", "Success", "Cost"], ["Runs", "Success", "Cost"]),
-    past.map((o) => row([cell(shortModel(o.model)), cell(day(o.to)), cell(count(o.runs), { num: true }), cell(cardPct(o.rate), { num: true }), cell(o.cost ? money(o.cost) : "", { num: true })])).join("")) : "";
-  return inspector({ id: key, title: model ? `${label} · ${shortModel(model)}` : label, rows: kv, body: table });
+  return inspector({ id: key, title: model ? `${label} · ${shortModel(model)}` : label, rows: kv });
 }
 
-/** One role as a row: the switch and the model select, then runs, success, p50, cost and cost per output; a blank for no value. `m` is /api/models, or null while it loads or after it failed. */
-function roleRow(key, role, outs, m) {
+/** The cells of one model's outcomes: runs, success, p50, cost and cost per output; a blank for no value. */
+function cellsOf(o) {
+  const out = output(o);
+  const rate = o.ended < MIN_ENDED ? esc(`${count(o.succeeded)}/${count(o.ended)}`) : rateBar(o.rate, o.baseline);
+  return [esc(count(o.runs)), rate, esc(dur(o.p50)), o.cost ? esc(money(o.cost)) : "", out && o.cost ? esc(money(o.cost / out)) : ""];
+}
+
+/** One role as its rows: the switch and the model select with its model's figures, then a row for each earlier model, newest first. `m` is /api/models, or null while it loads or after it failed. */
+function roleRows(key, role, outs, m) {
   const set = m?.models ?? {}, label = LABELS[key] ?? NAMES[role];
   const all = outs.filter((o) => o.role === role && o.runs && (role !== "worker" || (o.size ?? "unsized") === key));
   const last = [...all].sort((x, y) => (y.to ?? "").localeCompare(x.to ?? ""));
   const now = set[key]?.model ?? last[0]?.model, cur = all.find((o) => shortModel(o.model) === shortModel(now)), past = last.filter((o) => o !== cur);
   const off = set[key] && !set[key].enabled;
   const ctl = () => {
-    const sw = `<input type="checkbox" data-name="${esc(key)}" aria-label="${esc(label)} on"${set[key].enabled ? " checked" : ""}${LOCKED[key] ? ` disabled title="${esc(LOCKED[key])}"` : ""}>`;
+    const sw = `<input type="checkbox" data-name="${esc(key)}" aria-label="${esc(label)} on"${set[key].enabled ? " checked" : ""}>`;
     const pick = selectBox(`${label} model`, key, m.offers[key].map((v) => ({ value: v, label: shortModel(v), disabled: m.down.includes(v) })), set[key].model, { id: `model-${key}`, attrs: ` data-name="${esc(key)}"` });
     return `<span class="rolectl">${sw}${off ? `<span class="quiet" title="${esc(key in SIZES ? `Goes to ${goesTo(key, set)}` : WAITS[key])}">Off</span>` : pick}</span>`;
   };
-  const main = set[key] ? ctl() : esc(shortModel(now));
-  const out = cur ? output(cur) : 0;
-  const rate = !cur ? "" : cur.ended < MIN_ENDED ? esc(`${count(cur.succeeded)}/${count(cur.ended)}`) : rateBar(cur.rate, cur.baseline);
-  return {
-    key, lead: esc(label), main, text: `${label} ${role} ${now ?? ""}`, inspect: roleInspect(key, role, label, now, cur, past),
-    cells: !cur || off ? ["", "", "", "", ""] : [esc(count(cur.runs)), rate, esc(dur(cur.p50)), cur.cost ? esc(money(cur.cost)) : "", out && cur.cost ? esc(money(cur.cost / out)) : ""],
+  const head = {
+    key, lead: esc(label), main: set[key] ? ctl() : esc(shortModel(now)), text: `${label} ${role} ${now ?? ""}`, inspect: roleInspect(key, role, label, now, cur),
+    cells: !cur || off ? ["", "", "", "", ""] : cellsOf(cur),
   };
+  return [head, ...past.map((o) => ({
+    key: `${key}:${o.model}`, lead: "", main: `<span class="quiet">${esc(shortModel(o.model))}</span>`, text: `${label} ${role} ${o.model}`,
+    inspect: roleInspect(key, role, label, o.model, o, true), cells: cellsOf(o),
+  }))];
 }
 
 function rolesView(s, d, m, win) {
@@ -90,7 +95,7 @@ function rolesView(s, d, m, win) {
   // The Unsized row has no setting, so it shows only when a build had no size.
   const groups = GROUPS.map(([title, all]) => {
     const keys = all.filter(([k]) => k !== "unsized" || outs.some((o) => o.role === "worker" && o.size == null));
-    return { title, count: count(keys.length), heads: ["Runs", "Success", "p50", "Cost", "Per Output"], rows: keys.map(([k, r]) => roleRow(k, r, outs, m)) };
+    return { title, count: count(keys.length), heads: ["Runs", "Success", "p50", "$", title === "Workers" ? "$ / change" : "$ / output"], rows: keys.flatMap(([k, r]) => roleRows(k, r, outs, m)) };
   });
   return factsLine([[count(a.live), `of ${count(a.cap)} live`], [count(a.roles.reduce((n, r) => n + r.runs, 0)), "runs"], [cardPct(a.rates.success), "success"], [v == null ? "–" : money(v), "OpenRouter"]]) +
     (m === null ? notice("Could not load the models.", true) : "") + browse({ id: "roles", label: "Roles", search: "Search roles", groups });

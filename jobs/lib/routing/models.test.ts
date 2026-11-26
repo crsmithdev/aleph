@@ -44,9 +44,13 @@ test("an entry set to a model it offers reads back; a model it does not offer, a
   expect(setModel("title", { model: "haiku" })).toContain("unknown name");
   expect(setModel("worker-low", { model: "haiku" })).toContain("unknown");
   expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
-  expect(setModel("review", { enabled: false })).toContain("stays on");
   expect(setModel("merge", { model: "haiku" })).toContain("unknown");
   expect(readModels()).toEqual({ ...m, housekeeper: { enabled: true, model: "sonnet" } });
+});
+
+test("the review can be disabled", () => {
+  expect(setModel("review", { enabled: false })).toBeNull();
+  expect(readModels().review.enabled).toBe(false);
 });
 
 test("any one size can be disabled, and a disable of the last enabled size is an error text that changes nothing", () => {

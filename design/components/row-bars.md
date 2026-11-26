@@ -15,7 +15,7 @@ A row bar is the evidence of a row in one cell: a bar of shares, a rate against 
 
 | Part | Holds | Optional | Style |
 |---|---|---|---|
-| Bar | The shares, the rate or the runs |  | `--bar-h` high on `--sunk`; 120px for a row bar, 64px for a rate bar, 14em for a strip |
+| Bar | The shares, the rate or the runs |  | `--bar-h` high on `--sunk`; 120px for a row bar, 64px for a rate bar, 14em for a strip; in a list, the width of its column (`page-bar-wide`) |
 | Mark | The baseline of a rate, or the p90 of a span | yes | `--ink`, a thin bar |
 | Rate | The rate, after its bar | yes; a rate bar only | `--num` |
 

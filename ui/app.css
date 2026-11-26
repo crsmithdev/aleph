@@ -85,6 +85,7 @@
   --dim: .6;  /* opacity of a dimmed control */
   --ctl-h: 28px;  /* control height; taller on a touch screen */
   --bar-h: 10px;  /* .meter and .wf-bar height */
+  --bar-w: 120px;  /* the least width of a bar column in a list */
   --ls-display: -0.02em;  /* tracking of the display and brand type */
   --ls-caps: .06em;       /* tracking of the uppercase keys */
   --sel: color-mix(in srgb, var(--focus) 35%, transparent);  /* the selection fill */
@@ -1678,7 +1679,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .fig .cmp.warn { color: var(--need); }
 /* List surface: the rows of every group on one grid, so the columns line up. A group head or "more" line spans every column. */
 .lcard .fbar { margin: 0; }
-.lrows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) repeat(var(--n), max-content); column-gap: var(--sp-14); }
+.lrows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr) var(--cols, repeat(var(--n), max-content)); column-gap: var(--sp-14); }
 .lrows > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: baseline; }
 .lrows > .lnone, .lrows > .lmore { display: block; padding: var(--sp-6) var(--sp-8); border-top: 1px solid var(--rule-2); }
 .lrows > .lmore { font-size: var(--fs-xs); color: var(--muted); }
@@ -1696,6 +1697,9 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .lrow .main .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .lrow .main .chips, .lrow .main .badge { flex: none; }
 .lrow .c { text-align: right; white-space: nowrap; color: var(--ink-2); font-family: var(--num); font-variant-numeric: tabular-nums; }
+/* A bar column takes the room the other columns leave (page-bar-wide), and its bar fills the cell. */
+.lrow .c.bar > .rowbar, .lrow .c.bar > .ratebar, .lrow .c.bar > .runstrip, .lrow .c.bar > .logmeter { display: flex; width: 100%; }
+.lrow .c.bar > .ratebar .meter { flex: 1; }
 @media (max-width: 720px) {
   .lrows { display: block; }
   .lrows > li { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: var(--sp-2) var(--sp-10); }
@@ -1704,11 +1708,18 @@ ul.logs .step { margin: var(--sp-6) 0; }
   .lrow .main .t { flex: 1 1 100%; }
   .lrow .c:empty, .lhead .h { display: none; }
   .lrow .c { font-size: var(--fs-xs); }
+  .lrow .c.bar { flex: 1 1 var(--bar-w); }
 }
 /* Inspector: the selected row's detail. A table in it keeps its height: a flex column would shrink its scroll box to nothing. */
 .browse .ins { gap: var(--sp-10); }
 .ins .inspect-head { align-items: center; }
 .ins .facts, .ins .status-row { margin: 0; }
+/* One fact per line: the key at the left, the value at the right, a hairline between. */
+.ins .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0; }
+.ins .facts div { display: contents; }
+.ins .facts dt, .ins .facts dd { padding: var(--sp-4) 0; border-top: 1px solid var(--rule-2); }
+.ins .facts div:first-child > * { border-top: 0; }
+.ins .facts dd { padding-left: var(--sp-14); text-align: right; overflow-wrap: anywhere; }
 .ins .sub-head { margin: var(--sp-6) 0 0; }
 .ins .tscroll { flex: none; }
 .ins .srow { grid-template-columns: minmax(0, 1fr); }

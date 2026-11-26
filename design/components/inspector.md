@@ -18,7 +18,7 @@ The inspector is the detail of the selected row of a list surface.
 | Head | The id and Open page |  | `.inspect-head` |
 | Title | The item's title |  | `h3` |
 | Status | The state, the priority and the labels | yes | `statusRow()` |
-| Facts | The item's facts |  | `facts()`; an empty value leaves its fact out |
+| Facts | The item's facts |  | `facts()`, one per line: the key at the left, the value at the right, a `--rule-2` line between; an empty value leaves its fact out |
 | Body | A strip, a table or a form, under a `subHead()` | yes |  |
 
 ## Rules

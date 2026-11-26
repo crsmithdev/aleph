@@ -87,7 +87,7 @@ The `models` setting maps each size and role model ([Naming](naming.md#terms)) t
 | `maintainer` | `sonnet` |
 | `judge` | `haiku` |
 
-You can disable any size except the last one that is on, and any role except `review`. An off role starts no run, and its work waits until it is on: intake leaves issues unsorted, the director leaves Asks with you, the housekeeper and the maintainer keep their queues, and an off judge gives no verdict, which the Stop gate passes. A build needs its review to land, so `review` is always on. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
+You can disable any size except the last one that is on, and any role. An off role starts no run, and its work waits until it is on: intake leaves issues unsorted, the director leaves Asks with you, the housekeeper and the maintainer keep their queues, an off judge gives no verdict, which the Stop gate passes, and an off review gives no verdict, so each build holds for your review. A setting stored under the old names `worker-low`, `worker-medium` and `reviewer` reads as `small`, `medium` and `review`.
 
 ```bash
 aleph models                          # show the sizes and role models

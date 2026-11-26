@@ -9,6 +9,7 @@ import { type Repo, type Run } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";
 import { runFile } from "../records/run-files.ts";
 import { seed } from "../../job.testkit.ts";
+import { setModel } from "../routing/models.ts";
 import { reviewer } from "./review.ts";
 
 let root = "";
@@ -95,6 +96,13 @@ test("a reply with no verdict holds the run, and its review job ends failed", as
   const { call, job } = await review(run, git(repo.path, "rev-parse", "main").out);
   expect(call).toMatchObject({ reason: 'reviewer: no verdict (unknown verdict "maybe")', none: true });
   expect(job.run).toMatchObject({ state: "failed", reason: 'unknown verdict "maybe"' });
+});
+
+test("an off review starts no review job and gives no verdict, so the build holds for the user", async () => {
+  setModel("review", { enabled: false });
+  const { call } = await review(run, git(repo.path, "rev-parse", "main").out);
+  expect(call).toEqual({ reason: "reviewer: no verdict (the review is off)", none: true });
+  expect(allRuns().some((e) => e.run.role === "review")).toBe(false);
 });
 
 const minor = { title: "Rename the loose helper in a.ts", location: "a.ts:3", saw: "a wording nit", why: "it reads wrong", impact: 1, risk: 1, effort: 1 };

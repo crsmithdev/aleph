@@ -52,7 +52,6 @@ test("a missing header gives 403; a bad name, a model the entry does not offer, 
   expect((await post({ name: "merge", model: "haiku" })).status).toBe(422);
   expect((await post({ name: "intake", model: "nonexistent" })).status).toBe(422);
   expect((await post({ name: "small", model: "sonnet" })).status).toBe(422);
-  expect((await post({ name: "review", enabled: false })).status).toBe(422);
   healthy = false;
   expect((await post({ name: "judge", model: "gpt-oss-20b" })).status).toBe(422);
   expect(getJson("settings", "models", {})).toEqual(kept);
