@@ -535,7 +535,7 @@ test("agents: the reviewer's runs, model, cost and times come from its review jo
     e("build", 10, 11, { model: "claude-haiku", review: { call: "passed", model: "claude-opus-5-5" } }),
   ];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 2, ended: 2 });
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "opus", runs: 2, cost: 2, p50: 1800, p95: 3600, pass: 1, fail: 0, succeeded: 2, ended: 2 });
   expect(a.roles.find((x) => x.key === "reviewer")).toMatchObject({ live: 0, runs: 2, hours: 1.5, p50: 1800, p95: 3600, models: ["opus"] });
 });
 
@@ -559,7 +559,16 @@ test("agents: worker rows are one per size and model, a build with no size has i
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
   expect(a.outcomes.filter((x) => x.role === "worker").map((x) => [x.size, x.model, x.runs, x.from, x.to])).toEqual([["small", "claude-haiku", 2, iso(11), iso(14)], [null, "unset", 2, iso(13), iso(15)], ["medium", "claude-haiku", 1, iso(12), iso(12)]]);
   expect(a.roles[0].runs).toBe(a.outcomes.filter((x) => x.role === "worker").reduce((n, x) => n + x.runs, 0));
-  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "claude-opus-5-5", pass: 1 });
+  expect(a.outcomes.find((x) => x.role === "reviewer")).toMatchObject({ model: "opus", pass: 1 });
+});
+
+test("agents: the full id of Opus joins its alias in one worker row and one reviewer row, and their cost adds up", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  const build = (a: number, model: string, cost: number) => ({ folder: `o${a}`, id: `o${a}`, run: { n: 1, role: "build", job: `j${a}`, state: "passed", size: "small", started: iso(a), ended: iso(a + 1), model, cost, review: { call: "passed", model } } }) as any;
+  const review = { folder: "r13", id: "r13", run: { n: 1, role: "review", job: "j13", state: "done", started: iso(13), ended: iso(13.5), model: "opus" } } as any;
+  const a = agentStats([build(10, "opus", 1), build(12, "claude-opus-5-5", 2), review], 10 * H, 20 * H, H, 2, () => false);
+  expect(a.outcomes.filter((x) => x.role === "worker")).toMatchObject([{ model: "opus", size: "small", runs: 2, succeeded: 2, cost: 3 }]);
+  expect(a.outcomes.filter((x) => x.role === "reviewer")).toMatchObject([{ model: "opus", runs: 1, pass: 2 }]);
 });
 
 test("agents: a model's provider prefix falls away, so its runs share one reviewer row", () => {
@@ -594,7 +603,7 @@ test("agents: housekeeper and maintainer runs are roles with their own outcome r
   const e = (kind: string, a: number, extra: object = {}) => ({ folder: `h${n}`, id: `h${n++}`, run: { n: 1, role: kind, job: `j${n}`, state: "done", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
   const runs = [e("housekeeper", 10, { model: "claude-opus-5-5", cost: 0.5 }), e("housekeeper", 12, { model: "claude-opus-5-5", cost: 0.25 }), e("maintainer", 14, { model: "claude-sonnet-5-5", cost: 1 })];
   const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false);
-  expect(a.outcomes.map((x) => [x.role, x.runs, x.cost])).toEqual([["housekeeper", 2, 0.75], ["maintainer", 1, 1]]);
+  expect(a.outcomes.map((x) => [x.role, x.model, x.runs, x.cost])).toEqual([["housekeeper", "opus", 2, 0.75], ["maintainer", "claude-sonnet-5-5", 1, 1]]);
   expect(a.roles.map((x) => x.key)).toEqual(expect.arrayContaining(["housekeeper", "maintainer"]));
 });
 

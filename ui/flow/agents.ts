@@ -3,7 +3,7 @@ import { roundsByJob } from "../../jobs/lib/records/record.ts";
 import { isRunning } from "../../jobs/lib/infra/process.ts";
 import { causeOf } from "../../jobs/lib/records/outcome.ts";
 import { OFFERS, readModels } from "../../jobs/lib/routing/models.ts";
-import { bare, isLocal } from "../../lib/models.ts";
+import { bare, isLocal, OPUS_MODEL } from "../../lib/models.ts";
 import { NAMES } from "../../lib/naming.ts";
 import { quantile } from "../../lib/windows.ts";
 import { HOUR, MAX_RUN, passedState, round } from "./phases.ts";
@@ -37,6 +37,9 @@ type AgentKey = (typeof AGENT_ROLES)[number][0];
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
 const modelName = (m: string) => /^claude-([a-z]+)-/.exec(bare(m))?.[1] ?? bare(m);
 
+/** The name a run's model counts under: Opus's full id as its alias "opus", any other name as it is. */
+const alias = (m: string | undefined) => (bare(m) === OPUS_MODEL ? "opus" : bare(m));
+
 /** The model a size (small, medium or large) is set to now, or undefined for any other size. */
 const sizeModel = (size: string | undefined): string | undefined => (size && size in OFFERS ? readModels()[size as keyof typeof OFFERS].model : undefined);
 
@@ -47,7 +50,7 @@ const sizeModel = (size: string | undefined): string | undefined => (size && siz
  * - Intake, Triage, Planner, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
  * - Housekeeper, Maintainer: like Intake, the run ends `passed` or `done`.
  * - Reviewer: its runs, model, cost, times and ends are those of its own `review` jobs, and it succeeded when the job ended `passed` or `done`. Its pass and fail counts (and so `rate`) are read from the verdicts on the builds: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A build with no verdict counts as neither. A verdict's model is the build's `review.model`, else that of the review run whose `prev` is the build's job, else "unset".
- * - A model counts under its name without a provider prefix, and a build with no model under its size's model, so the rows match the names the models setting carries.
+ * - A model counts under its name without a provider prefix, Opus's full id as "opus", and a build with no model under its size's model, so the rows match the names the models setting carries.
  * Error is a run that ended `failed` with no `failed` field, or with the cause `timeout` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
  */
 function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[] {
@@ -77,7 +80,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.role)?.[0];
     const size = build ? (["small", "medium", "large"].includes(r.size ?? "") ? r.size! : null) : undefined;
     // The unsized builds are one row, so the Workers rows add up to the runs: their model is the one of no setting.
-    const model = size === null ? "unset" : bare(r.model) || (build ? sizeModel(r.size) : undefined) || "unset";
+    const model = size === null ? "unset" : alias(r.model) || (build ? sizeModel(r.size) : undefined) || "unset";
     if (role) {
       const w = row(role, model, size);
       w.runs++; w.cost += r.cost ?? 0; w.starts.push(a);
@@ -92,7 +95,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     if (build) {
       const back = r.failed === "review" || r.review?.call === "returned", land = ok || r.review?.call === "passed";
       if (back || land) {
-        const v = row("reviewer", bare(r.review?.model) || bare(reviews.get(e.id)) || "unset");
+        const v = row("reviewer", alias(r.review?.model) || alias(reviews.get(e.id)) || "unset");
         if (back) v.fail = (v.fail ?? 0) + 1; else v.pass = (v.pass ?? 0) + 1;
         const w = row("worker", model, size); w.verdicts++; w.landed += back ? 0 : 1;
       }
