@@ -400,6 +400,10 @@ describe("a backend hold", () => {
       putJson("state", "backend-hold", { via: "openrouter", why, since: ago(1) });
       const s = state(now);
       expect(s.factory.backend).toEqual({ via: "OpenRouter", why });
+      expect(s.factory.backend?.link).toBeUndefined();
+      const url = "https://openrouter.ai/settings/credits";
+      putJson("state", "backend-hold", { via: "openrouter", why: `${why}. Add more at ${url}`, since: ago(1) });
+      expect(state(now).factory.backend?.link).toBe(url);
       expect(verdict(s).text).toContain("OpenRouter");
       checkStatus(now);
       expect(readEvents().filter((e) => e.action === "status").at(-1)?.detail).toContain("OpenRouter");

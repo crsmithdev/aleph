@@ -254,10 +254,9 @@ function errorAlert(j, now) {
   return alertCard({ card: "unstick", kind: "Error", title: `${jobLink(j)} ${esc(j.item?.title || j.name)}${j.item?.priority ? ` ${priorityBadge(j.item.priority)}` : ""}`, detail: b ? `Waits on ${blocker}: ${b.title}` : errorSentence(j), tag: j.cause ?? j.state, side: dur((Date.parse(now) - Date.parse(j.run?.started ?? j.started)) / 1000), acts: first + drop + actMsg(j.name) });
 }
 
-/** The backend hold as an alert, with the backend's own link when its error names one. */
+/** The backend hold as an alert, with the backend's own link when it has one. */
 function backendAlert(b) {
-  const link = b.why.match(/https?:\/\/\S+/)?.[0];
-  return alertCard({ card: "unstick", kind: "Backend", title: `${esc(b.via)} is down`, detail: b.why, acts: link ? linkButton("Credits", link) : "" });
+  return alertCard({ card: "unstick", kind: "Backend", title: `${esc(b.via)} is down`, detail: b.why, acts: b.link ? linkButton("Credits", b.link) : "" });
 }
 
 /** The Problems card: each thing that needs the user as a compact alert. The factory's alerts, the Asks, the errored jobs, and a backend that is down. */

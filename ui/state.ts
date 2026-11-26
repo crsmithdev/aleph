@@ -126,8 +126,8 @@ export interface State {
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
     health: { text: string; kind: "alert" | "warn"; key?: string }[];
-    /** The backend the factory holds after the API credit error: its name and the line of the call that failed. Null with no hold. */
-    backend: { via: string; why: string } | null;
+    /** The backend the factory holds after the API credit error: its name, the line of the call that failed and the URL in that line. Null with no hold. */
+    backend: { via: string; why: string; link?: string } | null;
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
@@ -391,7 +391,7 @@ function statusOf(now: Date, jobs: Runs[]) {
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingOf(slots, picks) });
   const timers = tickTimer();
-  const hold = backendHold(), backend = hold ? { via: BACKENDS[hold.via], why: hold.why } : null;
+  const hold = backendHold(), backend = hold ? { via: BACKENDS[hold.via], why: hold.why, link: hold.why.match(/https?:\/\/\S+/)?.[0] } : null;
   const v = verdict({ now: now.toISOString(), factory: { ...factory, ...timers, backend }, errored, asks: att.items, usage: summary(now.getTime()) });
   return { projector, errored, running, slots, picks, gated, factory, att, timers, backend, v };
 }

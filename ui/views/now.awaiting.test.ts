@@ -59,12 +59,14 @@ test("an errored job offers Re-check and Drop; with a blocker, Wait for it first
 });
 
 test("the factory's alerts, a backend hold and an Ask are alerts in that order", () => {
-  const s = { ...calm, factory: { ...calm.factory, health: [{ text: "health: aleph CI on main failed 2 runs in a row", kind: "alert", key: "red-ci" }], backend: { via: "OpenRouter", why: "API Error: 402 Insufficient credits. Add more at https://openrouter.ai/settings/credits" } },
+  const s = { ...calm, factory: { ...calm.factory, health: [{ text: "health: aleph CI on main failed 2 runs in a row", kind: "alert", key: "red-ci" }], backend: { via: "OpenRouter", why: "API Error: 402 Insufficient credits. Add more at https://openrouter.ai/settings/credits", link: "https://openrouter.ai/settings/credits" } },
     asks: attend({ runs: [], issues: [{ ...issue(7), title: "T", ask: { reason: "no-commit", question: "q", options: [], why: [], situation: "s" } }] }).items };
   const kinds = rows(withAttn(s)).map((r) => r.match(/<b class="ask-kind">([^<]+):<\/b>/)![1]);
   expect(kinds).toHaveLength(3);
   expect([kinds[0], kinds[2]]).toEqual(["Alert", "Backend"]);
   expect(withAttn(s)).toContain('href="https://openrouter.ai/settings/credits"');
+  const bare = { ...s, factory: { ...s.factory, backend: { via: "OpenRouter", why: "see https://example.com/x" } } };
+  expect(withAttn(bare)).not.toContain("Credits");
 });
 
 test("a full start context is no alert: a write demotes the oldest core line", () => {
