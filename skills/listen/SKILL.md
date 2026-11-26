@@ -13,7 +13,8 @@ to the inbox. This skill makes this session the inbox's listener.
 2. When `wait` exits 0, its output is `send: <n>`, then the user's notes as Markdown: the page, each note, and the
    element it is pinned on. Act on them as a request from the user. When the second line is `answer: <kind>`, the send
    is an answer: follow [ANSWERS.md](ANSWERS.md). When it is `ask: <question>`, the send is a question on one
-   note: follow Questions in ANSWERS.md.
+   note: follow Questions in ANSWERS.md. A note that starts `[rule]` is a new rule from the inspector: follow New
+   rules in ANSWERS.md.
 3. Run `wait` again, as in step 1. Do this after each send until the user says to stop. Then stop the background task.
 
 If `wait` exits 3, another session took the inbox: say so and stop. If it exits 2, the inbox is missing, which is

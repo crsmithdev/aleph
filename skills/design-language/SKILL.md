@@ -51,6 +51,44 @@ Done when every group above has a list, and you can name the file you have not r
    Then follow [SHELF](../SHELF.md) for `design/rules.md`: kind `doc`, no wait.
 6. **File the fixes.** One issue per group of deviations, worst first, through the repo's issue tool.
 
+## Draft
+
+Draft mode drafts a language for a project with `tools.json` (the design tool, ADR-0011) as notes that the user
+approves one group at a time. It writes no home: the listener writes a group's lines when the user approves it.
+
+1. Run Inventory, then steps 1 to 4 of Extract. Read the homes that `tools.json` names: `tokens`, `components`,
+   `rules` and `helpers`.
+2. Split the draft into groups of at most about 40 diff lines, by layer, in this order:
+   - **tokens:** the `:root` variables of one role (colour, type, space, shape) with a use comment on each, and each
+     literal of the role replaced by its token;
+   - **components:** one `design/components/<id>.md` per component, with its `## Parts` and `## Rules`, and the
+     `@design <id>` line, `data-design` root and `data-part` elements of its helper (ADR-0012);
+   - **rules:** the global rules of `design/rules.md`, each a `###` heading with `- id:`, `- scope: global` and
+     `- reason:`.
+   Each group alone keeps `design rules` at exit 0, so a part rule goes with its component. A homes line in
+   `tools.json` that no group adds goes in the first group that needs it.
+3. Add one note per group, in that order, on the URL `<tools dev>/first-run`, where `<tools dev>` is
+   `http://127.0.0.1:<port>` from `tools.json`:
+
+   ````
+   shelf note add --selector :root --url http://127.0.0.1:<port>/first-run - <<'EOF'
+   proposal: <the group's title>
+   <what was found: the uses it rests on, with counts>
+   ```diff
+   @@ <file>:<line>
+   +<each line Approve writes>
+   ```
+   layer: tokens | components | rules
+   group: <layer>/<short id>
+   EOF
+   ````
+
+   The diff holds every line Approve writes and no other. Read each note back with `shelf note list --url <url>`.
+4. Tell the user to open `<tools dev>/first-run`, and run `aleph:listen`. Each Approve or Discard comes back as an
+   answer: follow First run in the listen skill's ANSWERS.md.
+
+Done when each group has one note and `git status` shows no change to a home.
+
 ## Audit
 
 See [refit-design](../refit-design/SKILL.md).
