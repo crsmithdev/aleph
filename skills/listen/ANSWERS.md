@@ -12,7 +12,9 @@ reason: <text>          (exception only)
 ```
 
 The note lives in a scope file. In the commands below, `<scope>` is `<item-id>` for a note on a shelf item page
-(`/shelf/i/<item-id>/`), else `--file ~/.aleph/annotations.json`.
+(`/shelf/i/<item-id>/`). In a project that `tools init` attached, it is empty: run `shelf` in the project, and it uses
+the project's notes. Else it is `--file ~/.aleph/annotations.json`. A note's id is the last `- id:` line of its
+numbered entry: its text comes before its fields and can hold `- id:` lines of its own.
 
 1. **Replay.** Run `git log --grep "send <n>$" --oneline` in the repo of the page. A hit means the answer is done:
    go back to `wait`.
@@ -60,6 +62,62 @@ answer for that level:
    nested `  - part: <name>`, and the part must be under `## Parts`.
 4. **Propose.** Reply `proposal: <the rule>, in <home file and heading or bullet>`, then a fenced `diff` block of every
    line it adds, `@@ <file>:<line>` first. Go back to `wait`. The user's Approve then follows `approve` above.
+
+## Designer
+
+A note that starts `[variant]`, `[tune]`, `[text]`, `[steer]` or `[critique]` comes from the dock's designer
+(`~/aleph-tools/docs/specs/2026-11-26-design-tool-m3.md`). Each starts with **Replay**, as in step 1 above. Each
+reply goes through `shelf note reply <scope> <note-id>`, and each commit is made as in step 4 above, with
+`note <note-id>, send <n>` in its body. The page's URL is in the head line of the send, `Annotations on <title> (<url>):`.
+
+### Variants
+
+1. Read the element: its `- html:` line, the helper that draws it (its `data-design` id), and
+   `design rules --for <component>`.
+2. Reply `variants:`, a blank line, then three variants. Each is `<n>. <the idea, in one line>`, a fenced `html` block
+   of the element's whole new HTML with the page's own classes and tokens, an optional fenced `css` block, and
+   `new: <part>, <part>` when it uses parts that the component file does not list. The dock draws each one in place
+   of the element, and runs no app code in it. Change no file, and go back to `wait`.
+3. The user's Use is `answer: ui` with the line `variant: <n>`. Write variant `n` into the helper with the helper's own
+   code and tokens, not the HTML as given. Commit, and reply `written <short sha>`. For each part on its `new:` line,
+   reply `proposal:` with the part's bullet under `## Parts` of the component file and a fenced `diff` block, and
+   leave the note open. With no new part, resolve the note.
+
+### Tune
+
+The note's diff is the user's own change, made and seen on the page. Write exactly its lines, and no other line.
+Commit, reply `written <short sha>`, and resolve the note. If a `-` line does not match its file, change nothing and
+reply with the line that differs.
+
+### Text edits
+
+The note holds `from: <old>` and `to: <new>`. Search the project's tracked source for the old text with
+`git grep -n -F`.
+
+- In exactly one place: change it there, commit, reply `written <short sha>` and a fenced `diff` block, and resolve the
+  note.
+- In no place or in more than one: change no file, reply with each `file:line` found, or `not found`, and leave the
+  note open.
+
+### Steer
+
+1. Read the page's helpers and `design rules`, and find each element that the direction changes.
+2. For each, add an agent note on it with `shelf note add <scope> --selector '<css>' --url <the page's URL> -`. Its first
+   line says the change, then a fenced `diff` block of every line it changes, and its last lines are `from: steer`
+   and `note: <steer note id>`. A change to a token goes on `:root`, with the token's diff.
+3. Change no file. Reply `<n> notes`, resolve the steer note, and go back to `wait`. The user answers each note with
+   `ui`, `language`, `exception` or `discard`, as above.
+
+### Critique
+
+1. Run `design critique` for the checklist. Read the page: its helpers, its CSS and its states. Score each item 0, 1 or
+   2 on its own scale.
+2. Reply `critique:`, then a Markdown table of each item's id, score and one line of reason, then
+   `total: <sum> of <max>`.
+3. For each item below 2 on an element, add an agent note on it, as in Steer, with a fenced `diff` block, and the
+   lines `from: critique`, `note: <critique note id>` and `check: <item id>` last. A failure with no element and no lines stays in the
+   table only.
+4. Change no file. Resolve the critique note, and go back to `wait`.
 
 ## Questions
 
