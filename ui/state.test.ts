@@ -6,9 +6,9 @@ import * as store from "../lib/store.ts";
 import * as systemd from "../jobs/lib/infra/systemd.ts";
 import { writeList } from "../lib/store.ts";
 import { add, setStatus } from "../lib/issue-file.ts";
-import { checkStatus, jobProjector, state } from "./state.ts";
+import { checkStatus, state } from "./state.ts";
 import { withEnv } from "./server.testkit.ts";
-import { loadRegistry, allJobs } from "../jobs/lib/records/ledger.ts";
+import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { seed, reseed, unseed } from "../jobs/job.testkit.ts";
 import { jobFolder } from "../jobs/lib/records/run-files.ts";
 import { spawn } from "node:child_process";
@@ -122,19 +122,6 @@ describe("state", () => {
       for (const k of kids) k.kill();
     }
   });
-
-  test("trailers: a landed job's from its commit, an awaiting job's as the land will write them", () => {
-    const repo = join(base, "repo");
-    const job = run("20261027-000007-a", { job: "fac-7", name: "fac-7", state: "landed", on: "fac-1", ended: ago(1), started: ago(2) });
-    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `land\n\nIssue: issue.1\nJob: ${job}`);
-    const commit = sh(repo, "git", "rev-parse", "HEAD").trim();
-    run("20261027-000007-a", { commit });
-    const s = state(now);
-    const landed = jobProjector().toJob(allJobs().find((rs) => rs[0].run.name === "fac-7")!);
-    expect(landed.trailers).toEqual([{ key: "Issue", value: "issue.1" }, { key: "Job", value: job }]);
-    expect(runAsks(s)[0].trailers).toEqual([{ key: "Issue", value: "issue.1" }, { key: "Job", value: K["20261027-000001-a"] }, { key: "Held-by", value: "user" }]);
-  });
-
 });
 
 describe("a land that found the job lock busy", () => {

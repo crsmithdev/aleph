@@ -14,7 +14,7 @@ import { isWaiting, issueKeyOf, loadRegistry, onOf, type CheckResult, type Repo,
 import { stateOf, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { counting, isError } from "../jobs/lib/records/record.ts";
 import { type Cause } from "../jobs/lib/records/outcome.ts";
-import { needsOf, type Ask } from "../jobs/lib/asks/ask.ts";
+import { type Ask } from "../jobs/lib/asks/ask.ts";
 import { eventIn, factoryWide } from "./api/scope.ts";
 import { attend, errorBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { parentIn, reader } from "../lib/store.ts";
@@ -84,8 +84,6 @@ export interface Job {
   /** A landed job whose manual check is still open. */
   check?: "open";
   checks?: CheckResult[];
-  /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
-  trailers?: { key: string; value: string }[];
   /** An intake or triage run: its verdict as `build`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
   outcome?: string;
   /** Error: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
@@ -176,43 +174,14 @@ function commitUrl(repo: Repo | undefined, commit: string | undefined, bases: Ma
   return base ? `${base}/commit/${commit}` : undefined;
 }
 
-/** Each commit's trailers, by repo path and hash: a commit never changes, so one git call per commit per process. */
-const trailers = new Map<string, { key: string; value: string }[]>();
-
-/** A commit git could not read, by the same key, to the time it failed: it is tried again after MISS_MS, as a fetch may bring it. */
-const misses = new Map<string, number>();
-const MISS_MS = 10 * 60_000;
-
-/** The trailers of a commit, from `git log -1 --format=%(trailers:only,unfold)`; none when git fails. */
-function landedTrailers(repo: Repo | undefined, commit: string | undefined): { key: string; value: string }[] {
-  if (!repo || !commit) return [];
-  const id = `${repo.path}\0${commit}`;
-  const hit = trailers.get(id);
-  if (hit) return hit;
-  const missed = misses.get(id);
-  if (missed !== undefined && Date.now() - missed < MISS_MS) return [];
-  const p = probe(repo.path, "log", "-1", "--format=%(trailers:only,unfold)", commit);
-  if (!p.ok) { misses.set(id, Date.now()); return []; }
-  const out = p.out.split("\n").flatMap((l) => {
-    const i = l.indexOf(":");
-    return i > 0 ? [{ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() }] : [];
-  });
-  trailers.set(id, out);
-  return out;
-}
-
 /**
  * The UI's job: the Job module's `view`, with the item's title, the commit's
- * URL and the trailers. One projector per request: it reads each work list
+ * URL. One projector per request: it reads each work list
  * and each origin URL once.
  */
 export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jobs?: Runs[]) {
   const lists = reader();
   const bases = new Map<string, string | null>();
-
-  // The trailer the land writes.
-  const needsYouIssue = (todo: number | string | undefined): { key: string; value: string }[] =>
-    todo === undefined ? [] : [{ key: "Issue", value: issueKey(todo) }];
 
   const toJob = (runs: Runs, v: JobView = view(runs)): Job => {
     const repo = v.repo ? registry[v.repo] : undefined;
@@ -241,13 +210,6 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.check === "open") job.check = "open";
-    const trailers = v.state === "landed" ? landedTrailers(repo, v.commit)
-      : v.state === "waiting" ? [
-        ...needsYouIssue(todo),
-        { key: "Job", value: v.job },
-        ...(needsOf(asked) === "protected" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "user" }] : []),
-      ] : [];
-    if (trailers.length) job.trailers = trailers;
     return job;
   };
   // The dispatch's decider, on this build's lists: it fetches no repo.

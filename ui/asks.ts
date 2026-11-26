@@ -30,12 +30,12 @@ export interface AskItem {
   repo?: string;
   /** The priority of the issue or run's item it is about. */
   priority?: string;
-  /** A waiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
+  /** A waiting run: a live run exists for it, its defaults and follow-ups. */
   /** A waiting run: the issue it is on. */ on?: string;
   /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of an issue as "n/m" of its parent. */
   at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
   /** A waiting run: when the Ask timeout acts on it with no answer (ISO), and the action it takes. */ due?: string; dueAction?: string;
-  agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
+  agent?: boolean; defaults?: string[]; followups?: string[];
 }
 interface Details {
   note?: string; stat?: string; review?: { call: string; reason?: string };
@@ -212,7 +212,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
     ...(!c.run ? {} : {
       at: c.run.run.started, since: c.run.started, part: c.run.part, ...(c.run.item ? { on: `${c.run.repo}-${c.run.item.id}` } : {}),
       agent: c.run.agent ?? false, defaults: c.run.defaults, followups: c.run.followups,
-      ...(c.run.trailers ? { trailers: c.run.trailers } : {}), ...(c.run.due ? { due: c.run.due, dueAction: c.run.dueAction } : {}),
+      ...(c.run.due ? { due: c.run.due, dueAction: c.run.dueAction } : {}),
     }),
   };
 }

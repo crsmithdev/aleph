@@ -1,7 +1,7 @@
 // The parts of a card, and the Ask card that Status, Automation and an issue page show. Pure string functions, no DOM.
 import { actMessages, openDiffs, reasonOf } from "./decisions.js";
 import { clock, dur, span, when } from "./format.js";
-import { actButton, fold, codeText, diffHtml, esc, idLink, inputBox, meta, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
+import { actButton, fold, codeText, diffHtml, esc, idLink, inputBox, note, priorityBadge, repoIdLink, subHead, tag } from "./html.js";
 import { shortText, shortId, jobHref, parseId } from "../../../lib/naming.ts";
 
 /** A job's id, linking to its page. */
@@ -10,21 +10,6 @@ export const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" 
 /** The checks of a run as fact rows: `Tests 71s ✓`. */
 export const checkFacts = (j) =>
   (j.checks || []).map((c) => [c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`]);
-/** "10/28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
-const idStart = (m, now) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])), new Date(now));
-const KINDS = { land: "land", intake: "intake", director: "director" };
-/** One trailer as text: Item shows its value alone; a Job ID (`a1375#6`) shows as it is, and an old Job folder id is parsed into its run kind and start; both link to the job page (raw id in the title). */
-const trailer = (t, j, now) => {
-  if (t.key === "Item") return esc(t.value);
-  if (t.key === "Job" && /#\d+$/.test(t.value)) return `<a href="${esc(jobHref(t.value))}" title="${esc(t.value)}">${esc(t.value)}</a>`;
-  const m = t.key === "Job" && /^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)\d\d-.+-([a-z]+)$/.exec(t.value);
-  if (!m) return `${esc(t.key)} ${esc(t.value)}`;
-  return `<a href="${esc(jobHref(j.id))}" title="${esc(t.value)}">${esc(KINDS[m[6]] ?? m[6])}, ${esc(idStart(m, now))}</a>`;
-};
-/** The trailers of a job as one small line; empty when it has none. */
-export const trailerLine = (j, now) =>
-  j.trailers?.length ? meta(j.trailers.map((t) => trailer(t, j, now))) : "";
-
 const STAT_FILES = 12;
 
 /** The first STAT_FILES file lines of a diff stat, then "+N more files" and the summary line. */
