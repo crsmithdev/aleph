@@ -324,6 +324,11 @@ describe("GET /api/jobs/:id/diff", () => {
     expect(res.status).toBe(404);
     expect(await res.text()).toContain("No diff was recorded");
   });
+  test("the job detail carries the files, insertions and deletions of its diff stat as fields", async () => {
+    run("", { job: "fac-F", name: "fac-F", repo: "fac", branch: "factory/fac-F", state: "dropped" }, { "diff.patch": "x\n", "diff.stat": " config.yml | 4 ++--\n 1 file changed, 2 insertions(+), 2 deletions(-)\n" });
+    const d = (await (await get(jp(K["fac-F#1"]))).json()) as any;
+    expect([d.files, d.insertions, d.deletions]).toEqual([1, 2, 2]);
+  });
   test("404 when the branch is gone, or the job unknown", async () => {
     expect((await get(jp(K["fac-2#1"], "/diff"))).status).toBe(404);
     expect((await get(jp(K["oth-1#1"], "/diff"))).status).toBe(404);
@@ -352,6 +357,11 @@ describe("render", () => {
     expect(h).toContain("1 failed, then fixed");
     expect(h).not.toContain("<it>");
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9#3"><p class="quiet" role="status"><i class="spin" aria-hidden="true"></i>Loading the diff…</p></div>');
+  });
+  test("the change shows the lines and files from the fields, not the stat text", () => {
+    const h = v.renderJob({ ...job, stat: " config.yml | 4 ++--", files: 1, insertions: 2, deletions: 2 });
+    expect(h).toContain("+2 −2");
+    expect(h).toContain("1 file");
   });
   test("the head shows the escaped title and the nav links as aside", () => {
     expect(v.renderJob(job)).toContain('<header class="ph"><h1>Fix &lt;it&gt;</h1><div class="aside"><a class="act" href="http://lf/sessions/s">Trace</a>');

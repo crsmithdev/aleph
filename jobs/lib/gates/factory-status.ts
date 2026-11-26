@@ -138,9 +138,17 @@ export function firefighterLines(now = Date.now(), n = 8): { at: string; line: s
   return events.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).slice(-n);
 }
 
+/** The files, insertions and deletions in a diff stat's last line; null for none. */
+export function changeOf(stat: string): { files: number; insertions: number; deletions: number } | null {
+  const m = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(stat);
+  return m ? { files: Number(m[1]), insertions: Number(m[2] ?? 0), deletions: Number(m[3] ?? 0) } : null;
+}
+
 /** Insertions plus deletions in a `git show --shortstat` line. */
-export const changedLinesOf = (stat: string): number =>
-  [...stat.matchAll(/(\d+) (?:insertion|deletion)/g)].reduce((a, m) => a + Number(m[1]), 0);
+export const changedLinesOf = (stat: string): number => {
+  const c = changeOf(stat);
+  return c ? c.insertions + c.deletions : 0;
+};
 
 /** A file is busy when this many land runs of its repo conflicted on it in the last BUSY_MS. */
 const BUSY_CONFLICTS = 3;

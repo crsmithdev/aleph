@@ -7,7 +7,7 @@ import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { isBuild, isOpen, issueKeyOf, loadRegistry, onOf, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { duration } from "../../jobs/lib/infra/process.ts";
 import { checkedBy, lookMinutes, latestFile, readFile, view } from "../../jobs/lib/records/job.ts";
-import { changedLinesOf } from "../../jobs/lib/gates/factory-status.ts";
+import { changedLinesOf, changeOf } from "../../jobs/lib/gates/factory-status.ts";
 import { readHolds, type HoldRecord } from "../../jobs/lib/gates/holds.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -73,6 +73,8 @@ export function transcript(stream: string): Step[] {
 interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
+  /** The files, insertions and deletions of `stat`. */
+  files?: number; insertions?: number; deletions?: number;
   /** The reviewer's verdict, from the review.json beside its result.md. */
   verdict?: "pass" | "hold";
   trace?: string;
@@ -210,6 +212,7 @@ async function detailOf(id: string, runs: Entry[]): Promise<JobDetail> {
   const jd = jobDiff(runs);
   if (jd?.stat) detail.stat = jd.stat;
   else if (v.stat) detail.stat = v.stat;
+  Object.assign(detail, detail.stat && changeOf(detail.stat));
   const trace = await traceUrl(runs);
   if (trace) detail.trace = trace;
   if (detail.item) Object.assign(detail, fromStore(detail.repo, detail.item.id));

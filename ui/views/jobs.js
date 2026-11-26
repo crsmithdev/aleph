@@ -45,10 +45,9 @@ function jobEvent(x, nth, j) {
   return { ...e, html: e.html + (r.job ? ` <span class="quiet">${esc(r.job)}</span>` : "") + logButtons(r) };
 }
 
-/** "+23 −2" and "2 files" from a diff stat's last line; null for none. */
-export function change(stat) {
-  const m = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(String(stat ?? ""));
-  return m ? { lines: `+${m[2] ?? 0} −${m[3] ?? 0}`, files: plural(Number(m[1]), "file") } : null;
+/** "+23 −2" and "2 files" from the job's change fields; null for none. */
+export function change(j) {
+  return j.files === undefined ? null : { lines: `+${j.insertions} −${j.deletions}`, files: plural(j.files, "file") };
 }
 
 /** The runs that do the work: not the reviews, which run inside a build, and not an old facts run after the land. */
@@ -79,7 +78,7 @@ function jobSegments(j, now = Date.now()) {
 function jobKpis(j, now = Date.now()) {
   const runs = spans(workRuns(j), now), builds = runs.filter((x) => x.r.kind === "worker");
   const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.state)).length, last = builds.at(-1)?.r.state;
-  const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
+  const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j);
   return renderKpis([
     { k: "Implements", v: esc(count(builds.length)), sub: bad ? `<span class="bad">${esc(`${bad} failed${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
     { k: "Elapsed", v: esc(dur(runs.length ? (end - runs[0].start) / 1000 : undefined)), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
@@ -125,7 +124,7 @@ export function renderJob(j) {
   const checks = j.checks?.length
     ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${badge(c.ok ? "passed" : "failed")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td></tr>`))}${checkLog}${failures}<div class="logbody" hidden></div></div>`
     : empty();
-  const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
+  const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j);
   const next = j.next && j.next.step !== "none" ? `<p class="q"><span class="quiet">Next</span> ${esc(j.next.text)}</p>` : "";
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
     pageHead(j.item?.title || j.title || id, { aside: nav + lifecycle(j) + (j.open ? "" : runNowButton(j.repo, j.item?.id, j.runNow)) + investigateButton(j.subject, j.investigations) }) + `${pills}${next}${blocked}` +
