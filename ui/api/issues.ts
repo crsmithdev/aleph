@@ -26,7 +26,7 @@ import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, logOnce } from "../state.ts";
 import { awaiting, row, runNowOf, stageOf, type Row } from "../issue.ts";
-import { issueHref, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
+import { issueHref, issueId, issueKey, jobHref, parseId, parseKey } from "../../lib/naming.ts";
 import { objectsWith } from "../../lib/layout.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { answerHeld, NOTE } from "../../jobs/lib/roles/recheck.ts";
@@ -74,10 +74,10 @@ function list(url: URL): Response {
     return doc.items.map((i) => row(repo.key, i, states.get(String(i.id))));
   });
   // A director job has no repo: its target alone names the issue.
-  const by = runsByIssue(allRuns()), key = (r: Row) => `${r.repo}-${r.ref}`;
+  const by = runsByIssue(allRuns()), key = (r: Row) => issueId(r.repo, r.ref);
   const own = (r: Row) => { const es = (by.get(issueKey(r.ref)) ?? []).filter((e) => !e.run.repo || e.run.repo === r.repo); return { runs: es.length, cost: es.reduce((n, e) => n + (e.run.cost ?? 0), 0) }; };
   // A child's jobs also count for its parent: `runs` and `cost` hold both, `own` the row's alone.
-  const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => `${r.repo}-${r.parent}`);
+  const kids = Map.groupBy(rows.filter((r) => r.parent !== null), (r) => issueId(r.repo, r.parent!));
   const totals = (r: Row) => [own(r), ...(kids.get(key(r)) ?? []).map(own)].reduce((a, t) => ({ runs: a.runs + t.runs, cost: a.cost + t.cost }));
   const projects = repos.map((r) => r.key);
   const parked = objectsWith("parked");
@@ -106,7 +106,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const every = allRuns(), jobsAll = allJobs(every);
   const states = stagesBy(repo, doc, [ref, ...partRefs], jobsAll);
   const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
-  const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
+  const state = mine ? { item: issueId(repo.key, ref), stage: mine.stage, why: mine.why } : null;
 
   const all = jobsAll.filter((runs) => runs[0].run.repo === repo.key);
   const jobsOf = (r: string) => all.filter((runs) => runs.some((e) => issueKeyOf(e.run) === issueKey(r))).map((runs) => jobRow(runs));
@@ -118,17 +118,17 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
-    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: issueHref(`${repo.key}-${g}`), priority: gi ? priorityOf(gi) : "medium", stage: gi ? stageOf(gi, st) : "missing", why: st?.why ?? "", jobs: jobsOf(g) };
+    return { id: issueId(repo.key, g), title: gi?.title ?? "", href: issueHref(issueId(repo.key, g)), priority: gi ? priorityOf(gi) : "medium", stage: gi ? stageOf(gi, st) : "missing", why: st?.why ?? "", jobs: jobsOf(g) };
   });
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const timeline = {
-    filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(`${repo.key}-${ref}`)),
+    filed: ((t) => (t == null ? null : new Date(t).toISOString()))(filed().issue.get(issueId(repo.key, ref))),
     runs: all.flat().filter((e) => ours.has(e.id)).map((e) => ({ r: e.run, href: jobHref(e.id) })).map(({ r, href }) => ({ kind: r.role, name: r.name, href, on: onOf(r), issue: issueKeyOf(r) ?? null, state: r.state, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
   const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
   const up = parentOf(doc, item);
-  const parent = up ? `${repo.key}-${up.id}` : null;
+  const parent = up ? issueId(repo.key, up.id) : null;
 
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
   // The issue's own commits, then each part's, with the part it landed for.
@@ -136,7 +136,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const seen = new Set<string>(), index = landedIndex(repo.path, main, repo.key);
   const commits = own.flatMap((r) => (index.get(r) ?? []).filter((h) => !seen.has(h) && seen.add(h)).map((h) => {
     const [hash, date, subject] = git(repo.path, "show", "-s", "--format=%H%x09%cI%x09%s", h).out.split("\t");
-    return { hash, subject: subject ?? "", date, ...(r !== ref ? { part: `${repo.key}-${r}` } : {}), ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
+    return { hash, subject: subject ?? "", date, ...(r !== ref ? { part: issueId(repo.key, r) } : {}), ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   }));
 
   const blockers = jobProjector().blockers(repo.key, ref);
@@ -144,7 +144,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // Plain references both ways, across every project: issue numbers are global. readList above fetched, so this reads with no fetch.
   const fetched = everyFetched(), where = new Map(fetched.map((w) => [w.item.id, w]));
   const link = (n: number | undefined) => {
-    const w = n === undefined ? undefined : where.get(n), id = w && `${w.repo}-${w.item.id}`;
+    const w = n === undefined ? undefined : where.get(n), id = w && issueId(w.repo, w.item.id);
     return w && id ? [{ id, key: issueKey(w.item.id), title: w.item.title, status: todos.status(w.item), href: issueHref(id) }] : [];
   };
   const refs = refsOf(item).flatMap((k) => link(parseKey(k)?.n));
@@ -292,7 +292,7 @@ const answer = (verb: "note" | "decide", text: string) => post((_b, params) => {
 /** The user's answer to a held change of a core note, run in process (no `aleph` command does this): the refusal of the vault op is a 422. A `reason` is a note on the issue. */
 const core = (approved: boolean) => post(async (b, params) => {
   const { repo, item } = target(params);
-  const why = await answerHeld(`${repo.key}-${item.id}`, approved, "human");
+  const why = await answerHeld(issueId(repo.key, item.id), approved, "human");
   if (why) fail(422, why);
   const said = typeof b.reason === "string" ? b.reason.trim() : "";
   if (said) await aleph(["issue", "note", "--", repo.key, String(item.id), `${NOTE.said} ${said}`]);

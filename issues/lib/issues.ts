@@ -9,7 +9,7 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { key, parseKey, PRIORITIES, SOURCES, STATUSES } from "../../lib/naming.ts";
+import { issueId, key, parseKey, PRIORITIES, SOURCES, STATUSES } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
@@ -243,7 +243,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   checkFields(fields);
   text = text.trim() || refuse("give the decision");
   const was = show(repo, id), ask = askOfItem(was);
-  if (!ask || (issues.status(was) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${repo.key}-${was.id} is not waiting for a decision`);
+  if (!ask || (issues.status(was) !== "open" && ask.reason !== "blocker-dropped")) refuse(`${issueId(repo.key, was.id)} is not waiting for a decision`);
   const answer = { subject: by, answer: option ?? answerOf(ask, text) };
   // A write that closes the issue clears its Ask at the push: `answering` gives that clear the answer.
   const w = record.answering(refIn(was), answer, () => write(repo, `todo: item ${id}: decided`, (doc) => {

@@ -10,7 +10,7 @@ import { routes as logRoutes } from "../ui/api/log.ts";
 import { currentFit } from "../ui/usage.ts";
 import { verdict } from "../lib/status-words.ts";
 import { FACTORY, type Window } from "../lib/windows.ts";
-import { clip, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
+import { clip, issueId, NAMES, runWord, shortText, shownId } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { clock, count, dur, hours } from "../ui/views/lib/format.js";
 // @ts-ignore plain JS, shared with the page
@@ -74,7 +74,7 @@ export function data(s: State, d: Flow) {
           return { id: shownId(j.id ?? j.name), word: runWord(run.kind), for: dur((now - Date.parse(run.started ?? j.started)) / 1000), title: j.item?.title || j.name };
         }),
       ],
-      waiting: (holdsOf(s) as { qs: any[]; waited: number | null }[]).map(({ qs, waited }) => ({ hold: qs[0].kind, on: onText(qs[0]), waited: waited === null ? "–" : dur(waited), issues: qs.map((q: any) => ({ id: shownId(`${q.repo}-${q.id}`), title: q.title ?? "" })) })),
+      waiting: (holdsOf(s) as { qs: any[]; waited: number | null }[]).map(({ qs, waited }) => ({ hold: qs[0].kind, on: onText(qs[0]), waited: waited === null ? "–" : dur(waited), issues: qs.map((q: any) => ({ id: shownId(issueId(q.repo, q.id)), title: q.title ?? "" })) })),
     },
     efficiency: {
       kept: hours(f.kept), all: hours((f.kept ?? 0) + (f.hours ?? 0)),

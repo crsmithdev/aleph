@@ -11,7 +11,7 @@
  * The `always` setting maps a key to `{ action, at }`. A key is a reason (all projects) or a reason, a colon and a project key (one project).
  */
 import { logEvent, logSetting } from "../../../lib/layout.ts";
-import { BECAUSE, because, detailOf, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
+import { BECAUSE, because, detailOf, issueId, key, parseKey, word, type AskAction, type Event } from "../../../lib/naming.ts";
 import { alwaysRow, INTAKE_TRIES, NO_COMMIT_LIMIT, RUN_CAP, setAlwaysRow } from "../infra/settings.ts";
 import { specVersion } from "../../../lib/issue-spec.ts";
 import * as issues from "../../../lib/issue-file.ts";
@@ -311,7 +311,7 @@ export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: st
   const issue = parentOf(doc, part);
   if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsUser(refIn(issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
-  askPartDropped(issue, `Sub-issue ${doc.repo}-${part.id} was dropped: ${reason}. What now?`);
+  askPartDropped(issue, `Sub-issue ${issueId(doc.repo, part.id)} was dropped: ${reason}. What now?`);
 }
 
 /** Put the part-dropped Ask on a parent. */

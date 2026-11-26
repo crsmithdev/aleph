@@ -4,7 +4,7 @@
  */
 import { SENT_BACK } from "../jobs/lib/gates/worker-verdict.ts";
 import { actionsOn, ASK_REASONS, CLOSE_DONE, LIMITS, limitText, PLAN_REST, reasonOf, type Ask, type Card } from "../jobs/lib/asks/ask.ts";
-import { jobHref, parseId, parseKey, refs, word } from "../lib/naming.ts";
+import { issueId, jobHref, parseId, parseKey, refs, word } from "../lib/naming.ts";
 import { askReason } from "../jobs/lib/gates/factory-status.ts";
 import { readEvents } from "../lib/layout.ts";
 // @ts-ignore plain JS, shared with the page
@@ -87,7 +87,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
   const job = (verb: string) => `/api/jobs/${encodeURIComponent(c.run?.id ?? "")}/${verb}`;
   const issue = (verb: string) => `/api/issues/${encodeURIComponent(c.id)}/${verb}`;
   /** The drop of the issue: on a run, of the run's issue, which drops the run with it (`aleph issue drop`). */
-  const dropIt = c.run?.item ? `/api/issues/${encodeURIComponent(`${c.run.repo}-${c.run.item.id}`)}/drop` : c.run ? job("drop") : issue("drop");
+  const dropIt = c.run?.item ? `/api/issues/${encodeURIComponent(issueId(c.run.repo, c.run.item.id))}/drop` : c.run ? job("drop") : issue("drop");
   const a = (act: string, label: string, hint: string, path: string, body: Record<string, unknown> = {}, more: Partial<Action> = {}): Action =>
     ({ act, label, hint, primary: false, recommended: false, path, body, ...more });
   const held = reason === "held-path" || reason === "review-held";
@@ -210,7 +210,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
     ...(c.issue ? { at: c.issue.updated, since: c.issue.since ?? "", part: c.issue.part } : {}),
     ...(!c.run ? {} : {
-      at: c.run.run.started, since: c.run.started, part: c.run.part, ...(c.run.item ? { on: `${c.run.repo}-${c.run.item.id}` } : {}),
+      at: c.run.run.started, since: c.run.started, part: c.run.part, ...(c.run.item ? { on: issueId(c.run.repo, c.run.item.id) } : {}),
       agent: c.run.agent ?? false, defaults: c.run.defaults, followups: c.run.followups,
       ...(c.run.due ? { due: c.run.due, dueAction: c.run.dueAction } : {}),
     }),
@@ -237,7 +237,7 @@ export const asks = (s: { runs: Job[]; issues: NewIssue[] }): AskItem[] => atten
 /** The open issue an errored job cannot succeed before: the part's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }
 export function errorBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
-  const own = j.item ? `${j.repo}-${j.item.id}` : "";
+  const own = j.item ? issueId(j.repo, j.item.id) : "";
   const hit = (id: string): Blocker | null => (id !== own && open.has(id) ? { id, ...open.get(id)! } : null);
   const w = after?.trim();
   if (w && hit(w)) return hit(w);

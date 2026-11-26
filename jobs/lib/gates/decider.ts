@@ -9,7 +9,7 @@ import { projectOfIssue, readList, reader, type Reader } from "../../../lib/stor
 import * as issues from "../../../lib/issue-file.ts";
 import { errText } from "../../../lib/errtext.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { issueKey, parseKey } from "../../../lib/naming.ts";
+import { issueId, issueKey, parseKey } from "../../../lib/naming.ts";
 import type { Job } from "../records/job.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { repoStages } from "../records/status.ts";
@@ -58,7 +58,7 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   const done = (key: string): boolean => {
     // An `issue.<n>` key names its project through the items repo; the rest of the check reads `<repo>-<n>`.
     const k = parseKey(key);
-    const r = issues.parseIssueRef(k?.kind === "issue" ? `${projectOfIssue(k.n)}-${k.n}` : key);
+    const r = issues.parseIssueRef(k?.kind === "issue" ? issueId(projectOfIssue(k.n)!, k.n) : key);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     const { doc, stages, read } = readOf(repo);
@@ -73,7 +73,7 @@ export function decider(o: { fresh: boolean; jobs?: Job[]; lists?: Reader; regis
   function decide(repo: Repo, item: issues.Issue, mode: Exclude<Mode, { route: Route }>): IssueDecision;
   function decide(repo: Repo, item: issues.Issue, mode: Extract<Mode, { route: Route }>): Promise<StartDecision>;
   function decide(repo: Repo, item: issues.Issue, mode: Mode): IssueDecision | Promise<StartDecision> {
-    if ("cheap" in mode) return issueDecision({ name: issueKey(item.id), ref: `${repo.key}-${item.id}`, item, done, red: redOf(repo) });
+    if ("cheap" in mode) return issueDecision({ name: issueKey(item.id), ref: issueId(repo.key, item.id), item, done, red: redOf(repo) });
     const f = { ...issueFacts(repo, item, mode.jobs, mode.now, mode.lists ?? lists), done, red: redOf(repo) };
     return "route" in mode ? decideStart(repo, f, mode.jobs, mode.route) : issueDecision({ ...f, ...mode.gates });
   }

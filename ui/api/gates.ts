@@ -19,7 +19,7 @@ import * as record from "../../jobs/lib/records/record.ts";
 import { readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, repoIn, scopeOf, withProjects } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
-import { issueKey, type EventRow } from "../../lib/naming.ts";
+import { issueId, issueKey, type EventRow } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, capMin, fixRounds, jobSeconds, landBatch, loadLimit, monitorHour, writeCaps, writeMonitorHour } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../lib/store.ts";
 import { closed, noteOf } from "../../lib/issue-file.ts";
@@ -86,7 +86,7 @@ function noteEntries(): LogEntry[] {
   for (const repo of sandboxRepos()) {
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
-      const ref = `${repo.key}-${item.id}`;
+      const ref = issueId(repo.key, item.id);
       for (const { at, text: t } of item.notes.map(noteOf)) {
         const u = t.replace(/^Chris\b/, "User"); // notes stored before the rename lead with the old name
         if (!at || !Object.values(NOTE).some((lead) => u.startsWith(lead))) continue;

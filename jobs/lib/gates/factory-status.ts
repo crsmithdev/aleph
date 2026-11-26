@@ -12,7 +12,7 @@ import { openJob, stateOf, type Job } from "../records/job.ts";
 import { allRuns } from "../records/record.ts";
 import { isOpen, isWaiting, isBuild, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { heldEvent, type Bound, type Gate } from "./issue-decision.ts";
-import { issueKey, wordOf } from "../../../lib/naming.ts";
+import { issueId, issueKey, wordOf } from "../../../lib/naming.ts";
 import { eventsOf, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { held } from "../../../lib/locks.ts";
@@ -207,7 +207,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   // A job whose last run ended with the API credit error is not open work: the credit hold keeps the issue for its wait, then it starts again.
   const found = openJob(name, null, jobs), open = found && policyOf(causeOf(record.counting(found).run)).waitMs > 0 ? null : found;
   return {
-    name, ref: `${repo.key}-${item.id}`, item, parent: parentIn(repo.key, item, lists),
+    name, ref: issueId(repo.key, item.id), item, parent: parentIn(repo.key, item, lists),
     open: open ? stateOf(open) : null,
     job: open ? record.counting(open).id : null,
     busy: busyWait(repo, item, jobs, now, lists),

@@ -6,7 +6,7 @@ import { readJsonOr } from "../lib/json.ts";
 import { logOnce } from "./state.ts";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { clip, issueHref, MEMORY_TYPES, noteHref, sessionHref } from "../lib/naming.ts";
+import { clip, issueHref, issueId, MEMORY_TYPES, noteHref, sessionHref } from "../lib/naming.ts";
 import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { claimLine, recall } from "../vault/lib/index.ts";
 import { dailyNotes, readMemoryMd, scopeOf, type Note } from "../vault/lib/vault.ts";
@@ -166,8 +166,8 @@ async function episodic(root: string): Promise<Item[]> {
 
 function prospective(): Item[] {
   return prospectiveIssues().map((i) => ({
-    type: "prospective", source: "issue", key: `${i.repo}/${i.id}`, title: `${i.repo}-${i.id}`, text: i.title, scope: i.repo, at: "", read: null, body: i.title, priority: i.priority,
-    href: issueHref(`${i.repo}-${i.id}`), effect: `The factory starts it when ${i.after.join(", ")} is done.`,
+    type: "prospective", source: "issue", key: `${i.repo}/${i.id}`, title: issueId(i.repo, i.id), text: i.title, scope: i.repo, at: "", read: null, body: i.title, priority: i.priority,
+    href: issueHref(issueId(i.repo, i.id)), effect: `The factory starts it when ${i.after.join(", ")} is done.`,
   }));
 }
 

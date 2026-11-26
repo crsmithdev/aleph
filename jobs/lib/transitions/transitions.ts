@@ -28,7 +28,7 @@ import { logEvent } from "../../../lib/layout.ts";
 import { raise, route, type Size } from "../routing/route.ts";
 import { heldEvent, type Gate, type Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
-import { detailOf, key, parseId } from "../../../lib/naming.ts";
+import { detailOf, issueId, key, parseId } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import * as store from "../../../lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
@@ -153,7 +153,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   let on = a.on;
   if (on !== undefined) {
-    const p = parseId(on) ?? parseId(`${repo.key}-${on}`);
+    const p = parseId(on) ?? parseId(issueId(repo.key, on));
     if (p?.repo !== repo.key || p.sub !== undefined) refuse("--on takes an issue number");
     on = p.n;
     let doc: issues.Doc | null = null;

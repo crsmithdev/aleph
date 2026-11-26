@@ -10,7 +10,7 @@ import { counting, allRuns } from "../../jobs/lib/records/record.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { afterOf } from "../../lib/issue-file.ts";
-import { FULL, fullId } from "../../lib/naming.ts";
+import { FULL, fullId, issueId } from "../../lib/naming.ts";
 import { aleph, fail, post } from "../action.ts";
 import type { Routes } from "../server.ts";
 import { errText } from "../../lib/errtext.ts";
@@ -80,7 +80,7 @@ const wait = post(async (body, { id }) => {
     return await aleph(["drop", "--", name, `The user chose to wait for ${on}: this job cannot succeed until it lands.`]);
   } catch (e) {
     const back = await edit(was).then(() => "its wait was put back", () => `it still waits on ${on}`);
-    return fail(statusOf(e), `drop the job: ${errText(e)}; ${repo}-${issue} ${back}`);
+    return fail(statusOf(e), `drop the job: ${errText(e)}; ${issueId(repo!, issue!)} ${back}`);
   }
 });
 

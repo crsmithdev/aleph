@@ -1,11 +1,11 @@
 import { isAgentRun, onOf, type Run } from "../../jobs/lib/records/ledger.ts";
-import { issueHref, parseId, tail } from "../../lib/naming.ts";
+import { issueHref, issueId, parseId, tail } from "../../lib/naming.ts";
 import { quantile, type buckets } from "../../lib/windows.ts";
 import type { Filed } from "../../lib/store.ts";
 import type { Speed } from "../api/flow.ts";
 
 /** The issue a run works on, as the issue store names it (`<repo>-<n>`), or undefined for a run on no issue. */
-export const issueOf = (r: Pick<Run, "repo" | "target">): string | undefined => { const n = onOf(r); return n === undefined || !r.repo ? undefined : `${r.repo}-${n}`; };
+export const issueOf = (r: Pick<Run, "repo" | "target">): string | undefined => { const n = onOf(r); return n === undefined || !r.repo ? undefined : issueId(r.repo, n); };
 
 export const HOUR = 3600_000;
 
@@ -43,7 +43,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const note = (key: string | undefined, k: Phase, secs: number) => {
     if (!key) return;
     const [repo, n] = splitId(key);
-    if (!per.has(key)) per.set(key, { id: key, href: issueHref(`${repo}-${n}`), outcome: "unlanded", filed: issue.get(key) ? new Date(issue.get(key)!).toISOString() : null, intake: null, queue: null, implement: null, land: null, lead: null });
+    if (!per.has(key)) per.set(key, { id: key, href: issueHref(issueId(repo, n)), outcome: "unlanded", filed: issue.get(key) ? new Date(issue.get(key)!).toISOString() : null, intake: null, queue: null, implement: null, land: null, lead: null });
     per.get(key)![k] = secs;
   };
   const inWindow = (t: number) => t >= since && t <= now;

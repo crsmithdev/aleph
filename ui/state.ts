@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { eventsOf, logEvent } from "../lib/layout.ts";
-import { detailOf, type EventRow, issueHref, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
+import { detailOf, type EventRow, issueHref, issueId, issueKey, parseId, parseKey, targetOf } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot } from "../jobs/lib/gates/factory-status.ts";
 import { decider } from "../jobs/lib/gates/decider.ts";
@@ -277,24 +277,24 @@ function jobCards(jobs: Runs[], registry: Record<string, Repo>, { lists, toJob }
 
   for (const j of [...needs, ...errored]) {
     const todo = j.item?.id;
-    j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}-${todo}`));
+    j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(issueId(j.repo, todo)));
   }
 
   const openById = new Map<string, { title: string; href: string }>(), waitsOf = new Map<string, string>();
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const id = `${repo.key}-${item.id}`;
+      const id = issueId(repo.key, item.id);
       if (status(item) === "open") openById.set(id, { title: item.title, href: issueHref(id) });
       const after = afterOf(item);
       if (after.length) waitsOf.set(id, after[0]);
     }
   }
   for (const j of errored) {
-    const b = errorBlocker(j, j.item ? waitsOf.get(`${j.repo}-${j.item.id}`) : undefined, openById);
+    const b = errorBlocker(j, j.item ? waitsOf.get(issueId(j.repo, j.item.id)) : undefined, openById);
     if (b) j.blocker = b;
   }
-  for (const j of [...running, ...errored, ...needs]) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
+  for (const j of [...running, ...errored, ...needs]) if (j.item) j.part = partOf.get(issueId(j.repo, j.item.id));
   return { needs, errored, running };
 }
 
@@ -305,7 +305,7 @@ function partsByKey(registry: Record<string, Repo>, { lists }: Projector): Map<s
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
       const ps = partsOf(doc!, item);
-      ps.forEach((g, i) => partOf.set(`${repo.key}-${g.id}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${item.id}`, href: issueHref(`${repo.key}-${item.id}`) }));
+      ps.forEach((g, i) => partOf.set(issueId(repo.key, g.id), { n: i + 1, m: ps.length, parent: issueId(repo.key, item.id), href: issueHref(issueId(repo.key, item.id)) }));
     }
   }
   return partOf;
@@ -318,7 +318,7 @@ function slotsOf(registry: Record<string, Repo>, { lists, stagesOf }: Projector,
   return Object.values(registry).filter((repo) => repo.sandbox).flatMap((repo) => {
     const stageById = stagesOf(repo), doc = lists.list(repo.key);
     return (doc?.items ?? []).map((item) => {
-      const ref = String(item.id), id = `${repo.key}-${ref}`, stage = stageById.get(ref);
+      const ref = String(item.id), id = issueId(repo.key, ref), stage = stageById.get(ref);
       // Done lists issues; a part shows under its issue.
       return { repo, item, id, st: stageOf(item, stage), top: parentRef(item) === undefined, parts: partsOf(doc!, item), of: stage?.of, part: partOf.get(id) };
     });
@@ -363,7 +363,7 @@ const runningIssuesOf = (slots: Slot[], { pickedUp }: Pickups): RunningIssue[] =
   slots.flatMap(({ repo, item, id, st, parts, of }) => {
     if (status(item) !== "open" || st !== "working" || !parts.length) return [];
     const n = of ?? { n: 0, m: parts.length };
-    return n.n >= n.m ? [{ id, title: item.title, href: issueHref(id), stage: st, priority: priorityOf(item), of: n, since: pickedUp(id, ...parts.map((g) => `${repo.key}-${g.id}`)), at: updated(item) ?? "" }] : [];
+    return n.n >= n.m ? [{ id, title: item.title, href: issueHref(id), stage: st, priority: priorityOf(item), of: n, since: pickedUp(id, ...parts.map((g) => issueId(repo.key, g.id))), at: updated(item) ?? "" }] : [];
   });
 
 /** The latest done issues, and the finish time of every done one. Latest done holds the done parts and the done issues without parts; a done parent shows no card. */

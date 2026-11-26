@@ -24,7 +24,7 @@ import { readModels } from "../routing/models.ts";
 import { refusal } from "../transitions/transitions.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { detailOf, issueKey, PRIORITIES } from "../../../lib/naming.ts";
+import { detailOf, issueId, issueKey, PRIORITIES } from "../../../lib/naming.ts";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -44,7 +44,7 @@ export interface Batch { repo: Repo; items: issues.Issue[]; land?: { from: strin
 
 const headOf = (repo: Repo): string => git(repo.path, "rev-parse", "--verify", "-q", mainRef(repo.path, repo.main)).out;
 /** Whether the housekeeper changed issue `id` of `repo` in the day before `now`. */
-const resting = (s: State, repo: Repo, id: number | string, now: number): boolean => now - Date.parse(s.changed[`${repo.key}-${id}`] ?? "") < DAY;
+const resting = (s: State, repo: Repo, id: number | string, now: number): boolean => now - Date.parse(s.changed[issueId(repo.key, id)] ?? "") < DAY;
 /** The parked issues of `repo`, but those whose Ask waits for the user, which the housekeeper must not close or drop, and those resting. */
 const parked = (s: State, repo: Repo, now: number): issues.Issue[] =>
   (readList(repo)?.items ?? []).filter((i) => issues.status(i) === "parked" && !asking(i, askOfItem(i)) && !resting(s, repo, i.id, now));
@@ -133,7 +133,7 @@ function section(repo: Repo, i: issues.Issue, tracked: string[], now: number): s
   const age = filed ? `filed ${filed.slice(0, 10)} (${Math.floor((now - Date.parse(filed)) / DAY)} days ago)` : "filed: unknown";
   const log = history(repo, i, tracked);
   return [
-    `### ${repo.key}-${i.id}: ${i.title}`,
+    `### ${issueId(repo.key, i.id)}: ${i.title}`,
     `id ${i.id}, ${issues.kindOf(i)}, priority ${priorityOf(i)}, ${age}, updated ${(issues.updated(i) ?? "-").slice(0, 10)}`,
     i.request.trim() && `#### Request\n${i.request.trim()}`,
     i.spec.trim() && `#### Spec\n${i.spec.trim()}`,
@@ -194,8 +194,8 @@ async function applyOne(b: Batch, a: Action): Promise<string | null> {
     const keep = issues.find(doc, idArg(a.keep));
     if (a.keep === a.id || !keep || !["open", "parked"].includes(issues.status(keep))) return `${a.keep} is not another open or parked issue`;
     return refusal(async () => {
-      verbs.close(repo, idArg(a.id), "drop", said(`duplicate of ${repo.key}-${a.keep}: ${a.why}`));
-      verbs.note(repo, idArg(a.keep), said(`${repo.key}-${a.id} was dropped as its duplicate: ${a.why}`));
+      verbs.close(repo, idArg(a.id), "drop", said(`duplicate of ${issueId(repo.key, a.keep)}: ${a.why}`));
+      verbs.note(repo, idArg(a.keep), said(`${issueId(repo.key, a.id)} was dropped as its duplicate: ${a.why}`));
     });
   }
   if (a.do === "retitle") return issues.titleProblem(a.title) ?? refusal(async () => verbs.edit(repo, idArg(a.id), { title: a.title }, said(a.why)));
@@ -239,7 +239,7 @@ export async function review(b: Batch, now: number, seconds = HOUR / 1000): Prom
   }
   const s = readState(), at = new Date(now).toISOString();
   const kept = Object.entries(s.changed).filter(([, t]) => now - Date.parse(t) < DAY);
-  const changed = did.flatMap((a) => (a.do === "drop" ? [a.id, a.keep] : [a.id])).map((id) => [`${b.repo.key}-${id}`, at]);
+  const changed = did.flatMap((a) => (a.do === "drop" ? [a.id, a.keep] : [a.id])).map((id) => [issueId(b.repo.key, id), at]);
   putJson("state", "housekeeper", { ...s, changed: Object.fromEntries([...kept, ...changed]) });
   writeFileSync(runFile(run.folder, "result.md"), [`# Applied`, ...out.applied.map((l) => `- ${l}`), "", `# Refused`, ...out.refused.map((l) => `- ${l}`), ""].join("\n"));
   const tally = { reviewed: ids.length, ...Object.fromEntries(WORD.map(([k, w]) => [w, did.filter((a) => a.do === k).length])), refused: out.refused.length };

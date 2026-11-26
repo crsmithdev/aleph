@@ -31,7 +31,7 @@ import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { afterFiling } from "../transitions/filing.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { issueKey } from "../../../lib/naming.ts";
+import { issueId, issueKey } from "../../../lib/naming.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */
 const LOG_LINES = 200;
@@ -164,7 +164,7 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
     const c = ciOf(key), repo = reg[key];
     if (!c || !repo) continue;
     for (const i of store.reader().list(key)?.items ?? []) {
-      const ref = `${key}-${i.id}`;
+      const ref = issueId(key, i.id);
       const ci = issues.status(i) === "open" && issues.isRedMain(i) ? record.read(issueKey(i.id))?.ci : undefined;
       if (!ci) continue;
       // A landed issue waits for a run at or after the land; one that never landed, for a run past its failing commit.
@@ -228,7 +228,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
       if (!f) continue;
       filed.push(f);
       // A new issue's `filed` event is the filing's own.
-      if ("noted" in f) logEvent({ subject: "gate", action: "changed", object: `${f.repo}-${f.noted}`, detail: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
+      if ("noted" in f) logEvent({ subject: "gate", action: "changed", object: issueId(f.repo, f.noted), detail: `noted ${issueId(f.repo, f.noted)}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e) {
       logEvent({ subject: "gate", action: "failed", object: r.repo, detail: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${errText(e)}` });
     }

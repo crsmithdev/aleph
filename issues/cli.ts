@@ -7,7 +7,7 @@ import { dispatchDetached, intakeDetached } from "../jobs/lib/transitions/launch
 import { drop } from "../jobs/lib/transitions/transitions.ts";
 import { fit } from "../jobs/lib/roles/title.ts";
 import { refuse } from "../lib/refusal.ts";
-import { issueKey, parseId, parseKey, shownKey } from "../lib/naming.ts";
+import { issueId, issueKey, parseId, parseKey, shownKey } from "../lib/naming.ts";
 import { jobId } from "../lib/env.ts";
 import * as issues from "../lib/issue-file.ts";
 import * as store from "../lib/store.ts";
@@ -127,7 +127,7 @@ export async function todoCmd(ctx: Ctx, use: string): Promise<void> {
       ctx.out(c.result);
       // The dropped issue's open job goes with it, or its Ask outlives the issue. The close note is the issue's record.
       const open = sub === "drop" ? openJobOfIssue(repo.key, id)?.[0].run.name : undefined;
-      if (open) await drop(open, { reason: `issue ${repo.key}-${id} was dropped`, quiet: true });
+      if (open) await drop(open, { reason: `issue ${issueId(repo.key, id)} was dropped`, quiet: true });
       // An issue that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
       if (repo.sandbox) dispatchDetached();
       return;

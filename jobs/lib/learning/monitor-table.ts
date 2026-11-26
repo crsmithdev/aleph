@@ -10,6 +10,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr } from "../../../lib/json.ts";
+import { issueId } from "../../../lib/naming.ts";
 import { loadRegistry, onOf, type Entry } from "../records/ledger.ts";
 import { allRuns } from "../records/record.ts";
 import { duration } from "../infra/process.ts";
@@ -269,7 +270,7 @@ function trackersOf(lists: Reader, keys = factoryKeys()): Sources["trackers"] {
   return keys.flatMap((key) => {
     const doc = lists.list(key);
     const t = doc && flakeTracker(doc);
-    return t ? [{ ref: `${key}-${t.id}`, notes: t.notes }] : [];
+    return t ? [{ ref: issueId(key, t.id), notes: t.notes }] : [];
   });
 }
 
@@ -280,7 +281,7 @@ export const flakeLines = (now = Date.now(), lists: Reader = reader()): string[]
 export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
   const lists = reader({ fetch: false });
-  const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${item.id}`, item })));
+  const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: issueId(key, item.id), item })));
   return {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),

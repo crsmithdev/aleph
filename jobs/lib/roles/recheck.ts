@@ -21,7 +21,7 @@ import { loadRegistry } from "../records/ledger.ts";
 import { answering } from "../records/record.ts";
 import { body, pass, reason, related, TEXT } from "./maintainer.ts";
 import { cutTitle } from "./title.ts";
-import { issueKey } from "../../../lib/naming.ts";
+import { issueId, issueKey } from "../../../lib/naming.ts";
 
 /** The leads of the issue notes written for the user: the writers build a note from one and the Gates log (ui/api/gates.ts) reads their answers by them. */
 export const NOTE = { said: "User:", rerun: "User: run it again", retriage: "User: run intake again", checked: "User: checked", decided: "User decided:", approved: "User approved", declined: "User declined", dropped: "User dropped", denied: "User denied" };
@@ -86,7 +86,7 @@ function hold(n: Note, v: Verdict, day: string): void {
   const claim = v.verdict === "correct" && v.claim ? `New claim: ${v.claim}` : "";
   const request = [`The memory re-check of the core note ${n.title} gives the verdict ${v.verdict}.`, `Why: ${v.why}`, claim].filter(Boolean).join("\n\n");
   const issue = fileIssue(repo, { title: cutTitle(`Apply the ${v.verdict} of core note ${n.title}`), kind: "task", source: "memory", parked: true, request }, "rule", { after: () => {} });
-  const ref = `${repo.key}-${issue.id}`;
+  const ref = issueId(repo.key, issue.id);
   setAsk(issueKey(issue.id), { reason: "core-change", question: `Apply the ${v.verdict} verdict to the core note ${n.title}?`, options: [], why: [v.why, claim].filter(Boolean) });
   putJson("state", "recheck-held", { ...getJson<Record<string, Held>>("state", "recheck-held", {}), [n.title]: { ...v, day, issue: ref } });
 }

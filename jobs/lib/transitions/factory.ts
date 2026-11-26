@@ -4,7 +4,7 @@
  * (baseline.ts), the stall check (stall.ts) and the report (report.ts). What it reads of its state is in
  * factory-status.ts. Its state lives in ~/.aleph/factory. See docs/factory.md.
  */
-import { issueKey } from "../../../lib/naming.ts";
+import { issueId, issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { reader, type Reader } from "../../../lib/store.ts";
 import { git } from "../../../lib/git.ts";
@@ -88,7 +88,7 @@ export function hookLines(now = Date.now()): string[] {
   const refs = jobs.filter((j) => isOpen(j) && isWaiting(stateOf(j)) && counting(j).run.ask).map((j) => j[0].run.name);
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (issues.status(item) === "open" && askOfItem(item)) refs.push(`${repo.key}-${item.id}`);
+      if (issues.status(item) === "open" && askOfItem(item)) refs.push(issueId(repo.key, item.id));
     }
   }
   if (refs.length) lines.push(`${refs.length} asks wait for the user: ${refs.slice(0, 5).join(", ")}`);

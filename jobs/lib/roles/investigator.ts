@@ -12,7 +12,7 @@ import { projectOfIssue, readList } from "../../../lib/store.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { lock } from "../../../lib/locks.ts";
 import { errText } from "../../../lib/errtext.ts";
-import { issueKey, parseKey } from "../../../lib/naming.ts";
+import { issueId, issueKey, parseKey } from "../../../lib/naming.ts";
 import { loadRegistry, issueKeyOf, type Entry, type Repo } from "../records/ledger.ts";
 import { landedCommits } from "../records/status.ts";
 import { allRuns, getRun, runsOfRole } from "../records/record.ts";
@@ -47,7 +47,7 @@ export function caseOf(subject: string): Case | null {
     const { repo, item } = at;
     const runs = allRuns().filter((e) => issueKeyOf(e.run) === subject);
     return { subject, repo, title: item.title, runs, pointers: [
-      `Read the issue: \`aleph issue show ${subject}\`, and its stage: \`aleph status ${repo.key}-${k.n}\`.`,
+      `Read the issue: \`aleph issue show ${subject}\`, and its stage: \`aleph status ${issueId(repo.key, k.n)}\`.`,
       `The commits on ${repo.main} that land it: ${landedCommits(repo.path, repo.main, repo.key, k.n).join(", ") || "none"}. Read each with \`git show\`.`,
     ] };
   }

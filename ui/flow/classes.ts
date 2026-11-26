@@ -2,7 +2,7 @@ import { isAgentRun, type Run } from "../../jobs/lib/records/ledger.ts";
 import { roundsIn } from "../../jobs/lib/records/record.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import { RUN_CAP } from "../../jobs/lib/infra/settings.ts";
-import { CLOSED, clip, issueHref, SPEEDS } from "../../lib/naming.ts";
+import { CLOSED, clip, issueHref, issueId, SPEEDS } from "../../lib/naming.ts";
 import { runShare, type Fit } from "../usage.ts";
 import { issueOf, HOUR, MAX_RUN, passedState, round, splitId } from "./phases.ts";
 
@@ -128,7 +128,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     const top = [...group((r) => r.issue)].map(([issue, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
       const [repo, n] = splitId(issue);
-      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: issueHref(`${repo}-${n}`) };
+      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: issueHref(issueId(repo, n)) };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ issue: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, lost: LOST.includes(key), text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });

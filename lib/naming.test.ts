@@ -25,6 +25,11 @@ describe("ids", () => {
     expect(n.fullId("cc12")).toBe("cloudchamber-12");
     expect(n.fullId("aleph-1430")).toBe("aleph-1430");
   });
+  test("a full ID joins a repo and a number, and parseId reads it back", () => {
+    expect(n.issueId("aleph", 1430)).toBe("aleph-1430");
+    expect(n.issueId("aleph", "1430")).toBe("aleph-1430");
+    expect(n.parseId(n.issueId("btcx-tools", 3))).toEqual({ repo: "btcx-tools", n: 3, sub: undefined });
+  });
   test("a project with no code keeps its full form", () => expect(n.shortId("koans-4")).toBe("koans-4"));
   test("a short ID needs a known code", () => {
     expect(n.parseId("z12")).toBeNull();

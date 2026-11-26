@@ -2,7 +2,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { money } from "../../../lib/money.ts";
-import { LANES, lane, shownId } from "../../../lib/naming.ts";
+import { issueId, LANES, lane, shownId } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { fetchingOnceSync, readLists, reader } from "../../../lib/store.ts";
 import { afterOf, priorityOf } from "../../../lib/issue-file.ts";
@@ -90,7 +90,7 @@ function cameDue(): string[] {
   try { docs = readLists(repos); } catch (e) { logEvent({ subject: "rule", action: "failed", object: "came-due", detail: errText(e) }); }
   for (const [n, repo] of docs.map((_, n) => [n, repos[n]] as const)) {
     for (const item of docs[n]?.items ?? []) {
-      const id = `${repo.key}-${item.id}`;
+      const id = issueId(repo.key, item.id);
       if (issues.status(item) !== "open" || seen.has(id)) continue;
       const waits = afterOf(item);
       if (waits.length > 0 && !pendingWaits(waits, done).length) {

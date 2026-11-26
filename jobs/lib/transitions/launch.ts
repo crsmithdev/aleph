@@ -7,6 +7,7 @@
 import { dispatchLog, factoryDir, logEvent } from "../../../lib/layout.ts";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { home } from "../../../lib/paths.ts";
+import { issueId } from "../../../lib/naming.ts";
 import { dirname, join } from "node:path";
 import { LOW, type Repo } from "../records/ledger.ts";
 import { dispatchOn, jobForeground } from "../infra/settings.ts";
@@ -116,7 +117,7 @@ export function dispatchDetached(): void {
 /** Start `aleph intake <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
 export function intakeDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
-  detached(["intake", `${repo.key}-${id}`], dispatchLog());
+  detached(["intake", issueId(repo.key, id)], dispatchLog());
 }
 
 /** Start `aleph director` detached, for a new Ask: the director decides it now, not at a tick. It never fails the caller. */

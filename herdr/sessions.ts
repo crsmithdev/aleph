@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { allJobs, loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { repoStages } from "../jobs/lib/records/status.ts";
-import { shownId } from "../lib/naming.ts";
+import { issueId, shownId } from "../lib/naming.ts";
 import { readFetched } from "../lib/store.ts";
 
 type Opt = { label: string; key?: string; send?: string };
@@ -139,7 +139,7 @@ export function scan(file: string): Scan {
 /** The two lists of a record from its scan: each issue with its stage, each shelf item with its title and pending count. Both in the order filed. */
 export function found(s: Scan, stageOf: Map<string, string>, items: Map<string, { title: string; pending: number }>): Found {
   const shelf = new Map(s.puts.map((p) => [p.id, { id: p.id, title: items.get(p.id)?.title ?? p.title ?? p.id, pending: items.get(p.id)?.pending ?? 0, url: `http://aleph.home/shelf/i/${p.id}/` }]));
-  const issues = new Map(s.added.map((a) => [`${a.repo}-${a.n}`, { id: shownId(`${a.repo}-${a.n}`), title: a.title, stage: stageOf.get(`${a.repo}-${a.n}`) ?? "unknown", url: `http://aleph.home/#/issues/${a.repo}/${a.n}` }]));
+  const issues = new Map(s.added.map((a) => [issueId(a.repo, a.n), { id: shownId(issueId(a.repo, a.n)), title: a.title, stage: stageOf.get(issueId(a.repo, a.n)) ?? "unknown", url: `http://aleph.home/#/issues/${a.repo}/${a.n}` }]));
   return { issues: [...issues.values()], shelf: [...shelf.values()] };
 }
 

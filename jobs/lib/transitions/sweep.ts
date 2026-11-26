@@ -2,7 +2,7 @@
  * The dispatch's sweep of a repo's list: an issue whose work is on origin/<main> closes, one whose commits are all
  * reverted reopens, and a parent whose parts are done closes. See docs/factory.md.
  */
-import { issueKey } from "../../../lib/naming.ts";
+import { issueId, issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { close, reader, reopenReverted, type Reader } from "../../../lib/store.ts";
 import { partsOf, planSet } from "../../../lib/issue-file.ts";
@@ -43,7 +43,7 @@ function sweepMain(repo: Repo, lists: Reader): void {
 const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: string) => boolean): boolean => {
   const parts = partsOf(doc, item);
   if (issues.status(item) !== "open" || !parts.length || askOfItem(item) || planSet(item)) return false;
-  const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(`${repo.key}-${p.id}`);
+  const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(issueId(repo.key, p.id));
   return parts.some(isDone) && parts.every((p) => issues.status(p) === "dropped" || isDone(p));
 };
 
@@ -63,7 +63,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
       const now = reader().list(repo.key);
       const item = now ? issues.find(now, listed.id) : undefined;
       if (!now || !item || !finished(now, item, repo, done)) continue;
-      const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${p.id} (${itemOnMain(repo, p.id) ?? "no commit"})`);
+      const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${issueId(repo.key, p.id)} (${itemOnMain(repo, p.id) ?? "no commit"})`);
       const bad = close(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`);
       lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
       logEvent(bad ? { subject: "rule", action: "failed", object: name, detail: `not closed: ${bad}` } : { subject: "rule", action: "done", object: name, detail: "its sub-issues are done" });

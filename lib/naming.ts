@@ -112,7 +112,9 @@ export function parseId(s: unknown): Id | null {
 /** `1430` or `1430.2`: the part of an ID after its repo. */
 export const tail = (p: Id) => `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`;
 /** `aleph-1430` for any issue ID; anything else unchanged. */
-export const fullId = (s: unknown): string => { const p = parseId(s); return p ? `${p.repo}-${tail(p)}` : String(s ?? ""); };
+export const fullId = (s: unknown): string => { const p = parseId(s); return p ? issueId(p.repo, tail(p)) : String(s ?? ""); };
+/** `aleph-1430` from a repo key and an issue number. */
+export const issueId = (repo: string, n: number | string): string => `${repo}-${n}`;
 /** `a1430` for any issue ID of a project with a code; anything else unchanged. */
 export const shortId = (s: unknown): string => { const p = parseId(s); return p && codes[p.repo] ? `${codes[p.repo]}${tail(p)}` : String(s ?? ""); };
 

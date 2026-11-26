@@ -35,7 +35,7 @@ import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { answerHeld } from "./recheck.ts";
 import { logEvent } from "../../../lib/layout.ts";
-import { because, detailOf as wordDetail, ISSUE_KEY, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
+import { because, detailOf as wordDetail, ISSUE_KEY, issueId, key, parseKey, refs as idsIn } from "../../../lib/naming.ts";
 import { DIRECTOR_CAP } from "../infra/settings.ts";
 import { readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
@@ -556,11 +556,11 @@ async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule
     if (issue !== undefined) store.note(repo, issue, `director: dropped ${name}: ${reason}${a.do === "drop" && a.after ? `; after ${a.after.join(", ")}` : ""}`);
     // A run's Ask goes with its run; an item's Ask stays when its job is dropped.
     const ev: Ev = a.do === "answer" ? { action: "answered", sub, note: a.note }
-      : { action: "dropped", sub: fate ?? sub, on: fate === "duplicate" ? idsIn(a.reason).filter((x) => x !== `${repo.key}-${issue}`) : undefined, note: a.reason };
+      : { action: "dropped", sub: fate ?? sub, on: fate === "duplicate" ? idsIn(a.reason).filter((x) => x !== issueId(repo.key, issue!)) : undefined, note: a.reason };
     return waits ? no(a, `dropped, but after not set: ${waits}`) : done(a, ev, c.at === "run");
   }
   if (!item || issues.status(item) !== "open") return no(a, `no open issue ${c.at === "run" ? c.entry.run.target ?? "for the run" : c.on}`);
-  const id = `${repo.key}-${n}`;
+  const id = issueId(repo.key, n!);
   if (a.do === "note") {
     const why = store.note(repo, n!, `director: ${a.text}`);
     return why ? no(a, why) : done(a, { note: a.text }, false);
@@ -571,9 +571,9 @@ async function applyOne(c: Case, a: Action, ports: Ports, by: "director" | "rule
     const title = issues.titleProblem(a.title) ? cutTitle(a.title) : a.title;
     const w = store.writeFiling(repo, `todo: a fix job for ${id}`, "director", ports, (_, file) => file({ title, spec: a.body, source: "agent" }).id);
     if (!w) return no(a, "no issue written");
-    store.note(repo, n!, `director: filed ${repo.key}-${w.value} as a fix job: ${title}`);
+    store.note(repo, n!, `director: filed ${issueId(repo.key, w.value)} as a fix job: ${title}`);
     // The filing logged `filed` on the new issue; this event is a note on the Ask's.
-    return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false, ev: { note: `filed ${repo.key}-${w.value}: ${title}` } };
+    return { applied: `${describe(a)} (${issueId(repo.key, w.value)})`, decides: false, ev: { note: `filed ${issueId(repo.key, w.value)}: ${title}` } };
   }
   if (a.do === "close" || a.do === "drop-issue") {
     if (userOwns(item)) return no(a, `${id} was filed by the user, so closing or dropping it is theirs`);
@@ -655,7 +655,7 @@ async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | 
     if (granted === "user") return escalate(c, base, undefined, "a rule sends this Ask to the user");
     // An Always rule granted the reason's first verb takes it with no run, and logs it as a rule event. `resolve` needs the Ask's recommended option; an Ask with none goes on to the director.
     if (FIRST_VERB.includes(base.reason) && granted === ASK_REASONS[base.reason].always && (granted !== "resolve" || c.ask.recommended)) {
-      const ref = c.at === "item" ? `${c.repo.key}-${idOf(c.item)}` : c.entry.run.name;
+      const ref = c.at === "item" ? issueId(c.repo.key, idOf(c.item)) : c.entry.run.name;
       let why: string | null;
       // A held-path Always lands a run that changes only the repo's held paths; a security path, bun.lock or a branch it cannot read stays the user's. A review-held run lands through the land action, which refuses the repo's held paths too.
       const held = granted === "approve" && base.reason === "held-path" ? landRefusal(c, []) : null;

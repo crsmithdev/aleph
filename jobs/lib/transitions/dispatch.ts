@@ -1,7 +1,7 @@
 /**
  * The dispatch: `aleph dispatch` starts every ready issue up to the live cap, or one issue now. See docs/factory.md.
  */
-import { issueKey } from "../../../lib/naming.ts";
+import { issueId, issueKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { buildableIssue, buildableIssues, reader } from "../../../lib/store.ts";
 import { askUser, plainAsk } from "../asks/ask.ts";
@@ -100,7 +100,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   for (const { repo, item: listed } of ready) {
     const ref = listed.id;
     const name = issueKey(ref);
-    if (at.done(`${repo.key}-${ref}`)) continue;
+    if (at.done(issueId(repo.key, ref))) continue;
     // The cheap facts first: the pause was asked above.
     const first = at.decide(repo, listed, { cheap: true });
     if (first.kind !== "ready") { held(name, repo, first); continue; }

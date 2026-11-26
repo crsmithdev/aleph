@@ -13,7 +13,7 @@
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  * A build or recheck whose failed check's tests all fail on main too waits while main is red, and is rechecked once when it turns green.
  */
-import { issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
+import { issueId, issueKey, key as keyOf, parseId, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { isVersion } from "../../../lib/issue-spec.ts";
 import { close, reader, writeList } from "../../../lib/store.ts";
@@ -317,7 +317,7 @@ function splitAlready({ repo, issue }: Pick<Ended, "repo" | "issue">): boolean {
 /** Set `plan` on the issue, so the next dispatch starts intake on it, which splits it. Returns the refusal, or null. */
 function sendToIntake(repo: Repo, issue: number): string | null {
   try {
-    const w = writeList(repo, `time box: plan ${repo.key}-${issue}`, (doc) => {
+    const w = writeList(repo, `time box: plan ${issueId(repo.key, issue)}`, (doc) => {
       const item = issues.find(doc, issue);
       if (!item || issues.status(item) !== "open") return null;
       setPlan(item, true);

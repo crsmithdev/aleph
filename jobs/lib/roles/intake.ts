@@ -8,7 +8,7 @@
  */
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../../../lib/json.ts";
-import { ISSUE_KEY, issueKey, parseKey } from "../../../lib/naming.ts";
+import { ISSUE_KEY, issueId, issueKey, parseKey } from "../../../lib/naming.ts";
 import * as issues from "../../../lib/issue-file.ts";
 import { itemsDir, mediaFiles, noteFlake, hasIssue, reader, sort, type Effects, type File } from "../../../lib/store.ts";
 import { isRedMain, mediaOf, partsOf, planSet, priorityOf, setIntake, setPlan, sourceOf } from "../../../lib/issue-file.ts";
@@ -362,7 +362,7 @@ function stillRed(repo: Repo, item: issues.Issue): string | null {
 
 /** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | null {
-  const ref = `${repo.key}-${id}`;
+  const ref = issueId(repo.key, id);
   let standing = ""; // the option an Always rule took
   const ok = sort(repo, id, `intake ${ref}: ${v.route}`, (item, doc, file) => {
     if (v.route === "build") {
@@ -397,7 +397,7 @@ function apply(repo: Repo, id: number, v: Route, effects: Effects): Applied | nu
 
 /** Set the `intake-failed` Ask on the item with `why`; the line to report, or null when the item changed. */
 function askFailed(repo: Repo, id: number, why: string): string | null {
-  const ref = `${repo.key}-${id}`;
+  const ref = issueId(repo.key, id);
   const written = sort(repo, id, `intake ${ref}: failed`, () => {});
   if (written) setAsk(issueKey(id), plainAsk("intake-failed", `Intake failed: ${why}`));
   return written ? `${ref}: intake failed; asked Chris` : null;
@@ -418,7 +418,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   const n = runs.length;
   if (n < INTAKE_TRIES()) return null;
   const grant = always("intake-failed", repo.key)?.action;
-  const ref = `${repo.key}-${id}`;
+  const ref = issueId(repo.key, id);
   if (grant === "continue") {
     writeJson(mark, [...before, ...runs.map((e) => e.id)]);
     logAlways("intake-failed", ref, "reran");
@@ -440,7 +440,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
  * is a note on the flake tracker. The route applied, or null when a run must decide.
  */
 function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line: string } | null {
-  const ref = `${repo.key}-${item.id}`;
+  const ref = issueId(repo.key, item.id);
   if (issues.kindOf(item) === "flake") {
     const noted = noteFlake(repo, `${ref}: ${item.title}${item.request.trim() ? `: ${item.request.trim().replace(/\s+/g, " ")}` : ""}`);
     if (typeof noted === "string") return { applied: null, line: `${ref}: flake not noted: ${noted}` };
@@ -460,7 +460,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
 
 /** One intake of one item and its route applied; counts and skipped lines are added to. */
 async function intakeItem(repo: Repo, id: number, at: Decider, counts: Counts, skipped: string[], effects: Effects): Promise<void> {
-  const name = `${repo.key}-${id}`;
+  const name = issueId(repo.key, id);
   // One intake of an item at a time: an issue write's run and the tick may meet.
   const release = await lock(`intake-${name}`, 0);
   if (!release) { skipped.push(`${name}: another intake is running`); return; }

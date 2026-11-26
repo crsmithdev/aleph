@@ -15,7 +15,7 @@ import { currentFit, runShare, type Fit, type Wk } from "../usage.ts";
 import { langfuse } from "../../lib/langfuse.ts";
 import { jsonLines } from "../../lib/jsonl.ts";
 import { pairs, resultContent } from "../../lib/transcripts.ts";
-import { issueHref, shownId } from "../../lib/naming.ts";
+import { issueHref, issueId, shownId } from "../../lib/naming.ts";
 import { isSection, readSections } from "../../jobs/lib/records/run-files.ts";
 import { unusable } from "../../jobs/lib/learning/monitor-table.ts";
 import { projectOf, repoIn, scopeOf } from "./scope.ts";
@@ -117,7 +117,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   if (!up) return out;
   const parts = partsOf(doc, up).map((p) => String(p.id));
   const n = parts.indexOf(String(item.id)), next = parts[n + 1];
-  out.parent = { id: `${repo}-${up.id}`, href: issueHref(`${repo}-${up.id}`), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: issueHref(`${repo}-${next}`) } } : {}) };
+  out.parent = { id: issueId(repo, up.id), href: issueHref(issueId(repo, up.id)), n: n + 1, of: parts.length, ...(next ? { next: { id: issueId(repo, next), href: issueHref(issueId(repo, next)) } } : {}) };
   return out;
 }
 
