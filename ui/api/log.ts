@@ -7,7 +7,7 @@
  */
 import { readEvents } from "../../lib/layout.ts";
 import { projectsOnMain } from "../../lib/store.ts";
-import { issueHref, jobHref, parseKey, runWord, shownId, targetOf, whoOf, wordOf, type EventRow } from "../../lib/naming.ts";
+import { factsOf, issueHref, jobHref, parseKey, runWord, shownId, targetOf, whoOf, wordOf, type EventRow } from "../../lib/naming.ts";
 import { reader } from "../../lib/store.ts";
 import { allRuns } from "../../jobs/lib/records/record.ts";
 import { issueKeyOf, type Run } from "../../jobs/lib/records/ledger.ts";
@@ -37,7 +37,7 @@ function rowOf(e: EventRow, titles: Record<string, string>, projectOf: (n: numbe
     seq: e.seq, at: e.time, action: e.action === "running" ? "started" : e.action,
     // A factory-wide run (a director's) has no project of its own: its issue's link takes the issue's.
     issue: issue ? ((p) => ({ id: shownId(issue, p), to: issueHref(issue, p) }))(e.project ?? projectOf(parseKey(issue)!.n)) : null, job: job ? { id: shownId(job), to: jobHref(shownId(job)) } : null,
-    ...(run ? jobTitle(run) : { keys: [], title: (issue && titles[issue]) ?? "" }), by: e.object_role ? runWord(e.object_role) : whoOf(e.subject, e.subject_role), took,
+    ...(run ? jobTitle(run) : e.object === "settings" ? { keys: [wordOf(e)], title: factsOf(e) } : { keys: [], title: (issue && titles[issue]) ?? "" }), by: e.object_role ? runWord(e.object_role) : whoOf(e.subject, e.subject_role), took,
     // An event a job makes (a housekeeper's change, a review's return) goes with the rows of that job's run.
     run: from ? (issueKeyOf({ target: runOf(from)?.target }) ?? from) : (issue ?? job),
   };

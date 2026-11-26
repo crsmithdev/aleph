@@ -76,11 +76,16 @@ test("puts an event a job makes in that job's run, and any other in its issue's,
   expect(rows.find((r) => r.action === "landed").run).toBe("issue.1");
 });
 
-// Last in the file: the new event stays.
+// Leaves a new event behind, so it runs after the counts above.
 test("a page by cursor holds its rows when a new event arrives above it", async () => {
   const one = await log(), two = await log(`?before=${one.next}`);
   logEvent({ time: new Date(NOW).toISOString(), subject: "gate", action: "failed", object: "issue.1", detail: "y" });
   const again = await log(`?before=${one.next}`);
   expect(again.rows.map((r) => r.seq)).toEqual(two.rows.map((r) => r.seq));
   expect([again.from, again.total]).toEqual([27, 67]);
+});
+
+test("gives a settings change its detail word as a key and the facts after it as the title", async () => {
+  logEvent({ time: new Date(NOW).toISOString(), subject: "gate", action: "changed", object: "settings", detail: "cap: on: 5 / 5 jobs" });
+  expect((await log("?q=5 jobs")).rows).toMatchObject([{ keys: ["cap"], title: "on: 5 / 5 jobs" }]);
 });
