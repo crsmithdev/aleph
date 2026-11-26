@@ -158,7 +158,7 @@ test("the Roles list has three groups of rows, each with a select and a switch o
   const h = page([]);
   expect([...h.matchAll(/<h3 class="sub-head">([^<]+)<\/h3><span class="count">(\d+)</g)].map((x) => [x[1], x[2]])).toEqual([["Workers", "3"], ["Review and Intake", "3"], ["Oversight", "5"]]);
   expect([...h.matchAll(/<li class="lrow"[^>]*data-key="(\w+)"/g)].map((x) => x[1])).toEqual(["small", "medium", "large", "review", "intake", "judge", "director", "monitor", "housekeeper", "maintainer", "investigator"]);
-  expect([...h.matchAll(/<span class="h">([^<]+)</g)].map((x) => x[1]).slice(0, 10)).toEqual(["Runs", "Success", "p50", "$", "$ / change", "Runs", "Success", "p50", "$", "$ / output"]);
+  expect([...h.matchAll(/<span class="h">([^<]+)</g)].map((x) => x[1]).slice(0, 10)).toEqual(["Sessions", "Success", "p50", "$", "$ / change", "Sessions", "Success", "p50", "$", "$ / output"]);
   // The second offer of each key is configured, so a select that kept its first option fails.
   const models = Object.fromEntries(Object.keys(OFFERS).map((k) => [k, { enabled: true, model: (OFFERS as any)[k][1] }]));
   const all = page([], { ...M, models });
@@ -235,7 +235,7 @@ test("an outcome on a full model id joins the row of its short model, and each e
 
 test("the inspector of a role lists its figures and a worker's first pass", () => {
   const t = page([full("worker", "haiku", { size: "small", built: 4, firstPass: 3, reviewPass: 0.5 })]).match(/<template data-inspect="small">.*?<\/template>/s)![0];
-  for (const x of ["<dt>Runs</dt><dd>30</dd>", "<dt>Failed</dt><dd>6</dd>", "<dt>First Pass</dt><dd>75%</dd>", "<dt>Review Pass</dt><dd>50%</dd>", "<dt>p95</dt><dd>5m 00s</dd>", "<dt>Output</dt><dd>4 landed</dd>"]) expect(t).toContain(x);
+  for (const x of ["<dt>Sessions</dt><dd>30</dd>", "<dt>Failed</dt><dd>6</dd>", "<dt>First Pass</dt><dd>75%</dd>", "<dt>Review Pass</dt><dd>50%</dd>", "<dt>p95</dt><dd>5m 00s</dd>", "<dt>Output</dt><dd>4 landed</dd>"]) expect(t).toContain(x);
   expect(t).not.toContain("<dt>Error</dt>");
 });
 
@@ -260,9 +260,9 @@ test("a down local server disables gpt-oss-20b in each select and draws no alert
   expect(page([])).not.toContain("disabled>");
 });
 
-test("the facts line holds the live agents, runs, success and the window's OpenRouter spend", () => {
+test("the facts line holds the live agents, sessions, success and the window's OpenRouter spend", () => {
   const f = page([]).match(/<p class="factline">.*?<\/p>/)![0];
-  expect(f.replace(/<[^>]+>/g, "")).toBe("1 of 5 live 18 runs 80% success $17.54 OpenRouter");
+  expect(f.replace(/<[^>]+>/g, "")).toBe("1 of 5 live 18 sessions 80% success $17.54 OpenRouter");
   expect(renderFactoryAgents(S, { ...D, window: "hour", agents: { ...agents, outcomes: [] } }, new URLSearchParams(), M)).toContain("$1.50</b> OpenRouter");
   expect(page([full("worker", "opus", { size: "large" })], null)).toContain('<b class="num">–</b> OpenRouter');
 });

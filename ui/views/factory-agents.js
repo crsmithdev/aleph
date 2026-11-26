@@ -33,7 +33,7 @@ const WAITS = {
   maintainer: "Memory passes wait", judge: "Stop gate passes unjudged", investigator: "No investigations",
 };
 
-/** The noun of each role's output; a role not named here counts its OK runs. */
+/** The noun of each role's output; a role not named here counts its OK sessions. */
 const NOUNS = { worker: "landed", reviewer: "verdicts", intake: "triages", director: "steps", monitor: "readings", housekeeper: "sweeps", judge: "calls" };
 
 /** Where an off size's work goes, as route() picks it: the next size up that is on, else the next one down. */
@@ -49,11 +49,11 @@ const output = (o) => (o.role === "worker" ? o.built : o.role === "reviewer" ? o
 function roleInspect(key, role, label, model, cur, until) {
   const out = cur ? output(cur) : 0;
   const kv = !cur ? [] : [
-    ["Runs", esc(count(cur.runs))], ["Failed", cur.failed ? esc(count(cur.failed)) : ""], ["Error", cur.error ? esc(count(cur.error)) : ""],
+    ["Sessions", esc(count(cur.runs))], ["Failed", cur.failed ? esc(count(cur.failed)) : ""], ["Error", cur.error ? esc(count(cur.error)) : ""],
     ["Success", esc(cardPct(cur.rate))], ["Baseline", cur.baseline == null ? "" : esc(cardPct(cur.baseline))],
     ["First Pass", cur.built ? esc(cardPct(cur.firstPass / cur.built)) : ""], ["Review Pass", cur.reviewPass == null ? "" : esc(cardPct(cur.reviewPass))],
     ["p50", esc(dur(cur.p50))], ["p95", esc(dur(cur.p95))], ["Cost", cur.cost ? esc(money(cur.cost)) : ""],
-    ["Output", out ? esc(`${count(out)} ${NOUNS[role] ?? "runs"}`) : ""], ["Since", esc(day(cur.from))], ["Until", until ? esc(day(cur.to)) : ""],
+    ["Output", out ? esc(`${count(out)} ${NOUNS[role] ?? "sessions"}`) : ""], ["Since", esc(day(cur.from))], ["Until", until ? esc(day(cur.to)) : ""],
   ];
   return inspector({ id: key, title: model ? `${label} · ${shortModel(model)}` : label, rows: kv });
 }
@@ -95,9 +95,9 @@ function rolesView(s, d, m, win) {
   // The Unsized row has no setting, so it shows only when a build had no size.
   const groups = GROUPS.map(([title, all]) => {
     const keys = all.filter(([k]) => k !== "unsized" || outs.some((o) => o.role === "worker" && o.size == null));
-    return { title, count: count(keys.length), heads: ["Runs", "Success", "p50", "$", title === "Workers" ? "$ / change" : "$ / output"], rows: keys.flatMap(([k, r]) => roleRows(k, r, outs, m)) };
+    return { title, count: count(keys.length), heads: ["Sessions", "Success", "p50", "$", title === "Workers" ? "$ / change" : "$ / output"], rows: keys.flatMap(([k, r]) => roleRows(k, r, outs, m)) };
   });
-  return factsLine([[count(a.live), `of ${count(a.cap)} live`], [count(a.roles.reduce((n, r) => n + r.runs, 0)), "runs"], [cardPct(a.rates.success), "success"], [v == null ? "–" : money(v), "OpenRouter"]]) +
+  return factsLine([[count(a.live), `of ${count(a.cap)} live`], [count(a.roles.reduce((n, r) => n + r.runs, 0)), "sessions"], [cardPct(a.rates.success), "success"], [v == null ? "–" : money(v), "OpenRouter"]]) +
     (m === null ? notice("Could not load the models.", true) : "") + browse({ id: "roles", label: "Roles", search: "Search roles", groups });
 }
 
