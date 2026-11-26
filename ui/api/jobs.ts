@@ -98,16 +98,18 @@ interface JobDetail extends Job {
   parked?: boolean;
   /** Run now for the job's issue (see `runNowOf`): null when it starts the issue, else why not. Absent when the issue is closed. */
   runNow?: string | null;
+  /** The short note of `runNow`, null with it. */
+  runNowNote?: string | null;
 }
 
 /** The item's spec and, for a part, its issue and its place among the parts. Nothing when the store cannot be read. */
-function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent" | "parked" | "runNow"> {
+function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent" | "parked" | "runNow" | "runNowNote"> {
   const place = loadRegistry()[repo];
   let doc: todos.Doc | null = null;
   try { doc = place ? readList(place) : null; } catch { return {}; }
   const item = doc && todos.find(doc, id);
   if (!doc || !item) return {};
-  const out: Pick<JobDetail, "spec" | "parent" | "parked" | "runNow"> = {};
+  const out: Pick<JobDetail, "spec" | "parent" | "parked" | "runNow" | "runNowNote"> = {};
   if (item.spec) out.spec = item.spec;
   if (todos.status(item) === "parked") out.parked = true;
   if (place) Object.assign(out, runNowOf(place, doc, item));

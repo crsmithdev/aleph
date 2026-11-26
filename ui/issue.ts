@@ -58,11 +58,13 @@ export function awaiting(repo: string, item: todos.Issue, stage: string): NewIss
 
 /**
  * What `aleph dispatch <key>` (Run now) would do with an open issue: `runNow` is null when it starts the issue, else the text of
- * the gate that binds, as the dispatch reads the same facts. Nothing for a closed issue.
+ * the gate that binds, as the dispatch reads the same facts. `runNowNote` is the part of that text before the first colon, null
+ * with `runNow`. Nothing for a closed issue.
  */
-export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null } {
+export function runNowOf(repo: Repo, doc: todos.Doc, item: todos.Issue, jobs = allJobs()): { runNow?: string | null; runNowNote?: string | null } {
   if (todos.status(item) !== "open") return {};
-  if (!repo.sandbox || !isBuildable(doc, item, repo)) return { runNow: `${issueKey(item.id)} is not a queued issue` };
+  const gate = (text: string) => ({ runNow: text, runNowNote: text.split(":")[0] });
+  if (!repo.sandbox || !isBuildable(doc, item, repo)) return gate(`${issueKey(item.id)} is not a queued issue`);
   const d = decider({ fresh: false, jobs }).decide(repo, item, { jobs });
-  return { runNow: d.kind === "ready" ? null : d.text };
+  return d.kind === "ready" ? { runNow: null, runNowNote: null } : gate(d.text);
 }

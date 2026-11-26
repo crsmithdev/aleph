@@ -13,6 +13,7 @@ import { deviceCookie, withEnv, withServer, type TestServer } from "./server.tes
 import { updater } from "./updater.ts";
 import { state } from "./state.ts";
 import { run as alephRun } from "../cli/commands.ts";
+import { writeBaseline } from "../jobs/lib/gates/tables.ts";
 
 // The fixtures change between tests, with no watcher to see it: each test starts with no kept answer.
 beforeEach(() => updater.reset());
@@ -297,13 +298,23 @@ describe("Run now", () => {
   };
   test("GET /api/issues/:id: runNow is null for a ready issue and the gate's text for one that waits", async () => {
     const [ready, waits] = pair();
-    expect((await getJson(`/api/issues/fac-${ready}`)).runNow).toBeNull();
-    expect((await getJson(`/api/issues/fac-${waits}`)).runNow).toBe(`Waits on issue.${ready}`);
+    const on = await getJson(`/api/issues/fac-${ready}`), off = await getJson(`/api/issues/fac-${waits}`);
+    expect([on.runNow, on.runNowNote]).toEqual([null, null]);
+    expect([off.runNow, off.runNowNote]).toEqual([`Waits on issue.${ready}`, `Waits on issue.${ready}`]);
+  });
+  test("runNowNote is the gate's text up to its first colon, and runNow the whole text", async () => {
+    const [ready] = pair();
+    writeBaseline("fac", () => ({ repo: "fac", commit: "abcdef1234", ok: false, failed: "tests" }));
+    try {
+      const d = await getJson(`/api/issues/fac-${ready}`);
+      expect([d.runNow, d.runNowNote]).toEqual(["main is red at abcdef1: tests", "main is red at abcdef1"]);
+    } finally { writeBaseline("fac", () => ({ repo: "fac", commit: "abcdef1234", ok: true })); }
   });
   test("a closed issue and one in a repo that is no sandbox have no Run now", async () => {
     expect((await getJson("/api/issues/fac-2")).runNow).toBeUndefined();
     const n = writeList({ key: "oth" }, "seed", (doc) => add(doc, "other spec", { spec: "Do it." }).id)!.value;
-    expect((await getJson(`/api/issues/oth-${n}`)).runNow).toBe(`issue.${n} is not a queued issue`);
+    const d = await getJson(`/api/issues/oth-${n}`);
+    expect([d.runNow, d.runNowNote]).toEqual([`issue.${n} is not a queued issue`, `issue.${n} is not a queued issue`]);
   });
   test("POST /api/issues/:id/run runs `aleph dispatch issue.N`, and the real parser reads the key as the one issue to start", async () => {
     const [ready, waits] = pair();

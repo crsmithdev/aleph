@@ -760,7 +760,7 @@ export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` 
  * @design fact-list
  */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
-/** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text), or nothing when `runNow` is absent. A gate that binds shows it disabled, its text in a short note and as the title. */
-export const runNowButton = (repo, ref, runNow) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null
+/** The Run now button of an issue (`runNow` from the API: null when it starts the issue, else the gate's text; `note` is its short note), or nothing when `runNow` is absent. A gate that binds shows it disabled, the note beside it and the text as the title. */
+export const runNowButton = (repo, ref, runNow, note) => (runNow === undefined ? "" : `<span class="run-now">${runNow === null
   ? `${actButton("Run now", { act: "run", path: `${issueApi(repo, ref)}/run`, label: "Run now" })}<span class="act-msg" role="status"></span>`
-  : `<button class="act" type="button" disabled title="${esc(runNow)}">Run now</button> <span class="quiet">${esc(runNow.split(":")[0])}</span>`}</span>`);
+  : `<button class="act" type="button" disabled title="${esc(runNow)}">Run now</button> <span class="quiet">${esc(note)}</span>`}</span>`);

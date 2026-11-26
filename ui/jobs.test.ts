@@ -423,9 +423,9 @@ describe("render", () => {
     expect(labels(head({ open: false }))).toEqual(["Investigate"]);
     expect(labels(head({ open: true, item: undefined }))).toEqual(["Investigate"]);
   });
-  test("a job whose issue's gate binds shows the button disabled with the gate's text", () => {
-    const h = v.renderJob({ ...job, runNow: "Waits on issue.3" });
-    expect(h).toContain('<button class="act" type="button" disabled title="Waits on issue.3">Run now</button> <span class="quiet">Waits on issue.3</span>');
+  test("a job whose issue's gate binds shows the button disabled with the gate's text as the title and the note from its field", () => {
+    const h = v.renderJob({ ...job, runNow: "Waits on issue.3: it is not done", runNowNote: "Waits" });
+    expect(h).toContain('<button class="act" type="button" disabled title="Waits on issue.3: it is not done">Run now</button> <span class="quiet">Waits</span>');
   });
   test("the Cancel dialog offers park, restart and drop, with park chosen", () => {
     const h = v.renderJob({ ...job, open: true, state: "running" });

@@ -365,7 +365,7 @@ const FORM = 'form="issue-edit"';
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead("", {
   after: `<h1>${editable(esc(d.title), inputBox("title", d.title, { attrs: ` class="title-edit" ${FORM} required aria-label="Title"` }))}</h1>`,
-  aside: runNowButton(d.repo, ref, d.runNow) + investigateButton(issueKey(d.id), d.investigations) + actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
+  aside: runNowButton(d.repo, ref, d.runNow, d.runNowNote) + investigateButton(issueKey(d.id), d.investigations) + actButton("Edit", { editor: "start" }, { cls: "view-only" }) +
   `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { editor: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */
