@@ -159,8 +159,8 @@ test("Events folds the changes a housekeeper makes under its run, each linking i
 
 test("Events starts each past day and each page with a day row, and today with none", () => {
   const ev = (seq: number, at: string) => ({ ...LOG.rows[0], seq, at, issue: { id: `a${seq}`, to: `#/issues/aleph/${seq}` }, job: null, run: `issue.${seq}` });
-  const h = cardOf(page({ log: { total: 4, rows: [ev(4, new Date().toISOString()), ev(3, "2026-11-02T20:00:00"), ev(2, "2026-11-02T08:00:00"), ev(1, "2026-11-01T20:00:00")] } }), "events");
-  expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Nov 02", "Nov 01"]);
+  const h = cardOf(page({ log: { total: 4, rows: [ev(4, NOW), ev(3, "2026-10-30T20:00:00"), ev(2, "2026-10-30T08:00:00"), ev(1, "2026-10-29T20:00:00")] } }), "events");
+  expect([...h.matchAll(/<tr class="day"><th colspan="5" scope="colgroup">([^<]+)</g)].map((m) => m[1])).toEqual(["Oct 30", "Oct 29"]);
 });
 
 test("the log fixture has the shape /api/log sends, so a changed route fails here", () => {

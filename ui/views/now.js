@@ -24,7 +24,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   live: true,
   // `more` adds /api/flow for the window with its baseline, the Memory page's data, the runs of the last hour and a page of the event log; the page draws without them first.
-  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", statusCards(s, f, { memory: s.memory ?? null }), "scorecard")}<div class="rail"><div class="rail-main">${renderMotion(s)}${renderLog(s.log ?? null, q)}${renderMemory(s.memory ?? null, s.now)}</div><div class="stack">${renderProblems(s, page.stale)}${renderEfficiency(f)}${renderFlow(f, s)}</div></div></div>`; },
+  render: (s, _params, q) => { page.state = s; const w = scope(q).window, f = s.flow ?? null; return `<div class="page sp">${renderStatusLine(s, page.stale, w)}${tiles("Scorecard", statusCards(s, f, { memory: s.memory ?? null }), "scorecard")}<div class="rail"><div class="rail-main">${renderMotion(s)}${renderLog(s.log ?? null, q, s.now)}${renderMemory(s.memory ?? null, s.now)}</div><div class="stack">${renderProblems(s, page.stale)}${renderEfficiency(f)}${renderFlow(f, s)}</div></div></div>`; },
   more: async (s, q) => { const [flow, memory, jobs, log] = await Promise.all([flowOf(scope(q).window, q, true), memoryOf(q), jobsOf(q), logOf(q)]); return { ...s, flow, memory, jobs, log }; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { page.stale = b; const el = root.querySelector(".shead .say"); if (el && page.state) el.outerHTML = renderLede(page.state, b); },
@@ -156,20 +156,20 @@ const logRuns = (rows) => rows.reduce((runs, r) => {
 }, []);
 
 /** The log's table and pager: the part that a search or a page turn draws again. `log` is null while it loads, or `{ error }`. */
-function logBody(log) {
+function logBody(log, now) {
   if (!log) return loadingLine("the events");
   if (log.error) return error(log.error);
   if (!log.rows.length) return empty();
   const head = iconHead("clock", "Time", { num: false }) + heads(["Event", "Ref", "Title", "By"], ["By"]);
   // Today's rows have no day row: only a past day is named.
-  const today = day(new Date()), on = (run) => day(run[0].at);
+  const today = day(now), on = (run) => day(run[0].at);
   const rows = logRuns(log.rows).map((run, i, runs) => (on(run) === today || (i && on(runs[i - 1]) === on(run)) ? "" : dayRow(on(run), 5)) + logRow(run));
   return dataTable(head, rows.join("")) + pager(1, log.total, 25, { at: log.from - 1, back: { before: log.prev }, fwd: { before: log.next } });
 }
 
 /** The Events card: the search folded in its head, then the log's table and pager. */
-export const renderLog = (log, q = new URLSearchParams()) =>
-  card("Events", `<div id="log">${logBody(log)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events", aside: searchFold("status-log", q.get("q") ?? "", "Search ids and titles") });
+export const renderLog = (log, q = new URLSearchParams(), now) =>
+  card("Events", `<div id="log">${logBody(log, now)}</div>`, { count: log?.total === undefined ? undefined : count(log.total), id: "events", aside: searchFold("status-log", q.get("q") ?? "", "Search ids and titles") });
 
 /** A search or a page turn sets the address and loads that page of the log alone; the page then draws again from the state. */
 // The card is wired once, at a first draw that comes before `more`, so the log goes on the state drawn last.
