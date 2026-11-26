@@ -34,11 +34,12 @@ Stress-test each relationship with a specific edge case. Force the user to say w
 
 ### Ask the model questions
 
-For each entity under discussion, ask three questions:
+For each entity under discussion, ask four questions:
 
 1. **Identity**: what makes two of these the same one? What is its ID?
 2. **Lifecycle**: what states does it have, and which moves between them are legal?
 3. **Owner**: which one module or role writes it? Who reads it?
+4. **Variants**: what kinds does it have, and which fields does each kind carry? A field whose meaning changes with the kind, or text a reader parses, is a kind without its own fields.
 
 Then ask for the invariants (what is always true) and the relations (to which entities, one or many).
 
@@ -74,10 +75,10 @@ Each step is done when its check passes:
 - **Challenge**: every term that conflicts with the glossary has been named, and the user chose one meaning.
 - **Sharpen**: every vague term has one canonical name, and the user agreed.
 - **Scenarios**: every relationship under discussion has an edge case, and the user answered it.
-- **Model questions**: every entity under discussion has an identity, a lifecycle and an owner answer from the user.
+- **Model questions**: every entity under discussion has an identity, a lifecycle, an owner and a variants answer from the user.
 - **Cross-reference**: every claim about the system is checked against the code, and each contradiction and each two-answer case was shown to the user.
 - **Update**: every resolved term is in the glossary before you reply to the next message.
-- **Model block**: every entity discussed has all five lines. Each code fact cites a `path:line` that you read, and each unresolved two-answer case is marked `(conflict: ...)`.
+- **Model block**: every entity discussed has all six lines. Each code fact cites a `path:line` that you read, and each unresolved two-answer case is marked `(conflict: ...)`.
 - **Decisions**: each decision is an ADR in `docs/adr/` (with the old ADR marked superseded where it replaces one), or it fails one of the three tests and you can name which. Each term from a decision names its ADR number.
 
 ## At the end

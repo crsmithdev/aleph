@@ -68,6 +68,8 @@ When designing an interface, ask:
 - **The deletion test.** Imagine deleting the module. If complexity vanishes, it was a pass-through. If complexity reappears across N callers, it was earning its keep.
 - **The interface is the test surface.** Callers and tests cross the same seam. If you want to test *past* the interface, the module is probably the wrong shape.
 - **One adapter means a hypothetical seam. Two adapters means a real one.** Don't introduce a seam unless something actually varies across it.
+- **A route is a module.** Its interface is its params, its row shape, its order, its paging and its error form. Name the row shape in one place that the server and the page both read, and page every list in one form.
+- **One side owns each rule.** The server computes each key and rule; the page draws from the result. A page that builds a key from raw fields holds a second copy of the rule.
 
 ## Designing for testability
 

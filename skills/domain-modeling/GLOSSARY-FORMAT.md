@@ -48,13 +48,14 @@ Terms say what a word means. The model says how the thing behaves. Put one block
   - Identity: one attempt on a subject. ID `<subject>#<n>`, built at `lib/naming.ts:88`.
   - Lifecycle: queued, running, done, dropped. Legal moves: queued to running, running to done or dropped. `lib/jobs.ts:140`.
   - Owner: writer `factory/run.ts` only (`factory/run.ts:52`). Readers: UI, report.
+  - Variants: none. Each job carries the same fields.
   - Invariants: a done job has a cost. A subject has at most one running job. `lib/jobs.ts:171`.
   - Relations: belongs to one Subject. A Subject has many Jobs.
 ```
 
 Rules:
 
-- Write one entry per entity, with all five lines. Write "none" for an invariant list that is empty. Do not leave a line out.
+- Write one entry per entity, with all six lines. Write "none" for an invariant list or a variant list that is empty. Do not leave a line out.
 - Cite `path:line` for every fact that comes from the code. Check the line before you write it.
 - A fact the code does not show is a claim of intent. Mark it `(intended)` and ask the user to confirm it.
 - Where the code gives two answers, do not pick one. Write `(conflict: <path:line> vs <path:line>)` and raise it with the user.

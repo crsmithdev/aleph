@@ -14,3 +14,5 @@ Ask these of each new number on a page, record field, event action, key form, jo
 5. **Carry the history.** A store migration carries each field that a reader needs, for old rows too. Run each
    reader on the migrated data, and compare its values before and after the migration. (migration)
 6. **A recompute.** Name the query on the raw source that gives the same value. (recompute)
+7. **One row per intent.** A writer that can run twice for one intent (a retry, a second tick) names the intent's
+   key and writes one row for it, through a unique constraint or an upsert on that key. (validity)
