@@ -18,7 +18,7 @@ The contents are a list of links to the sections of a long page, in a rail that 
 |---|---|---|---|
 | Rail | The word "Contents" and the list, in a `nav` |  | 220px at the right of the body, `--sp-28` apart; sticky `--sp-16` from the top; it ends above the dock and scrolls when taller |
 | Entry | An `<a href="#id">` to one section |  | `--fs-sm`, `--muted`, on a `--rule` hairline at the left; a `sub` entry is indented `--sp-24` |
-| Current entry | The entry of the section at the top of the view |  | `aria-current="location"`; `--ink`, `--fw-strong`, a thin `--ink` bar at the left, as the sidebar's current link |
+| Current entry | The entry of the section at the top of the view |  | `aria-current="location"`; `--ink`, `--fw-strong`, an inset thin `--ink` bar at the left |
 
 ## Rules
 

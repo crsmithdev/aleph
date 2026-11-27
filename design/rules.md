@@ -493,7 +493,7 @@ A row that shows its detail beside it has `aria-selected="true"`, `--sunk` and a
 - id: state-current
 - scope: global
 
-The sidebar link or the contents entry has `aria-current` and an inset thin `--ink` bar at the left.
+The current sidebar link has `aria-current`, `--sunk` and a thin `--ink` bar at the sidebar's left edge, outside the link. At 720px and narrower, the bar is at the bottom of the link. The current contents entry has `aria-current` and an inset thin `--ink` bar at the left.
 
 ### Parked
 - id: state-parked
